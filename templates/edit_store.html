@@ -1,0 +1,810 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Store - Inventory Management{% endblock %}
+
+{% block content %}
+{# Parse eBay credentials to extract Business Policy IDs #}
+{% set ebay_credentials = {} %}
+{% if store.api_key and store.platform == 'eBay' %}
+    {% set ebay_credentials = store.api_key | from_json if store.api_key else {} %}
+{% endif %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex align-items-center mb-4">
+            <a href="{{ url_for('routes.stores') }}" class="btn btn-outline-secondary me-3">
+                <i data-feather="arrow-left"></i>
+            </a>
+            <h1 class="mb-0">
+                <i data-feather="edit-2" class="me-2"></i>
+                Edit Store: {{ store.name }}
+            </h1>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Store Details</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="editStoreForm">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="name" class="form-label">
+                                <i data-feather="tag" class="me-1"></i>
+                                Store Name *
+                            </label>
+                            <input type="text" class="form-control" id="name" name="name" 
+                                   value="{{ store.name }}" required>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="platform" class="form-label">
+                                <i data-feather="shopping-bag" class="me-1"></i>
+                                Platform *
+                            </label>
+                            <select class="form-select" id="platform" name="platform" required>
+                                <option value="">Select Platform</option>
+                                <option value="Amazon" {% if store.platform == 'Amazon' %}selected{% endif %}>Amazon</option>
+                                <option value="eBay" {% if store.platform == 'eBay' %}selected{% endif %}>eBay</option>
+                                <option value="Shopify" {% if store.platform == 'Shopify' %}selected{% endif %}>Shopify</option>
+                                <option value="WooCommerce" {% if store.platform == 'WooCommerce' %}selected{% endif %}>WooCommerce</option>
+                                <option value="Etsy" {% if store.platform == 'Etsy' %}selected{% endif %}>Etsy</option>
+                                <option value="Facebook Marketplace" {% if store.platform == 'Facebook Marketplace' %}selected{% endif %}>Facebook Marketplace</option>
+                                <option value="Other" {% if store.platform == 'Other' %}selected{% endif %}>Other</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="api_endpoint" class="form-label">
+                            <i data-feather="link" class="me-1"></i>
+                            API Endpoint
+                        </label>
+                        <input type="url" class="form-control" id="api_endpoint" name="api_endpoint" 
+                               value="{{ store.api_endpoint or '' }}" placeholder="https://api.example.com/v1/">
+                        <div class="form-text">The base URL for the store's API</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="api_key" class="form-label">
+                            <i data-feather="key" class="me-1"></i>
+                            API Credentials
+                        </label>
+                        <div class="input-group">
+                            <textarea class="form-control" id="api_key" name="api_key" rows="3"
+                                      placeholder="Enter API credentials (JSON format for Amazon)">{{ store.api_key or '' }}</textarea>
+                            <button type="button" class="btn btn-outline-secondary" id="toggleApiKey">
+                                <i data-feather="eye"></i>
+                            </button>
+                        </div>
+                        <div class="form-text" id="api_help_text">API key or credentials for authentication with the store platform</div>
+                        <div class="mt-2" id="amazonHelp" style="display: none;">
+                            <small class="text-muted">
+                                For Amazon, use JSON format with: refresh_token, lwa_app_id, lwa_client_secret, seller_id
+                                <br>
+                                <button type="button" class="btn btn-link btn-sm p-0" id="testConnection">
+                                    Test Connection
+                                </button>
+                            </small>
+                        </div>
+                        
+                        <!-- eBay Business Policies Section -->
+                        <div class="mt-2" id="ebayHelp" style="display: none;">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h6 class="mb-0">
+                                        <i data-feather="briefcase" class="me-1"></i>
+                                        eBay Business Policies (Required)
+                                    </h6>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-4 mb-3">
+                                            <label for="shipping_profile_id" class="form-label">
+                                                <i data-feather="truck" class="me-1"></i>
+                                                Shipping Policy ID
+                                            </label>
+                                            <input type="text" class="form-control" id="shipping_profile_id" name="shipping_profile_id" 
+                                                   value="{{ ebay_credentials.get('shipping_profile_id', '') }}"
+                                                   placeholder="e.g., 12345678">
+                                            <div class="form-text">From eBay Seller Hub > Account > Business Policies</div>
+                                        </div>
+                                        <div class="col-md-4 mb-3">
+                                            <label for="payment_profile_id" class="form-label">
+                                                <i data-feather="credit-card" class="me-1"></i>
+                                                Payment Policy ID
+                                            </label>
+                                            <input type="text" class="form-control" id="payment_profile_id" name="payment_profile_id" 
+                                                   value="{{ ebay_credentials.get('payment_profile_id', '') }}"
+                                                   placeholder="e.g., 87654321">
+                                            <div class="form-text">PayPal/Credit Card policy from Business Policies</div>
+                                        </div>
+                                        <div class="col-md-4 mb-3">
+                                            <label for="return_profile_id" class="form-label">
+                                                <i data-feather="rotate-ccw" class="me-1"></i>
+                                                Return Policy ID
+                                            </label>
+                                            <input type="text" class="form-control" id="return_profile_id" name="return_profile_id" 
+                                                   value="{{ ebay_credentials.get('return_profile_id', '') }}"
+                                                   placeholder="e.g., 56789012">
+                                            <div class="form-text">Return policy from Business Policies</div>
+                                        </div>
+                                    </div>
+                                    <div class="alert alert-info">
+                                        <i data-feather="info" class="me-1"></i>
+                                        <strong>How to find Policy IDs:</strong> Go to eBay Seller Hub > Account > Business Policies. 
+                                        Click each policy and look at the URL - the ID is the number at the end.
+                                    </div>
+                                    <button type="button" class="btn btn-link btn-sm p-0" id="testEbayConnection">
+                                        Test eBay Connection
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="is_active" name="is_active" 
+                                   {% if store.is_active %}checked{% endif %}>
+                            <label class="form-check-label" for="is_active">
+                                <i data-feather="power" class="me-1"></i>
+                                Store is Active
+                            </label>
+                            <div class="form-text">Active stores will be included in automatic sync operations</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Amazon FBA/FBM Configuration Section -->
+                    <div id="amazonFbaFbmSection" class="mb-4" style="display: {% if store.platform and 'amazon' in store.platform.lower() %}block{% else %}none{% endif %};">
+                        <h6 class="mb-3">
+                            <i data-feather="layers" class="me-2"></i>
+                            Amazon Inventory Modes
+                        </h6>
+                        
+                        <!-- Section A: FBA Inventory (Read-Only) -->
+                        <div class="card mb-3 border-info">
+                            <div class="card-header bg-info bg-opacity-10">
+                                <h6 class="mb-0 text-info">
+                                    <i data-feather="archive" class="me-2"></i>
+                                    Section A: FBA Inventory (Read-Only)
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input" type="checkbox" id="fba_import_enabled" name="fba_import_enabled" 
+                                           {% if store.fba_import_enabled %}checked{% endif %}>
+                                    <label class="form-check-label fw-bold" for="fba_import_enabled">
+                                        Enable FBA Inventory Import
+                                    </label>
+                                </div>
+                                <div class="form-text text-muted">
+                                    <i data-feather="info" class="me-1"></i>
+                                    Imports FBA inventory from Amazon. <strong>No stock or price is pushed to FBA.</strong>
+                                    FBA inventory is managed by Amazon and shown in the Amazon FBA Stock page.
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Section B: FBM Listings (Push & Pull) -->
+                        <div class="card mb-3 border-success">
+                            <div class="card-header bg-success bg-opacity-10">
+                                <h6 class="mb-0 text-success">
+                                    <i data-feather="upload-cloud" class="me-2"></i>
+                                    Section B: FBM Listings (Push & Pull)
+                                </h6>
+                            </div>
+                            <div class="card-body">
+                                <div class="form-check form-switch mb-2">
+                                    <input class="form-check-input" type="checkbox" id="fbm_sync_enabled" name="fbm_sync_enabled" 
+                                           {% if store.fbm_sync_enabled %}checked{% endif %}>
+                                    <label class="form-check-label fw-bold" for="fbm_sync_enabled">
+                                        Enable FBM Listing Sync & Stock Push
+                                    </label>
+                                </div>
+                                <div class="form-text text-muted">
+                                    <i data-feather="info" class="me-1"></i>
+                                    Syncs MFN/FBM listings and <strong>pushes stock/price updates from the warehouse</strong>.
+                                    Your warehouse is the source of truth for FBM inventory.
+                                </div>
+                                
+                                <!-- Warning if FBM is disabled but push settings are configured -->
+                                <div id="fbmDisabledWarning" class="alert alert-warning mt-3" style="display: none;">
+                                    <i data-feather="alert-triangle" class="me-2"></i>
+                                    <strong>FBM Sync Disabled:</strong> Push settings below will not take effect until FBM sync is enabled.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Push Settings Section -->
+                    <div class="mb-4">
+                        <h6 class="mb-3">
+                            <i data-feather="refresh-cw" class="me-2"></i>
+                            Push Settings
+                        </h6>
+                        
+                        <div class="card">
+                            <div class="card-body">
+                                <!-- Master Toggle -->
+                                <div class="mb-3">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="auto_push_enabled" name="auto_push_enabled" 
+                                               {% if store.auto_push_enabled %}checked{% endif %}>
+                                        <label class="form-check-label fw-bold" for="auto_push_enabled">
+                                            <i data-feather="power" class="me-1"></i>
+                                            Enable Automatic Stock Push
+                                        </label>
+                                        <div class="form-text">Master switch for automatic inventory synchronization to this store</div>
+                                    </div>
+                                </div>
+                                
+                                <div id="pushSettingsDetails" style="{% if not store.auto_push_enabled %}display: none;{% endif %}">
+                                    <!-- Basic Settings -->
+                                    <div class="row mb-3">
+                                        <div class="col-md-4">
+                                            <label for="push_priority" class="form-label">
+                                                <i data-feather="arrow-up" class="me-1"></i>
+                                                Push Priority
+                                            </label>
+                                            <select class="form-select" id="push_priority" name="push_priority">
+                                                {% for priority in range(1, 11) %}
+                                                <option value="{{ priority }}" {% if store.push_priority == priority %}selected{% endif %}>
+                                                    {{ priority }}{% if priority == 10 %} (Highest){% elif priority == 1 %} (Lowest){% endif %}
+                                                </option>
+                                                {% endfor %}
+                                            </select>
+                                            <div class="form-text">Higher priority stores get pushed first</div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label for="push_frequency_minutes" class="form-label">
+                                                <i data-feather="clock" class="me-1"></i>
+                                                Frequency (minutes)
+                                            </label>
+                                            <input type="number" class="form-control" id="push_frequency_minutes" name="push_frequency_minutes" 
+                                                   value="{{ store.push_frequency_minutes }}" min="1" max="60">
+                                            <div class="form-text">Minimum time between pushes</div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <label for="push_batch_size" class="form-label">
+                                                <i data-feather="package" class="me-1"></i>
+                                                Batch Size
+                                            </label>
+                                            <input type="number" class="form-control" id="push_batch_size" name="push_batch_size" 
+                                                   value="{{ store.push_batch_size }}" min="1" max="100">
+                                            <div class="form-text">Items per batch</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Push Triggers -->
+                                    <div class="mb-3">
+                                        <h6 class="mb-2">
+                                            <i data-feather="zap" class="me-1"></i>
+                                            Push Triggers
+                                        </h6>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="form-check mb-2">
+                                                    <input class="form-check-input" type="checkbox" id="push_on_quantity_change" name="push_on_quantity_change" 
+                                                           {% if store.push_on_quantity_change %}checked{% endif %}>
+                                                    <label class="form-check-label" for="push_on_quantity_change">
+                                                        <i data-feather="hash" class="me-1"></i>
+                                                        Quantity Changes
+                                                    </label>
+                                                </div>
+                                                <div class="form-check mb-2">
+                                                    <input class="form-check-input" type="checkbox" id="push_on_price_change" name="push_on_price_change" 
+                                                           {% if store.push_on_price_change %}checked{% endif %}>
+                                                    <label class="form-check-label" for="push_on_price_change">
+                                                        <i data-feather="dollar-sign" class="me-1"></i>
+                                                        Price Changes
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="form-check mb-2">
+                                                    <input class="form-check-input" type="checkbox" id="push_on_item_create" name="push_on_item_create" 
+                                                           {% if store.push_on_item_create %}checked{% endif %}>
+                                                    <label class="form-check-label" for="push_on_item_create">
+                                                        <i data-feather="plus-circle" class="me-1"></i>
+                                                        New Items
+                                                    </label>
+                                                </div>
+                                                <div class="form-check mb-2">
+                                                    <input class="form-check-input" type="checkbox" id="push_on_item_update" name="push_on_item_update" 
+                                                           {% if store.push_on_item_update %}checked{% endif %}>
+                                                    <label class="form-check-label" for="push_on_item_update">
+                                                        <i data-feather="edit" class="me-1"></i>
+                                                        Item Updates
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Error Handling -->
+                                    <div class="row mb-3">
+                                        <div class="col-md-6">
+                                            <h6 class="mb-2">
+                                                <i data-feather="shield" class="me-1"></i>
+                                                Error Handling
+                                            </h6>
+                                            <div class="mb-2">
+                                                <label for="max_retry_attempts" class="form-label">Max Retry Attempts</label>
+                                                <input type="number" class="form-control" id="max_retry_attempts" name="max_retry_attempts" 
+                                                       value="{{ store.max_retry_attempts }}" min="0" max="10">
+                                            </div>
+                                            <div class="mb-2">
+                                                <label for="failure_threshold" class="form-label">Failure Threshold</label>
+                                                <input type="number" class="form-control" id="failure_threshold" name="failure_threshold" 
+                                                       value="{{ store.failure_threshold }}" min="1" max="20">
+                                                <div class="form-text">Failures before auto-disable</div>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="checkbox" id="auto_disable_on_failures" name="auto_disable_on_failures" 
+                                                       {% if store.auto_disable_on_failures %}checked{% endif %}>
+                                                <label class="form-check-label" for="auto_disable_on_failures">
+                                                    <i data-feather="shield-off" class="me-1"></i>
+                                                    Auto-disable on repeated failures
+                                                </label>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="col-md-6">
+                                            <h6 class="mb-2">
+                                                <i data-feather="sliders" class="me-1"></i>
+                                                Push Behavior
+                                            </h6>
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" id="immediate_push" name="immediate_push" 
+                                                       {% if store.immediate_push %}checked{% endif %}>
+                                                <label class="form-check-label" for="immediate_push">
+                                                    <i data-feather="zap" class="me-1"></i>
+                                                    Immediate Push
+                                                </label>
+                                                <div class="form-text">Push immediately vs batch for later</div>
+                                            </div>
+                                            <div class="form-check mb-2">
+                                                <input class="form-check-input" type="checkbox" id="large_change_confirmation" name="large_change_confirmation" 
+                                                       {% if store.large_change_confirmation %}checked{% endif %}>
+                                                <label class="form-check-label" for="large_change_confirmation">
+                                                    <i data-feather="alert-triangle" class="me-1"></i>
+                                                    Confirm Large Changes
+                                                </label>
+                                            </div>
+                                            <div class="mb-2">
+                                                <label for="large_change_threshold" class="form-label">Large Change Threshold</label>
+                                                <input type="number" class="form-control" id="large_change_threshold" name="large_change_threshold" 
+                                                       value="{{ store.large_change_threshold }}" min="1" max="1000">
+                                                <div class="form-text">Quantity change requiring confirmation</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Current Status -->
+                                    {% if store.current_failure_count > 0 %}
+                                    <div class="alert alert-warning">
+                                        <i data-feather="alert-triangle" class="me-2"></i>
+                                        <strong>Warning:</strong> This store has {{ store.current_failure_count }} consecutive failures.
+                                        {% if store.current_failure_count >= store.failure_threshold and store.auto_disable_on_failures %}
+                                        Auto-push has been disabled due to repeated failures.
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('routes.stores') }}" class="btn btn-secondary">
+                            <i data-feather="x" class="me-1"></i>
+                            Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i data-feather="save" class="me-1"></i>
+                            Update Store
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i data-feather="info" class="me-1"></i>
+                    Store Information
+                </h6>
+            </div>
+            <div class="card-body">
+                <dl class="row small">
+                    <dt class="col-sm-5">Created:</dt>
+                    <dd class="col-sm-7">
+                        {% if store.created_at %}
+                            {{ store.created_at.strftime('%Y-%m-%d %H:%M') }}
+                        {% else %}
+                            Unknown
+                        {% endif %}
+                    </dd>
+                    
+                    <dt class="col-sm-5">Last Updated:</dt>
+                    <dd class="col-sm-7">
+                        {% if store.updated_at %}
+                            {{ store.updated_at.strftime('%Y-%m-%d %H:%M') }}
+                        {% else %}
+                            Unknown
+                        {% endif %}
+                    </dd>
+                    
+                    <dt class="col-sm-5">Last Sync:</dt>
+                    <dd class="col-sm-7">
+                        {% if store.last_sync %}
+                            {{ store.last_sync.strftime('%Y-%m-%d %H:%M') }}
+                        {% else %}
+                            Never
+                        {% endif %}
+                    </dd>
+                    
+                    <dt class="col-sm-5">Sync Status:</dt>
+                    <dd class="col-sm-7">
+                        {% if store.sync_status == 'success' %}
+                            <span class="badge bg-success">{{ store.sync_status.title() }}</span>
+                        {% elif store.sync_status == 'syncing' %}
+                            <span class="badge bg-warning">{{ store.sync_status.title() }}</span>
+                        {% elif store.sync_status == 'error' %}
+                            <span class="badge bg-danger">{{ store.sync_status.title() }}</span>
+                        {% else %}
+                            <span class="badge bg-info">{{ store.sync_status.title() }}</span>
+                        {% endif %}
+                    </dd>
+                </dl>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i data-feather="info" class="me-1"></i>
+                    Platform Information
+                </h6>
+            </div>
+            <div class="card-body">
+                <div id="platformInfo" class="small text-muted"></div>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i data-feather="help-circle" class="me-1"></i>
+                    Tips
+                </h6>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled small">
+                    <li class="mb-2">
+                        <i data-feather="check" class="text-success me-2"></i>
+                        Changes will affect future sync operations
+                    </li>
+                    <li class="mb-2">
+                        <i data-feather="check" class="text-success me-2"></i>
+                        Deactivating will stop automatic syncing
+                    </li>
+                    <li class="mb-2">
+                        <i data-feather="check" class="text-success me-2"></i>
+                        Test connectivity after updating credentials
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Platform information
+    const platformInfo = {
+        'Amazon': 'Amazon SP-API integration. Requires seller account with SP-API access. Use JSON format for credentials.',
+        'eBay': 'eBay Trading API integration. Requires developer account and authentication tokens.',
+        'Shopify': 'Shopify Admin API integration. Requires Shopify store and API credentials.',
+        'WooCommerce': 'WooCommerce REST API integration. Requires consumer key and secret.',
+        'Etsy': 'Etsy Open API integration. Requires Etsy developer account and OAuth tokens.',
+        'Facebook Marketplace': 'Facebook Marketing API integration for catalog management.',
+        'Other': 'Custom integration - specify your own API endpoint and authentication.'
+    };
+    
+    // Update platform information
+    function updatePlatformInfo() {
+        const platform = document.getElementById('platform').value;
+        const info = platformInfo[platform] || 'Select a platform to see integration details.';
+        document.getElementById('platformInfo').textContent = info;
+    }
+    
+    // Initialize platform info and set up change listener
+    updatePlatformInfo();
+    document.getElementById('platform').addEventListener('change', function() {
+        updatePlatformInfo();
+        
+        // Show platform-specific help
+        const amazonHelp = document.getElementById('amazonHelp');
+        const ebayHelp = document.getElementById('ebayHelp');
+        const apiHelpText = document.getElementById('api_help_text');
+        
+        // Hide all platform-specific sections first
+        amazonHelp.style.display = 'none';
+        ebayHelp.style.display = 'none';
+        
+        // Show/hide Amazon FBA/FBM section
+        const amazonFbaFbmSection = document.getElementById('amazonFbaFbmSection');
+        if (amazonFbaFbmSection) {
+            amazonFbaFbmSection.style.display = this.value === 'Amazon' ? 'block' : 'none';
+        }
+        
+        if (this.value === 'Amazon') {
+            amazonHelp.style.display = 'block';
+            apiHelpText.textContent = 'Amazon SP-API credentials in JSON format';
+        } else if (this.value === 'eBay') {
+            ebayHelp.style.display = 'block';
+            apiHelpText.textContent = 'eBay Trading API credentials in JSON format';
+        } else {
+            apiHelpText.textContent = 'API key or token for authentication with the store platform';
+        }
+    });
+    
+    // Handle FBM disabled warning
+    function updateFbmWarning() {
+        const fbmEnabled = document.getElementById('fbm_sync_enabled');
+        const warning = document.getElementById('fbmDisabledWarning');
+        const pushSection = document.getElementById('pushSettingsDetails');
+        
+        if (fbmEnabled && warning) {
+            const platform = document.getElementById('platform').value;
+            if (platform === 'Amazon' && !fbmEnabled.checked) {
+                warning.style.display = 'block';
+            } else {
+                warning.style.display = 'none';
+            }
+        }
+    }
+    
+    // Bind FBM toggle change
+    const fbmToggle = document.getElementById('fbm_sync_enabled');
+    if (fbmToggle) {
+        fbmToggle.addEventListener('change', updateFbmWarning);
+        updateFbmWarning(); // Initial check
+    }
+    
+    // Show platform-specific help if platform is already selected
+    const currentPlatform = document.getElementById('platform').value;
+    if (currentPlatform === 'Amazon') {
+        document.getElementById('amazonHelp').style.display = 'block';
+        document.getElementById('api_help_text').textContent = 'Amazon SP-API credentials in JSON format';
+    } else if (currentPlatform === 'eBay') {
+        document.getElementById('ebayHelp').style.display = 'block';
+        document.getElementById('api_help_text').textContent = 'eBay Trading API credentials in JSON format';
+        
+        // Populate eBay Business Policy fields if they exist
+        try {
+            const apiKey = document.getElementById('api_key').value;
+            if (apiKey) {
+                const credentials = JSON.parse(apiKey);
+                if (credentials.shipping_profile_id) {
+                    document.getElementById('shipping_profile_id').value = credentials.shipping_profile_id;
+                }
+                if (credentials.payment_profile_id) {
+                    document.getElementById('payment_profile_id').value = credentials.payment_profile_id;
+                }
+                if (credentials.return_profile_id) {
+                    document.getElementById('return_profile_id').value = credentials.return_profile_id;
+                }
+            }
+        } catch (e) {
+            // Ignore JSON parse errors
+        }
+    }
+    
+    // Toggle API key visibility
+    document.getElementById('toggleApiKey').addEventListener('click', function() {
+        const apiKeyField = document.getElementById('api_key');
+        const icon = this.querySelector('i');
+        
+        if (apiKeyField.style.filter === 'blur(3px)') {
+            apiKeyField.style.filter = 'none';
+            icon.setAttribute('data-feather', 'eye-off');
+        } else {
+            apiKeyField.style.filter = 'blur(3px)';
+            icon.setAttribute('data-feather', 'eye');
+        }
+        
+        feather.replace();
+    });
+    
+    // Test connection for Amazon stores
+    
+function bt38GetCsrfToken() {
+    const meta = document.querySelector('meta[name="csrf-token"]');
+    return meta ? meta.getAttribute('content') : '';
+}
+
+document.getElementById('testConnection').addEventListener('click', function() {
+        const storeId = {{ store.id }};
+        const credentials = document.getElementById('api_key').value;
+        
+        if (!credentials.trim()) {
+            alert('Please enter Amazon credentials first');
+            return;
+        }
+        
+        // Show loading state
+        this.innerHTML = '<i data-feather="loader" class="spin"></i> Testing...';
+        this.disabled = true;
+        feather.replace();
+        
+        fetch(`/api/test-amazon-connection/${storeId}`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': bt38GetCsrfToken()
+            },
+            body: JSON.stringify({
+                credentials: credentials,
+                csrf_token: bt38GetCsrfToken()
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Connection successful!');
+            } else {
+                alert('Connection failed: ' + (data.message || data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            alert('Test failed: ' + error.message);
+        })
+        .finally(() => {
+            this.innerHTML = 'Test Connection';
+            this.disabled = false;
+        });
+    });
+    
+    const testEbayBtn = document.getElementById('testEbayConnection');
+    if (testEbayBtn) {
+        testEbayBtn.addEventListener('click', function() {
+            const storeId = {{ store.id }};
+            const credentials = document.getElementById('api_key').value;
+
+            if (!credentials.trim()) {
+                alert('Please enter eBay credentials first');
+                return;
+            }
+
+            this.innerHTML = '<i data-feather="loader" class="spin"></i> Testing eBay...';
+            this.disabled = true;
+            feather.replace();
+
+            fetch(`/api/test-ebay-connection/${storeId}`, {
+                method: 'GET',
+                credentials: 'include'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('eBay connection successful!');
+                } else {
+                    alert('eBay connection failed: ' + (data.message || data.error || 'Unknown error'));
+                }
+            })
+            .catch(error => {
+                alert('eBay test failed: ' + error.message);
+            })
+            .finally(() => {
+                this.innerHTML = 'Test eBay Connection';
+                this.disabled = false;
+            });
+        });
+    }
+
+    // Initialize API key field styling
+    document.getElementById('api_key').style.filter = 'blur(3px)';
+    
+    // Push settings conditional display
+    document.getElementById('auto_push_enabled').addEventListener('change', function() {
+        const pushSettingsDetails = document.getElementById('pushSettingsDetails');
+        if (this.checked) {
+            pushSettingsDetails.style.display = 'block';
+        } else {
+            pushSettingsDetails.style.display = 'none';
+        }
+    });
+    
+    // Form validation
+    document.getElementById('editStoreForm').addEventListener('submit', function(e) {
+        const name = document.getElementById('name').value.trim();
+        const platform = document.getElementById('platform').value;
+        
+        if (!name || !platform) {
+            e.preventDefault();
+            alert('Please fill in all required fields');
+            return;
+        }
+        
+        // For eBay stores, merge Business Policy IDs into API credentials
+        if (platform === 'eBay') {
+            const apiKeyField = document.getElementById('api_key');
+            const shippingId = document.getElementById('shipping_profile_id').value.trim();
+            const paymentId = document.getElementById('payment_profile_id').value.trim();
+            const returnId = document.getElementById('return_profile_id').value.trim();
+            
+            try {
+                // Parse existing credentials or create new object
+                let credentials = {};
+                if (apiKeyField.value.trim()) {
+                    credentials = JSON.parse(apiKeyField.value);
+                }
+                
+                // Add Business Policy IDs if provided
+                if (shippingId) credentials.shipping_profile_id = shippingId;
+                if (paymentId) credentials.payment_profile_id = paymentId;
+                if (returnId) credentials.return_profile_id = returnId;
+                
+                // Update the API key field with merged credentials
+                apiKeyField.value = JSON.stringify(credentials, null, 2);
+            } catch (error) {
+                console.error('Error processing eBay credentials:', error);
+            }
+        }
+        
+        // Validate push settings if enabled
+        if (document.getElementById('auto_push_enabled') && document.getElementById('auto_push_enabled').checked) {
+              const freqField = document.getElementById('push_frequency_minutes');
+              if (!freqField) {
+                  return;
+              }
+            const frequency = parseInt(document.getElementById('push_frequency_minutes').value);
+            const batchSize = parseInt(document.getElementById('push_batch_size').value);
+            const retryAttempts = parseInt(document.getElementById('max_retry_attempts').value);
+            const failureThreshold = parseInt(document.getElementById('failure_threshold').value);
+            const largeChangeThreshold = parseInt(document.getElementById('large_change_threshold').value);
+            
+            if (frequency < 1 || frequency > 60) {
+                e.preventDefault();
+                alert('Push frequency must be between 1 and 60 minutes');
+                return;
+            }
+            
+            if (batchSize < 1 || batchSize > 100) {
+                e.preventDefault();
+                alert('Batch size must be between 1 and 100 items');
+                return;
+            }
+            
+            if (retryAttempts < 0 || retryAttempts > 10) {
+                e.preventDefault();
+                alert('Retry attempts must be between 0 and 10');
+                return;
+            }
+            
+            if (failureThreshold < 1 || failureThreshold > 20) {
+                e.preventDefault();
+                alert('Failure threshold must be between 1 and 20');
+                return;
+            }
+            
+            if (largeChangeThreshold < 1 || largeChangeThreshold > 1000) {
+                e.preventDefault();
+                alert('Large change threshold must be between 1 and 1000');
+                return;
+            }
+        }
+    });
+</script>
+{% endblock %}

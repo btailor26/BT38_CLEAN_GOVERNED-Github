@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+
+{% block title %}Amazon → Warehouse Sync{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header border-secondary d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">
+                        <i data-feather="refresh-cw" class="me-2"></i>
+                        Amazon → Warehouse Sync (One-Time Cleanup)
+                    </h4>
+                    <a href="{{ url_for('routes.dashboard') }}" class="btn btn-outline-secondary btn-sm">
+                        <i data-feather="arrow-left" class="me-1"></i> Back to Dashboard
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <h5><i data-feather="info" class="me-2"></i>About This Tool</h5>
+                        <p class="mb-2">This utility syncs Amazon MFN (FBM) quantities <strong>TO</strong> warehouse stock for items where:</p>
+                        <ul class="mb-2">
+                            <li>Warehouse quantity is <strong>0 or NULL</strong></li>
+                            <li>Amazon has <strong>actual stock > 0</strong></li>
+                            <li>Item is <strong>MFN (Merchant-Fulfilled)</strong> - FBA items are skipped</li>
+                        </ul>
+                        <p class="mb-0"><strong>Note:</strong> After this sync, normal "Warehouse is Boss" rule applies - warehouse pushes to Amazon.</p>
+                    </div>
+
+                    {% if result %}
+                        {% if result.success %}
+                            <div class="alert alert-success">
+                                <i data-feather="check-circle" class="me-2"></i>
+                                {{ result.message }}
+                            </div>
+                        {% else %}
+                            <div class="alert alert-danger">
+                                <i data-feather="alert-triangle" class="me-2"></i>
+                                {{ result.message }}
+                            </div>
+                        {% endif %}
+
+                        {% if result.candidates and result.candidates|length > 0 %}
+                            <div class="card bg-dark border-secondary mt-4">
+                                <div class="card-header border-secondary">
+                                    <h5 class="mb-0">
+                                        <i data-feather="list" class="me-2"></i>
+                                        Sync Candidates ({{ result.candidates|length }} items)
+                                    </h5>
+                                </div>
+                                <div class="card-body p-0">
+                                    <div class="table-responsive">
+                                        <table class="table table-dark table-striped table-hover mb-0">
+                                            <thead>
+                                                <tr>
+                                                    <th>#</th>
+                                                    <th>SKU</th>
+                                                    <th>Product Name</th>
+                                                    <th class="text-center">Warehouse Qty (Current)</th>
+                                                    <th class="text-center">Amazon Qty</th>
+                                                    <th class="text-center">New Qty</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for item in result.candidates %}
+                                                <tr>
+                                                    <td>{{ loop.index }}</td>
+                                                    <td><code>{{ item.sku }}</code></td>
+                                                    <td>{{ item.product_name[:50] }}{% if item.product_name|length > 50 %}...{% endif %}</td>
+                                                    <td class="text-center">
+                                                        <span class="badge bg-danger">{{ item.warehouse_qty_old }}</span>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <span class="badge bg-primary">{{ item.amazon_qty }}</span>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <span class="badge bg-success">{{ item.amazon_qty }}</span>
+                                                    </td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {% if preview_mode %}
+                            <div class="mt-4">
+                                <form action="{{ url_for('routes.amazon_sync_apply') }}" method="POST" onsubmit="return confirm('Are you sure you want to apply {{ result.candidates|length }} warehouse quantity updates? This cannot be undone.');">
+                                    <button type="submit" class="btn btn-warning btn-lg">
+                                        <i data-feather="zap" class="me-2"></i>
+                                        Apply Sync (Update {{ result.candidates|length }} Items)
+                                    </button>
+                                    <span class="text-muted ms-3">This will update warehouse quantities to match Amazon.</span>
+                                </form>
+                            </div>
+                            {% endif %}
+                        {% else %}
+                            <div class="alert alert-secondary mt-4">
+                                <i data-feather="check" class="me-2"></i>
+                                <strong>No sync needed.</strong> All MFN items with Amazon stock already have matching warehouse quantities (or warehouse already has stock > 0).
+                            </div>
+                        {% endif %}
+
+                        {% if result.updated_count > 0 %}
+                            <div class="alert alert-success mt-4">
+                                <i data-feather="check-circle" class="me-2"></i>
+                                <strong>Sync Complete!</strong> Updated {{ result.updated_count }} warehouse quantities from Amazon.
+                                Check the application logs for detailed changes (search for "AMZN_SYNC").
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <div class="alert alert-secondary">
+                            <i data-feather="loader" class="me-2"></i>
+                            Loading sync preview...
+                        </div>
+                    {% endif %}
+
+                    <div class="mt-4">
+                        <a href="{{ url_for('routes.amazon_sync_preview') }}" class="btn btn-outline-primary">
+                            <i data-feather="refresh-cw" class="me-1"></i> Refresh Preview
+                        </a>
+                        <a href="{{ url_for('routes.amazon_sync_preview', format='json') }}" class="btn btn-outline-secondary ms-2">
+                            <i data-feather="code" class="me-1"></i> View as JSON
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    feather.replace();
+</script>
+{% endblock %}

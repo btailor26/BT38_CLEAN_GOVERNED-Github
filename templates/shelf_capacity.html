@@ -1,0 +1,392 @@
+{% extends 'base.html' %}
+
+{% block title %}Shelf Capacity Planner - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-1">Shelf Capacity Planner</h1>
+            <p class="text-muted mb-0">Plan and track storage capacity on warehouse shelves</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('routes.settings') }}" class="btn btn-outline-secondary">
+                <i data-feather="box" class="me-1"></i>Box Types
+            </a>
+            <a href="{{ url_for('routes.warehouse') }}" class="btn btn-outline-primary">
+                <i data-feather="grid" class="me-1"></i>Warehouse Layout
+            </a>
+        </div>
+    </div>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <div class="row">
+        <div class="col-lg-3">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i data-feather="search" class="me-2"></i>Select Location
+                </div>
+                <div class="card-body">
+                    <form method="GET" id="locationForm">
+                        <div class="mb-3">
+                            <label class="form-label">Warehouse</label>
+                            <select name="warehouse_id" class="form-select" id="warehouseSelect">
+                                <option value="">Select warehouse...</option>
+                                {% for wh in warehouses %}
+                                <option value="{{ wh.id }}" {% if selected_warehouse_id == wh.id %}selected{% endif %}>
+                                    {{ wh.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Zone</label>
+                            <select name="zone_id" class="form-select" id="zoneSelect" disabled>
+                                <option value="">Select zone...</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Aisle</label>
+                            <select name="aisle_id" class="form-select" id="aisleSelect" disabled>
+                                <option value="">Select aisle...</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Bay</label>
+                            <select name="bay_id" class="form-select" id="baySelect" disabled>
+                                <option value="">Select bay...</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Shelf</label>
+                            <select name="shelf_id" class="form-select" id="shelfSelect" disabled>
+                                <option value="">Select shelf...</option>
+                            </select>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i data-feather="eye" class="me-1"></i>View Capacity
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <i data-feather="box" class="me-2"></i>Available Box Types
+                </div>
+                <div class="card-body p-0">
+                    {% if box_types %}
+                    <ul class="list-group list-group-flush">
+                        {% for bt in box_types %}
+                        <li class="list-group-item d-flex justify-content-between align-items-center box-type-item"
+                            data-box-id="{{ bt.id }}"
+                            data-width="{{ bt.width_cm }}"
+                            data-depth="{{ bt.depth_cm }}"
+                            data-height="{{ bt.height_cm }}"
+                            draggable="true">
+                            <div>
+                                <span class="badge me-2" style="background-color: {{ bt.color }}">{{ bt.code }}</span>
+                                <span class="small">{{ bt.width_cm }}×{{ bt.depth_cm }}×{{ bt.height_cm }}</span>
+                            </div>
+                            <i data-feather="move" class="text-muted"></i>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <div class="text-center py-3">
+                        <p class="text-muted mb-2 small">No box types defined</p>
+                        <a href="{{ url_for('routes.box_type_add') }}" class="btn btn-sm btn-outline-primary">Add Box Type</a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-9">
+            {% if shelf %}
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span>
+                        <i data-feather="layers" class="me-2"></i>
+                        Shelf: <strong>{{ shelf.full_code }}</strong>
+                    </span>
+                    <div>
+                        {% if shelf.width_cm and shelf.depth_cm %}
+                        <span class="badge bg-secondary">{{ shelf.width_cm }}×{{ shelf.depth_cm }} cm</span>
+                        {% endif %}
+                        {% if shelf.max_height_cm %}
+                        <span class="badge bg-info">Max Height: {{ shelf.max_height_cm }} cm</span>
+                        {% endif %}
+                        {% if shelf.max_weight_kg %}
+                        <span class="badge bg-warning text-dark">Max: {{ shelf.max_weight_kg }} kg</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="shelfVisualizer" class="border rounded bg-light position-relative mb-3"
+                         style="min-height: 300px; {% if shelf.width_cm and shelf.depth_cm %}aspect-ratio: {{ shelf.width_cm }} / {{ shelf.depth_cm }};{% endif %}"
+                         data-shelf-id="{{ shelf.id }}"
+                         data-shelf-width="{{ shelf.width_cm or 100 }}"
+                         data-shelf-depth="{{ shelf.depth_cm or 60 }}">
+                        
+                        {% for alloc in allocations %}
+                        <div class="allocation-block position-absolute"
+                             data-allocation-id="{{ alloc.id }}"
+                             style="left: {{ alloc.position_x }}%; top: {{ alloc.position_y }}%; 
+                                    width: {{ (alloc.width_cm / (shelf.width_cm or 100)) * 100 }}%;
+                                    height: {{ (alloc.depth_cm / (shelf.depth_cm or 60)) * 100 }}%;
+                                    background-color: {{ alloc.box_type.color if alloc.box_type else '#6c757d' }};
+                                    opacity: 0.7; border: 2px solid rgba(0,0,0,0.3); border-radius: 4px;">
+                            <span class="position-absolute top-50 start-50 translate-middle text-white small fw-bold">
+                                {{ alloc.label or alloc.sku or 'Box' }}
+                            </span>
+                        </div>
+                        {% endfor %}
+                        
+                        <div class="position-absolute bottom-0 end-0 p-2 text-muted small">
+                            Drop boxes here
+                        </div>
+                    </div>
+                    
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <div class="border rounded p-3 text-center">
+                                <h6 class="text-muted mb-1">Allocations</h6>
+                                <h4 class="mb-0">{{ allocations|length }}</h4>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border rounded p-3 text-center">
+                                <h6 class="text-muted mb-1">Area Used</h6>
+                                <h4 class="mb-0" id="areaUsed">0%</h4>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border rounded p-3 text-center">
+                                <h6 class="text-muted mb-1">Weight Used</h6>
+                                <h4 class="mb-0">{{ shelf.current_weight_kg or 0 }} kg</h4>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border rounded p-3 text-center">
+                                <h6 class="text-muted mb-1">Remaining</h6>
+                                <h4 class="mb-0">{{ (shelf.max_weight_kg - (shelf.current_weight_kg or 0))|round(1) if shelf.max_weight_kg else '-' }} kg</h4>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <i data-feather="list" class="me-2"></i>Current Allocations
+                </div>
+                <div class="card-body p-0">
+                    {% if allocations %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Box Type</th>
+                                    <th>SKU/Label</th>
+                                    <th>Dimensions</th>
+                                    <th>Weight</th>
+                                    <th>Qty</th>
+                                    <th class="text-center">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for alloc in allocations %}
+                                <tr>
+                                    <td>
+                                        {% if alloc.box_type %}
+                                        <span class="badge" style="background-color: {{ alloc.box_type.color }}">
+                                            {{ alloc.box_type.code }}
+                                        </span>
+                                        {% else %}
+                                        <span class="text-muted">Custom</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ alloc.label or alloc.sku or '-' }}</td>
+                                    <td>{{ alloc.width_cm }}×{{ alloc.depth_cm }}×{{ alloc.height_cm }} cm</td>
+                                    <td>{{ alloc.weight_kg or '-' }} kg</td>
+                                    <td>{{ alloc.quantity }}</td>
+                                    <td class="text-center">
+                                        <button class="btn btn-sm btn-outline-danger" 
+                                                onclick="removeAllocation({{ alloc.id }})">
+                                            <i data-feather="trash-2"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <p class="text-muted mb-0">No allocations on this shelf</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            {% else %}
+            <div class="card">
+                <div class="card-body text-center py-5">
+                    <i data-feather="layers" style="width: 48px; height: 48px;" class="text-muted mb-3"></i>
+                    <h5 class="text-muted">Select a Shelf</h5>
+                    <p class="text-muted">Choose a warehouse, zone, aisle, bay, and shelf to view capacity</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    feather.replace();
+    
+    const warehouseSelect = document.getElementById('warehouseSelect');
+    const zoneSelect = document.getElementById('zoneSelect');
+    const aisleSelect = document.getElementById('aisleSelect');
+    const baySelect = document.getElementById('baySelect');
+    const shelfSelect = document.getElementById('shelfSelect');
+    
+    warehouseSelect?.addEventListener('change', async function() {
+        const warehouseId = this.value;
+        resetSelects(['zone', 'aisle', 'bay', 'shelf']);
+        
+        if (!warehouseId) return;
+        
+        try {
+            const resp = await fetch(`/api/warehouse/${warehouseId}/layout`);
+            const data = await resp.json();
+            
+            if (data.ok && data.zones) {
+                zoneSelect.disabled = false;
+                data.zones.forEach(z => {
+                    const opt = document.createElement('option');
+                    opt.value = z.id;
+                    opt.textContent = z.name || z.code;
+                    zoneSelect.appendChild(opt);
+                });
+            }
+        } catch (e) {
+            console.error('Error loading zones:', e);
+        }
+    });
+    
+    zoneSelect?.addEventListener('change', async function() {
+        const zoneId = this.value;
+        resetSelects(['aisle', 'bay', 'shelf']);
+        
+        if (!zoneId) return;
+        
+        aisleSelect.disabled = false;
+        
+        const opt1 = document.createElement('option');
+        opt1.value = '';
+        opt1.textContent = 'Loading...';
+        aisleSelect.appendChild(opt1);
+    });
+    
+    function resetSelects(names) {
+        names.forEach(name => {
+            const sel = document.getElementById(name + 'Select');
+            if (sel) {
+                sel.innerHTML = '<option value="">Select ' + name + '...</option>';
+                sel.disabled = true;
+            }
+        });
+    }
+    
+    async function removeAllocation(allocationId) {
+        if (!confirm('Remove this allocation?')) return;
+        
+        try {
+            const resp = await fetch(`/api/shelf/allocation/${allocationId}`, {
+                method: 'DELETE'
+            });
+            const data = await resp.json();
+            
+            if (data.ok) {
+                location.reload();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        } catch (e) {
+            console.error('Error removing allocation:', e);
+            alert('Error removing allocation');
+        }
+    }
+    
+    const visualizer = document.getElementById('shelfVisualizer');
+    if (visualizer) {
+        visualizer.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            visualizer.style.backgroundColor = '#e9ecef';
+        });
+        
+        visualizer.addEventListener('dragleave', () => {
+            visualizer.style.backgroundColor = '';
+        });
+        
+        visualizer.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            visualizer.style.backgroundColor = '';
+            
+            const boxId = e.dataTransfer.getData('text/plain');
+            if (!boxId) return;
+            
+            const shelfId = visualizer.dataset.shelfId;
+            const rect = visualizer.getBoundingClientRect();
+            const x = ((e.clientX - rect.left) / rect.width) * 100;
+            const y = ((e.clientY - rect.top) / rect.height) * 100;
+            
+            try {
+                const resp = await fetch(`/api/shelf/${shelfId}/allocate`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        box_type_id: parseInt(boxId),
+                        position_x: x,
+                        position_y: y
+                    })
+                });
+                const data = await resp.json();
+                
+                if (data.ok) {
+                    location.reload();
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (e) {
+                console.error('Error allocating:', e);
+            }
+        });
+    }
+    
+    document.querySelectorAll('.box-type-item').forEach(item => {
+        item.addEventListener('dragstart', (e) => {
+            e.dataTransfer.setData('text/plain', item.dataset.boxId);
+        });
+    });
+</script>
+{% endblock %}

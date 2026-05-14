@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block title %}Review Import - Inventory Manager{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('routes.warehouse') }}">Warehouse</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('routes.amazon_credentials_setup') }}">Import</a></li>
+                    <li class="breadcrumb-item active">Review</li>
+                </ol>
+            </nav>
+            
+            <h2 class="mb-0">
+                <i data-feather="check-circle" class="me-2"></i>
+                Review Import: {{ batch_id }}
+            </h2>
+            <p class="text-muted mt-2">
+                Review the imported data before applying changes to warehouse stock.
+            </p>
+        </div>
+    </div>
+    
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary">
+                <div class="card-body text-center">
+                    <h3 class="text-primary mb-0">{{ total_items }}</h3>
+                    <small class="text-muted">Total Items</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary">
+                <div class="card-body text-center">
+                    <h3 class="text-warning mb-0">{{ mismatch_count }}</h3>
+                    <small class="text-muted">Mismatches</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary">
+                <div class="card-body text-center">
+                    <h3 class="text-success mb-0">{{ matched_count }}</h3>
+                    <small class="text-muted">Already Matched</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary">
+                <div class="card-body text-center">
+                    <h3 class="text-info mb-0">{{ new_count }}</h3>
+                    <small class="text-muted">New Items</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Action Buttons -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <form method="POST" action="{{ url_for('routes.inventory_import_apply', batch_id=batch_id) }}" id="applyForm">
+                <input type="hidden" name="action" id="actionInput" value="apply_all">
+                
+                <div class="btn-group me-3">
+                    <button type="submit" class="btn btn-success" onclick="document.getElementById('actionInput').value='apply_all';">
+                        <i data-feather="check-circle" class="me-2"></i>
+                        Apply All Changes ({{ mismatch_count + new_count }})
+                    </button>
+                    <button type="submit" class="btn btn-primary" onclick="document.getElementById('actionInput').value='apply_selected';">
+                        <i data-feather="check-square" class="me-2"></i>
+                        Apply Selected Only
+                    </button>
+                </div>
+                
+                <a href="{{ url_for('routes.amazon_credentials_setup') }}" class="btn btn-outline-secondary">
+                    <i data-feather="arrow-left" class="me-2"></i>
+                    Back to Import
+                </a>
+                
+                <form method="POST" action="{{ url_for('routes.inventory_import_reject', batch_id=batch_id) }}" class="d-inline">
+                    <button type="submit" class="btn btn-outline-danger" onclick="return confirm('Are you sure you want to reject this import?');">
+                        <i data-feather="x-circle" class="me-2"></i>
+                        Reject All
+                    </button>
+                </form>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Items Table -->
+    <div class="card bg-dark border-secondary">
+        <div class="card-header">
+            <div class="row align-items-center">
+                <div class="col">
+                    <h5 class="mb-0">Imported Items</h5>
+                </div>
+                <div class="col-auto">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="selectAll" onchange="toggleSelectAll(this)">
+                        <label class="form-check-label" for="selectAll">Select All Mismatches</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-dark table-hover mb-0">
+                    <thead class="sticky-top bg-dark">
+                        <tr>
+                            <th width="40">
+                                <i data-feather="check-square"></i>
+                            </th>
+                            <th>SKU</th>
+                            <th>Product Name</th>
+                            <th>Type</th>
+                            <th class="text-end">Amazon Qty</th>
+                            <th class="text-end">Warehouse Qty</th>
+                            <th class="text-end">Difference</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in staging_items %}
+                        <tr class="{% if item.quantity_difference and item.quantity_difference != 0 %}table-warning{% elif item.warehouse_stock_id is none %}table-info{% endif %}">
+                            <td>
+                                {% if item.quantity_difference != 0 or item.warehouse_stock_id is none %}
+                                <input type="checkbox" class="form-check-input item-checkbox" 
+                                       name="selected_items" value="{{ item.id }}" form="applyForm"
+                                       {% if item.quantity_difference != 0 %}checked{% endif %}>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <code>{{ item.sku }}</code>
+                                {% if item.asin %}
+                                <br><small class="text-muted">{{ item.asin }}</small>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <span title="{{ item.product_name }}">
+                                    {{ item.product_name[:50] ~ '...' if item.product_name and item.product_name|length > 50 else item.product_name or '-' }}
+                                </span>
+                            </td>
+                            <td>
+                                {% if item.fulfillment_type == 'FBA' %}
+                                <span class="badge bg-primary">FBA</span>
+                                {% elif item.fulfillment_type == 'FBM' %}
+                                <span class="badge bg-secondary">FBM</span>
+                                {% else %}
+                                <span class="badge bg-dark">Unknown</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                <strong>{{ item.marketplace_quantity }}</strong>
+                            </td>
+                            <td class="text-end">
+                                {% if item.warehouse_quantity is not none %}
+                                {{ item.warehouse_quantity }}
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-end">
+                                {% if item.quantity_difference is not none %}
+                                    {% if item.quantity_difference > 0 %}
+                                    <span class="text-success">+{{ item.quantity_difference }}</span>
+                                    {% elif item.quantity_difference < 0 %}
+                                    <span class="text-danger">{{ item.quantity_difference }}</span>
+                                    {% else %}
+                                    <span class="text-muted">0</span>
+                                    {% endif %}
+                                {% else %}
+                                <span class="text-info">NEW</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if item.warehouse_stock_id is none %}
+                                <span class="badge bg-info">New Item</span>
+                                {% elif item.quantity_difference == 0 %}
+                                <span class="badge bg-success">Matched</span>
+                                {% elif item.quantity_difference > 0 %}
+                                <span class="badge bg-warning text-dark">Stock Higher</span>
+                                {% else %}
+                                <span class="badge bg-danger">Stock Lower</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleSelectAll(checkbox) {
+    const items = document.querySelectorAll('.item-checkbox');
+    items.forEach(item => {
+        item.checked = checkbox.checked;
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    feather.replace();
+});
+</script>
+{% endblock %}

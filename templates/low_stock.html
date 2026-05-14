@@ -1,0 +1,292 @@
+{% extends "base.html" %}
+
+{% block title %}Low Stock Items - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h2><i data-feather="alert-triangle"></i> Low Stock Items</h2>
+            <p class="text-muted">{{ total_count }} items with stock below 10 units</p>
+        </div>
+        <a href="{{ url_for('routes.dashboard') }}" class="btn btn-outline-secondary">
+            <i data-feather="arrow-left"></i> Back to Dashboard
+        </a>
+    </div>
+    
+    <!-- Search Bar -->
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <form method="GET" action="{{ url_for('routes.low_stock_items') }}" class="input-group">
+                <input type="text" 
+                       class="form-control" 
+                       name="search" 
+                       placeholder="Search by SKU or Location..." 
+                       value="{{ search_query or '' }}">
+                <button class="btn btn-primary" type="submit">
+                    <i data-feather="search"></i> Search
+                </button>
+                {% if search_query %}
+                <a href="{{ url_for('routes.low_stock_items') }}" class="btn btn-outline-secondary">
+                    <i data-feather="x"></i> Clear
+                </a>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+</div>
+
+{% if by_supplier or no_supplier_items %}
+    <form method="POST" action="{{ url_for('routes.create_po_from_low_stock') }}">
+        <!-- Items grouped by supplier -->
+        {% for supplier_id, data in by_supplier.items() %}
+        <div class="card mb-3">
+            <div class="card-header bg-warning bg-opacity-10">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-0">
+                            <i data-feather="package"></i> {{ data.supplier.name }}
+                        </h5>
+                        <small class="text-muted">
+                            {% if data.supplier.email %}{{ data.supplier.email }}{% endif %}
+                            {% if data.supplier.phone %} | {{ data.supplier.phone }}{% endif %}
+                        </small>
+                    </div>
+                    <div>
+                        <input type="checkbox" class="form-check-input me-2" id="selectSupplier{{ supplier_id }}" 
+                               onchange="toggleSupplierItems({{ supplier_id }}, this.checked)">
+                        <label for="selectSupplier{{ supplier_id }}">Select All</label>
+                        <button type="submit" name="supplier_id" value="{{ supplier_id }}" 
+                                class="btn btn-sm btn-primary ms-3">
+                            <i data-feather="shopping-cart"></i> Create PO
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover">
+                        <thead>
+                            <tr>
+                                <th width="40">
+                                    <input type="checkbox" class="form-check-input" id="selectAllSupplier{{ supplier_id }}" 
+                                           onchange="toggleSupplierItems({{ supplier_id }}, this.checked)">
+                                </th>
+                                <th>SKU</th>
+                                <th>Product Name</th>
+                                <th>Location</th>
+                                <th>Available Qty</th>
+                                <th>Reorder Point</th>
+                                <th>Order Qty</th>
+                                <th>Unit Cost</th>
+                                <th>Estimated Cost</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in data.stock_items %}
+                            <tr class="{% if item.available_quantity == 0 %}table-danger{% else %}table-warning{% endif %}">
+                                <td>
+                                    <input type="checkbox" class="form-check-input supplier-{{ supplier_id }}-item" 
+                                           name="selected_items[]" value="{{ item.id }}" 
+                                           data-sku="{{ item.sku }}" 
+                                           data-qty="{{ item.reorder_quantity if item.reorder_quantity > 0 else 10 }}"
+                                           data-cost="{{ item.unit_cost }}">
+                                </td>
+                                <td><code>{{ item.sku }}</code></td>
+                                <td>{{ item.product_name }}</td>
+                                <td>{{ item.location or '-' }}</td>
+                                <td>
+                                    {% if item.available_quantity == 0 %}
+                                        <span class="badge bg-danger">OUT</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark">{{ item.available_quantity }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if item.reorder_point > 0 %}
+                                        {{ item.reorder_point }}
+                                    {% else %}
+                                        <span class="text-muted">Not set</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <input type="number" class="form-control form-control-sm" 
+                                           style="width: 80px;" 
+                                           name="qty_{{ item.id }}" 
+                                           value="{{ item.reorder_quantity if item.reorder_quantity > 0 else 10 }}" 
+                                           min="1">
+                                    <input type="hidden" name="sku_{{ item.id }}" value="{{ item.sku }}">
+                                    <input type="hidden" name="cost_{{ item.id }}" value="{{ item.unit_cost }}">
+                                </td>
+                                <td>£{{ "%.2f"|format(item.unit_cost) }}</td>
+                                <td>
+                                    £{{ "%.2f"|format((item.reorder_quantity if item.reorder_quantity > 0 else 10) * item.unit_cost) }}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+        <!-- Items without supplier -->
+        {% if no_supplier_items %}
+        <div class="card mb-3">
+            <div class="card-header bg-secondary bg-opacity-10">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-0">
+                            <i data-feather="alert-triangle"></i> Items Without Supplier ({{ no_supplier_items|length }})
+                        </h5>
+                        <small class="text-muted">Assign suppliers to these items to enable purchase orders</small>
+                    </div>
+                    <div>
+                        <input type="checkbox" class="form-check-input me-2" id="selectAllNoSupplier" 
+                               onchange="toggleNoSupplierItems(this.checked)">
+                        <label for="selectAllNoSupplier">Select All</label>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- Bulk Supplier Assignment - Separate form -->
+                <form method="POST" action="{{ url_for('routes.bulk_assign_supplier') }}" id="bulkAssignForm">
+                    <div class="alert alert-info mb-3">
+                        <div class="row align-items-center">
+                            <div class="col-md-6">
+                                <label class="form-label mb-0"><strong>Bulk Assign Supplier:</strong></label>
+                                <select class="form-select form-select-sm" name="bulk_supplier_id" id="bulkSupplierSelect">
+                                    <option value="">Select a supplier...</option>
+                                    {% for supplier in all_suppliers %}
+                                    <option value="{{ supplier.id }}">{{ supplier.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <button type="submit" class="btn btn-primary" onclick="return validateBulkAssign()">
+                                    <i data-feather="users"></i> Assign Supplier to Selected Items
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm table-hover">
+                            <thead>
+                                <tr>
+                                    <th width="40">
+                                        <input type="checkbox" class="form-check-input" id="selectAllNoSupplierHeader" 
+                                               onchange="toggleNoSupplierItems(this.checked)">
+                                    </th>
+                                    <th>SKU</th>
+                                    <th>Product Name</th>
+                                    <th>Location</th>
+                                    <th>Available Qty</th>
+                                    <th>Reorder Point</th>
+                                    <th>Unit Cost</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in no_supplier_items %}
+                                <tr class="{% if item.available_quantity == 0 %}table-danger{% else %}table-warning{% endif %}">
+                                    <td>
+                                        <input type="checkbox" class="form-check-input no-supplier-item" 
+                                               name="no_supplier_items[]" value="{{ item.id }}">
+                                    </td>
+                                <td><code>{{ item.sku }}</code></td>
+                                <td>{{ item.product_name }}</td>
+                                <td>{{ item.location or '-' }}</td>
+                                <td>
+                                    {% if item.available_quantity == 0 %}
+                                        <span class="badge bg-danger">OUT</span>
+                                    {% else %}
+                                        <span class="badge bg-warning text-dark">{{ item.available_quantity }}</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if item.reorder_point > 0 %}
+                                        {{ item.reorder_point }}
+                                    {% else %}
+                                        <span class="text-muted">Not set</span>
+                                    {% endif %}
+                                </td>
+                                <td>£{{ "%.2f"|format(item.unit_cost) }}</td>
+                                <td>
+                                    <a href="{{ url_for('routes.warehouse_detail', stock_id=item.id) }}" 
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i data-feather="edit"></i> Assign Supplier
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Global action buttons -->
+        {% if by_supplier %}
+        <div class="d-flex justify-content-end gap-2">
+            <button type="submit" name="create_selected" value="1" class="btn btn-lg btn-primary">
+                <i data-feather="shopping-cart"></i> Create PO for Selected Items
+            </button>
+            <button type="submit" name="create_all" value="1" class="btn btn-lg btn-success">
+                <i data-feather="shopping-cart"></i> Create POs for All Suppliers
+            </button>
+        </div>
+        {% endif %}
+    </form>
+{% else %}
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <i data-feather="check-circle" size="64" class="text-success mb-3"></i>
+            <h4>All Stock Levels Good!</h4>
+            <p class="text-muted">No items are currently below 10 units.</p>
+            <a href="{{ url_for('routes.inventory') }}" class="btn btn-primary">
+                <i data-feather="package"></i> View Inventory
+            </a>
+        </div>
+    </div>
+{% endif %}
+
+<script>
+function toggleSupplierItems(supplierId, checked) {
+    const checkboxes = document.querySelectorAll('.supplier-' + supplierId + '-item');
+    checkboxes.forEach(cb => cb.checked = checked);
+}
+
+function toggleNoSupplierItems(checked) {
+    const checkboxes = document.querySelectorAll('.no-supplier-item');
+    checkboxes.forEach(cb => cb.checked = checked);
+    // Sync both select all checkboxes
+    document.getElementById('selectAllNoSupplier').checked = checked;
+    document.getElementById('selectAllNoSupplierHeader').checked = checked;
+}
+
+function validateBulkAssign() {
+    const selectedItems = document.querySelectorAll('.no-supplier-item:checked');
+    const supplier = document.getElementById('bulkSupplierSelect').value;
+    
+    if (selectedItems.length === 0) {
+        alert('Please select at least one item to assign a supplier.');
+        return false;
+    }
+    
+    if (!supplier) {
+        alert('Please select a supplier from the dropdown.');
+        return false;
+    }
+    
+    return true;
+}
+
+// Initialize feather icons
+feather.replace();
+</script>
+
+{% endblock %}

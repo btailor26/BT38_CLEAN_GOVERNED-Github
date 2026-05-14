@@ -1,0 +1,341 @@
+{% extends 'base.html' %}
+
+{% block title %}Warehouse Layout - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-1">Warehouse Layout Engine</h1>
+            <p class="text-muted mb-0">Auto-generate and manage warehouse zones, aisles, bays, and shelves</p>
+        </div>
+    </div>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <div class="row">
+        <div class="col-lg-4">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i data-feather="settings" class="me-2"></i>Layout Generator
+                </div>
+                <div class="card-body">
+                    <form id="generate-layout-form">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        
+                        <div class="mb-3">
+                            <label for="warehouse_id" class="form-label">Warehouse</label>
+                            <select class="form-select" id="warehouse_id" name="warehouse_id" required>
+                                {% for warehouse in warehouses %}
+                                <option value="{{ warehouse.id }}">{{ warehouse.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                <label for="zones" class="form-label">Zones</label>
+                                <input type="number" class="form-control" id="zones" name="zones" value="1" min="1" max="26">
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label for="aisles_per_zone" class="form-label">Aisles/Zone</label>
+                                <input type="number" class="form-control" id="aisles_per_zone" name="aisles_per_zone" value="5" min="1" max="99">
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-6 mb-3">
+                                <label for="bays_per_aisle" class="form-label">Bays/Aisle</label>
+                                <input type="number" class="form-control" id="bays_per_aisle" name="bays_per_aisle" value="10" min="1" max="99">
+                            </div>
+                            <div class="col-6 mb-3">
+                                <label for="shelves_per_bay" class="form-label">Shelves/Bay</label>
+                                <input type="number" class="form-control" id="shelves_per_bay" name="shelves_per_bay" value="4" min="1" max="20">
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="bins_per_shelf" class="form-label">Bins/Shelf (0 = no bins)</label>
+                            <input type="number" class="form-control" id="bins_per_shelf" name="bins_per_shelf" value="0" min="0" max="50">
+                        </div>
+                        
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">
+                                <i data-feather="grid" class="me-1"></i>Generate Layout
+                            </button>
+                        </div>
+                    </form>
+                    
+                    <div id="generation-result" class="mt-3" style="display: none;"></div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <i data-feather="search" class="me-2"></i>Find Location
+                </div>
+                <div class="card-body">
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" id="location-code" placeholder="e.g., Z01-A01-B01-S01">
+                        <button class="btn btn-outline-primary" type="button" id="find-location-btn">
+                            <i data-feather="search"></i>
+                        </button>
+                    </div>
+                    <div id="location-result" style="display: none;"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i data-feather="map" class="me-2"></i>Layout Viewer</span>
+                    <button class="btn btn-sm btn-outline-secondary" id="load-layout-btn">
+                        <i data-feather="refresh-cw" class="me-1"></i>Refresh
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div id="layout-container">
+                        <div class="text-center py-5 text-muted">
+                            <i data-feather="map" style="width: 48px; height: 48px;"></i>
+                            <p class="mt-3">Select a warehouse and generate a layout to view</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card mt-4">
+        <div class="card-header">
+            <i data-feather="info" class="me-2"></i>Location Code Format
+        </div>
+        <div class="card-body">
+            <p class="mb-3">Locations are identified using a hierarchical code format:</p>
+            <div class="row">
+                <div class="col-md-2 text-center mb-3">
+                    <div class="p-3 bg-primary bg-opacity-10 rounded">
+                        <strong class="text-primary">Z01</strong>
+                        <div class="small text-muted mt-1">Zone</div>
+                    </div>
+                </div>
+                <div class="col-auto d-flex align-items-center mb-3">-</div>
+                <div class="col-md-2 text-center mb-3">
+                    <div class="p-3 bg-success bg-opacity-10 rounded">
+                        <strong class="text-success">A01</strong>
+                        <div class="small text-muted mt-1">Aisle</div>
+                    </div>
+                </div>
+                <div class="col-auto d-flex align-items-center mb-3">-</div>
+                <div class="col-md-2 text-center mb-3">
+                    <div class="p-3 bg-warning bg-opacity-10 rounded">
+                        <strong class="text-warning">B01</strong>
+                        <div class="small text-muted mt-1">Bay</div>
+                    </div>
+                </div>
+                <div class="col-auto d-flex align-items-center mb-3">-</div>
+                <div class="col-md-2 text-center mb-3">
+                    <div class="p-3 bg-info bg-opacity-10 rounded">
+                        <strong class="text-info">S01</strong>
+                        <div class="small text-muted mt-1">Shelf</div>
+                    </div>
+                </div>
+                <div class="col-auto d-flex align-items-center mb-3">-</div>
+                <div class="col-md-2 text-center mb-3">
+                    <div class="p-3 bg-secondary bg-opacity-10 rounded">
+                        <strong class="text-secondary">BN01</strong>
+                        <div class="small text-muted mt-1">Bin (optional)</div>
+                    </div>
+                </div>
+            </div>
+            <p class="text-muted small mb-0">
+                Example: <code>Z01-A03-B05-S02</code> = Zone 1, Aisle 3, Bay 5, Shelf 2
+            </p>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    feather.replace();
+    
+    document.getElementById('generate-layout-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const warehouseId = document.getElementById('warehouse_id').value;
+        const data = {
+            zones: parseInt(document.getElementById('zones').value),
+            aisles_per_zone: parseInt(document.getElementById('aisles_per_zone').value),
+            bays_per_aisle: parseInt(document.getElementById('bays_per_aisle').value),
+            shelves_per_bay: parseInt(document.getElementById('shelves_per_bay').value),
+            bins_per_shelf: parseInt(document.getElementById('bins_per_shelf').value)
+        };
+        
+        const btn = this.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating...';
+        
+        try {
+            const response = await fetch(`/api/warehouse/${warehouseId}/generate-layout`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('input[name="csrf_token"]').value
+                },
+                body: JSON.stringify(data)
+            });
+            
+            const result = await response.json();
+            const resultEl = document.getElementById('generation-result');
+            
+            if (result.ok) {
+                resultEl.innerHTML = `
+                    <div class="alert alert-success mb-0">
+                        <strong>Layout Generated!</strong><br>
+                        Zones: ${result.created.zones}<br>
+                        Aisles: ${result.created.aisles}<br>
+                        Bays: ${result.created.bays}<br>
+                        Shelves: ${result.created.shelves}<br>
+                        ${result.created.bins > 0 ? 'Bins: ' + result.created.bins + '<br>' : ''}
+                        <strong>Total Locations: ${result.total_locations}</strong>
+                    </div>
+                `;
+                loadLayout(warehouseId);
+            } else {
+                resultEl.innerHTML = `<div class="alert alert-danger mb-0">${result.error}</div>`;
+            }
+            resultEl.style.display = 'block';
+        } catch (err) {
+            console.error('Generation error:', err);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i data-feather="grid" class="me-1"></i>Generate Layout';
+            feather.replace();
+        }
+    });
+    
+    document.getElementById('load-layout-btn').addEventListener('click', function() {
+        const warehouseId = document.getElementById('warehouse_id').value;
+        loadLayout(warehouseId);
+    });
+    
+    document.getElementById('find-location-btn').addEventListener('click', async function() {
+        const code = document.getElementById('location-code').value.trim();
+        if (!code) return;
+        
+        try {
+            const response = await fetch(`/api/warehouse/location/${encodeURIComponent(code)}`);
+            const result = await response.json();
+            const resultEl = document.getElementById('location-result');
+            
+            if (result.ok) {
+                let html = '<div class="alert alert-success mb-0"><strong>Found:</strong><br>';
+                if (result.location.zone) html += `Zone: ${result.location.zone.code} - ${result.location.zone.name || 'N/A'}<br>`;
+                if (result.location.aisle) html += `Aisle: ${result.location.aisle.code}<br>`;
+                if (result.location.bay) html += `Bay: ${result.location.bay.code}<br>`;
+                if (result.location.shelf) html += `Shelf: ${result.location.shelf.code}<br>`;
+                if (result.location.bin) html += `Bin: ${result.location.bin.code}<br>`;
+                html += '</div>';
+                resultEl.innerHTML = html;
+            } else {
+                resultEl.innerHTML = `<div class="alert alert-warning mb-0">${result.error}</div>`;
+            }
+            resultEl.style.display = 'block';
+        } catch (err) {
+            console.error('Find error:', err);
+        }
+    });
+    
+    async function loadLayout(warehouseId) {
+        const container = document.getElementById('layout-container');
+        container.innerHTML = '<div class="text-center py-3"><span class="spinner-border"></span></div>';
+        
+        try {
+            const response = await fetch(`/api/warehouse/${warehouseId}/layout`);
+            const result = await response.json();
+            
+            if (result.ok && result.layout.zones.length > 0) {
+                let html = '';
+                result.layout.zones.forEach(zone => {
+                    html += `
+                        <div class="zone-block mb-4">
+                            <h5 class="bg-primary text-white p-2 rounded-top mb-0">
+                                <i data-feather="grid" class="me-1"></i>${zone.code} - ${zone.name || 'Zone'}
+                            </h5>
+                            <div class="border border-primary rounded-bottom p-3">
+                    `;
+                    
+                    zone.aisles.forEach(aisle => {
+                        html += `
+                            <div class="aisle-block mb-3">
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="badge bg-success me-2">${aisle.full_code}</span>
+                                    <small class="text-muted">${aisle.bays.length} bays</small>
+                                </div>
+                                <div class="row g-2">
+                        `;
+                        
+                        aisle.bays.forEach(bay => {
+                            const shelfCount = bay.shelves.length;
+                            html += `
+                                <div class="col-auto">
+                                    <div class="bay-chip p-2 border rounded text-center" style="min-width: 60px;">
+                                        <small class="d-block fw-bold">${bay.code}</small>
+                                        <small class="text-muted">${shelfCount}S</small>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        
+                        html += '</div></div>';
+                    });
+                    
+                    html += '</div></div>';
+                });
+                
+                container.innerHTML = html;
+                feather.replace();
+            } else {
+                container.innerHTML = `
+                    <div class="text-center py-5 text-muted">
+                        <i data-feather="map" style="width: 48px; height: 48px;"></i>
+                        <p class="mt-3">No layout defined for this warehouse.<br>Use the generator to create one.</p>
+                    </div>
+                `;
+                feather.replace();
+            }
+        } catch (err) {
+            container.innerHTML = '<div class="alert alert-danger">Error loading layout</div>';
+        }
+    }
+    
+    if (document.getElementById('warehouse_id').value) {
+        loadLayout(document.getElementById('warehouse_id').value);
+    }
+});
+</script>
+
+<style>
+.bay-chip {
+    transition: all 0.2s;
+    cursor: pointer;
+}
+.bay-chip:hover {
+    background-color: var(--bs-primary);
+    color: white;
+}
+.zone-block {
+    border-radius: 8px;
+    overflow: hidden;
+}
+</style>
+{% endblock %}

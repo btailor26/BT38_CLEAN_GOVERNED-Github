@@ -1,0 +1,365 @@
+{% extends 'base.html' %}
+
+{% block title %}Order {{ order.order_number }} - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1">
+                    <li class="breadcrumb-item"><a href="{{ url_for('routes.stores') }}">Orders</a></li>
+                    <li class="breadcrumb-item active">{{ order.order_number }}</li>
+                </ol>
+            </nav>
+            <h1 class="h3 mb-0">{{ order.order_number }}</h1>
+        </div>
+        <div class="d-flex gap-2">
+            {% if order.status == 'draft' %}
+            <form action="{{ url_for('routes.order_confirm', order_id=order.id) }}" method="POST" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button type="submit" class="btn btn-success">
+                    <i data-feather="check" class="me-1"></i>Confirm Order
+                </button>
+            </form>
+            {% elif order.status == 'confirmed' %}
+            <form action="{{ url_for('routes.order_fulfill', order_id=order.id) }}" method="POST" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button type="submit" class="btn btn-primary">
+                    <i data-feather="truck" class="me-1"></i>Fulfill Order
+                </button>
+            </form>
+            {% endif %}
+            {% if order.status in ['confirmed', 'fulfilled'] and not order.invoices.count() %}
+            <form action="{{ url_for('routes.order_create_invoice', order_id=order.id) }}" method="POST" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button type="submit" class="btn btn-outline-primary">
+                    <i data-feather="file-text" class="me-1"></i>Create Invoice
+                </button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card mb-4">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i data-feather="list" class="me-2"></i>Order Items</span>
+                    <span class="badge bg-primary">{{ items|length }} items</span>
+                </div>
+                <div class="card-body p-0">
+                    {% if items %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>SKU</th>
+                                    <th>Description</th>
+                                    <th class="text-center">Qty</th>
+                                    <th class="text-end">Unit Price</th>
+                                    <th class="text-end">Total</th>
+                                    {% if order.status == 'draft' %}
+                                    <th></th>
+                                    {% endif %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in items %}
+                                <tr>
+                                    <td><code>{{ item.sku }}</code></td>
+                                    <td>{{ item.description or '-' }}</td>
+                                    <td class="text-center">{{ item.quantity }}</td>
+                                    <td class="text-end">£{{ "%.2f"|format(item.unit_price or 0) }}</td>
+                                    <td class="text-end"><strong>£{{ "%.2f"|format(item.line_total or 0) }}</strong></td>
+                                    {% if order.status == 'draft' %}
+                                    <td class="text-end">
+                                        <form action="{{ url_for('routes.order_remove_item', order_id=order.id, item_id=item.id) }}" 
+                                              method="POST" style="display:inline;">
+                                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                <i data-feather="x"></i>
+                                            </button>
+                                        </form>
+                                    </td>
+                                    {% endif %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <p class="text-muted mb-0">No items added yet</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            {% if order.status == 'draft' %}
+            <div class="card">
+                <div class="card-header">
+                    <i data-feather="plus-circle" class="me-2"></i>Add Item
+                </div>
+                <div class="card-body">
+                    <form action="{{ url_for('routes.order_add_item', order_id=order.id) }}" method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <div class="row g-3">
+                            <div class="col-md-5">
+                                <label class="form-label">Product</label>
+                                <select name="warehouse_stock_id" class="form-select" id="productSelect">
+                                    <option value="">Select product...</option>
+                                    {% for product in available_products %}
+                                    <option value="{{ product.id }}" 
+                                            data-price="{{ product.selling_price or 0 }}"
+                                            data-stock="{{ product.available_quantity }}">
+                                        {{ product.sku }} - {{ product.name or 'No name' }} ({{ product.available_quantity }} in stock)
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Quantity</label>
+                                <input type="number" name="quantity" class="form-control" value="1" min="1">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Unit Price</label>
+                                <input type="number" name="unit_price" class="form-control" 
+                                       id="unitPrice" step="0.01" min="0" value="0">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label">Discount %</label>
+                                <input type="number" name="discount_percent" class="form-control" 
+                                       step="0.1" min="0" max="100" value="0">
+                            </div>
+                            <div class="col-md-1 d-flex align-items-end">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i data-feather="plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card mb-4">
+                <div class="card-header">Order Summary</div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Status:</span>
+                        <span class="badge 
+                            {% if order.status == 'fulfilled' %}bg-success
+                            {% elif order.status == 'confirmed' %}bg-primary
+                            {% elif order.status == 'cancelled' %}bg-danger
+                            {% else %}bg-secondary{% endif %}">
+                            {{ order.status|title }}
+                        </span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Date:</span>
+                        <span>{{ order.order_date.strftime('%d %b %Y') if order.order_date else '-' }}</span>
+                    </div>
+                    {% if order.fulfillment_type %}
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Fulfillment:</span>
+                        <span class="badge 
+                            {% if order.fulfillment_type == 'FBA' %}bg-info
+                            {% elif order.fulfillment_type == 'MCF' %}bg-info
+                            {% else %}bg-primary{% endif %}">
+                            {{ order.fulfillment_type }}
+                        </span>
+                    </div>
+                    {% endif %}
+                    <hr>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Subtotal:</span>
+                        <span>£{{ "%.2f"|format(order.subtotal or 0) }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Tax ({{ order.tax_rate or 20 }}%):</span>
+                        <span>£{{ "%.2f"|format(order.tax_amount or 0) }}</span>
+                    </div>
+                    {% if order.shipping_cost %}
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Shipping:</span>
+                        <span>£{{ "%.2f"|format(order.shipping_cost) }}</span>
+                    </div>
+                    {% endif %}
+                    <hr>
+                    <div class="d-flex justify-content-between">
+                        <strong>Total:</strong>
+                        <strong class="fs-5">£{{ "%.2f"|format(order.total or 0) }}</strong>
+                    </div>
+                </div>
+            </div>
+            
+            {% if order.platform_fee or order.fulfillment_fee or order.referral_fee %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i data-feather="dollar-sign" class="me-2"></i>Fees Breakdown
+                </div>
+                <div class="card-body">
+                    {% if order.platform_fee %}
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Platform Fee:</span>
+                        <span class="text-danger">-£{{ "%.2f"|format(order.platform_fee) }}</span>
+                    </div>
+                    {% endif %}
+                    {% if order.referral_fee %}
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Referral Fee:</span>
+                        <span class="text-danger">-£{{ "%.2f"|format(order.referral_fee) }}</span>
+                    </div>
+                    {% endif %}
+                    {% if order.fulfillment_fee %}
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>
+                            {% if order.fulfillment_type == 'FBA' or order.fulfillment_type == 'MCF' %}
+                            FBA/MCF Fee:
+                            {% else %}
+                            Fulfillment Fee:
+                            {% endif %}
+                        </span>
+                        <span class="text-danger">-£{{ "%.2f"|format(order.fulfillment_fee) }}</span>
+                    </div>
+                    {% endif %}
+                    {% if order.mcf_shipping_fee %}
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>MCF Shipping:</span>
+                        <span class="text-danger">-£{{ "%.2f"|format(order.mcf_shipping_fee) }}</span>
+                    </div>
+                    {% endif %}
+                    {% if order.vat_on_fees %}
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>VAT on Fees:</span>
+                        <span class="text-danger">-£{{ "%.2f"|format(order.vat_on_fees) }}</span>
+                    </div>
+                    {% endif %}
+                    <hr>
+                    <div class="d-flex justify-content-between">
+                        <strong>Total Fees:</strong>
+                        <strong class="text-danger">-£{{ "%.2f"|format((order.platform_fee or 0) + (order.referral_fee or 0) + (order.fulfillment_fee or 0) + (order.mcf_shipping_fee or 0) + (order.vat_on_fees or 0)) }}</strong>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            {% if order.gross_profit is defined or order.margin_percent is defined %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i data-feather="trending-up" class="me-2"></i>Profit Summary
+                </div>
+                <div class="card-body">
+                    {% if order.product_cost %}
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Product Cost:</span>
+                        <span>£{{ "%.2f"|format(order.product_cost) }}</span>
+                    </div>
+                    {% endif %}
+                    {% if order.landed_cost %}
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Landed Cost:</span>
+                        <span>£{{ "%.2f"|format(order.landed_cost) }}</span>
+                    </div>
+                    {% endif %}
+                    <hr>
+                    <div class="d-flex justify-content-between mb-2">
+                        <strong>Gross Profit:</strong>
+                        <strong class="{% if order.gross_profit and order.gross_profit > 0 %}text-success{% else %}text-danger{% endif %}">
+                            £{{ "%.2f"|format(order.gross_profit or 0) }}
+                        </strong>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span>Margin:</span>
+                        <span class="badge 
+                            {% if order.margin_percent and order.margin_percent >= 15 %}bg-success
+                            {% elif order.margin_percent and order.margin_percent >= 10 %}bg-warning text-dark
+                            {% else %}bg-danger{% endif %}">
+                            {{ "%.1f"|format(order.margin_percent or 0) }}%
+                        </span>
+                    </div>
+                    {% if order.margin_percent and order.margin_percent < 15 %}
+                    <div class="alert alert-warning mt-3 mb-0 py-2 small">
+                        <i data-feather="alert-triangle" class="me-1" style="width:14px;height:14px;"></i>
+                        Margin below 15% target
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            
+            {% if order.customer %}
+            <div class="card mb-4">
+                <div class="card-header">Customer</div>
+                <div class="card-body">
+                    <h6>
+                        <a href="{{ url_for('routes.customer_detail', customer_id=order.customer_id) }}">
+                            {{ order.customer.name }}
+                        </a>
+                    </h6>
+                    {% if order.customer.email %}
+                    <p class="mb-1 small">{{ order.customer.email }}</p>
+                    {% endif %}
+                    {% if order.customer.phone %}
+                    <p class="mb-0 small">{{ order.customer.phone }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+            
+            <div class="card">
+                <div class="card-header">Payment</div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Status:</span>
+                        <span class="badge 
+                            {% if order.payment_status == 'paid' %}bg-success
+                            {% elif order.payment_status == 'partial' %}bg-warning text-dark
+                            {% else %}bg-secondary{% endif %}">
+                            {{ order.payment_status|title }}
+                        </span>
+                    </div>
+                    {% if order.payment_method %}
+                    <div class="d-flex justify-content-between">
+                        <span>Method:</span>
+                        <span>{{ order.payment_method }}</span>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    feather.replace();
+    
+    const productSelect = document.getElementById('productSelect');
+    const unitPrice = document.getElementById('unitPrice');
+    
+    if (productSelect && unitPrice) {
+        productSelect.addEventListener('change', function() {
+            const selected = this.options[this.selectedIndex];
+            if (selected.value) {
+                unitPrice.value = selected.dataset.price || 0;
+            }
+        });
+    }
+</script>
+{% endblock %}

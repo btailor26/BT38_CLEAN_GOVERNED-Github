@@ -1,0 +1,150 @@
+{% extends 'base.html' %}
+
+{% block title %}Master Cartons - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-1">Master Cartons</h1>
+            <p class="text-muted mb-0">Define carton to single SKU mappings for bulk intake</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('routes.master_carton_bulk') }}" class="btn btn-outline-primary">
+                <i data-feather="upload" class="me-1"></i>Bulk Import
+            </a>
+            <a href="{{ url_for('routes.master_carton_add') }}" class="btn btn-primary">
+                <i data-feather="plus" class="me-1"></i>Add Carton Mapping
+            </a>
+        </div>
+    </div>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <div class="card">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <span><i data-feather="package" class="me-2"></i>Carton Mappings</span>
+                <span class="badge bg-primary">{{ cartons|length }} mappings</span>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            {% if cartons %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Single SKU</th>
+                            <th>Single Barcode</th>
+                            <th>Master Barcode</th>
+                            <th class="text-center">Units/Carton</th>
+                            <th>Dimensions (cm)</th>
+                            <th>Weight (kg)</th>
+                            <th class="text-center">Status</th>
+                            <th class="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for carton in cartons %}
+                        <tr>
+                            <td>
+                                <strong>{{ carton.single_sku }}</strong>
+                            </td>
+                            <td>{{ carton.single_barcode or '-' }}</td>
+                            <td>
+                                {% if carton.master_barcode %}
+                                <code>{{ carton.master_barcode }}</code>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <span class="badge bg-info">{{ carton.units_per_carton }}</span>
+                            </td>
+                            <td>
+                                {% if carton.carton_length_cm %}
+                                {{ carton.carton_length_cm }}x{{ carton.carton_width_cm }}x{{ carton.carton_height_cm }}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>{{ carton.carton_weight_kg or '-' }}</td>
+                            <td class="text-center">
+                                {% if carton.is_active %}
+                                <span class="badge bg-success">Active</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{{ url_for('routes.master_carton_edit', carton_id=carton.id) }}" 
+                                       class="btn btn-outline-primary" title="Edit">
+                                        <i data-feather="edit-2"></i>
+                                    </a>
+                                    <form action="{{ url_for('routes.master_carton_delete', carton_id=carton.id) }}" 
+                                          method="POST" style="display: inline;" 
+                                          onsubmit="return confirm('Delete this carton mapping?');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                        <button type="submit" class="btn btn-outline-danger" title="Delete">
+                                            <i data-feather="trash-2"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i data-feather="package" style="width: 48px; height: 48px;" class="text-muted mb-3"></i>
+                <h5>No Carton Mappings</h5>
+                <p class="text-muted">Define carton-to-SKU mappings for bulk intake scanning</p>
+                <a href="{{ url_for('routes.master_carton_add') }}" class="btn btn-primary">
+                    <i data-feather="plus" class="me-1"></i>Add First Mapping
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="card mt-4">
+        <div class="card-header">
+            <i data-feather="info" class="me-2"></i>How Master Cartons Work
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <h6><i data-feather="box" class="me-1"></i>1. Define Mappings</h6>
+                    <p class="text-muted small">Link each master carton barcode to a single SKU and specify how many units are in each carton.</p>
+                </div>
+                <div class="col-md-4">
+                    <h6><i data-feather="camera" class="me-1"></i>2. Scan Cartons</h6>
+                    <p class="text-muted small">When receiving stock, scan the master carton barcode using the Mobile Scanner.</p>
+                </div>
+                <div class="col-md-4">
+                    <h6><i data-feather="plus-circle" class="me-1"></i>3. Auto-Add Stock</h6>
+                    <p class="text-muted small">The system automatically adds the correct quantity to warehouse stock and logs the movement.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    feather.replace();
+});
+</script>
+{% endblock %}

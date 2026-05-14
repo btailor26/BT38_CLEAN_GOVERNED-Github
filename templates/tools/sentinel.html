@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+
+{% block title %}Sentinel Console v1{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header bg-dark border-secondary d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0 text-white">
+                        <i data-feather="terminal" class="me-2"></i>
+                        Sentinel Console v1
+                    </h4>
+                    <span class="badge bg-warning text-dark">Architect Only</span>
+                </div>
+                
+                <div class="card-body">
+                    <div class="alert alert-dark border-secondary mb-4" style="font-family: monospace; font-size: 0.85rem;">
+                        <div class="d-flex justify-content-between">
+                            <span><strong>ENV:</strong> <span class="text-info">{{ environment|upper }}</span></span>
+                            <span><strong>Execution:</strong> <span class="text-danger">DISABLED</span></span>
+                            <span><strong>KillSwitch:</strong> <span id="kill-switch-status" class="{% if kill_switch %}text-danger{% else %}text-success{% endif %}">{{ 'ACTIVE' if kill_switch else 'INACTIVE' }}</span></span>
+                        </div>
+                    </div>
+                    
+                    <form id="sentinel-form">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <div class="mb-3">
+                            <label for="command-input" class="form-label text-white">Command Input</label>
+                            <textarea 
+                                class="form-control bg-dark text-white border-secondary" 
+                                id="command-input" 
+                                name="command"
+                                rows="4" 
+                                placeholder="Enter command for Task Proposal generation..."
+                                style="font-family: monospace;"
+                                required
+                            ></textarea>
+                            <small class="text-muted">Describe what you want to implement. A Task Proposal Box (v1) will be generated.</small>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary" id="submit-btn">
+                            <i data-feather="send" class="me-1" style="width: 16px; height: 16px;"></i>
+                            Generate Proposal
+                        </button>
+                    </form>
+                    
+                    <hr class="border-secondary my-4">
+                    
+                    <div class="mb-2 d-flex justify-content-between align-items-center">
+                        <label class="form-label text-white mb-0">Output Panel</label>
+                        <span id="output-status" class="badge bg-secondary">Ready</span>
+                    </div>
+                    <div 
+                        id="output-panel" 
+                        class="bg-black text-success p-3 rounded border border-secondary"
+                        style="font-family: 'Courier New', monospace; font-size: 0.85rem; min-height: 400px; max-height: 600px; overflow-y: auto; white-space: pre-wrap;"
+                    >Awaiting command...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof feather !== 'undefined') {
+        feather.replace();
+    }
+    
+    const form = document.getElementById('sentinel-form');
+    const commandInput = document.getElementById('command-input');
+    const outputPanel = document.getElementById('output-panel');
+    const outputStatus = document.getElementById('output-status');
+    const submitBtn = document.getElementById('submit-btn');
+    
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const command = commandInput.value.trim();
+        if (!command) {
+            outputPanel.textContent = 'Error: Command cannot be empty.';
+            outputPanel.classList.remove('text-success');
+            outputPanel.classList.add('text-danger');
+            return;
+        }
+        
+        submitBtn.disabled = true;
+        outputStatus.textContent = 'Processing...';
+        outputStatus.classList.remove('bg-secondary', 'bg-success', 'bg-danger');
+        outputStatus.classList.add('bg-warning');
+        outputPanel.textContent = 'Generating Task Proposal Box (v1)...';
+        outputPanel.classList.remove('text-danger');
+        outputPanel.classList.add('text-success');
+        
+        try {
+            const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+            const response = await fetch('/api/sentinel/propose', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                body: JSON.stringify({ command: command })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                outputPanel.textContent = data.response;
+                outputPanel.classList.remove('text-danger');
+                outputPanel.classList.add('text-success');
+                outputStatus.textContent = 'Proposal Generated';
+                outputStatus.classList.remove('bg-warning');
+                outputStatus.classList.add('bg-success');
+            } else {
+                outputPanel.textContent = 'Error: ' + (data.error || 'Unknown error');
+                outputPanel.classList.remove('text-success');
+                outputPanel.classList.add('text-danger');
+                outputStatus.textContent = 'Failed';
+                outputStatus.classList.remove('bg-warning');
+                outputStatus.classList.add('bg-danger');
+            }
+        } catch (error) {
+            outputPanel.textContent = 'Network Error: ' + error.message;
+            outputPanel.classList.remove('text-success');
+            outputPanel.classList.add('text-danger');
+            outputStatus.textContent = 'Error';
+            outputStatus.classList.remove('bg-warning');
+            outputStatus.classList.add('bg-danger');
+        } finally {
+            submitBtn.disabled = false;
+        }
+    });
+});
+</script>
+{% endblock %}

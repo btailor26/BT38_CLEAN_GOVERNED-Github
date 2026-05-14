@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Amazon SP-API OAuth - Inventory Manager</title>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/feather-icons"></script>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h4><i data-feather="key" class="me-2"></i>Amazon SP-API OAuth Authorization</h4>
+                        <p class="mb-0 text-muted">Connect your Amazon Seller Central account for inventory synchronization</p>
+                    </div>
+                    <div class="card-body">
+                        
+                        <!-- Flash Messages -->
+                        {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                        {% for category, message in messages %}
+                        <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                        {% endfor %}
+                        {% endif %}
+                        {% endwith %}
+
+                        <!-- Step 1: Authorization -->
+                        <div class="mb-4">
+                            <h5 class="text-primary">Step 1: Authorize Amazon Account</h5>
+                            <div class="alert alert-info">
+                                <i data-feather="info" class="me-2"></i>
+                                <strong>Prerequisites:</strong> You need valid Amazon LWA (Login with Amazon) credentials configured in environment variables.
+                            </div>
+                            
+                            <div class="d-grid gap-2">
+                                <a href="/auth/amazon/start" class="btn btn-warning btn-lg">
+                                    <i data-feather="external-link" class="me-2"></i>
+                                    Authorize with Amazon
+                                </a>
+                            </div>
+                        </div>
+
+                        <!-- Step 2: Manual Token Renewal -->
+                        <div class="mb-4">
+                            <h5 class="text-primary">Step 2: Manual Token Renewal (Recommended)</h5>
+                            <div class="alert alert-info">
+                                <strong>For Expired Tokens:</strong> If your store shows 403 permission errors, manually renew your refresh token.
+                            </div>
+                            
+                            <form id="manualRefreshForm">
+                                <div class="mb-3">
+                                    <label for="auth_code" class="form-label">Amazon Authorization Code</label>
+                                    <input type="text" class="form-control" id="auth_code" name="auth_code" 
+                                           placeholder="Enter spapi_oauth_code from Amazon" required>
+                                    <div class="form-text">
+                                        <strong>How to get this:</strong><br>
+                                        1. Go to Amazon Seller Central → Apps & Services → Develop Apps<br>
+                                        2. Click "Re-Authorize" next to your app<br>
+                                        3. Copy the spapi_oauth_code from the callback
+                                    </div>
+                                </div>
+                                <div class="d-grid">
+                                    <button type="submit" class="btn btn-warning" id="manualRefreshBtn">
+                                        <i data-feather="refresh-cw" class="me-2"></i>
+                                        Generate New Refresh Token
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Step 3: Auto-fill Credentials -->
+                        <div class="mb-4">
+                            <h5 class="text-primary">Step 3: Auto-fill Store Credentials</h5>
+                            <form id="autoFillForm">
+                                <div class="row">
+                                    <div class="col-md-6 mb-3">
+                                        <label for="seller_id" class="form-label">Amazon Seller ID</label>
+                                        <input type="text" class="form-control" id="seller_id" name="seller_id" 
+                                               placeholder="A2WUN0OF9UHU23" required>
+                                        <div class="form-text">Find this in Seller Central → Settings → Account Info</div>
+                                    </div>
+                                    <div class="col-md-6 mb-3">
+                                        <label for="region" class="form-label">Region</label>
+                                        <select class="form-control" id="region" name="region" required>
+                                            <option value="US">United States</option>
+                                            <option value="EU">Europe</option>
+                                            <option value="UK">United Kingdom</option>
+                                            <option value="DE">Germany</option>
+                                            <option value="ES">Spain</option>
+                                            <option value="FR">France</option>
+                                            <option value="IT">Italy</option>
+                                            <option value="CA">Canada</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="d-grid">
+                                    <button type="submit" class="btn btn-success" id="autoFillBtn">
+                                        <i data-feather="download" class="me-2"></i>
+                                        Generate Store Credentials
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+
+                        <!-- Step 3: Credentials Result -->
+                        <div id="credentialsResult" class="mb-4" style="display: none;">
+                            <h5 class="text-primary">Step 3: Copy Credentials</h5>
+                            <div class="alert alert-success">
+                                <h6>✅ Credentials Generated Successfully!</h6>
+                                <div class="mb-3">
+                                    <label class="form-label">Amazon SP-API Credentials (JSON):</label>
+                                    <textarea class="form-control" id="credentialsJson" rows="10" readonly></textarea>
+                                </div>
+                                <div class="d-grid gap-2">
+                                    <button class="btn btn-outline-success" onclick="copyToClipboard('credentialsJson')">
+                                        <i data-feather="copy" class="me-2"></i>
+                                        Copy Credentials
+                                    </button>
+                                    <a href="/stores" class="btn btn-primary">
+                                        <i data-feather="settings" class="me-2"></i>
+                                        Go to Stores & Update Credentials
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Current Amazon Stores -->
+                        <div class="mt-5">
+                            <h5 class="text-primary">Current Amazon Stores</h5>
+                            <div id="amazonStores" class="mb-4">
+                                <div class="text-center">
+                                    <div class="spinner-border" role="status">
+                                        <span class="visually-hidden">Loading...</span>
+                                    </div>
+                                    <p class="mt-2">Loading Amazon stores...</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-4">
+                            <a href="/" class="btn btn-secondary">
+                                <i data-feather="arrow-left" class="me-2"></i>
+                                Back to Dashboard
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Initialize Feather icons
+        feather.replace();
+
+        // Load Amazon stores on page load
+        loadAmazonStores();
+
+        // Manual refresh form submission
+        document.getElementById('manualRefreshForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const btn = document.getElementById('manualRefreshBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generating...';
+            btn.disabled = true;
+            
+            const formData = new FormData(this);
+            const authCode = formData.get('auth_code');
+            
+            fetch('/auth/amazon/manual-refresh', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ auth_code: authCode })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('✅ New refresh token generated successfully!');
+                    console.log('New refresh token:', data.refresh_token);
+                    
+                    // Show instructions for updating BT38 store
+                    const instruction = `
+✅ SUCCESS! Your new refresh token is ready.
+
+NEXT STEPS:
+1. Go to /stores page
+2. Edit your BT38 store  
+3. Replace the "refresh_token" value in the API credentials with:
+   ${data.refresh_token}
+4. Save the store
+
+Your BT38 store should then start syncing successfully!
+                    `;
+                    alert(instruction);
+                } else {
+                    alert('❌ Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('❌ Error: ' + error);
+            })
+            .finally(() => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            });
+        });
+
+        // Auto-fill form submission
+        document.getElementById('autoFillForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const btn = document.getElementById('autoFillBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generating...';
+            btn.disabled = true;
+            
+            const formData = new FormData(this);
+            
+            fetch('/auth/amazon/auto-fill', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('credentialsJson').value = data.credentials;
+                    document.getElementById('credentialsResult').style.display = 'block';
+                    alert('✅ Credentials generated successfully!');
+                } else {
+                    alert('❌ Error: ' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('❌ Error: ' + error);
+            })
+            .finally(() => {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            });
+        });
+
+        // Copy to clipboard function
+        function copyToClipboard(elementId) {
+            const element = document.getElementById(elementId);
+            element.select();
+            element.setSelectionRange(0, 99999);
+            navigator.clipboard.writeText(element.value);
+            alert('✅ Copied to clipboard!');
+        }
+
+        // Load Amazon stores
+        function loadAmazonStores() {
+            fetch('/api/stores?platform=Amazon')
+            .then(response => response.json())
+            .then(stores => {
+                const container = document.getElementById('amazonStores');
+                if (stores.length === 0) {
+                    container.innerHTML = '<div class="alert alert-warning">No Amazon stores configured yet.</div>';
+                } else {
+                    let html = '<div class="row">';
+                    stores.forEach(store => {
+                        const statusClass = store.sync_status === 'success' ? 'success' : 'danger';
+                        const statusIcon = store.sync_status === 'success' ? 'check-circle' : 'x-circle';
+                        
+                        html += `
+                            <div class="col-md-6 mb-3">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <h6 class="card-title">${store.name}</h6>
+                                                <small class="text-muted">Last sync: ${store.last_sync || 'Never'}</small>
+                                            </div>
+                                            <div class="text-end">
+                                                <span class="badge bg-${statusClass}">
+                                                    <i data-feather="${statusIcon}" class="me-1"></i>
+                                                    ${store.sync_status || 'Unknown'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div class="mt-2">
+                                            <a href="/stores/edit/${store.id}" class="btn btn-sm btn-outline-primary">
+                                                <i data-feather="edit" class="me-1"></i>
+                                                Edit
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                    container.innerHTML = html;
+                    feather.replace();
+                }
+            })
+            .catch(error => {
+                document.getElementById('amazonStores').innerHTML = 
+                    '<div class="alert alert-danger">Error loading stores: ' + error + '</div>';
+            });
+        }
+    </script>
+</body>
+</html>

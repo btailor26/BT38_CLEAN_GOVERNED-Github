@@ -1,0 +1,275 @@
+{% extends "base.html" %}
+
+{% block title %}Quick Scan - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2><i data-feather="camera"></i> Quick Scan</h2>
+                <a href="{{ url_for('routes.warehouse') }}" class="btn btn-secondary">
+                    <i data-feather="arrow-left"></i> Back to Warehouse
+                </a>
+            </div>
+            
+            <div class="card mb-3">
+                <div class="card-header bg-primary text-white">
+                    <h5><i data-feather="maximize"></i> Barcode Scanner</h5>
+                </div>
+                <div class="card-body">
+                    <div id="reader" style="width: 100%; max-width: 500px; margin: 0 auto;"></div>
+                    
+                    <div class="text-center mt-3">
+                        <button id="startScanBtn" class="btn btn-success btn-lg">
+                            <i data-feather="video"></i> Start Camera
+                        </button>
+                        <button id="stopScanBtn" class="btn btn-danger btn-lg" style="display:none;">
+                            <i data-feather="video-off"></i> Stop Camera
+                        </button>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <p class="text-muted small text-center">
+                            <i data-feather="info"></i> Position the barcode in front of your camera. 
+                            Scanning will happen automatically when a barcode is detected.
+                        </p>
+                    </div>
+                    
+                    <div class="mt-3">
+                        <label class="form-label">Or manually enter SKU/Barcode:</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="manualSkuInput" placeholder="Enter SKU or barcode">
+                            <button class="btn btn-primary" id="manualLookupBtn">
+                                <i data-feather="search"></i> Lookup
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="productResult" class="card" style="display:none;">
+                <div class="card-header bg-success text-white">
+                    <h5><i data-feather="package"></i> Product Found</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 id="productName"></h6>
+                            <p class="text-muted mb-1">SKU: <code id="productSku"></code></p>
+                            <p class="mb-1">Current Stock: <strong id="currentStock">0</strong></p>
+                            <p class="mb-1">Unit Cost: £<span id="unitCost">0.00</span></p>
+                            <p class="mb-1">Supplier: <span id="supplierName">N/A</span></p>
+                        </div>
+                        <div class="col-md-6">
+                            <form id="quickAdjustForm">
+                                <input type="hidden" id="warehouseStockId">
+                                <div class="mb-3">
+                                    <label class="form-label">Quick Adjust Quantity:</label>
+                                    <div class="btn-group d-flex" role="group">
+                                        <button type="button" class="btn btn-outline-danger quick-adjust-btn" data-value="-10">-10</button>
+                                        <button type="button" class="btn btn-outline-danger quick-adjust-btn" data-value="-1">-1</button>
+                                        <button type="button" class="btn btn-outline-success quick-adjust-btn" data-value="+1">+1</button>
+                                        <button type="button" class="btn btn-outline-success quick-adjust-btn" data-value="+10">+10</button>
+                                    </div>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Or set exact quantity:</label>
+                                    <input type="number" class="form-control" id="exactQuantity" min="0">
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Reason:</label>
+                                    <select class="form-select" id="adjustmentReason">
+                                        <option value="receiving">Receiving Stock</option>
+                                        <option value="correction">Stock Correction</option>
+                                        <option value="damage">Damaged Items</option>
+                                        <option value="return">Customer Return</option>
+                                        <option value="other">Other</option>
+                                    </select>
+                                </div>
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i data-feather="save"></i> Update Stock
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="notFoundResult" class="alert alert-warning mt-3" style="display:none;">
+                <strong><i data-feather="alert-triangle"></i> Product Not Found</strong>
+                <p class="mb-0">No product found with SKU: <code id="notFoundSku"></code></p>
+            </div>
+            
+            <div id="errorResult" class="alert alert-danger mt-3" style="display:none;">
+                <strong><i data-feather="alert-circle"></i> Error</strong>
+                <p class="mb-0" id="errorMessage"></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script>
+    feather.replace();
+    
+    let html5QrcodeScanner = null;
+    let currentProduct = null;
+    
+    // Start camera scanning
+    document.getElementById('startScanBtn').addEventListener('click', function() {
+        html5QrcodeScanner = new Html5QrcodeScanner(
+            "reader",
+            { 
+                fps: 10, 
+                qrbox: {width: 250, height: 250},
+                supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA]
+            }
+        );
+        
+        html5QrcodeScanner.render(onScanSuccess, onScanError);
+        
+        document.getElementById('startScanBtn').style.display = 'none';
+        document.getElementById('stopScanBtn').style.display = 'inline-block';
+    });
+    
+    // Stop camera scanning
+    document.getElementById('stopScanBtn').addEventListener('click', function() {
+        if (html5QrcodeScanner) {
+            html5QrcodeScanner.clear();
+            html5QrcodeScanner = null;
+        }
+        document.getElementById('startScanBtn').style.display = 'inline-block';
+        document.getElementById('stopScanBtn').style.display = 'none';
+    });
+    
+    // Manual lookup
+    document.getElementById('manualLookupBtn').addEventListener('click', function() {
+        const sku = document.getElementById('manualSkuInput').value.trim();
+        if (sku) {
+            lookupProduct(sku);
+        }
+    });
+    
+    document.getElementById('manualSkuInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            document.getElementById('manualLookupBtn').click();
+        }
+    });
+    
+    // Barcode scan success handler
+    function onScanSuccess(decodedText, decodedResult) {
+        // Stop scanning temporarily
+        if (html5QrcodeScanner) {
+            html5QrcodeScanner.pause();
+        }
+        
+        lookupProduct(decodedText);
+    }
+    
+    function onScanError(error) {
+        // Silent - scanning errors are common and expected
+    }
+    
+    // Product lookup
+    async function lookupProduct(sku) {
+        try {
+            hideAllResults();
+            
+            const response = await fetch(`/api/warehouse/lookup/${encodeURIComponent(sku)}`);
+            const data = await response.json();
+            
+            if (data.success && data.product) {
+                currentProduct = data.product;
+                displayProduct(data.product);
+            } else {
+                document.getElementById('notFoundSku').textContent = sku;
+                document.getElementById('notFoundResult').style.display = 'block';
+                
+                // Resume scanning after delay
+                setTimeout(() => {
+                    if (html5QrcodeScanner) {
+                        html5QrcodeScanner.resume();
+                    }
+                }, 2000);
+            }
+        } catch (error) {
+            document.getElementById('errorMessage').textContent = error.message;
+            document.getElementById('errorResult').style.display = 'block';
+        }
+    }
+    
+    // Display product details
+    function displayProduct(product) {
+        document.getElementById('productName').textContent = product.name || 'Unknown Product';
+        document.getElementById('productSku').textContent = product.sku;
+        document.getElementById('currentStock').textContent = product.available_quantity || 0;
+        document.getElementById('unitCost').textContent = (product.unit_cost || 0).toFixed(2);
+        document.getElementById('supplierName').textContent = product.supplier_name || 'N/A';
+        document.getElementById('warehouseStockId').value = product.id;
+        document.getElementById('exactQuantity').value = product.available_quantity || 0;
+        
+        document.getElementById('productResult').style.display = 'block';
+        feather.replace();
+    }
+    
+    // Hide all result displays
+    function hideAllResults() {
+        document.getElementById('productResult').style.display = 'none';
+        document.getElementById('notFoundResult').style.display = 'none';
+        document.getElementById('errorResult').style.display = 'none';
+    }
+    
+    // Quick adjust buttons
+    document.querySelectorAll('.quick-adjust-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const value = parseInt(this.getAttribute('data-value'));
+            const currentQty = parseInt(document.getElementById('exactQuantity').value) || 0;
+            const newQty = Math.max(0, currentQty + value);
+            document.getElementById('exactQuantity').value = newQty;
+        });
+    });
+    
+    // Stock adjustment form submission
+    document.getElementById('quickAdjustForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const stockId = document.getElementById('warehouseStockId').value;
+        const newQuantity = parseInt(document.getElementById('exactQuantity').value);
+        const reason = document.getElementById('adjustmentReason').value;
+        
+        try {
+            const response = await fetch(`/api/warehouse/${stockId}/quick-adjust`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    new_quantity: newQuantity,
+                    reason: reason
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                alert(`✅ Stock updated successfully! New quantity: ${newQuantity}`);
+                hideAllResults();
+                document.getElementById('manualSkuInput').value = '';
+                
+                // Resume scanning
+                setTimeout(() => {
+                    if (html5QrcodeScanner) {
+                        html5QrcodeScanner.resume();
+                    }
+                }, 1000);
+            } else {
+                alert('❌ Error: ' + (data.error || 'Failed to update stock'));
+            }
+        } catch (error) {
+            alert('❌ Error: ' + error.message);
+        }
+    });
+</script>
+{% endblock %}

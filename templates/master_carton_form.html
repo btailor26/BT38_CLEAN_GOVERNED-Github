@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ 'Edit' if carton else 'Add' }} Carton Mapping - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="d-flex align-items-center mb-4">
+                <a href="{{ url_for('routes.settings') }}" class="btn btn-outline-secondary me-3">
+                    <i data-feather="arrow-left"></i>
+                </a>
+                <div>
+                    <h1 class="h3 mb-0">{{ 'Edit' if carton else 'Add' }} Carton Mapping</h1>
+                    <p class="text-muted mb-0">{{ 'Update' if carton else 'Create a new' }} master carton to single SKU mapping</p>
+                </div>
+            </div>
+            
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <div class="card">
+                <div class="card-header">
+                    <i data-feather="package" class="me-2"></i>Carton Details
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="single_sku" class="form-label">Single SKU <span class="text-danger">*</span></label>
+                                <input type="text" class="form-control" id="single_sku" name="single_sku" 
+                                       value="{{ carton.single_sku if carton else '' }}" 
+                                       list="sku-list" required>
+                                <datalist id="sku-list">
+                                    {% for sku in skus %}
+                                    <option value="{{ sku }}">
+                                    {% endfor %}
+                                </datalist>
+                                <div class="form-text">The SKU of the individual product in the carton</div>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label for="units_per_carton" class="form-label">Units per Carton <span class="text-danger">*</span></label>
+                                <input type="number" class="form-control" id="units_per_carton" name="units_per_carton" 
+                                       value="{{ carton.units_per_carton if carton else 1 }}" 
+                                       min="1" required>
+                                <div class="form-text">How many individual units are in one carton</div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="single_barcode" class="form-label">Single Item Barcode</label>
+                                <input type="text" class="form-control" id="single_barcode" name="single_barcode" 
+                                       value="{{ carton.single_barcode if carton else '' }}">
+                                <div class="form-text">Barcode of individual product (optional)</div>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label for="master_barcode" class="form-label">Master Carton Barcode</label>
+                                <input type="text" class="form-control" id="master_barcode" name="master_barcode" 
+                                       value="{{ carton.master_barcode if carton else '' }}">
+                                <div class="form-text">Barcode on the outer carton for scanning</div>
+                            </div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        <h6 class="mb-3"><i data-feather="box" class="me-1"></i>Carton Dimensions (Optional)</h6>
+                        
+                        <div class="row">
+                            <div class="col-md-3 mb-3">
+                                <label for="carton_length_cm" class="form-label">Length (cm)</label>
+                                <input type="number" step="0.1" class="form-control" id="carton_length_cm" name="carton_length_cm" 
+                                       value="{{ carton.carton_length_cm if carton and carton.carton_length_cm else '' }}">
+                            </div>
+                            
+                            <div class="col-md-3 mb-3">
+                                <label for="carton_width_cm" class="form-label">Width (cm)</label>
+                                <input type="number" step="0.1" class="form-control" id="carton_width_cm" name="carton_width_cm" 
+                                       value="{{ carton.carton_width_cm if carton and carton.carton_width_cm else '' }}">
+                            </div>
+                            
+                            <div class="col-md-3 mb-3">
+                                <label for="carton_height_cm" class="form-label">Height (cm)</label>
+                                <input type="number" step="0.1" class="form-control" id="carton_height_cm" name="carton_height_cm" 
+                                       value="{{ carton.carton_height_cm if carton and carton.carton_height_cm else '' }}">
+                            </div>
+                            
+                            <div class="col-md-3 mb-3">
+                                <label for="carton_weight_kg" class="form-label">Weight (kg)</label>
+                                <input type="number" step="0.1" class="form-control" id="carton_weight_kg" name="carton_weight_kg" 
+                                       value="{{ carton.carton_weight_kg if carton and carton.carton_weight_kg else '' }}">
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="notes" class="form-label">Notes</label>
+                            <textarea class="form-control" id="notes" name="notes" rows="2">{{ carton.notes if carton else '' }}</textarea>
+                        </div>
+                        
+                        {% if carton %}
+                        <div class="mb-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="is_active" name="is_active" 
+                                       {% if carton.is_active %}checked{% endif %}>
+                                <label class="form-check-label" for="is_active">Active</label>
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('routes.settings') }}" class="btn btn-outline-secondary">Cancel</a>
+                            <button type="submit" class="btn btn-primary">
+                                <i data-feather="save" class="me-1"></i>{{ 'Save Changes' if carton else 'Create Mapping' }}
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    feather.replace();
+});
+</script>
+{% endblock %}

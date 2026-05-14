@@ -1,0 +1,228 @@
+{% extends "base.html" %}
+
+{% block title %}Receive Purchase Order {{ po.po_number }} - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <h2><i data-feather="check-circle"></i> Receive Purchase Order {{ po.po_number }}</h2>
+    <p class="text-muted">Inspect and verify received items. Only accepted items will be added to warehouse stock.</p>
+</div>
+
+<div class="alert alert-info">
+    <i data-feather="info"></i>
+    <strong>Important:</strong> Stock will only be pushed to marketplaces AFTER the receiving inspection is complete and items are accepted into the warehouse.
+</div>
+
+<form method="POST" id="receiveForm">
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5>Inspection Information</h5>
+                    <div class="mb-3">
+                        <label for="inspected_by" class="form-label">Inspected By *</label>
+                        <input type="text" class="form-control" id="inspected_by" name="inspected_by" value="Admin" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="inspection_notes" class="form-label">Overall Notes</label>
+                        <textarea class="form-control" id="inspection_notes" name="inspection_notes" rows="2"></textarea>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body">
+                    <h5>Summary</h5>
+                    <div class="mb-2"><strong>Supplier:</strong> {{ po.supplier.name if po.supplier else 'N/A' }}</div>
+                    <div class="mb-2"><strong>Order Date:</strong> {{ po.order_date.strftime('%Y-%m-%d') }}</div>
+                    <div class="mb-2"><strong>Total Items:</strong> {{ po.items | length }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card">
+        <div class="card-header">
+            <h5>Inspection Checklist</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>SKU</th>
+                            <th>Product</th>
+                            <th>Ordered</th>
+                            <th>Pending</th>
+                            <th>Qty Received *</th>
+                            <th>Qty Damaged</th>
+                            <th>Damage Type</th>
+                            <th>Damage Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in po.items %}
+                        <tr class="inspection-row">
+                            <td><code>{{ item.sku }}</code></td>
+                            <td>{{ item.product_name }}</td>
+                            <td>{{ item.ordered_quantity }}</td>
+                            <td><span class="badge bg-warning">{{ item.pending_quantity }}</span></td>
+                            <td>
+                                <input type="number" class="form-control form-control-sm qty-received" 
+                                       name="qty_received_{{ item.id }}" 
+                                       min="0" max="{{ item.pending_quantity }}" 
+                                       value="{{ item.pending_quantity }}" 
+                                       data-item-id="{{ item.id }}" required>
+                            </td>
+                            <td>
+                                <input type="number" class="form-control form-control-sm qty-damaged" 
+                                       name="qty_damaged_{{ item.id }}" 
+                                       min="0" value="0" 
+                                       data-item-id="{{ item.id }}">
+                            </td>
+                            <td>
+                                <select class="form-select form-select-sm damage-type" 
+                                        name="damage_type_{{ item.id }}" 
+                                        data-item-id="{{ item.id }}" disabled>
+                                    <option value="">None</option>
+                                    <option value="broken">Broken</option>
+                                    <option value="defective">Defective</option>
+                                    <option value="wrong_item">Wrong Item</option>
+                                    <option value="missing_parts">Missing Parts</option>
+                                    <option value="packaging_damage">Packaging Damage</option>
+                                    <option value="expired">Expired</option>
+                                </select>
+                            </td>
+                            <td>
+                                <input type="text" class="form-control form-control-sm damage-notes" 
+                                       name="damage_notes_{{ item.id }}" 
+                                       placeholder="Describe damage..." 
+                                       data-item-id="{{ item.id }}" disabled>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mt-4">
+        <div class="col-md-8">
+            <div class="card bg-light">
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <strong>Total Received:</strong> <span id="totalReceived">0</span> units
+                        </div>
+                        <div class="col-md-4">
+                            <strong>Total Damaged:</strong> <span id="totalDamaged" class="text-danger">0</span> units
+                        </div>
+                        <div class="col-md-4">
+                            <strong>Accepted for Warehouse:</strong> <span id="totalAccepted" class="text-success">0</span> units
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="d-flex justify-content-between mt-4">
+        <a href="{{ url_for('routes.purchase_orders') }}" class="btn btn-secondary">
+            <i data-feather="x"></i> Cancel
+        </a>
+        <button type="submit" class="btn btn-success">
+            <i data-feather="check-circle"></i> Complete Receiving & Add to Warehouse
+        </button>
+    </div>
+</form>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        feather.replace();
+        
+        function updateTotals() {
+            let totalReceived = 0;
+            let totalDamaged = 0;
+            
+            document.querySelectorAll('.qty-received').forEach(input => {
+                totalReceived += parseInt(input.value) || 0;
+            });
+            
+            document.querySelectorAll('.qty-damaged').forEach(input => {
+                totalDamaged += parseInt(input.value) || 0;
+            });
+            
+            document.getElementById('totalReceived').textContent = totalReceived;
+            document.getElementById('totalDamaged').textContent = totalDamaged;
+            document.getElementById('totalAccepted').textContent = totalReceived - totalDamaged;
+        }
+        
+        function updateDamageFields(itemId) {
+            const damagedQty = parseInt(document.querySelector(`[name="qty_damaged_${itemId}"]`).value) || 0;
+            const damageType = document.querySelector(`[name="damage_type_${itemId}"]`);
+            const damageNotes = document.querySelector(`[name="damage_notes_${itemId}"]`);
+            
+            if (damagedQty > 0) {
+                damageType.disabled = false;
+                damageNotes.disabled = false;
+                damageType.required = true;
+            } else {
+                damageType.disabled = true;
+                damageNotes.disabled = true;
+                damageType.required = false;
+                damageType.value = '';
+                damageNotes.value = '';
+            }
+        }
+        
+        // Listen for quantity changes
+        document.querySelectorAll('.qty-received, .qty-damaged').forEach(input => {
+            input.addEventListener('input', function() {
+                const itemId = this.dataset.itemId;
+                const receivedInput = document.querySelector(`[name="qty_received_${itemId}"]`);
+                const damagedInput = document.querySelector(`[name="qty_damaged_${itemId}"]`);
+                
+                const received = parseInt(receivedInput.value) || 0;
+                const damaged = parseInt(damagedInput.value) || 0;
+                
+                // Ensure damaged doesn't exceed received
+                if (damaged > received) {
+                    damagedInput.value = received;
+                }
+                
+                updateDamageFields(itemId);
+                updateTotals();
+            });
+        });
+        
+        // Form validation
+        document.getElementById('receiveForm').addEventListener('submit', function(e) {
+            let isValid = true;
+            
+            document.querySelectorAll('.qty-damaged').forEach(input => {
+                const itemId = input.dataset.itemId;
+                const damagedQty = parseInt(input.value) || 0;
+                
+                if (damagedQty > 0) {
+                    const damageType = document.querySelector(`[name="damage_type_${itemId}"]`);
+                    if (!damageType.value) {
+                        alert('Please select a damage type for items with damage reported.');
+                        isValid = false;
+                        damageType.focus();
+                        return false;
+                    }
+                }
+            });
+            
+            if (!isValid) {
+                e.preventDefault();
+            }
+        });
+        
+        // Initialize
+        updateTotals();
+    });
+</script>
+{% endblock %}

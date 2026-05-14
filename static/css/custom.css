@@ -1,0 +1,660 @@
+/* BT38 Inventory Management - Light Theme (eBay Seller Hub Style) */
+
+/* ========================================
+   1. BASE STYLES
+   ======================================== */
+
+body {
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', Arial, sans-serif;
+    line-height: 1.6;
+    background-color: #f8f9fa;
+    color: #212529;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+main {
+    flex: 1;
+}
+
+/* ========================================
+   2. NAVIGATION
+   ======================================== */
+
+.navbar-brand {
+    font-weight: 600;
+    font-size: 1.25rem;
+}
+
+.navbar-nav .nav-link {
+    font-weight: 500;
+    transition: all 0.2s ease;
+    padding: 0.5rem 0.75rem;
+}
+
+.navbar-nav .nav-link:hover {
+    opacity: 0.9;
+}
+
+.navbar-nav .nav-link.active {
+    font-weight: 600;
+}
+
+.dropdown-menu {
+    border: 1px solid #dee2e6;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
+}
+
+.dropdown-item {
+    padding: 0.5rem 1rem;
+}
+
+.dropdown-item:hover {
+    background-color: #f8f9fa;
+}
+
+/* ========================================
+   3. CARDS - Clean White Style
+   ======================================== */
+
+.card {
+    background-color: #ffffff;
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    transition: box-shadow 0.15s ease-in-out;
+}
+
+.card:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.card-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #dee2e6;
+    font-weight: 600;
+    padding: 1rem 1.25rem;
+}
+
+.card-body {
+    padding: 1.25rem;
+}
+
+/* KPI Cards - Flat style */
+.kpi-card {
+    background-color: #ffffff;
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+    padding: 1.5rem;
+    text-align: center;
+}
+
+.kpi-card .kpi-number {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #212529;
+    line-height: 1.2;
+}
+
+.kpi-card .kpi-label {
+    font-size: 0.875rem;
+    color: #6c757d;
+    margin-top: 0.25rem;
+}
+
+/* ========================================
+   4. TABLES - White Background
+   ======================================== */
+
+.table {
+    margin-bottom: 0;
+    background-color: #ffffff;
+}
+
+.table th {
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6c757d;
+    border-top: none;
+    background-color: #f8f9fa;
+    padding: 0.75rem 1rem;
+}
+
+.table td {
+    padding: 0.75rem 1rem;
+    vertical-align: middle;
+    color: #212529;
+    border-color: #e9ecef;
+}
+
+.table tbody tr {
+    background-color: #ffffff;
+}
+
+.table-hover tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+/* Striped table override for light theme */
+.table-striped > tbody > tr:nth-of-type(odd) {
+    background-color: rgba(0, 0, 0, 0.02);
+}
+
+/* Table wrapper with border */
+.table-responsive {
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
+
+/* SKU code styling */
+.table code,
+code {
+    color: #198754;
+    background-color: #e8f5e9;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.875rem;
+}
+
+/* ========================================
+   5. MARKETPLACE BADGES
+   ======================================== */
+
+.badge-ebay {
+    background-color: #0d6efd !important;
+    color: #ffffff !important;
+}
+
+.badge-amazon-fbm {
+    background-color: #fd7e14 !important;
+    color: #ffffff !important;
+}
+
+.badge-amazon-fba {
+    background-color: #198754 !important;
+    color: #ffffff !important;
+}
+
+.badge-shopify {
+    background-color: #6f42c1 !important;
+    color: #ffffff !important;
+}
+
+/* Platform badge auto-styling */
+.badge[class*="eBay"],
+.badge:contains("eBay") {
+    background-color: #0d6efd !important;
+}
+
+/* Marketplace badge styling for tables */
+.marketplace-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin: 0.125rem;
+}
+
+/* ========================================
+   6. STATUS BADGES
+   ======================================== */
+
+.badge {
+    font-weight: 500;
+    padding: 0.35em 0.65em;
+}
+
+.badge.bg-success {
+    background-color: #198754 !important;
+}
+
+.badge.bg-warning {
+    background-color: #ffc107 !important;
+    color: #212529 !important;
+}
+
+.badge.bg-danger {
+    background-color: #dc3545 !important;
+}
+
+.badge.bg-secondary {
+    background-color: #6c757d !important;
+}
+
+.badge.bg-info {
+    background-color: #0dcaf0 !important;
+    color: #212529 !important;
+}
+
+/* ========================================
+   7. BUTTONS
+   ======================================== */
+
+.btn {
+    font-weight: 500;
+    transition: all 0.2s ease;
+    border-radius: 0.375rem;
+}
+
+.btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.btn-group .btn {
+    transform: none;
+}
+
+.btn-group .btn:hover {
+    transform: none;
+    box-shadow: none;
+}
+
+.btn-primary {
+    background-color: #0d6efd;
+    border-color: #0d6efd;
+}
+
+.btn-success {
+    background-color: #198754;
+    border-color: #198754;
+}
+
+.btn-outline-secondary {
+    color: #6c757d;
+    border-color: #dee2e6;
+}
+
+.btn-outline-secondary:hover {
+    background-color: #f8f9fa;
+    border-color: #dee2e6;
+    color: #495057;
+}
+
+/* ========================================
+   8. FORMS
+   ======================================== */
+
+.form-label {
+    font-weight: 600;
+    color: #212529;
+    margin-bottom: 0.5rem;
+}
+
+.form-control,
+.form-select {
+    background-color: #ffffff;
+    border: 1px solid #dee2e6;
+    color: #212529;
+    border-radius: 0.375rem;
+    padding: 0.5rem 0.75rem;
+}
+
+.form-control:focus,
+.form-select:focus {
+    background-color: #ffffff;
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+    color: #212529;
+}
+
+.form-control::placeholder {
+    color: #adb5bd;
+}
+
+/* ========================================
+   9. MODALS
+   ======================================== */
+
+.modal-content {
+    background-color: #ffffff;
+    border: none;
+    border-radius: 0.5rem;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.modal-header {
+    background-color: #ffffff;
+    border-bottom: 1px solid #dee2e6;
+    padding: 1rem 1.5rem;
+}
+
+.modal-title {
+    font-weight: 600;
+    color: #212529;
+}
+
+.modal-body {
+    padding: 1.5rem;
+    background-color: #ffffff;
+}
+
+.modal-footer {
+    background-color: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+    padding: 1rem 1.5rem;
+}
+
+/* Search results in modals */
+.search-results-container {
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    background-color: #ffffff;
+}
+
+.search-result-item {
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid #e9ecef;
+    transition: background-color 0.15s ease;
+}
+
+.search-result-item:last-child {
+    border-bottom: none;
+}
+
+.search-result-item:hover {
+    background-color: #f8f9fa;
+}
+
+/* ========================================
+   10. ALERTS
+   ======================================== */
+
+.alert {
+    border: none;
+    border-radius: 0.5rem;
+}
+
+.alert-info {
+    background-color: #e7f1ff;
+    color: #0a58ca;
+}
+
+.alert-success {
+    background-color: #d1e7dd;
+    color: #0a3622;
+}
+
+.alert-warning {
+    background-color: #fff3cd;
+    color: #664d03;
+}
+
+.alert-danger {
+    background-color: #f8d7da;
+    color: #58151c;
+}
+
+/* ========================================
+   11. TAB NAVIGATION
+   ======================================== */
+
+.nav-tabs {
+    border-bottom: 1px solid #dee2e6;
+}
+
+.nav-tabs .nav-link {
+    color: #6c757d;
+    border: none;
+    border-bottom: 2px solid transparent;
+    padding: 0.75rem 1.25rem;
+    font-weight: 500;
+}
+
+.nav-tabs .nav-link:hover {
+    border-color: transparent;
+    color: #212529;
+}
+
+.nav-tabs .nav-link.active {
+    color: #0d6efd;
+    border-bottom-color: #0d6efd;
+    background-color: transparent;
+}
+
+/* Sub-navigation bar */
+.subnav {
+    background-color: #ffffff;
+    border-bottom: 1px solid #dee2e6;
+    padding: 0.5rem 1rem;
+}
+
+.subnav .nav-link {
+    color: #6c757d;
+    padding: 0.5rem 1rem;
+    border-radius: 0.25rem;
+    font-weight: 500;
+}
+
+.subnav .nav-link:hover {
+    color: #212529;
+    background-color: #f8f9fa;
+}
+
+.subnav .nav-link.active {
+    color: #0d6efd;
+    background-color: #e7f1ff;
+}
+
+/* ========================================
+   12. UTILITY CLASSES
+   ======================================== */
+
+.text-truncate-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.cursor-pointer {
+    cursor: pointer;
+}
+
+/* Empty states */
+.empty-state {
+    padding: 3rem 1rem;
+    text-align: center;
+    color: #6c757d;
+}
+
+.empty-state i[data-feather] {
+    opacity: 0.5;
+    margin-bottom: 1rem;
+}
+
+/* Loading states */
+.loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+/* ========================================
+   13. SYNC STATUS
+   ======================================== */
+
+.sync-indicator {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-right: 0.5rem;
+}
+
+.sync-indicator.success {
+    background-color: #198754;
+}
+
+.sync-indicator.syncing {
+    background-color: #ffc107;
+    animation: pulse 1.5s infinite;
+}
+
+.sync-indicator.error {
+    background-color: #dc3545;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* ========================================
+   14. FEATHER ICONS
+   ======================================== */
+
+.feather-xs {
+    width: 12px;
+    height: 12px;
+}
+
+.feather-sm {
+    width: 16px;
+    height: 16px;
+}
+
+/* ========================================
+   15. PAGE HEADER
+   ======================================== */
+
+.page-header {
+    margin-bottom: 1.5rem;
+}
+
+.page-header h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #212529;
+    margin-bottom: 0.25rem;
+}
+
+.page-header .text-muted {
+    font-size: 0.875rem;
+}
+
+/* ========================================
+   16. FILTERS ROW
+   ======================================== */
+
+.filters-row {
+    background-color: #ffffff;
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+/* ========================================
+   17. RESPONSIVE ADJUSTMENTS
+   ======================================== */
+
+@media (max-width: 768px) {
+    .navbar-brand {
+        font-size: 1.1rem;
+    }
+    
+    .btn-lg {
+        font-size: 1rem;
+        padding: 0.5rem 1rem;
+    }
+    
+    .table-responsive {
+        font-size: 0.875rem;
+    }
+    
+    .card-body {
+        padding: 1rem;
+    }
+    
+    h1 {
+        font-size: 1.5rem;
+    }
+    
+    .kpi-card .kpi-number {
+        font-size: 1.5rem;
+    }
+}
+
+/* ========================================
+   18. SCROLLBAR
+   ======================================== */
+
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: #f1f3f4;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+}
+
+/* ========================================
+   19. ANIMATIONS
+   ======================================== */
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.fade-in {
+    animation: fadeIn 0.3s ease;
+}
+
+/* ========================================
+   20. PRODUCT LINKING PAGE SPECIFIC
+   ======================================== */
+
+.group-linking-section {
+    border-left: 4px solid #0d6efd;
+    background-color: #f8f9fa;
+    padding: 1rem;
+    border-radius: 0.375rem;
+    margin: 1.5rem 0;
+}
+
+.product-name-text {
+    color: #0d6efd;
+    font-weight: 600;
+}
+
+/* Linked listing badge container */
+.linked-listing-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.25rem 0.5rem;
+    margin: 0.125rem;
+    border-radius: 0.25rem;
+    border: 1px solid #dee2e6;
+    background-color: #f8f9fa;
+    font-size: 0.75rem;
+}
+
+.linked-listing-badge .unlink-btn {
+    margin-left: 0.25rem;
+    padding: 0;
+    line-height: 1;
+}

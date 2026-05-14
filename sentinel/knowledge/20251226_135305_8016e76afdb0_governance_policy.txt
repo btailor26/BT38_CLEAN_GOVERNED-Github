@@ -1,0 +1,14 @@
+Sentinel Governance Policy v1.0
+
+This document authorizes internal Sentinel governance operations including:
+- Modification of stop_conditions
+- Modification of validator logic
+- Changes to scope lock settings
+- Updates to knowledge coverage rules
+- Protocol version updates
+- Workspace configuration changes
+- Control switch modifications
+- Auth and CSRF settings
+
+All governance changes require Architect approval before implementation.
+Execution must remain DISABLED in workspace at all times.

@@ -1,0 +1,436 @@
+{% extends "base.html" %}
+
+{% block title %}Inventory Repair Tools - {{ config.APP_NAME }}{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center">
+            <h1>
+                <i data-feather="tool" class="me-2"></i>
+                Inventory Repair Tools
+            </h1>
+            <a href="{{ url_for('routes.warehouse') }}" class="btn btn-outline-secondary">
+                <i data-feather="arrow-left" class="me-1"></i>
+                Back to Warehouse
+            </a>
+        </div>
+        <p class="text-muted mt-2">Diagnose and fix inventory issues across your warehouse and marketplace listings</p>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-white bg-warning">
+            <div class="card-body py-2">
+                <div class="d-flex align-items-center">
+                    <div class="me-3">
+                        <i data-feather="alert-circle" size="28"></i>
+                    </div>
+                    <div>
+                        <h4 class="mb-0">{{ stats.mismatches }}</h4>
+                        <small>Quantity Mismatches</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-danger">
+            <div class="card-body py-2">
+                <div class="d-flex align-items-center">
+                    <div class="me-3">
+                        <i data-feather="x-circle" size="28"></i>
+                    </div>
+                    <div>
+                        <h4 class="mb-0">{{ stats.orphaned_listings }}</h4>
+                        <small>Orphaned Listings</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-info">
+            <div class="card-body py-2">
+                <div class="d-flex align-items-center">
+                    <div class="me-3">
+                        <i data-feather="copy" size="28"></i>
+                    </div>
+                    <div>
+                        <h4 class="mb-0">{{ stats.duplicate_skus }}</h4>
+                        <small>Duplicate SKUs</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-white bg-success">
+            <div class="card-body py-2">
+                <div class="d-flex align-items-center">
+                    <div class="me-3">
+                        <i data-feather="check-circle" size="28"></i>
+                    </div>
+                    <div>
+                        <h4 class="mb-0">{{ stats.healthy_items }}</h4>
+                        <small>Healthy Items</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header bg-warning text-dark">
+                <h5 class="mb-0">
+                    <i data-feather="refresh-cw" class="me-2"></i>
+                    Quantity Mismatch Repair
+                </h5>
+            </div>
+            <div class="card-body">
+                <p>Detect and fix differences between warehouse stock and marketplace listings.</p>
+                {% if mismatches %}
+                <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                    <table class="table table-sm table-dark">
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="selectAllMismatches" onclick="toggleAllMismatches()"></th>
+                                <th>SKU</th>
+                                <th>Warehouse</th>
+                                <th>Marketplace</th>
+                                <th>Platform</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in mismatches[:20] %}
+                            <tr>
+                                <td><input type="checkbox" class="mismatch-check" value="{{ item.listing_id }}"></td>
+                                <td>{{ item.sku }}</td>
+                                <td class="text-success">{{ item.warehouse_qty }}</td>
+                                <td class="text-warning">{{ item.marketplace_qty }}</td>
+                                <td>
+                                    <span class="badge bg-{% if item.platform == 'Amazon' %}warning{% else %}primary{% endif %}">
+                                        {{ item.platform }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% if mismatches|length > 20 %}
+                <p class="text-muted small mt-2">Showing 20 of {{ mismatches|length }} mismatches</p>
+                {% endif %}
+                <form method="POST" action="{{ url_for('routes.repair_mismatches') }}" class="mt-3">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="hidden" name="listing_ids" id="mismatchListingIds" value="">
+                    <div class="d-flex gap-2">
+                        <button type="submit" name="action" value="push_warehouse" class="btn btn-warning">
+                            <i data-feather="upload" class="me-1"></i>
+                            Push Warehouse → Marketplace
+                        </button>
+                        <button type="submit" name="action" value="push_all" class="btn btn-outline-warning">
+                            Push All Mismatches
+                        </button>
+                    </div>
+                </form>
+                {% else %}
+                <div class="alert alert-success mb-0">
+                    <i data-feather="check-circle" class="me-2"></i>
+                    No quantity mismatches detected. All marketplace listings match warehouse stock.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-danger">
+                <h5 class="mb-0">
+                    <i data-feather="trash-2" class="me-2"></i>
+                    Orphaned Listings Cleanup
+                </h5>
+            </div>
+            <div class="card-body">
+                <p>Marketplace listings without matching warehouse stock records.</p>
+                {% if orphaned_listings %}
+                <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                    <table class="table table-sm table-dark">
+                        <thead>
+                            <tr>
+                                <th><input type="checkbox" id="selectAllOrphans" onclick="toggleAllOrphans()"></th>
+                                <th>External SKU</th>
+                                <th>Listing ID</th>
+                                <th>Platform</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in orphaned_listings[:15] %}
+                            <tr>
+                                <td><input type="checkbox" class="orphan-check" value="{{ item.id }}"></td>
+                                <td>{{ item.external_sku or 'N/A' }}</td>
+                                <td>{{ item.external_listing_id[:20] if item.external_listing_id else 'N/A' }}...</td>
+                                <td><span class="badge bg-secondary">{{ item.platform }}</span></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <form method="POST" action="{{ url_for('routes.repair_orphaned') }}" class="mt-3">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="hidden" name="listing_ids" id="orphanListingIds" value="">
+                    <div class="d-flex gap-2">
+                        <button type="submit" name="action" value="delete_selected" class="btn btn-danger">
+                            <i data-feather="trash-2" class="me-1"></i>
+                            Delete Selected
+                        </button>
+                        <button type="submit" name="action" value="create_warehouse" class="btn btn-outline-danger">
+                            Create Warehouse Stock
+                        </button>
+                    </div>
+                </form>
+                {% else %}
+                <div class="alert alert-success mb-0">
+                    <i data-feather="check-circle" class="me-2"></i>
+                    No orphaned listings found. All listings are properly linked.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header bg-info">
+                <h5 class="mb-0">
+                    <i data-feather="copy" class="me-2"></i>
+                    Duplicate SKU Resolution
+                </h5>
+            </div>
+            <div class="card-body">
+                <p>Find and merge duplicate warehouse stock entries with the same SKU.</p>
+                {% if duplicate_skus %}
+                <div class="table-responsive" style="max-height: 250px; overflow-y: auto;">
+                    <table class="table table-sm table-dark">
+                        <thead>
+                            <tr>
+                                <th>SKU</th>
+                                <th>Count</th>
+                                <th>Total Qty</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in duplicate_skus %}
+                            <tr>
+                                <td>{{ item.sku }}</td>
+                                <td class="text-warning">{{ item.count }} entries</td>
+                                <td>{{ item.total_qty }}</td>
+                                <td>
+                                    <form method="POST" action="{{ url_for('routes.repair_duplicates') }}" style="display: inline;">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                        <input type="hidden" name="sku" value="{{ item.sku }}">
+                                        <button type="submit" class="btn btn-sm btn-info">Merge</button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <form method="POST" action="{{ url_for('routes.repair_duplicates') }}" class="mt-3">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="hidden" name="sku" value="all">
+                    <button type="submit" class="btn btn-info">
+                        <i data-feather="layers" class="me-1"></i>
+                        Merge All Duplicates
+                    </button>
+                </form>
+                {% else %}
+                <div class="alert alert-success mb-0">
+                    <i data-feather="check-circle" class="me-2"></i>
+                    No duplicate SKUs found in warehouse stock.
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-primary">
+                <h5 class="mb-0">
+                    <i data-feather="edit-3" class="me-2"></i>
+                    Bulk Quantity Adjustment
+                </h5>
+            </div>
+            <div class="card-body">
+                <p>Adjust multiple warehouse quantities at once via CSV or manual entry.</p>
+                <form method="POST" action="{{ url_for('routes.repair_bulk_adjust') }}" enctype="multipart/form-data">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <div class="mb-3">
+                        <label class="form-label">Upload CSV (SKU, New Quantity, Reason)</label>
+                        <input type="file" class="form-control" name="csv_file" accept=".csv">
+                        <small class="text-muted">Format: sku,quantity,reason (one per line)</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Or enter manually:</label>
+                        <textarea class="form-control" name="manual_data" rows="4" placeholder="SKU1,10,restocked&#10;SKU2,5,count correction"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Adjustment Type</label>
+                        <select class="form-select" name="adjustment_type">
+                            <option value="set">Set to exact quantity</option>
+                            <option value="increase">Increase by amount</option>
+                            <option value="decrease">Decrease by amount</option>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i data-feather="upload" class="me-1"></i>
+                        Apply Bulk Adjustment
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header bg-secondary">
+                <h5 class="mb-0">
+                    <i data-feather="database" class="me-2"></i>
+                    Warehouse Sync Reset
+                </h5>
+            </div>
+            <div class="card-body">
+                <p>Reset sync states or force re-push all items to marketplaces.</p>
+                <form method="POST" action="{{ url_for('routes.repair_sync_reset') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Target Platform</label>
+                            <select class="form-select" name="platform">
+                                <option value="all">All Platforms</option>
+                                <option value="Amazon">Amazon</option>
+                                <option value="eBay">eBay</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Action</label>
+                            <select class="form-select" name="reset_action">
+                                <option value="reset_push_state">Reset Push States</option>
+                                <option value="clear_failures">Clear Consecutive Failures</option>
+                                <option value="force_repush">Force Re-Push All</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-secondary">
+                        <i data-feather="refresh-cw" class="me-1"></i>
+                        Execute Reset
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i data-feather="clipboard" class="me-2"></i>
+                    Recent Repair Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if recent_repairs %}
+                <div class="table-responsive">
+                    <table class="table table-dark table-striped">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Action</th>
+                                <th>Items Affected</th>
+                                <th>User</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for repair in recent_repairs %}
+                            <tr>
+                                <td>{{ repair.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td>{{ repair.action_type }}</td>
+                                <td>{{ repair.items_affected }}</td>
+                                <td>{{ repair.created_by or 'System' }}</td>
+                                <td>
+                                    <span class="badge bg-{% if repair.status == 'completed' %}success{% elif repair.status == 'failed' %}danger{% else %}warning{% endif %}">
+                                        {{ repair.status }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted mb-0">No repair actions have been performed yet.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleAllMismatches() {
+    const selectAll = document.getElementById('selectAllMismatches');
+    document.querySelectorAll('.mismatch-check').forEach(cb => {
+        cb.checked = selectAll.checked;
+    });
+    updateMismatchIds();
+}
+
+function toggleAllOrphans() {
+    const selectAll = document.getElementById('selectAllOrphans');
+    document.querySelectorAll('.orphan-check').forEach(cb => {
+        cb.checked = selectAll.checked;
+    });
+    updateOrphanIds();
+}
+
+function updateMismatchIds() {
+    const ids = Array.from(document.querySelectorAll('.mismatch-check:checked')).map(cb => cb.value);
+    document.getElementById('mismatchListingIds').value = ids.join(',');
+}
+
+function updateOrphanIds() {
+    const ids = Array.from(document.querySelectorAll('.orphan-check:checked')).map(cb => cb.value);
+    document.getElementById('orphanListingIds').value = ids.join(',');
+}
+
+document.querySelectorAll('.mismatch-check').forEach(cb => {
+    cb.addEventListener('change', updateMismatchIds);
+});
+
+document.querySelectorAll('.orphan-check').forEach(cb => {
+    cb.addEventListener('change', updateOrphanIds);
+});
+
+document.addEventListener('DOMContentLoaded', function() {
+    const mismatchForm = document.querySelector('form[action$="repair_mismatches"]');
+    if (mismatchForm) {
+        mismatchForm.addEventListener('submit', function(e) {
+            updateMismatchIds();
+        });
+    }
+    
+    const orphanForm = document.querySelector('form[action$="repair_orphaned"]');
+    if (orphanForm) {
+        orphanForm.addEventListener('submit', function(e) {
+            updateOrphanIds();
+        });
+    }
+});
+
+feather.replace();
+</script>
+{% endblock %}

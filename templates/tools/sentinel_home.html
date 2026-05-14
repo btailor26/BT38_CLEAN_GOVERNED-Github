@@ -1,0 +1,773 @@
+<!-- SENTINEL TEMPLATE VERIFIED -->
+{% extends "base.html" %}
+
+{% block title %}SENTINEL-1 (STAGING){% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header bg-dark border-secondary d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0 text-white">
+                        <i data-feather="shield" class="me-2"></i>
+                        SENTINEL-1 (STAGING)
+                    </h4>
+                    <span class="badge bg-danger">EXECUTION DISABLED</span>
+                </div>
+                
+                <div class="card-body">
+                    <div class="alert alert-danger border-danger mb-4" style="font-family: monospace; font-size: 0.85rem;">
+                        <div class="text-center">
+                            <strong>OBSERVATION ONLY</strong>
+                            <br>
+                            <small>This is a LOCKED, READ-ONLY governance layer. No commands will be executed.</small>
+                        </div>
+                    </div>
+                    
+                    <div class="card bg-dark border-{% if observation.status == 'STABLE' %}success{% elif observation.status == 'DEGRADED' %}warning{% else %}danger{% endif %} mb-4">
+                        <div class="card-header bg-dark border-{% if observation.status == 'STABLE' %}success{% elif observation.status == 'DEGRADED' %}warning{% else %}danger{% endif %}">
+                            <h6 class="mb-0 text-{% if observation.status == 'STABLE' %}success{% elif observation.status == 'DEGRADED' %}warning{% else %}danger{% endif %}">
+                                <i data-feather="{% if observation.status == 'STABLE' %}check-circle{% elif observation.status == 'DEGRADED' %}alert-triangle{% else %}x-circle{% endif %}" class="me-1" style="width: 16px; height: 16px;"></i>
+                                OBSERVATION REPORT
+                            </h6>
+                        </div>
+                        <div class="card-body" style="font-family: monospace; font-size: 0.85rem;">
+                            <div class="row mb-2">
+                                <div class="col-md-3"><strong class="text-white">STATUS:</strong></div>
+                                <div class="col-md-9">
+                                    <span class="badge bg-{% if observation.status == 'STABLE' %}success{% elif observation.status == 'DEGRADED' %}warning{% else %}danger{% endif %}">{{ observation.status }}</span>
+                                </div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-md-3"><strong class="text-white">MODE:</strong></div>
+                                <div class="col-md-9 text-info">{{ observation.mode }}</div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-md-3"><strong class="text-white">DRY_RUN:</strong></div>
+                                <div class="col-md-9 text-info">{{ observation.dry_run }}</div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-md-3"><strong class="text-white">ENVIRONMENT:</strong></div>
+                                <div class="col-md-9 text-info">{{ observation.environment }}</div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-md-3"><strong class="text-white">SCAN TARGET:</strong></div>
+                                <div class="col-md-9 text-info">{{ observation.scan_target }}</div>
+                            </div>
+                            <div class="row mb-2">
+                                <div class="col-md-3"><strong class="text-white">FILES DETECTED:</strong></div>
+                                <div class="col-md-9 text-info">{{ observation.files_detected.count }}</div>
+                            </div>
+                            {% if observation.files_detected.count > 0 %}
+                            <div class="row mb-2">
+                                <div class="col-md-3"><strong class="text-white">BY TYPE:</strong></div>
+                                <div class="col-md-9 text-info">
+                                    CSV: {{ observation.files_detected.by_type.CSV }}, 
+                                    PDF: {{ observation.files_detected.by_type.PDF }}, 
+                                    OTHER: {{ observation.files_detected.by_type.OTHER }}
+                                </div>
+                            </div>
+                            {% endif %}
+                            {% if observation.stop_conditions %}
+                            <div class="row mb-2">
+                                <div class="col-md-3"><strong class="text-warning">STOP CONDITIONS:</strong></div>
+                                <div class="col-md-9 text-warning">
+                                    {% for condition in observation.stop_conditions %}
+                                    <div>- {{ condition }}</div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+                            <hr class="border-secondary">
+                            <div class="row">
+                                <div class="col-md-3"><strong class="text-white">CONFIRMATIONS:</strong></div>
+                                <div class="col-md-9 text-success">
+                                    DB_WRITES: {{ observation.confirmations.db_writes }} | 
+                                    NETWORK_CALLS: {{ observation.confirmations.network_calls }} | 
+                                    STATE_CHANGES: {{ observation.confirmations.state_changes }}
+                                </div>
+                            </div>
+                            <div class="row mt-2">
+                                <div class="col-md-3"><strong class="text-white">TIMESTAMP:</strong></div>
+                                <div class="col-md-9 text-muted">{{ observation.timestamp }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-dark border-secondary mb-4" style="font-family: monospace; font-size: 0.85rem;">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <strong>APP_ENV:</strong> <span class="text-info">{{ app_env }}</span>
+                            </div>
+                            <div class="col-md-4">
+                                <strong>FLASK_ENV:</strong> <span class="text-info">{{ flask_env }}</span>
+                            </div>
+                            <div class="col-md-4">
+                                <strong>HOST:</strong> <span class="text-info">{{ hostname }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="command-input" class="form-label text-white">Command Input <span id="input-status-badge" class="badge bg-secondary">Loading...</span></label>
+                        <textarea 
+                            class="form-control bg-dark text-white border-secondary" 
+                            id="command-input" 
+                            rows="4" 
+                            placeholder="Loading status..."
+                            style="font-family: monospace;"
+                        ></textarea>
+                        <small id="input-status-text" class="text-muted">Checking server status...</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-outline-info" id="load-template-btn">
+                            <i data-feather="file-text" class="me-1" style="width: 16px; height: 16px;"></i>
+                            Task Box v1 Template
+                        </button>
+                        <button type="button" class="btn btn-outline-success ms-2" id="refresh-observation-btn">
+                            <i data-feather="refresh-cw" class="me-1" style="width: 16px; height: 16px;"></i>
+                            Refresh Observation
+                        </button>
+                    </div>
+                    
+                    <hr class="border-secondary my-4">
+                    
+                    <div class="mb-2 d-flex justify-content-between align-items-center">
+                        <label class="form-label text-white mb-0">Output Panel</label>
+                        <span id="output-status-badge" class="badge bg-secondary">Loading...</span>
+                    </div>
+                    <div 
+                        id="output-panel" 
+                        class="bg-black text-success p-3 rounded border border-secondary"
+                        style="font-family: 'Courier New', monospace; font-size: 0.85rem; min-height: 400px; max-height: 600px; overflow-y: auto; white-space: pre-wrap;"
+                    >SENTINEL CONSOLE
+================================
+Loading status from server...
+
+Click "Task Box v1 Template" to load the template format.</div>
+                    
+                    <hr class="border-secondary my-4">
+                    
+                    {% if is_admin and is_staging %}
+                    <div class="card bg-dark border-info mb-4" id="architect-controls-panel">
+                        <div class="card-header bg-dark border-info">
+                            <h6 class="mb-0 text-info">
+                                <i data-feather="settings" class="me-1" style="width: 16px; height: 16px;"></i>
+                                ARCHITECT CONTROLS
+                            </h6>
+                        </div>
+                        <div class="card-body" style="font-family: monospace; font-size: 0.85rem;">
+                            <div class="row">
+                                <div class="col-md-4 mb-2">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="toggle-input" disabled>
+                                        <label class="form-check-label text-white" for="toggle-input">Command Input</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-2">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="toggle-output" disabled>
+                                        <label class="form-check-label text-white" for="toggle-output">Command Output</label>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-2">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="toggle-execution" disabled>
+                                        <label class="form-check-label text-white" for="toggle-execution">Execution</label>
+                                    </div>
+                                </div>
+                            </div>
+                            <small class="text-muted" id="control-status-text">Loading control status...</small>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if is_admin %}
+                    <div class="card bg-dark border-primary mb-4" id="workspace-panel">
+                        <div class="card-header bg-dark border-primary">
+                            <h6 class="mb-0 text-primary">
+                                <i data-feather="message-square" class="me-1" style="width: 16px; height: 16px;"></i>
+                                SENTINEL WORKSPACE (GUIDANCE MODE)
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div id="workspace-thread" class="bg-black p-3 rounded border border-secondary mb-3" style="font-family: monospace; font-size: 0.85rem; min-height: 200px; max-height: 400px; overflow-y: auto;">
+                                <span class="text-muted">Loading thread...</span>
+                            </div>
+                            <div class="input-group mb-2">
+                                <textarea id="workspace-input" class="form-control bg-dark text-white border-secondary" rows="3" placeholder="Enter guidance message... (Prefix with PLAN: or PROPOSE: for validation)" style="font-family: monospace; resize: vertical;"></textarea>
+                                <button type="button" class="btn btn-primary" id="workspace-send-btn" title="Send (Ctrl+Enter)">
+                                    <i data-feather="arrow-up" style="width: 18px; height: 18px;"></i>
+                                </button>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <input type="file" id="workspace-file-input" class="d-none" accept=".txt,.md,.log,.csv,.json,.pdf">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="workspace-upload-btn">
+                                        <i data-feather="upload" class="me-1" style="width: 14px; height: 14px;"></i>
+                                        Upload File
+                                    </button>
+                                    <span class="ms-3 text-muted" id="workspace-char-counter" style="font-size: 0.8rem;">0 / 64000</span>
+                                </div>
+                                <small id="workspace-status">Saved to instance/sentinel_workspace.jsonl (admin only)</small>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="card bg-dark border-warning">
+                        <div class="card-header bg-dark border-warning">
+                            <h6 class="mb-0 text-warning">
+                                <i data-feather="alert-triangle" class="me-1" style="width: 16px; height: 16px;"></i>
+                                STOP CONDITIONS
+                            </h6>
+                        </div>
+                        <div class="card-body" style="font-family: monospace; font-size: 0.85rem;">
+                            <ul class="mb-0 text-white">
+                                <li>Missing environment configuration</li>
+                                <li>Missing scope clarity in request</li>
+                                <li>Any request to execute commands</li>
+                                <li>Any request involving secrets or credentials</li>
+                                <li>Requests outside approved scope boundaries</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof feather !== 'undefined') {
+        feather.replace();
+    }
+    
+    function apiFetch(url, options = {}) {
+        const isFormData = options.body instanceof FormData;
+        const headers = isFormData ? {} : { 'Content-Type': 'application/json', ...(options.headers || {}) };
+        return fetch(url, {
+            credentials: 'same-origin',
+            redirect: 'follow',
+            headers: headers,
+            ...options
+        });
+    }
+    
+    function showDebugBanner(endpoint, status, responseSnippet) {
+        const existing = document.getElementById('sentinel-debug-banner');
+        if (existing) existing.remove();
+        
+        const banner = document.createElement('div');
+        banner.id = 'sentinel-debug-banner';
+        banner.className = 'alert alert-danger';
+        banner.style.cssText = 'position:fixed;top:10px;left:10px;right:10px;z-index:9999;font-family:monospace;font-size:12px;max-height:200px;overflow:auto;';
+        
+        let msg = '';
+        if (status === 401) {
+            msg = '<strong>401 — Not logged in (session cookie missing or invalid)</strong>';
+        } else if (status === 403) {
+            msg = '<strong>403 — Admin required</strong>';
+        } else {
+            msg = `<strong>HTTP ${status}</strong>`;
+        }
+        
+        banner.innerHTML = `${msg}<br><b>Endpoint:</b> ${endpoint}<br><b>Response:</b> <pre style="margin:5px 0;white-space:pre-wrap;">${responseSnippet.substring(0, 200)}</pre><button class="btn btn-sm btn-outline-light" onclick="this.parentElement.remove()">Dismiss</button>`;
+        document.body.prepend(banner);
+    }
+    
+    function showAuthError(status) {
+        showDebugBanner('(auth check)', status, status === 401 ? 'Session not authenticated' : 'Insufficient permissions');
+    }
+    
+    const loadTemplateBtn = document.getElementById('load-template-btn');
+    const refreshBtn = document.getElementById('refresh-observation-btn');
+    const outputPanel = document.getElementById('output-panel');
+    const commandInput = document.getElementById('command-input');
+    const inputStatusBadge = document.getElementById('input-status-badge');
+    const inputStatusText = document.getElementById('input-status-text');
+    const outputStatusBadge = document.getElementById('output-status-badge');
+    
+    // Fetch server status and update UI accordingly
+    async function loadSentinelStatus() {
+        try {
+            const response = await apiFetch('/api/sentinel/status');
+            if (!response.ok) throw new Error('Status fetch failed');
+            const data = await response.json();
+            
+            // Update command input based on server truth
+            if (data.command_input_enabled) {
+                commandInput.disabled = false;
+                commandInput.readOnly = false;
+                commandInput.placeholder = 'Enter command to validate...';
+                commandInput.style.cursor = 'text';
+                inputStatusBadge.textContent = 'ENABLED';
+                inputStatusBadge.className = 'badge bg-success';
+                inputStatusText.textContent = 'Command input enabled by Architect.';
+                inputStatusText.className = 'text-success';
+            } else {
+                commandInput.disabled = true;
+                commandInput.readOnly = true;
+                commandInput.placeholder = 'Command input disabled by Architect';
+                commandInput.style.cursor = 'not-allowed';
+                inputStatusBadge.textContent = 'DISABLED';
+                inputStatusBadge.className = 'badge bg-secondary';
+                inputStatusText.textContent = 'Command input disabled by Architect.';
+                inputStatusText.className = 'text-warning';
+            }
+            
+            // Update output panel based on server truth
+            if (data.command_output_enabled) {
+                outputStatusBadge.textContent = 'ENABLED';
+                outputStatusBadge.className = 'badge bg-success';
+            } else {
+                outputStatusBadge.textContent = 'DISABLED';
+                outputStatusBadge.className = 'badge bg-secondary';
+            }
+            
+            // Update execution badge in header
+            const execBadge = document.querySelector('.card-header .badge');
+            if (execBadge && data.execution_enabled) {
+                execBadge.textContent = 'EXECUTION ENABLED';
+                execBadge.className = 'badge bg-warning';
+            }
+            
+            // Update output panel with status
+            outputPanel.textContent = `SENTINEL CONSOLE
+================================
+Mode: ${data.sentinel_mode || 'UNKNOWN'}
+Command Input: ${data.command_input_enabled ? 'ENABLED' : 'DISABLED'}
+Command Output: ${data.command_output_enabled ? 'ENABLED' : 'DISABLED'}
+Execution: ${data.execution_enabled ? 'ENABLED' : 'DISABLED'}
+
+Click "Task Box v1 Template" to load the template format.`;
+            
+        } catch (error) {
+            console.error('Failed to load sentinel status:', error);
+            inputStatusBadge.textContent = 'ERROR';
+            inputStatusBadge.className = 'badge bg-danger';
+            inputStatusText.textContent = 'Failed to load status from server.';
+            inputStatusText.className = 'text-danger';
+        }
+    }
+    
+    // Load status on page load
+    loadSentinelStatus();
+    
+    // Architect Controls wiring (only if panel exists)
+    const toggleInput = document.getElementById('toggle-input');
+    const toggleOutput = document.getElementById('toggle-output');
+    const toggleExecution = document.getElementById('toggle-execution');
+    const controlStatusText = document.getElementById('control-status-text');
+    
+    if (toggleInput && toggleOutput && toggleExecution) {
+        async function loadControlSwitches() {
+            try {
+                const response = await apiFetch('/api/sentinel/status');
+                if (!response.ok) {
+                    if (response.status === 401 || response.status === 403) showAuthError(response.status);
+                    throw new Error('Status fetch failed');
+                }
+                const data = await response.json();
+                
+                const switches = {
+                    command_input_enabled: data.command_input_enabled || false,
+                    command_output_enabled: data.command_output_enabled || false,
+                    execution_enabled: data.execution_enabled || false
+                };
+                
+                toggleInput.checked = switches.command_input_enabled;
+                toggleOutput.checked = switches.command_output_enabled;
+                toggleExecution.checked = switches.execution_enabled;
+                
+                if (data.is_admin === true) {
+                    toggleInput.disabled = false;
+                    toggleOutput.disabled = false;
+                    toggleExecution.disabled = false;
+                    controlStatusText.textContent = 'Controls loaded. Toggles active (admin).';
+                    controlStatusText.className = 'text-success';
+                } else if (data.username === null) {
+                    toggleInput.disabled = true;
+                    toggleOutput.disabled = true;
+                    toggleExecution.disabled = true;
+                    controlStatusText.textContent = 'Not logged in. Login required to toggle.';
+                    controlStatusText.className = 'text-warning';
+                } else {
+                    toggleInput.disabled = true;
+                    toggleOutput.disabled = true;
+                    toggleExecution.disabled = true;
+                    controlStatusText.textContent = 'View only (admin required to toggle).';
+                    controlStatusText.className = 'text-warning';
+                }
+                
+                applyControlState(switches);
+                
+            } catch (error) {
+                console.error('Failed to load control switches:', error);
+                controlStatusText.textContent = 'Failed to load: ' + error.message;
+                controlStatusText.className = 'text-danger';
+            }
+        }
+        
+        // Apply control state to UI elements
+        function applyControlState(switches) {
+            // Input control
+            if (switches.command_input_enabled) {
+                commandInput.disabled = false;
+                commandInput.readOnly = false;
+                commandInput.placeholder = 'Enter command to validate...';
+                commandInput.style.cursor = 'text';
+                inputStatusBadge.textContent = 'ENABLED';
+                inputStatusBadge.className = 'badge bg-success';
+                inputStatusText.textContent = 'Command input enabled by Architect.';
+                inputStatusText.className = 'text-success';
+            } else {
+                commandInput.disabled = true;
+                commandInput.readOnly = true;
+                commandInput.placeholder = 'Locked by Architect';
+                commandInput.style.cursor = 'not-allowed';
+                inputStatusBadge.textContent = 'LOCKED';
+                inputStatusBadge.className = 'badge bg-secondary';
+                inputStatusText.textContent = 'Locked by Architect.';
+                inputStatusText.className = 'text-warning';
+            }
+            
+            // Output control
+            if (switches.command_output_enabled) {
+                outputPanel.style.display = 'block';
+                outputStatusBadge.textContent = 'ENABLED';
+                outputStatusBadge.className = 'badge bg-success';
+            } else {
+                outputPanel.style.display = 'none';
+                outputStatusBadge.textContent = 'HIDDEN';
+                outputStatusBadge.className = 'badge bg-secondary';
+            }
+            
+            // Execution badge in header
+            const execBadge = document.querySelector('.card-header .badge');
+            if (execBadge) {
+                if (switches.execution_enabled) {
+                    execBadge.textContent = 'EXECUTION ENABLED';
+                    execBadge.className = 'badge bg-warning';
+                } else {
+                    execBadge.textContent = 'EXECUTION DISABLED';
+                    execBadge.className = 'badge bg-danger';
+                }
+            }
+        }
+        
+        // Update control on server
+        async function updateControl(field, value) {
+            try {
+                const payload = {};
+                payload[field] = value;
+                
+                const response = await apiFetch('/api/sentinel/control', {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+                
+                if (!response.ok) {
+                    if (response.status === 401 || response.status === 403) showAuthError(response.status);
+                    throw new Error('Update failed');
+                }
+                const data = await response.json();
+                
+                if (data.success && data.switches) {
+                    applyControlState(data.switches);
+                    controlStatusText.textContent = 'Control updated: ' + field + ' = ' + value;
+                    controlStatusText.className = 'text-success';
+                } else {
+                    controlStatusText.textContent = 'Update failed: ' + (data.error || 'Unknown error');
+                    controlStatusText.className = 'text-danger';
+                }
+            } catch (error) {
+                console.error('Failed to update control:', error);
+                controlStatusText.textContent = 'Update failed: ' + error.message;
+                controlStatusText.className = 'text-danger';
+            }
+        }
+        
+        // Wire up toggle events
+        toggleInput.addEventListener('change', function() {
+            updateControl('command_input_enabled', this.checked);
+        });
+        
+        toggleOutput.addEventListener('change', function() {
+            updateControl('command_output_enabled', this.checked);
+        });
+        
+        toggleExecution.addEventListener('change', function() {
+            updateControl('execution_enabled', this.checked);
+        });
+        
+        // Load controls on page load
+        loadControlSwitches();
+    }
+    
+    const taskBoxTemplate = `╔══════════════════════════════════════════════════════════════════╗
+║                    TASK PROPOSAL BOX (v1)                        ║
+╠══════════════════════════════════════════════════════════════════╣
+║ TASK_ID:        [STAGING-XXX-001]                                ║
+║ ENVIRONMENT:    STAGING                                          ║
+║ REQUESTED_BY:   [admin]                                          ║
+║ DATE:           [YYYY-MM-DD]                                     ║
+╠══════════════════════════════════════════════════════════════════╣
+║ OBJECTIVE:                                                       ║
+║   [Describe the task objective here]                             ║
+║                                                                  ║
+╠══════════════════════════════════════════════════════════════════╣
+║ SCOPE (ALLOWED):                                                 ║
+║   A) [List allowed actions]                                      ║
+║   B) [...]                                                       ║
+║                                                                  ║
+╠══════════════════════════════════════════════════════════════════╣
+║ OUT OF SCOPE (NOT ALLOWED):                                      ║
+║   - NO auth/CSRF/session/security changes                        ║
+║   - NO database schema changes                                   ║
+║   - NO push/sync/marketplace logic changes                       ║
+║   - [Add specific exclusions]                                    ║
+║                                                                  ║
+╠══════════════════════════════════════════════════════════════════╣
+║ FILES TO TOUCH (STRICT):                                         ║
+║   CREATE:                                                        ║
+║     1) [path/to/new/file]                                        ║
+║   MODIFY:                                                        ║
+║     1) [path/to/existing/file]                                   ║
+║                                                                  ║
+╠══════════════════════════════════════════════════════════════════╣
+║ IMPLEMENTATION RULES:                                            ║
+║   1) [Rule 1]                                                    ║
+║   2) [Rule 2]                                                    ║
+║   3) [Rule 3]                                                    ║
+║                                                                  ║
+╠══════════════════════════════════════════════════════════════════╣
+║ PROOF REQUIRED (EVIDENCE PACK):                                  ║
+║   1) PATCH.diff (unified diff, full)                             ║
+║   2) PROOF.md - test evidence                                    ║
+║   3) TRACE.md - file + line refs                                 ║
+║   4) RISK.md - blast radius assessment                           ║
+║   5) ROLLBACK.md - rollback instructions                         ║
+║   6) TASK CLOSEOUT (PASS/FAIL + self-score 0-30)                 ║
+║                                                                  ║
+╠══════════════════════════════════════════════════════════════════╣
+║ EXECUTION STATUS: ⛔ DISABLED                                    ║
+╚══════════════════════════════════════════════════════════════════╝`;
+    
+    loadTemplateBtn.addEventListener('click', function() {
+        outputPanel.textContent = taskBoxTemplate;
+    });
+    
+    refreshBtn.addEventListener('click', function() {
+        window.location.reload();
+    });
+    
+    // ==========================================================================
+    // WORKSPACE (GUIDANCE MODE) functionality
+    // ==========================================================================
+    const workspaceThread = document.getElementById('workspace-thread');
+    const workspaceInput = document.getElementById('workspace-input');
+    const workspaceSendBtn = document.getElementById('workspace-send-btn');
+    const workspaceUploadBtn = document.getElementById('workspace-upload-btn');
+    const workspaceFileInput = document.getElementById('workspace-file-input');
+    const workspaceStatus = document.getElementById('workspace-status');
+    const workspaceCharCounter = document.getElementById('workspace-char-counter');
+    
+    const MAX_MESSAGE_CHARS = 64000;
+    
+    if (workspaceThread && workspaceInput && workspaceSendBtn) {
+        // Character counter
+        function updateCharCounter() {
+            const len = workspaceInput.value.length;
+            if (workspaceCharCounter) {
+                workspaceCharCounter.textContent = `${len.toLocaleString()} / ${MAX_MESSAGE_CHARS.toLocaleString()}`;
+                if (len > MAX_MESSAGE_CHARS) {
+                    workspaceCharCounter.className = 'ms-3 text-danger fw-bold';
+                    workspaceSendBtn.disabled = true;
+                } else if (len > MAX_MESSAGE_CHARS * 0.9) {
+                    workspaceCharCounter.className = 'ms-3 text-warning';
+                    workspaceSendBtn.disabled = false;
+                } else {
+                    workspaceCharCounter.className = 'ms-3 text-muted';
+                    workspaceSendBtn.disabled = false;
+                }
+            }
+        }
+        
+        workspaceInput.addEventListener('input', updateCharCounter);
+        
+        // Load thread
+        async function loadWorkspaceThread() {
+            try {
+                const response = await apiFetch('/api/sentinel/workspace/thread?limit=50');
+                if (!response.ok) {
+                    const rawText = await response.text();
+                    showDebugBanner('/api/sentinel/workspace/thread', response.status, rawText);
+                    if (response.status === 401) {
+                        workspaceThread.innerHTML = '<span class="text-danger">Login required (401)</span>';
+                        return;
+                    }
+                    if (response.status === 403) {
+                        workspaceThread.innerHTML = '<span class="text-danger">Admin access required (403)</span>';
+                        return;
+                    }
+                    workspaceThread.innerHTML = `<span class="text-danger">Error ${response.status}</span>`;
+                    return;
+                }
+                const data = await response.json();
+                
+                if (data.ok && data.messages) {
+                    if (data.messages.length === 0) {
+                        workspaceThread.innerHTML = '<span class="text-muted">No messages yet. Start the conversation.</span>';
+                    } else {
+                        workspaceThread.innerHTML = data.messages.map(msg => {
+                            const ts = new Date(msg.ts).toLocaleString();
+                            if (msg.file) {
+                                return `<div class="mb-2"><span class="text-info">[${ts}]</span> <span class="text-warning">[FILE]</span> ${msg.file}</div>`;
+                            } else {
+                                const roleClass = msg.role === 'sentinel' ? 'text-primary' : 'text-success';
+                                const text = (msg.text || '').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                                return `<div class="mb-2"><span class="text-info">[${ts}]</span> <span class="${roleClass}">[${msg.role}]</span><pre class="text-white mb-0" style="white-space: pre-wrap;">${text}</pre></div>`;
+                            }
+                        }).join('');
+                        workspaceThread.scrollTop = workspaceThread.scrollHeight;
+                    }
+                }
+            } catch (error) {
+                console.error('Workspace thread error:', error);
+                workspaceThread.innerHTML = '<span class="text-danger">Error loading thread</span>';
+            }
+        }
+        
+        // Parse error response
+        function parseErrorResponse(data, status) {
+            if (data.error === 'MESSAGE_TOO_LARGE') {
+                const max = data.max_chars || MAX_MESSAGE_CHARS;
+                const current = data.current_chars || 'unknown';
+                return `Message too long (${current} chars). Max: ${max}. Split into parts.`;
+            } else if (data.error === 'INVALID_JSON') {
+                return `Invalid request format: ${data.message || 'JSON parse error'}`;
+            } else if (data.error === 'TEXT_REQUIRED') {
+                return 'Message cannot be empty';
+            } else if (data.error === 'ADMIN_REQUIRED') {
+                return 'Admin access required';
+            } else if (data.error === 'SERVER_ERROR') {
+                return `Server error (${data.request_id || 'no-id'}): ${data.message || 'Unknown'}`;
+            } else {
+                return data.message || data.error || `HTTP ${status} error`;
+            }
+        }
+        
+        // Send message
+        async function sendWorkspaceMessage() {
+            const text = workspaceInput.value.trim();
+            if (!text) return;
+            
+            if (text.length > MAX_MESSAGE_CHARS) {
+                workspaceStatus.textContent = `Message too long (${text.length} chars). Max: ${MAX_MESSAGE_CHARS}. Split into parts.`;
+                workspaceStatus.className = 'text-danger';
+                return;
+            }
+            
+            workspaceSendBtn.disabled = true;
+            workspaceStatus.textContent = 'Sending...';
+            workspaceStatus.className = 'text-info';
+            
+            try {
+                const response = await apiFetch('/api/sentinel/workspace/message', {
+                    method: 'POST',
+                    body: JSON.stringify({ text: text })
+                });
+                
+                let data;
+                const contentType = response.headers.get('content-type') || '';
+                if (contentType.includes('application/json')) {
+                    data = await response.json();
+                } else {
+                    const rawText = await response.text();
+                    data = { ok: false, error: 'NON_JSON_RESPONSE', message: rawText.substring(0, 200) };
+                }
+                
+                if (response.ok && data.ok) {
+                    workspaceInput.value = '';
+                    updateCharCounter();
+                    workspaceStatus.textContent = 'Sent! Loading reply...';
+                    workspaceStatus.className = 'text-success';
+                    await loadWorkspaceThread();
+                    workspaceStatus.textContent = 'Conversation updated';
+                } else {
+                    const rawSnippet = JSON.stringify(data).substring(0, 200);
+                    showDebugBanner('/api/sentinel/workspace/message', response.status, rawSnippet);
+                    const errMsg = parseErrorResponse(data, response.status);
+                    workspaceStatus.textContent = errMsg;
+                    workspaceStatus.className = 'text-danger';
+                }
+            } catch (error) {
+                workspaceStatus.textContent = 'Network error: ' + error.message;
+                workspaceStatus.className = 'text-danger';
+            } finally {
+                workspaceSendBtn.disabled = false;
+                updateCharCounter();
+            }
+        }
+        
+        // Upload file
+        async function uploadWorkspaceFile(file) {
+            workspaceStatus.textContent = 'Uploading...';
+            workspaceStatus.className = 'text-info';
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            try {
+                const response = await apiFetch('/api/sentinel/workspace/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                
+                if (data.ok) {
+                    workspaceStatus.textContent = 'File saved: ' + data.filename;
+                    workspaceStatus.className = 'text-success';
+                    await loadWorkspaceThread();
+                } else {
+                    workspaceStatus.textContent = 'Upload error: ' + (data.error || 'Unknown');
+                    workspaceStatus.className = 'text-danger';
+                }
+            } catch (error) {
+                workspaceStatus.textContent = 'Upload failed: ' + error.message;
+                workspaceStatus.className = 'text-danger';
+            }
+        }
+        
+        // Event listeners
+        workspaceSendBtn.addEventListener('click', sendWorkspaceMessage);
+        
+        workspaceInput.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'Enter') {
+                e.preventDefault();
+                sendWorkspaceMessage();
+            }
+        });
+        
+        workspaceUploadBtn.addEventListener('click', function() {
+            workspaceFileInput.click();
+        });
+        
+        workspaceFileInput.addEventListener('change', function() {
+            if (this.files && this.files[0]) {
+                uploadWorkspaceFile(this.files[0]);
+                this.value = '';
+            }
+        });
+        
+        // Load thread on page load
+        loadWorkspaceThread();
+        updateCharCounter();
+    }
+});
+</script>
+{% endblock %}

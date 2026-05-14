@@ -1,0 +1,250 @@
+{% extends "base.html" %}
+
+{% block title %}Bulk GroupView - Inventory Manager{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('routes.dashboard') }}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('routes.product_linking') }}">GroupView</a></li>
+                    <li class="breadcrumb-item active">Bulk Linking</li>
+                </ol>
+            </nav>
+            <h2><i data-feather="link" class="me-2"></i>Bulk GroupView</h2>
+            <p class="text-muted">Upload a CSV file to link multiple warehouse SKUs to Amazon ASINs at once.</p>
+        </div>
+    </div>
+
+    <ul class="nav nav-tabs mb-4" id="bulkLinkTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="upload-tab" data-bs-toggle="tab" data-bs-target="#upload" type="button" role="tab">
+                <i data-feather="upload" class="me-1"></i>Upload CSV
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="faq-tab" data-bs-toggle="tab" data-bs-target="#faq" type="button" role="tab">
+                <i data-feather="help-circle" class="me-1"></i>FAQ / Help
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="bulkLinkTabContent">
+        <div class="tab-pane fade show active" id="upload" role="tabpanel">
+            <div class="row">
+                <div class="col-lg-8">
+                    <div class="card bg-dark">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i data-feather="file-text" class="me-2"></i>CSV Upload</h5>
+                        </div>
+                        <div class="card-body">
+                            <form id="bulkLinkForm" enctype="multipart/form-data">
+                                <div class="mb-3">
+                                    <label for="store_id" class="form-label">Amazon Store</label>
+                                    <select class="form-select" id="store_id" name="store_id" required>
+                                        <option value="">Select Amazon Store</option>
+                                        {% for store in stores %}
+                                        <option value="{{ store.id }}">{{ store.name }} ({{ store.platform }})</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label for="csvFile" class="form-label">CSV File</label>
+                                    <input type="file" class="form-control" id="csvFile" name="file" accept=".csv" required>
+                                    <div class="form-text">
+                                        Required columns: <code>sku</code>, <code>asin</code><br>
+                                        Optional column: <code>fulfillment_type</code> (MFN or FBA, defaults to MFN)
+                                    </div>
+                                </div>
+                                
+                                <button type="submit" class="btn btn-primary" id="submitBtn">
+                                    <i data-feather="upload-cloud" class="me-1"></i>Upload & Process
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <div class="card bg-dark mt-4" id="resultsCard" style="display: none;">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i data-feather="check-circle" class="me-2"></i>Processing Results</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="resultsContent"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <div class="card bg-dark">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i data-feather="download" class="me-2"></i>Sample CSV Template</h5>
+                        </div>
+                        <div class="card-body">
+                            <p class="small">Download the template and fill in your SKU-ASIN mappings:</p>
+                            <pre class="bg-secondary p-2 rounded small">sku,asin,fulfillment_type
+AMZ-PROD-001,B01EXAMPLE1,MFN
+AMZ-PROD-002,B02EXAMPLE2,FBA
+AMZ-PROD-003,B03EXAMPLE3,MFN</pre>
+                            <a href="#" class="btn btn-outline-secondary btn-sm" id="downloadTemplate">
+                                <i data-feather="download" class="me-1"></i>Download Template
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="card bg-dark mt-3">
+                        <div class="card-header">
+                            <h5 class="mb-0"><i data-feather="info" class="me-2"></i>Column Definitions</h5>
+                        </div>
+                        <div class="card-body small">
+                            <dl class="mb-0">
+                                <dt>sku</dt>
+                                <dd>Your internal warehouse SKU (must exist in warehouse_stock)</dd>
+                                
+                                <dt>asin</dt>
+                                <dd>Amazon Standard Identification Number (10 characters)</dd>
+                                
+                                <dt>fulfillment_type</dt>
+                                <dd>MFN (Merchant Fulfilled) or FBA (Fulfilled by Amazon)</dd>
+                            </dl>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="faq" role="tabpanel">
+            <div class="card bg-dark">
+                <div class="card-header">
+                    <h5 class="mb-0"><i data-feather="help-circle" class="me-2"></i>FAQ / Help</h5>
+                </div>
+                <div class="card-body">
+                    <h6>What does this page do?</h6>
+                    <ul>
+                        <li>Links warehouse SKUs to Amazon ASINs in bulk via CSV upload</li>
+                        <li>Creates or updates marketplace_listings records for each SKU</li>
+                        <li>Enables stock sync from warehouse to Amazon for linked products</li>
+                    </ul>
+
+                    <h6>Main Workflow</h6>
+                    <ol>
+                        <li>Select your Amazon store from the dropdown</li>
+                        <li>Prepare a CSV file with sku, asin columns</li>
+                        <li>Upload the CSV file</li>
+                        <li>Review the results (success/error counts)</li>
+                        <li>Download error log if any rows failed</li>
+                    </ol>
+
+                    <h6>Common Errors</h6>
+                    <ul>
+                        <li><strong>SKU not found</strong>: The SKU doesn't exist in warehouse_stock. Add it first.</li>
+                        <li><strong>Invalid ASIN format</strong>: ASIN must be exactly 10 characters.</li>
+                        <li><strong>Missing columns</strong>: CSV must have at least sku and asin columns.</li>
+                    </ul>
+
+                    <h6>Where are Bulk Actions?</h6>
+                    <ul>
+                        <li>This IS the bulk action page for product linking</li>
+                        <li>After linking, use Warehouse → Push Selected to sync quantities</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    feather.replace();
+    
+    document.getElementById('downloadTemplate').addEventListener('click', function(e) {
+        e.preventDefault();
+        const csvContent = 'sku,asin,fulfillment_type\nAMZ-PROD-001,B01EXAMPLE1,MFN\nAMZ-PROD-002,B02EXAMPLE2,FBA\n';
+        const blob = new Blob([csvContent], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'bulk_link_template.csv';
+        a.click();
+        window.URL.revokeObjectURL(url);
+    });
+    
+    document.getElementById('bulkLinkForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const submitBtn = document.getElementById('submitBtn');
+        const resultsCard = document.getElementById('resultsCard');
+        const resultsContent = document.getElementById('resultsContent');
+        
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Processing...';
+        
+        const formData = new FormData(this);
+        
+        try {
+            const response = await fetch('/api/bulk_link_products', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            resultsCard.style.display = 'block';
+            
+            if (data.success) {
+                const r = data.results;
+                let html = `
+                    <div class="alert ${r.error_count > 0 ? 'alert-warning' : 'alert-success'}">
+                        <strong>Job ${r.job_id} Complete</strong>
+                    </div>
+                    <div class="row text-center mb-3">
+                        <div class="col-4">
+                            <h3 class="text-info">${r.total}</h3>
+                            <small>Total Rows</small>
+                        </div>
+                        <div class="col-4">
+                            <h3 class="text-success">${r.success_count}</h3>
+                            <small>Successful</small>
+                        </div>
+                        <div class="col-4">
+                            <h3 class="${r.error_count > 0 ? 'text-danger' : 'text-muted'}">${r.error_count}</h3>
+                            <small>Errors</small>
+                        </div>
+                    </div>
+                `;
+                
+                if (r.error_log_path) {
+                    html += `
+                        <a href="${r.error_log_path}" class="btn btn-outline-warning">
+                            <i data-feather="download" class="me-1"></i>Download Error Log
+                        </a>
+                    `;
+                }
+                
+                resultsContent.innerHTML = html;
+                feather.replace();
+            } else {
+                resultsContent.innerHTML = `
+                    <div class="alert alert-danger">
+                        <strong>Error:</strong> ${data.error}
+                    </div>
+                `;
+            }
+        } catch (error) {
+            resultsCard.style.display = 'block';
+            resultsContent.innerHTML = `
+                <div class="alert alert-danger">
+                    <strong>Error:</strong> ${error.message}
+                </div>
+            `;
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i data-feather="upload-cloud" class="me-1"></i>Upload & Process';
+            feather.replace();
+        }
+    });
+});
+</script>
+{% endblock %}

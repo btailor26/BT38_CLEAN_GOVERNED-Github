@@ -1,0 +1,500 @@
+{% extends "base.html" %}
+
+{% block title %}Stores - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                <i data-feather="shopping-bag" class="me-2"></i>
+                Stores
+            </h1>
+            <div class="btn-group">
+                <!-- Quick Setup Amazon Store Button -->
+                <button type="button" class="btn btn-success dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i data-feather="zap" class="me-1"></i>
+                    Quick Setup
+                </button>
+                <ul class="dropdown-menu">
+                    <li><h6 class="dropdown-header">Amazon Unified Store</h6></li>
+                    <li><a class="dropdown-item" href="#" onclick="quickSetupAmazonUnified()">
+                        <i data-feather="layers" class="me-2"></i>
+                        Amazon (FBA + FBM)
+                        <small class="text-muted d-block">Both FBA import and FBM push</small>
+                    </a></li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li><h6 class="dropdown-header">Individual Modes</h6></li>
+                    <li><a class="dropdown-item" href="#" onclick="quickSetupAmazonOnly()">
+                        <i data-feather="upload-cloud" class="me-2"></i>
+                        Amazon FBM Only
+                        <small class="text-muted d-block">Warehouse push enabled only</small>
+                    </a></li>
+                    <li><a class="dropdown-item" href="#" onclick="quickSetupAmazonOnly()">
+                        <i data-feather="download-cloud" class="me-2"></i>
+                        Amazon FBA Only
+                        <small class="text-muted d-block">Read-only FBA import</small>
+                    </a></li>
+                </ul>
+                <a href="{{ url_for('routes.add_store') }}" class="btn btn-primary">
+                    <i data-feather="plus" class="me-1"></i>
+                    Add New Store
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if stores %}
+    <div class="row">
+        {% for store in stores %}
+        <div class="col-md-6 col-lg-4 mb-4">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <h5 class="card-title mb-0">{{ store.name }}</h5>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" 
+                                   {% if store.is_active %}checked{% endif %}
+                                   onchange="toggleStore({{ store.id }}, this.checked)">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        {# New unified Amazon store model - show capabilities based on flags #}
+                        {% if store.platform and 'amazon' in store.platform|lower %}
+                            <span class="badge bg-warning text-dark">Amazon</span>
+                            {% if store.fba_import_enabled %}
+                                <span class="badge bg-info ms-1" title="FBA inventory import enabled">FBA Import</span>
+                            {% endif %}
+                            {% if store.fbm_sync_enabled %}
+                                <span class="badge bg-success ms-1" title="FBM warehouse push enabled">FBM Push</span>
+                            {% endif %}
+                            {% if not store.fba_import_enabled and not store.fbm_sync_enabled %}
+                                <span class="badge bg-secondary ms-1" title="Configure FBA/FBM in settings">Not Configured</span>
+                            {% endif %}
+                        {% elif store.platform and 'ebay' in store.platform|lower %}
+                            <span class="badge bg-primary">eBay</span>
+                        {% else %}
+                            <span class="badge bg-secondary">{{ store.platform }}</span>
+                        {% endif %}
+                        {% if store.sync_status in ['success', 'active'] %}
+                            <span class="badge bg-success ms-1">Synced</span>
+                        {% elif store.sync_status == 'syncing' %}
+                            <span class="badge bg-warning ms-1">Syncing</span>
+                        {% elif store.sync_status == 'error' %}
+                            <span class="badge bg-danger ms-1">Error</span>
+                        {% else %}
+                            <span class="badge bg-info ms-1">Pending</span>
+                        {% endif %}
+                    </div>
+                    
+                    {# Amazon Auth Error Banner #}
+                    {% if store.platform and 'amazon' in store.platform|lower and store.auth_status == 'auth_error' %}
+                    <div class="alert alert-danger py-2 px-3 mb-3">
+                        <div class="d-flex align-items-center">
+                            <i data-feather="alert-circle" class="me-2 flex-shrink-0"></i>
+                            <div>
+                                <strong>Auth Error</strong>
+                                <small class="d-block text-muted">{{ store.auth_error_code or 'Authentication failed' }}</small>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-sm btn-danger mt-2 w-100" onclick="reconnectAmazon({{ store.id }}, '{{ store.name }}')">
+                            <i data-feather="refresh-cw" class="me-1"></i>
+                            Reconnect Amazon
+                        </button>
+                    </div>
+                    {% endif %}
+                    
+                    {% if store.api_endpoint %}
+                    <p class="text-muted small mb-2">
+                        <i data-feather="link" class="me-1"></i>
+                        {{ store.api_endpoint[:30] + ('...' if store.api_endpoint|length > 30 else '') }}
+                    </p>
+                    {% endif %}
+                    
+                    <p class="text-muted small mb-3">
+                        <i data-feather="clock" class="me-1"></i>
+                        Last sync: 
+                        {% if store.last_sync %}
+                            {{ store.last_sync.strftime('%Y-%m-%d %H:%M') }}
+                        {% else %}
+                            Never
+                        {% endif %}
+                    </p>
+                </div>
+                
+                <div class="card-footer bg-transparent">
+                    <div class="btn-group w-100" role="group">
+                        <button type="button" 
+                                class="btn btn-sm btn-outline-info"
+                                id="sync-btn-{{ store.id }}"
+                                onclick="manualSync({{ store.id }}, '{{ store.name }}')">
+                            <i data-feather="refresh-cw" class="me-1"></i>
+                            Sync Now
+                        </button>
+                        <a href="{{ url_for('routes.edit_store', store_id=store.id) }}" 
+                           class="btn btn-sm btn-outline-primary">
+                            <i data-feather="edit-2" class="me-1"></i>
+                            Edit
+                        </a>
+                        <button type="button" 
+                                class="btn btn-sm btn-outline-danger"
+                                onclick="confirmDelete({{ store.id }}, '{{ store.name }}', '{{ store.platform }}')">
+                            <i data-feather="trash-2" class="me-1"></i>
+                            Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+{% else %}
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <i data-feather="shopping-bag" size="64" class="text-muted mb-3"></i>
+            <h4 class="text-muted">No stores configured yet</h4>
+            <p class="text-muted mb-4">Connect your first store to start syncing inventory</p>
+            <a href="{{ url_for('routes.add_store') }}" class="btn btn-primary">
+                <i data-feather="plus" class="me-1"></i>
+                Add Your First Store
+            </a>
+        </div>
+    </div>
+{% endif %}
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title">
+                    <i data-feather="alert-triangle" class="me-2"></i>
+                    Confirm Store Deletion
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning mb-3">
+                    <strong>You are about to delete:</strong>
+                    <div class="mt-2 p-2 bg-dark rounded">
+                        <div class="d-flex align-items-center">
+                            <span class="fs-5 fw-bold" id="deleteStoreName"></span>
+                        </div>
+                        <div class="mt-2" id="deletePlatformBadges"></div>
+                    </div>
+                </div>
+                <p><strong>This will:</strong></p>
+                <ul class="mb-3">
+                    <li>Remove all marketplace listings for this store</li>
+                    <li>Stop all sync operations for this store</li>
+                    <li>Delete sync logs and history</li>
+                    <li id="fbaWarningItem" style="display: none;">Delete all FBA inventory records for this store</li>
+                </ul>
+                <p class="text-success small mb-0">
+                    <i data-feather="check-circle" class="me-1"></i>
+                    <strong>Order history will be preserved</strong> (orders are not deleted)
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteForm" method="POST" style="display: inline;">
+                    <button type="submit" class="btn btn-danger">
+                        <i data-feather="trash-2" class="me-1"></i>
+                        Delete Store
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Sync Confirmation Modal -->
+<div class="modal fade" id="syncModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Trigger Sync</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Trigger manual sync for store <strong id="syncStoreName"></strong>?</p>
+                <p class="text-muted small">This will sync all inventory items with the external store platform.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-info" onclick="executeTriggerSync()">
+                    <i data-feather="refresh-cw" class="me-1"></i>
+                    Start Sync
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let currentStoreId = null;
+    
+    function manualSync(storeId, storeName) {
+        const btn = document.getElementById(`sync-btn-${storeId}`);
+        const originalContent = btn.innerHTML;
+        
+        // Show loading state
+        btn.disabled = true;
+        btn.innerHTML = '<i data-feather="loader" class="me-1"></i>Syncing...';
+        
+        fetch(`/stores/sync/${storeId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Show success state temporarily
+                btn.innerHTML = '<i data-feather="check" class="me-1"></i>Started';
+                btn.classList.remove('btn-outline-info');
+                btn.classList.add('btn-success');
+                
+                // Reset button after 3 seconds
+                setTimeout(() => {
+                    btn.innerHTML = originalContent;
+                    btn.classList.remove('btn-success');
+                    btn.classList.add('btn-outline-info');
+                    btn.disabled = false;
+                    feather.replace();
+                }, 3000);
+                
+                // Show success message
+                const alertContainer = document.querySelector('.container-fluid');
+                const alert = document.createElement('div');
+                alert.className = 'alert alert-success alert-dismissible fade show';
+                alert.innerHTML = `
+                    <i data-feather="check-circle" class="me-2"></i>
+                    ${data.message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                alertContainer.insertBefore(alert, alertContainer.firstChild);
+                feather.replace();
+            } else {
+                // Show error
+                btn.innerHTML = originalContent;
+                btn.disabled = false;
+                feather.replace();
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            btn.innerHTML = originalContent;
+            btn.disabled = false;
+            feather.replace();
+            alert('Error: ' + error.message);
+        });
+    }
+    
+    function reconnectAmazon(storeId, storeName) {
+        if (!confirm(`Reconnect Amazon store "${storeName}"?\n\nThis will attempt to refresh the authentication token and resume sync.`)) {
+            return;
+        }
+        
+        const btn = event.target.closest('button');
+        const originalContent = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i data-feather="loader" class="me-1"></i>Reconnecting...';
+        feather.replace();
+        
+        fetch(`/api/reconnect-amazon/${storeId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                btn.innerHTML = '<i data-feather="check" class="me-1"></i>Connected!';
+                btn.classList.remove('btn-danger');
+                btn.classList.add('btn-success');
+                
+                const alertContainer = document.querySelector('.container-fluid');
+                const alert = document.createElement('div');
+                alert.className = 'alert alert-success alert-dismissible fade show';
+                alert.innerHTML = `
+                    <i data-feather="check-circle" class="me-2"></i>
+                    ${data.message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                alertContainer.insertBefore(alert, alertContainer.firstChild);
+                feather.replace();
+                
+                setTimeout(() => { location.reload(); }, 2000);
+            } else {
+                btn.innerHTML = originalContent;
+                btn.disabled = false;
+                feather.replace();
+                
+                const alertContainer = document.querySelector('.container-fluid');
+                const alertDiv = document.createElement('div');
+                alertDiv.className = 'alert alert-danger alert-dismissible fade show';
+                alertDiv.innerHTML = `
+                    <i data-feather="alert-circle" class="me-2"></i>
+                    <strong>Reconnection failed:</strong> ${data.error}
+                    ${data.error_code ? `<br><small class="text-muted">Error code: ${data.error_code}</small>` : ''}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+                alertContainer.insertBefore(alertDiv, alertContainer.firstChild);
+                feather.replace();
+            }
+        })
+        .catch(error => {
+            btn.innerHTML = originalContent;
+            btn.disabled = false;
+            feather.replace();
+            alert('Error: ' + error.message);
+        });
+    }
+
+    function confirmDelete(storeId, storeName, platform) {
+        document.getElementById('deleteStoreName').textContent = storeName;
+        document.getElementById('deleteForm').action = `/stores/delete/${storeId}`;
+        
+        // Build platform badges
+        const badgesContainer = document.getElementById('deletePlatformBadges');
+        const fbaWarning = document.getElementById('fbaWarningItem');
+        
+        let badgeHtml = '';
+        if (platform === 'Amazon') {
+            badgeHtml = '<span class="badge bg-warning text-dark">Amazon FBA</span> <span class="badge bg-dark">Read-Only</span>';
+            fbaWarning.style.display = 'list-item';
+        } else if (platform === 'Amazon') {
+            badgeHtml = '<span class="badge bg-success">Amazon FBM</span> <span class="badge bg-primary">Full Sync</span>';
+            fbaWarning.style.display = 'none';
+        } else if (platform === 'Amazon') {
+            badgeHtml = '<span class="badge bg-secondary">Amazon (Legacy)</span>';
+            fbaWarning.style.display = 'none';
+        } else if (platform === 'eBay') {
+            badgeHtml = '<span class="badge bg-info">eBay</span>';
+            fbaWarning.style.display = 'none';
+        } else {
+            badgeHtml = '<span class="badge bg-secondary">' + platform + '</span>';
+            fbaWarning.style.display = 'none';
+        }
+        badgesContainer.innerHTML = badgeHtml;
+        
+        const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+        modal.show();
+        
+        // Reinitialize feather icons after modal opens
+        setTimeout(() => feather.replace(), 100);
+    }
+    
+    function triggerSync(storeId, storeName) {
+        currentStoreId = storeId;
+        document.getElementById('syncStoreName').textContent = storeName;
+        
+        const modal = new bootstrap.Modal(document.getElementById('syncModal'));
+        modal.show();
+    }
+    
+    function executeTriggerSync() {
+        if (!currentStoreId) return;
+        
+        fetch(`/stores/sync/${currentStoreId}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert('Error: ' + data.error);
+            } else {
+                alert('Sync triggered successfully!');
+                // Close modal and refresh page
+                bootstrap.Modal.getInstance(document.getElementById('syncModal')).hide();
+                setTimeout(() => location.reload(), 1000);
+            }
+        })
+        .catch(error => {
+            console.error('Error triggering sync:', error);
+            alert('Error triggering sync');
+        });
+    }
+    
+    function toggleStore(storeId, isActive) {
+        // This would normally make an API call to update store status
+        // For now, just show a message
+        console.log(`Store ${storeId} ${isActive ? 'activated' : 'deactivated'}`);
+    }
+    
+    // UNIFIED AMAZON MODEL: One store with fba_import_enabled and fbm_sync_enabled flags
+    function quickSetupAmazonUnified() {
+        if (confirm('Create Amazon store with BOTH FBA and FBM?\n\n✅ FBA Import: Read-only inventory from Amazon warehouses\n✅ FBM Push: Push stock from your warehouse to Amazon\n\nThis is the recommended setup for most sellers.')) {
+            submitAmazonSetupUnified('Amazon Store', true, true);
+        }
+    }
+    
+    function quickSetupAmazonOnly() {
+        if (confirm('Create Amazon store with FBM ONLY?\n\n✅ FBM Push: Push stock from your warehouse to Amazon\n❌ FBA Import: Disabled\n\nUse this if you only sell FBM products.')) {
+            submitAmazonSetupUnified('Amazon FBM', false, true);
+        }
+    }
+    
+    function quickSetupAmazonOnly() {
+        if (confirm('Create Amazon store with FBA ONLY?\n\n✅ FBA Import: Read-only inventory from Amazon warehouses\n❌ FBM Push: Disabled\n\nUse this if you only want to view FBA inventory.')) {
+            submitAmazonSetupUnified('Amazon FBA Import', true, false);
+        }
+    }
+    
+    function submitAmazonSetupUnified(displayName, fbaEnabled, fbmEnabled) {
+        const form = document.createElement('form');
+        form.method = 'GET';
+        form.action = '/amazon-credentials-setup';
+        
+        const storeNameInput = document.createElement('input');
+        storeNameInput.type = 'hidden';
+        storeNameInput.name = 'store_name';
+        storeNameInput.value = `${displayName} - ${new Date().toISOString().slice(0, 10)}`;
+        form.appendChild(storeNameInput);
+        
+        const fbaInput = document.createElement('input');
+        fbaInput.type = 'hidden';
+        fbaInput.name = 'fba_import_enabled';
+        fbaInput.value = fbaEnabled ? 'true' : 'false';
+        form.appendChild(fbaInput);
+        
+        const fbmInput = document.createElement('input');
+        fbmInput.type = 'hidden';
+        fbmInput.name = 'fbm_sync_enabled';
+        fbmInput.value = fbmEnabled ? 'true' : 'false';
+        form.appendChild(fbmInput);
+        
+        const regionInput = document.createElement('input');
+        regionInput.type = 'hidden';
+        regionInput.name = 'region';
+        regionInput.value = 'UK';
+        form.appendChild(regionInput);
+        
+        const marketplaceInput = document.createElement('input');
+        marketplaceInput.type = 'hidden';
+        marketplaceInput.name = 'marketplace_id';
+        marketplaceInput.value = 'A1F83G8C2ARO7P';
+        form.appendChild(marketplaceInput);
+        
+        document.body.appendChild(form);
+        form.submit();
+    }
+    
+    // Re-initialize feather icons after modal content changes
+    document.getElementById('deleteModal').addEventListener('shown.bs.modal', function () {
+        feather.replace();
+    });
+    
+    document.getElementById('syncModal').addEventListener('shown.bs.modal', function () {
+        feather.replace();
+    });
+</script>
+{% endblock %}

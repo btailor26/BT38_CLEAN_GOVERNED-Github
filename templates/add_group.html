@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block title %}Add Group - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex align-items-center mb-4">
+            <a href="{{ url_for('routes.groups') }}" class="btn btn-outline-secondary me-3">
+                <i data-feather="arrow-left"></i>
+            </a>
+            <h1 class="mb-0">
+                <i data-feather="plus" class="me-2"></i>
+                Add New Group
+            </h1>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Group Details</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="addGroupForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="name" class="form-label">
+                                <i data-feather="tag" class="me-1"></i>
+                                Group Name *
+                            </label>
+                            <input type="text" class="form-control" id="name" name="name" required>
+                            <div class="form-text">Display name for the product group</div>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="group_key" class="form-label">
+                                <i data-feather="key" class="me-1"></i>
+                                Group Key *
+                            </label>
+                            <input type="text" class="form-control" id="group_key" name="group_key" required>
+                            <div class="form-text">Unique identifier (e.g., "airpods-pro", "iphone-13")</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">
+                            <i data-feather="file-text" class="me-1"></i>
+                            Description
+                        </label>
+                        <textarea class="form-control" id="description" name="description" rows="4" 
+                                  placeholder="Optional description of the product group"></textarea>
+                        <div class="form-text">Describe what products belong to this group</div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('routes.groups') }}" class="btn btn-secondary">
+                            <i data-feather="x" class="me-1"></i>
+                            Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i data-feather="save" class="me-1"></i>
+                            Create Group
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i data-feather="info" class="me-1"></i>
+                    About Product Groups
+                </h6>
+            </div>
+            <div class="card-body">
+                <p class="small text-muted mb-3">
+                    Product groups help you organize related inventory items like product variations 
+                    (different sizes, colors, etc.) under a single category.
+                </p>
+                
+                <h6 class="small">Examples:</h6>
+                <ul class="small text-muted mb-3">
+                    <li><strong>Group Key:</strong> "t-shirt-basic"<br>
+                        <strong>Items:</strong> T-Shirt Basic (S, M, L, XL)</li>
+                    <li><strong>Group Key:</strong> "headphones-pro"<br>
+                        <strong>Items:</strong> Headphones Pro (Black, White)</li>
+                </ul>
+                
+                <div class="alert alert-info">
+                    <i data-feather="lightbulb" class="me-1"></i>
+                    <strong>Tip:</strong> Groups are automatically created when syncing from platforms 
+                    that have product variations.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Auto-generate group key from name
+document.getElementById('name').addEventListener('input', function() {
+    const name = this.value;
+    const groupKey = document.getElementById('group_key');
+    
+    // Only auto-generate if group_key is empty
+    if (!groupKey.value) {
+        // Convert name to lowercase, replace spaces and special chars with hyphens
+        const autoKey = name.toLowerCase()
+            .replace(/[^a-z0-9\s-]/g, '')
+            .replace(/\s+/g, '-')
+            .replace(/-+/g, '-')
+            .replace(/^-|-$/g, '');
+        groupKey.value = autoKey;
+    }
+});
+
+// Initialize Feather icons when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    feather.replace();
+});
+</script>
+{% endblock %}

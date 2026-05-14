@@ -1,0 +1,111 @@
+{% extends 'base.html' %}
+
+{% block title %}Customers - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-1">Customers</h1>
+            <p class="text-muted mb-0">Manage your customer database</p>
+        </div>
+        <a href="{{ url_for('routes.customer_add') }}" class="btn btn-primary">
+            <i data-feather="user-plus" class="me-1"></i>Add Customer
+        </a>
+    </div>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <div class="card">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <span><i data-feather="users" class="me-2"></i>Customer List</span>
+                <span class="badge bg-primary">{{ customers|length }} customers</span>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            {% if customers %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Code</th>
+                            <th>Name</th>
+                            <th>Company</th>
+                            <th>Email</th>
+                            <th>Phone</th>
+                            <th>Type</th>
+                            <th class="text-center">Status</th>
+                            <th class="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for customer in customers %}
+                        <tr>
+                            <td><code>{{ customer.code or '-' }}</code></td>
+                            <td>
+                                <a href="{{ url_for('routes.customer_detail', customer_id=customer.id) }}" class="text-decoration-none">
+                                    <strong>{{ customer.name }}</strong>
+                                </a>
+                            </td>
+                            <td>{{ customer.company_name or '-' }}</td>
+                            <td>{{ customer.email or '-' }}</td>
+                            <td>{{ customer.phone or '-' }}</td>
+                            <td>
+                                <span class="badge {% if customer.customer_type == 'wholesale' %}bg-info{% else %}bg-secondary{% endif %}">
+                                    {{ customer.customer_type|title }}
+                                </span>
+                            </td>
+                            <td class="text-center">
+                                {% if customer.is_active %}
+                                <span class="badge bg-success">Active</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{{ url_for('routes.customer_detail', customer_id=customer.id) }}" 
+                                       class="btn btn-outline-primary" title="View">
+                                        <i data-feather="eye"></i>
+                                    </a>
+                                    <a href="{{ url_for('routes.customer_edit', customer_id=customer.id) }}" 
+                                       class="btn btn-outline-secondary" title="Edit">
+                                        <i data-feather="edit-2"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i data-feather="users" style="width: 48px; height: 48px;" class="text-muted mb-3"></i>
+                <h5 class="text-muted">No customers yet</h5>
+                <p class="text-muted">Add your first customer to get started</p>
+                <a href="{{ url_for('routes.customer_add') }}" class="btn btn-primary">
+                    <i data-feather="user-plus" class="me-1"></i>Add First Customer
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    feather.replace();
+</script>
+{% endblock %}

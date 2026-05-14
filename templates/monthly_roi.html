@@ -1,0 +1,298 @@
+{% extends "base.html" %}
+
+{% block title %}Monthly ROI Report - Investment vs Revenue Tracking{% endblock %}
+
+{% block extra_css %}
+<style>
+    .roi-container {
+        padding: 20px;
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+    
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 30px;
+    }
+    
+    .section-header h2 {
+        font-size: 28px;
+        font-weight: 600;
+        margin: 0;
+    }
+    
+    .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+        margin-bottom: 30px;
+    }
+    
+    .metric-card {
+        background: white;
+        border-radius: 8px;
+        padding: 20px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .metric-card h3 {
+        font-size: 14px;
+        color: #666;
+        margin: 0 0 10px 0;
+        font-weight: 500;
+    }
+    
+    .metric-value {
+        font-size: 32px;
+        font-weight: 700;
+        margin: 0;
+    }
+    
+    .metric-value.positive {
+        color: #28a745;
+    }
+    
+    .metric-value.negative {
+        color: #dc3545;
+    }
+    
+    .metric-value.neutral {
+        color: #333;
+    }
+    
+    .metric-subtitle {
+        font-size: 14px;
+        color: #999;
+        margin-top: 5px;
+    }
+    
+    .data-table {
+        width: 100%;
+        background: white;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 30px;
+    }
+    
+    .data-table th {
+        background: #f8f9fa;
+        padding: 12px;
+        text-align: left;
+        font-weight: 600;
+        font-size: 13px;
+        color: #666;
+        border-bottom: 2px solid #dee2e6;
+    }
+    
+    .data-table td {
+        padding: 12px;
+        border-bottom: 1px solid #f0f0f0;
+        font-size: 13px;
+    }
+    
+    .data-table tr:hover {
+        background: #f8f9fa;
+    }
+    
+    .data-table tfoot td {
+        font-weight: 700;
+        background: #f8f9fa;
+        border-top: 2px solid #dee2e6;
+    }
+    
+    .badge-high-roi {
+        background: #d4edda;
+        color: #155724;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    
+    .badge-low-roi {
+        background: #f8d7da;
+        color: #721c24;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    
+    .badge-medium-roi {
+        background: #fff3cd;
+        color: #856404;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    
+    .export-btn {
+        background: #28a745;
+        color: white;
+        padding: 10px 20px;
+        border-radius: 6px;
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 500;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    
+    .export-btn:hover {
+        background: #218838;
+        color: white;
+        text-decoration: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="roi-container">
+    <div class="section-header">
+        <h2>📈 Monthly ROI Report</h2>
+        <a href="{{ url_for('routes.monthly_roi') }}?export=excel" class="export-btn">
+            <i data-feather="download"></i>
+            Export to Excel
+        </a>
+    </div>
+
+    <!-- Summary Metrics -->
+    <div class="metric-grid">
+        <div class="metric-card">
+            <h3>💰 Total Investment</h3>
+            <p class="metric-value neutral">£{{ "%.2f"|format(total_investment) }}</p>
+            <p class="metric-subtitle">Money spent on inventory</p>
+        </div>
+
+        <div class="metric-card">
+            <h3>💵 Total Revenue</h3>
+            <p class="metric-value positive">£{{ "%.2f"|format(total_revenue) }}</p>
+            <p class="metric-subtitle">Money returned from sales</p>
+        </div>
+
+        <div class="metric-card">
+            <h3>{% if total_profit >= 0 %}📈{% else %}📉{% endif %} Net Profit</h3>
+            <p class="metric-value {% if total_profit >= 0 %}positive{% else %}negative{% endif %}">
+                £{{ "%.2f"|format(total_profit) }}
+            </p>
+            <p class="metric-subtitle">After all costs</p>
+        </div>
+
+        <div class="metric-card">
+            <h3>📊 ROI Percentage</h3>
+            <p class="metric-value {% if total_roi >= 0 %}positive{% else %}negative{% endif %}">
+                {{ "%.1f"|format(total_roi) }}%
+            </p>
+            <p class="metric-subtitle">Return on investment</p>
+        </div>
+    </div>
+
+    <!-- Monthly Breakdown Table -->
+    <div class="metric-card">
+        <h3 style="margin-bottom: 20px;">📅 Monthly Breakdown</h3>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Month</th>
+                    <th>Investment</th>
+                    <th>Invoices</th>
+                    <th>Revenue</th>
+                    <th>COGS</th>
+                    <th>Commission</th>
+                    <th>Shipping</th>
+                    <th>Operating</th>
+                    <th>Profit</th>
+                    <th>ROI %</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for report in monthly_reports %}
+                <tr>
+                    <td><strong>{{ report.month }}</strong></td>
+                    <td>£{{ "%.2f"|format(report.investment) }}</td>
+                    <td>{{ report.invoice_count }}</td>
+                    <td>£{{ "%.2f"|format(report.revenue) }}</td>
+                    <td>£{{ "%.2f"|format(report.cost) }}</td>
+                    <td>£{{ "%.2f"|format(report.commission) }}</td>
+                    <td>£{{ "%.2f"|format(report.shipping) }}</td>
+                    <td>£{{ "%.2f"|format(report.operating) }}</td>
+                    <td>
+                        <span style="color: {% if report.profit >= 0 %}#28a745{% else %}#dc3545{% endif %}; font-weight: 600;">
+                            £{{ "%.2f"|format(report.profit) }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if report.roi_percentage >= 25 %}
+                            <span class="badge-high-roi">{{ "%.1f"|format(report.roi_percentage) }}%</span>
+                        {% elif report.roi_percentage >= 10 %}
+                            <span class="badge-medium-roi">{{ "%.1f"|format(report.roi_percentage) }}%</span>
+                        {% else %}
+                            <span class="badge-low-roi">{{ "%.1f"|format(report.roi_percentage) }}%</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td><strong>TOTAL</strong></td>
+                    <td><strong>£{{ "%.2f"|format(total_investment) }}</strong></td>
+                    <td></td>
+                    <td><strong>£{{ "%.2f"|format(total_revenue) }}</strong></td>
+                    <td><strong>£{{ "%.2f"|format(total_cost) }}</strong></td>
+                    <td><strong>£{{ "%.2f"|format(total_commission) }}</strong></td>
+                    <td><strong>£{{ "%.2f"|format(total_shipping) }}</strong></td>
+                    <td><strong>£{{ "%.2f"|format(total_operating) }}</strong></td>
+                    <td>
+                        <strong style="color: {% if total_profit >= 0 %}#28a745{% else %}#dc3545{% endif %};">
+                            £{{ "%.2f"|format(total_profit) }}
+                        </strong>
+                    </td>
+                    <td>
+                        <strong style="color: {% if total_roi >= 0 %}#28a745{% else %}#dc3545{% endif %};">
+                            {{ "%.1f"|format(total_roi) }}%
+                        </strong>
+                    </td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
+    <!-- Supplier Performance -->
+    {% if suppliers_data %}
+    <div class="metric-card">
+        <h3 style="margin-bottom: 20px;">🏪 Supplier Performance (Last 12 Months)</h3>
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Supplier</th>
+                    <th>Total Spent</th>
+                    <th>Orders</th>
+                    <th>Avg Order Value</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for supplier in suppliers_data %}
+                <tr>
+                    <td><strong>{{ supplier.name }}</strong></td>
+                    <td>£{{ "%.2f"|format(supplier.total_spent) }}</td>
+                    <td>{{ supplier.order_count }}</td>
+                    <td>£{{ "%.2f"|format(supplier.total_spent / supplier.order_count if supplier.order_count > 0 else 0) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+    // Initialize Feather icons
+    feather.replace();
+</script>
+{% endblock %}

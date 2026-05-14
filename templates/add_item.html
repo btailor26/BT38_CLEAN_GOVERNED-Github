@@ -1,0 +1,223 @@
+{% extends "base.html" %}
+
+{% block title %}Add Item - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex align-items-center mb-4">
+            <a href="{{ url_for('routes.inventory') }}" class="btn btn-outline-secondary me-3">
+                <i data-feather="arrow-left"></i>
+            </a>
+            <h1 class="mb-0">
+                <i data-feather="plus" class="me-2"></i>
+                Add New Item
+            </h1>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Item Details</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="addItemForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="name" class="form-label">
+                                <i data-feather="tag" class="me-1"></i>
+                                Item Name *
+                            </label>
+                            <input type="text" class="form-control" id="name" name="name" required>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="sku" class="form-label">
+                                <i data-feather="hash" class="me-1"></i>
+                                SKU *
+                            </label>
+                            <input type="text" class="form-control" id="sku" name="sku" required>
+                            <div class="form-text">Stock Keeping Unit - must be unique</div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="quantity" class="form-label">
+                                <i data-feather="package" class="me-1"></i>
+                                Quantity *
+                            </label>
+                            <input type="number" class="form-control" id="quantity" name="quantity" min="0" value="0" required>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label for="reorder_point" class="form-label">
+                                <i data-feather="alert-triangle" class="me-1"></i>
+                                Reorder Point
+                            </label>
+                            <input type="number" class="form-control" id="reorder_point" name="reorder_point" min="0" value="0">
+                            <div class="form-text">Alert when stock reaches this level</div>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label for="price" class="form-label">
+                                <i data-feather="credit-card" class="me-1"></i>
+                                Price *
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text">£</span>
+                                <input type="number" class="form-control" id="price" name="price" 
+                                       min="0" step="0.01" value="0.00" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="group_id" class="form-label">
+                            <i data-feather="layers" class="me-1"></i>
+                            Product Group
+                        </label>
+                        <select class="form-select" id="group_id" name="group_id">
+                            <option value="">No Group (Individual Item)</option>
+                            {% for group in groups %}
+                                <option value="{{ group.id }}">{{ group.name }} ({{ group.group_key }})</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">
+                            Assign to a product group for variations (color, size, etc.) 
+                            <a href="{{ url_for('routes.add_group') }}" class="link-primary">Create new group</a>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">
+                            <i data-feather="settings" class="me-1"></i>
+                            Variant Attributes <span class="text-muted">(Optional)</span>
+                        </label>
+                        <div class="row">
+                            <div class="col-md-6 mb-2">
+                                <input type="text" class="form-control form-control-sm" 
+                                       id="variant_color" name="variant_color" placeholder="Color (e.g., Red, Blue)">
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <input type="text" class="form-control form-control-sm" 
+                                       id="variant_size" name="variant_size" placeholder="Size (e.g., S, M, L, XL)">
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <input type="text" class="form-control form-control-sm" 
+                                       id="variant_material" name="variant_material" placeholder="Material (e.g., Cotton, Leather)">
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <input type="text" class="form-control form-control-sm" 
+                                       id="variant_style" name="variant_style" placeholder="Style (e.g., Classic, Modern)">
+                            </div>
+                        </div>
+                        <div class="form-text">Use these fields to specify what makes this item unique within its group</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">
+                            <i data-feather="file-text" class="me-1"></i>
+                            Description
+                        </label>
+                        <textarea class="form-control" id="description" name="description" rows="4" 
+                                  placeholder="Optional description of the item"></textarea>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('routes.inventory') }}" class="btn btn-secondary">
+                            <i data-feather="x" class="me-1"></i>
+                            Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i data-feather="save" class="me-1"></i>
+                            Add Item
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i data-feather="help-circle" class="me-1"></i>
+                    Tips
+                </h6>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled small">
+                    <li class="mb-2">
+                        <i data-feather="check" class="text-success me-2"></i>
+                        Use descriptive item names
+                    </li>
+                    <li class="mb-2">
+                        <i data-feather="check" class="text-success me-2"></i>
+                        SKUs must be unique across all items
+                    </li>
+                    <li class="mb-2">
+                        <i data-feather="check" class="text-success me-2"></i>
+                        Set accurate initial quantities
+                    </li>
+                    <li class="mb-2">
+                        <i data-feather="check" class="text-success me-2"></i>
+                        Include detailed descriptions for better tracking
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Auto-generate SKU based on item name
+    document.getElementById('name').addEventListener('input', function() {
+        const name = this.value;
+        const skuField = document.getElementById('sku');
+        
+        if (name && !skuField.value) {
+            // Generate SKU from name: uppercase, replace spaces with hyphens, add timestamp
+            const baseSku = name.toUpperCase().replace(/[^A-Z0-9]/g, '-').replace(/-+/g, '-');
+            const timestamp = Date.now().toString().slice(-4);
+            skuField.value = baseSku.substring(0, 10) + '-' + timestamp;
+        }
+    });
+    
+    // Form validation
+    document.getElementById('addItemForm').addEventListener('submit', function(e) {
+        const name = document.getElementById('name').value.trim();
+        const sku = document.getElementById('sku').value.trim();
+        const quantity = parseInt(document.getElementById('quantity').value);
+        const price = parseFloat(document.getElementById('price').value);
+        
+        if (!name || !sku) {
+            e.preventDefault();
+            alert('Please fill in all required fields');
+            return;
+        }
+        
+        if (quantity < 0) {
+            e.preventDefault();
+            alert('Quantity cannot be negative');
+            return;
+        }
+        
+        if (price < 0) {
+            e.preventDefault();
+            alert('Price cannot be negative');
+            return;
+        }
+    });
+    
+    // Focus on first input
+    document.getElementById('name').focus();
+</script>
+{% endblock %}

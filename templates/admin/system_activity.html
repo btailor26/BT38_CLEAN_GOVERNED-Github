@@ -1,0 +1,965 @@
+{% extends "base.html" %}
+
+{% block title %}System Activity - Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0"><i data-feather="activity"></i> System Activity</h1>
+            <p class="text-muted mb-0">Admin-only reporting dashboard</p>
+        </div>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-success btn-sm" onclick="runBackfill()">
+                <i data-feather="database"></i> Backfill Historical Data
+            </button>
+            <button class="btn btn-outline-secondary btn-sm" onclick="loadDashboardStats()">
+                <i data-feather="refresh-cw"></i> Refresh Stats
+            </button>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary">
+                <div class="card-body text-center">
+                    <h3 class="mb-1" id="stat-sync-jobs">-</h3>
+                    <small class="text-muted">Sync Jobs (24h)</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary">
+                <div class="card-body text-center">
+                    <h3 class="mb-1" id="stat-failed-jobs">-</h3>
+                    <small class="text-muted">Failed Jobs (24h)</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary">
+                <div class="card-body text-center">
+                    <h3 class="mb-1" id="stat-api-errors">-</h3>
+                    <small class="text-muted">API Errors (24h)</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-dark border-secondary">
+                <div class="card-body text-center">
+                    <h3 class="mb-1" id="stat-config-changes">-</h3>
+                    <small class="text-muted">Config Changes (7d)</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <ul class="nav nav-tabs mb-3" id="activityTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="sync-jobs-tab" data-bs-toggle="tab" data-bs-target="#sync-jobs" type="button" role="tab">
+                <i data-feather="refresh-cw"></i> Sync Jobs
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="api-errors-tab" data-bs-toggle="tab" data-bs-target="#api-errors" type="button" role="tab">
+                <i data-feather="alert-triangle"></i> API Errors
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="config-changes-tab" data-bs-toggle="tab" data-bs-target="#config-changes" type="button" role="tab">
+                <i data-feather="settings"></i> Config Changes
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="agent-runs-tab" data-bs-toggle="tab" data-bs-target="#agent-runs" type="button" role="tab">
+                <i data-feather="cpu"></i> Agent Runs
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="system-events-tab" data-bs-toggle="tab" data-bs-target="#system-events" type="button" role="tab">
+                <i data-feather="list"></i> All Events
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="activityTabsContent">
+        <div class="tab-pane fade show active" id="sync-jobs" role="tabpanel">
+            <div class="card bg-dark">
+                <div class="card-header">
+                    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                            <div class="input-group input-group-sm" style="width: auto;">
+                                <span class="input-group-text bg-secondary border-secondary text-light">From</span>
+                                <input type="date" class="form-control form-control-sm bg-dark text-light border-secondary" id="filter-sync-date-from">
+                            </div>
+                            <div class="input-group input-group-sm" style="width: auto;">
+                                <span class="input-group-text bg-secondary border-secondary text-light">To</span>
+                                <input type="date" class="form-control form-control-sm bg-dark text-light border-secondary" id="filter-sync-date-to">
+                            </div>
+                            <select class="form-select form-select-sm bg-dark text-light border-secondary" id="filter-sync-store" style="width: 140px;">
+                                <option value="">All Stores</option>
+                            </select>
+                            <select class="form-select form-select-sm bg-dark text-light border-secondary" id="filter-sync-status" style="width: 120px;">
+                                <option value="">All Status</option>
+                                <option value="completed">Completed</option>
+                                <option value="failed">Failed</option>
+                                <option value="partial">Partial</option>
+                                <option value="started">Started</option>
+                            </select>
+                            <select class="form-select form-select-sm bg-dark text-light border-secondary" id="filter-sync-type" style="width: 130px;">
+                                <option value="">All Types</option>
+                                <option value="fba_import">FBA Import</option>
+                                <option value="fbm_push">FBM Push</option>
+                                <option value="ebay_sync">eBay Sync</option>
+                                <option value="legacy_sync">Legacy Sync</option>
+                            </select>
+                            <button class="btn btn-sm btn-primary" onclick="loadSyncJobs()">
+                                <i data-feather="search"></i> Filter
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="clearSyncFilters()">Clear</button>
+                        </div>
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                <i data-feather="download"></i> Export
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end">
+                                <li><a class="dropdown-item" href="#" onclick="exportLogs('sync_jobs', 'csv')">CSV</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="exportLogs('sync_jobs', 'json')">JSON</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="exportLogs('sync_jobs', 'txt')">TXT</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div id="sync-jobs-date-range" class="mt-2 small text-muted"></div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Store</th>
+                                    <th>Type</th>
+                                    <th>Imported</th>
+                                    <th>Pushed</th>
+                                    <th>Failed</th>
+                                    <th>Status</th>
+                                    <th>Duration</th>
+                                    <th>Message</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sync-jobs-body">
+                                <tr><td colspan="9" class="text-center text-muted">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer d-flex justify-content-between align-items-center">
+                    <small class="text-muted" id="sync-jobs-count"></small>
+                    <nav id="sync-jobs-pagination"></nav>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="api-errors" role="tabpanel">
+            <div class="card bg-dark">
+                <div class="card-header">
+                    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                            <div class="input-group input-group-sm" style="width: auto;">
+                                <span class="input-group-text bg-secondary border-secondary text-light">From</span>
+                                <input type="date" class="form-control form-control-sm bg-dark text-light border-secondary" id="filter-error-date-from">
+                            </div>
+                            <div class="input-group input-group-sm" style="width: auto;">
+                                <span class="input-group-text bg-secondary border-secondary text-light">To</span>
+                                <input type="date" class="form-control form-control-sm bg-dark text-light border-secondary" id="filter-error-date-to">
+                            </div>
+                            <select class="form-select form-select-sm bg-dark text-light border-secondary" id="filter-error-provider" style="width: 120px;">
+                                <option value="">All Providers</option>
+                                <option value="amazon">Amazon</option>
+                                <option value="ebay">eBay</option>
+                            </select>
+                            <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary" id="filter-error-code" placeholder="Error code..." style="width: 140px;">
+                            <button class="btn btn-sm btn-primary" onclick="loadAPIErrors()">
+                                <i data-feather="search"></i> Filter
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="clearErrorFilters()">Clear</button>
+                        </div>
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                <i data-feather="download"></i> Export
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end">
+                                <li><a class="dropdown-item" href="#" onclick="exportLogs('api_errors', 'csv')">CSV</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="exportLogs('api_errors', 'json')">JSON</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="exportLogs('api_errors', 'txt')">TXT</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div id="api-errors-date-range" class="mt-2 small text-muted"></div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Store</th>
+                                    <th>Provider</th>
+                                    <th>Endpoint</th>
+                                    <th>Error Code</th>
+                                    <th>HTTP Status</th>
+                                    <th>Message</th>
+                                </tr>
+                            </thead>
+                            <tbody id="api-errors-body">
+                                <tr><td colspan="7" class="text-center text-muted">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer d-flex justify-content-between align-items-center">
+                    <small class="text-muted" id="api-errors-count"></small>
+                    <nav id="api-errors-pagination"></nav>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="config-changes" role="tabpanel">
+            <div class="card bg-dark">
+                <div class="card-header">
+                    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                            <div class="input-group input-group-sm" style="width: auto;">
+                                <span class="input-group-text bg-secondary border-secondary text-light">From</span>
+                                <input type="date" class="form-control form-control-sm bg-dark text-light border-secondary" id="filter-config-date-from">
+                            </div>
+                            <div class="input-group input-group-sm" style="width: auto;">
+                                <span class="input-group-text bg-secondary border-secondary text-light">To</span>
+                                <input type="date" class="form-control form-control-sm bg-dark text-light border-secondary" id="filter-config-date-to">
+                            </div>
+                            <select class="form-select form-select-sm bg-dark text-light border-secondary" id="filter-config-entity" style="width: 140px;">
+                                <option value="">All Entities</option>
+                                <option value="store">Store</option>
+                                <option value="push_settings">Push Settings</option>
+                                <option value="warehouse">Warehouse</option>
+                                <option value="user">User</option>
+                            </select>
+                            <select class="form-select form-select-sm bg-dark text-light border-secondary" id="filter-config-actor" style="width: 120px;">
+                                <option value="">All Actors</option>
+                                <option value="user">User</option>
+                                <option value="agent">Agent</option>
+                                <option value="system">System</option>
+                            </select>
+                            <button class="btn btn-sm btn-primary" onclick="loadConfigChanges()">
+                                <i data-feather="search"></i> Filter
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="clearConfigFilters()">Clear</button>
+                        </div>
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                <i data-feather="download"></i> Export
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end">
+                                <li><a class="dropdown-item" href="#" onclick="exportLogs('config_changes', 'csv')">CSV</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="exportLogs('config_changes', 'json')">JSON</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="exportLogs('config_changes', 'txt')">TXT</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div id="config-changes-date-range" class="mt-2 small text-muted"></div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Actor</th>
+                                    <th>Entity</th>
+                                    <th>Summary</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="config-changes-body">
+                                <tr><td colspan="5" class="text-center text-muted">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer d-flex justify-content-between align-items-center">
+                    <small class="text-muted" id="config-changes-count"></small>
+                    <nav id="config-changes-pagination"></nav>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="agent-runs" role="tabpanel">
+            <div class="card bg-dark">
+                <div class="card-header">
+                    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                            <div class="input-group input-group-sm" style="width: auto;">
+                                <span class="input-group-text bg-secondary border-secondary text-light">From</span>
+                                <input type="date" class="form-control form-control-sm bg-dark text-light border-secondary" id="filter-agent-date-from">
+                            </div>
+                            <div class="input-group input-group-sm" style="width: auto;">
+                                <span class="input-group-text bg-secondary border-secondary text-light">To</span>
+                                <input type="date" class="form-control form-control-sm bg-dark text-light border-secondary" id="filter-agent-date-to">
+                            </div>
+                            <select class="form-select form-select-sm bg-dark text-light border-secondary" id="filter-agent-status" style="width: 120px;">
+                                <option value="">All Status</option>
+                                <option value="success">Success</option>
+                                <option value="partial">Partial</option>
+                                <option value="failed">Failed</option>
+                                <option value="running">Running</option>
+                            </select>
+                            <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary" id="filter-agent-name" placeholder="Agent name..." style="width: 150px;">
+                            <button class="btn btn-sm btn-primary" onclick="loadAgentRuns()">
+                                <i data-feather="search"></i> Filter
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="clearAgentFilters()">Clear</button>
+                        </div>
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                <i data-feather="download"></i> Export
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end">
+                                <li><a class="dropdown-item" href="#" onclick="exportLogs('agent_runs', 'csv')">CSV</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="exportLogs('agent_runs', 'json')">JSON</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="exportLogs('agent_runs', 'txt')">TXT</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div id="agent-runs-date-range" class="mt-2 small text-muted"></div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Agent</th>
+                                    <th>Scope</th>
+                                    <th>Status</th>
+                                    <th>Summary</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="agent-runs-body">
+                                <tr><td colspan="6" class="text-center text-muted">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer d-flex justify-content-between align-items-center">
+                    <small class="text-muted" id="agent-runs-count"></small>
+                    <nav id="agent-runs-pagination"></nav>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="system-events" role="tabpanel">
+            <div class="card bg-dark">
+                <div class="card-header">
+                    <div class="d-flex flex-wrap gap-2 align-items-center justify-content-between">
+                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                            <div class="input-group input-group-sm" style="width: auto;">
+                                <span class="input-group-text bg-secondary border-secondary text-light">From</span>
+                                <input type="date" class="form-control form-control-sm bg-dark text-light border-secondary" id="filter-events-date-from">
+                            </div>
+                            <div class="input-group input-group-sm" style="width: auto;">
+                                <span class="input-group-text bg-secondary border-secondary text-light">To</span>
+                                <input type="date" class="form-control form-control-sm bg-dark text-light border-secondary" id="filter-events-date-to">
+                            </div>
+                            <select class="form-select form-select-sm bg-dark text-light border-secondary" id="filter-events-category" style="width: 140px;">
+                                <option value="">All Categories</option>
+                                <option value="sync_job">Sync Job</option>
+                                <option value="api_error">API Error</option>
+                                <option value="config_change">Config Change</option>
+                                <option value="agent_run">Agent Run</option>
+                                <option value="auth_failure">Auth Failure</option>
+                                <option value="auth_success">Auth Success</option>
+                                <option value="fba_import">FBA Import</option>
+                                <option value="fbm_push">FBM Push</option>
+                                <option value="store_update">Store Update</option>
+                                <option value="queue_event">Queue Event</option>
+                            </select>
+                            <select class="form-select form-select-sm bg-dark text-light border-secondary" id="filter-events-actor" style="width: 120px;">
+                                <option value="">All Actors</option>
+                                <option value="user">User</option>
+                                <option value="admin">Admin</option>
+                                <option value="agent">Agent</option>
+                                <option value="system">System</option>
+                                <option value="scheduler">Scheduler</option>
+                            </select>
+                            <select class="form-select form-select-sm bg-dark text-light border-secondary" id="filter-events-entity" style="width: 120px;">
+                                <option value="">All Entities</option>
+                                <option value="store">Store</option>
+                                <option value="listing">Listing</option>
+                                <option value="warehouse">Warehouse</option>
+                            </select>
+                            <button class="btn btn-sm btn-primary" onclick="loadSystemEvents()">
+                                <i data-feather="search"></i> Filter
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" onclick="clearEventsFilters()">Clear</button>
+                        </div>
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                <i data-feather="download"></i> Export
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-dark dropdown-menu-end">
+                                <li><a class="dropdown-item" href="#" onclick="exportLogs('system_events', 'csv')">CSV</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="exportLogs('system_events', 'json')">JSON</a></li>
+                                <li><a class="dropdown-item" href="#" onclick="exportLogs('system_events', 'txt')">TXT</a></li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div id="system-events-date-range" class="mt-2 small text-muted"></div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Category</th>
+                                    <th>Actor</th>
+                                    <th>Entity</th>
+                                    <th>Description</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="system-events-body">
+                                <tr><td colspan="6" class="text-center text-muted">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer d-flex justify-content-between align-items-center">
+                    <small class="text-muted" id="system-events-count"></small>
+                    <nav id="system-events-pagination"></nav>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="detailModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title" id="detailModalTitle">Details</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <pre id="detailModalContent" class="bg-secondary p-3 rounded" style="max-height: 400px; overflow: auto;"></pre>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let storesData = [];
+
+document.addEventListener('DOMContentLoaded', function() {
+    feather.replace();
+    loadDashboardStats();
+    loadSyncJobs();
+    
+    document.querySelectorAll('button[data-bs-toggle="tab"]').forEach(tab => {
+        tab.addEventListener('shown.bs.tab', function(e) {
+            const target = e.target.getAttribute('data-bs-target');
+            if (target === '#sync-jobs') loadSyncJobs();
+            else if (target === '#api-errors') loadAPIErrors();
+            else if (target === '#config-changes') loadConfigChanges();
+            else if (target === '#agent-runs') loadAgentRuns();
+            else if (target === '#system-events') loadSystemEvents();
+        });
+    });
+});
+
+function runBackfill() {
+    if (!confirm('This will import historical data from all tables into the unified System Events log. Continue?')) return;
+    
+    fetch('/admin/api/backfill', {method: 'POST'})
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                let msg = 'Backfill complete!\n';
+                msg += `- Sync logs imported: ${data.sync_logs_backfilled}\n`;
+                msg += `- Error logs imported: ${data.error_logs_backfilled}\n`;
+                if (data.system_events_backfill) {
+                    const se = data.system_events_backfill;
+                    if (se.skipped) {
+                        msg += `- System events: Already has ${se.existing_count} entries`;
+                    } else if (se.total) {
+                        msg += `- System events created: ${se.total}`;
+                    }
+                }
+                alert(msg);
+                loadDashboardStats();
+                loadSyncJobs();
+            } else {
+                alert('Backfill failed: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(e => alert('Backfill failed: ' + e.message));
+}
+
+function loadDashboardStats() {
+    fetch('/admin/api/dashboard-stats')
+        .then(r => r.json())
+        .then(data => {
+            document.getElementById('stat-sync-jobs').textContent = data.sync_jobs_24h || 0;
+            document.getElementById('stat-failed-jobs').textContent = data.sync_failed_24h || 0;
+            document.getElementById('stat-api-errors').textContent = data.api_errors_24h || 0;
+            document.getElementById('stat-config-changes').textContent = data.config_changes_7d || 0;
+            
+            storesData = data.stores || [];
+            const storeSelect = document.getElementById('filter-sync-store');
+            storeSelect.innerHTML = '<option value="">All Stores</option>';
+            storesData.forEach(s => {
+                storeSelect.innerHTML += `<option value="${s.id}">${s.name}</option>`;
+            });
+        })
+        .catch(e => console.error('Failed to load stats:', e));
+}
+
+function formatDate(isoDate) {
+    if (!isoDate) return '-';
+    const d = new Date(isoDate);
+    return d.toLocaleString();
+}
+
+function statusBadge(status) {
+    const classes = {
+        'completed': 'bg-success',
+        'success': 'bg-success',
+        'failed': 'bg-danger',
+        'error': 'bg-danger',
+        'partial': 'bg-warning text-dark',
+        'started': 'bg-info',
+        'running': 'bg-info'
+    };
+    return `<span class="badge ${classes[status] || 'bg-secondary'}">${status || 'unknown'}</span>`;
+}
+
+function clearSyncFilters() {
+    document.getElementById('filter-sync-date-from').value = '';
+    document.getElementById('filter-sync-date-to').value = '';
+    document.getElementById('filter-sync-store').value = '';
+    document.getElementById('filter-sync-status').value = '';
+    document.getElementById('filter-sync-type').value = '';
+    loadSyncJobs();
+}
+
+function clearErrorFilters() {
+    document.getElementById('filter-error-date-from').value = '';
+    document.getElementById('filter-error-date-to').value = '';
+    document.getElementById('filter-error-provider').value = '';
+    document.getElementById('filter-error-code').value = '';
+    loadAPIErrors();
+}
+
+function clearConfigFilters() {
+    document.getElementById('filter-config-date-from').value = '';
+    document.getElementById('filter-config-date-to').value = '';
+    document.getElementById('filter-config-entity').value = '';
+    document.getElementById('filter-config-actor').value = '';
+    loadConfigChanges();
+}
+
+function clearAgentFilters() {
+    document.getElementById('filter-agent-date-from').value = '';
+    document.getElementById('filter-agent-date-to').value = '';
+    document.getElementById('filter-agent-status').value = '';
+    document.getElementById('filter-agent-name').value = '';
+    loadAgentRuns();
+}
+
+function loadSyncJobs(page = 1) {
+    const dateFrom = document.getElementById('filter-sync-date-from').value;
+    const dateTo = document.getElementById('filter-sync-date-to').value;
+    const storeId = document.getElementById('filter-sync-store').value;
+    const status = document.getElementById('filter-sync-status').value;
+    const jobType = document.getElementById('filter-sync-type').value;
+    
+    let url = `/admin/api/sync-jobs?page=${page}`;
+    if (dateFrom) url += `&date_from=${dateFrom}`;
+    if (dateTo) url += `&date_to=${dateTo}`;
+    if (storeId) url += `&store_id=${storeId}`;
+    if (status) url += `&status=${status}`;
+    if (jobType) url += `&job_type=${jobType}`;
+    
+    fetch(url)
+        .then(r => r.json())
+        .then(data => {
+            const tbody = document.getElementById('sync-jobs-body');
+            document.getElementById('sync-jobs-count').textContent = `${data.total || 0} records found`;
+            
+            if (dateFrom || dateTo) {
+                document.getElementById('sync-jobs-date-range').textContent = `Showing: ${dateFrom || 'start'} to ${dateTo || 'now'}`;
+            } else {
+                document.getElementById('sync-jobs-date-range').textContent = 'Showing: Last 24 hours (default)';
+            }
+            
+            if (!data.items || data.items.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">No sync jobs found. Try adjusting filters or run Backfill to import historical data.</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = data.items.map(item => `
+                <tr>
+                    <td><small>${formatDate(item.started_at)}</small></td>
+                    <td>${item.store_name || '-'}</td>
+                    <td><span class="badge bg-secondary">${item.job_type || 'sync'}</span></td>
+                    <td>${item.items_imported || 0}</td>
+                    <td>${item.items_pushed || 0}</td>
+                    <td>${item.items_failed || 0}</td>
+                    <td>${statusBadge(item.status)}</td>
+                    <td>${item.duration_seconds ? item.duration_seconds.toFixed(1) + 's' : '-'}</td>
+                    <td><small class="text-muted">${(item.message || '').substring(0, 50)}</small></td>
+                </tr>
+            `).join('');
+            
+            renderPagination('sync-jobs-pagination', data, loadSyncJobs);
+        })
+        .catch(e => {
+            document.getElementById('sync-jobs-body').innerHTML = '<tr><td colspan="9" class="text-center text-danger">Error loading data</td></tr>';
+        });
+}
+
+function loadAPIErrors(page = 1) {
+    const dateFrom = document.getElementById('filter-error-date-from').value;
+    const dateTo = document.getElementById('filter-error-date-to').value;
+    const provider = document.getElementById('filter-error-provider').value;
+    const errorCode = document.getElementById('filter-error-code').value;
+    
+    let url = `/admin/api/api-errors?page=${page}`;
+    if (dateFrom) url += `&date_from=${dateFrom}`;
+    if (dateTo) url += `&date_to=${dateTo}`;
+    if (provider) url += `&provider=${provider}`;
+    if (errorCode) url += `&error_code=${encodeURIComponent(errorCode)}`;
+    
+    fetch(url)
+        .then(r => r.json())
+        .then(data => {
+            const tbody = document.getElementById('api-errors-body');
+            document.getElementById('api-errors-count').textContent = `${data.total || 0} records found`;
+            
+            if (dateFrom || dateTo) {
+                document.getElementById('api-errors-date-range').textContent = `Showing: ${dateFrom || 'start'} to ${dateTo || 'now'}`;
+            } else {
+                document.getElementById('api-errors-date-range').textContent = 'Showing: Last 24 hours (default)';
+            }
+            
+            if (!data.items || data.items.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No API errors found</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = data.items.map(item => `
+                <tr onclick="showDetail('API Error', ${JSON.stringify(item).replace(/"/g, '&quot;')})" style="cursor:pointer">
+                    <td><small>${formatDate(item.created_at)}</small></td>
+                    <td>${item.store_name || '-'}</td>
+                    <td><span class="badge ${item.provider === 'amazon' ? 'bg-warning text-dark' : 'bg-primary'}">${item.provider}</span></td>
+                    <td><small>${(item.endpoint || '').substring(0, 30)}</small></td>
+                    <td><code>${item.error_code || '-'}</code></td>
+                    <td>${item.http_status || '-'}</td>
+                    <td><small class="text-muted">${(item.message || '').substring(0, 50)}</small></td>
+                </tr>
+            `).join('');
+            
+            renderPagination('api-errors-pagination', data, loadAPIErrors);
+        })
+        .catch(e => {
+            document.getElementById('api-errors-body').innerHTML = '<tr><td colspan="7" class="text-center text-danger">Error loading data</td></tr>';
+        });
+}
+
+function loadConfigChanges(page = 1) {
+    const dateFrom = document.getElementById('filter-config-date-from').value;
+    const dateTo = document.getElementById('filter-config-date-to').value;
+    const entityType = document.getElementById('filter-config-entity').value;
+    const actorType = document.getElementById('filter-config-actor').value;
+    
+    let url = `/admin/api/config-changes?page=${page}`;
+    if (dateFrom) url += `&date_from=${dateFrom}`;
+    if (dateTo) url += `&date_to=${dateTo}`;
+    if (entityType) url += `&entity_type=${entityType}`;
+    if (actorType) url += `&actor_type=${actorType}`;
+    
+    fetch(url)
+        .then(r => r.json())
+        .then(data => {
+            const tbody = document.getElementById('config-changes-body');
+            document.getElementById('config-changes-count').textContent = `${data.total || 0} records found`;
+            
+            if (dateFrom || dateTo) {
+                document.getElementById('config-changes-date-range').textContent = `Showing: ${dateFrom || 'start'} to ${dateTo || 'now'}`;
+            } else {
+                document.getElementById('config-changes-date-range').textContent = 'Showing: Last 7 days (default)';
+            }
+            
+            if (!data.items || data.items.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No config changes found</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = data.items.map(item => `
+                <tr>
+                    <td><small>${formatDate(item.changed_at)}</small></td>
+                    <td><span class="badge ${item.actor_type === 'user' ? 'bg-info' : item.actor_type === 'agent' ? 'bg-warning text-dark' : 'bg-secondary'}">${item.actor_type}</span></td>
+                    <td>${item.entity_type}${item.entity_id ? ':' + item.entity_id : ''}</td>
+                    <td>${item.summary}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-secondary" onclick='showDiff(${JSON.stringify(item).replace(/'/g, "&#39;")})'>
+                            <i data-feather="eye" style="width:14px;height:14px"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+            
+            feather.replace();
+            renderPagination('config-changes-pagination', data, loadConfigChanges);
+        })
+        .catch(e => {
+            document.getElementById('config-changes-body').innerHTML = '<tr><td colspan="5" class="text-center text-danger">Error loading data</td></tr>';
+        });
+}
+
+function loadAgentRuns(page = 1) {
+    const dateFrom = document.getElementById('filter-agent-date-from').value;
+    const dateTo = document.getElementById('filter-agent-date-to').value;
+    const status = document.getElementById('filter-agent-status').value;
+    const agent = document.getElementById('filter-agent-name').value;
+    
+    let url = `/admin/api/agent-runs?page=${page}`;
+    if (dateFrom) url += `&date_from=${dateFrom}`;
+    if (dateTo) url += `&date_to=${dateTo}`;
+    if (status) url += `&status=${status}`;
+    if (agent) url += `&agent=${encodeURIComponent(agent)}`;
+    
+    fetch(url)
+        .then(r => r.json())
+        .then(data => {
+            const tbody = document.getElementById('agent-runs-body');
+            document.getElementById('agent-runs-count').textContent = `${data.total || 0} records found`;
+            
+            if (dateFrom || dateTo) {
+                document.getElementById('agent-runs-date-range').textContent = `Showing: ${dateFrom || 'start'} to ${dateTo || 'now'}`;
+            } else {
+                document.getElementById('agent-runs-date-range').textContent = 'Showing: Last 7 days (default)';
+            }
+            
+            if (!data.items || data.items.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No agent runs found</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = data.items.map(item => `
+                <tr>
+                    <td><small>${formatDate(item.started_at)}</small></td>
+                    <td><strong>${item.agent_name}</strong></td>
+                    <td><small>${(item.scope || '').substring(0, 40)}</small></td>
+                    <td>${statusBadge(item.status)}</td>
+                    <td><small class="text-muted">${(item.summary || '').substring(0, 50)}</small></td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-secondary" onclick='showDetail("Agent Run", ${JSON.stringify(item).replace(/'/g, "&#39;")})'>
+                            <i data-feather="eye" style="width:14px;height:14px"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+            
+            feather.replace();
+            renderPagination('agent-runs-pagination', data, loadAgentRuns);
+        })
+        .catch(e => {
+            document.getElementById('agent-runs-body').innerHTML = '<tr><td colspan="6" class="text-center text-danger">Error loading data</td></tr>';
+        });
+}
+
+function clearEventsFilters() {
+    document.getElementById('filter-events-date-from').value = '';
+    document.getElementById('filter-events-date-to').value = '';
+    document.getElementById('filter-events-category').value = '';
+    document.getElementById('filter-events-actor').value = '';
+    document.getElementById('filter-events-entity').value = '';
+    loadSystemEvents();
+}
+
+function categoryBadge(category) {
+    const classes = {
+        'sync_job': 'bg-info',
+        'api_error': 'bg-danger',
+        'config_change': 'bg-warning text-dark',
+        'agent_run': 'bg-primary',
+        'auth_failure': 'bg-danger',
+        'auth_success': 'bg-success',
+        'fba_import': 'bg-info',
+        'fbm_push': 'bg-success',
+        'store_update': 'bg-secondary',
+        'queue_event': 'bg-secondary'
+    };
+    return `<span class="badge ${classes[category] || 'bg-secondary'}">${category || 'unknown'}</span>`;
+}
+
+function loadSystemEvents(page = 1) {
+    const dateFrom = document.getElementById('filter-events-date-from').value;
+    const dateTo = document.getElementById('filter-events-date-to').value;
+    const category = document.getElementById('filter-events-category').value;
+    const actor = document.getElementById('filter-events-actor').value;
+    const entityType = document.getElementById('filter-events-entity').value;
+    
+    let url = `/admin/api/system-events?page=${page}`;
+    if (dateFrom) url += `&date_from=${dateFrom}`;
+    if (dateTo) url += `&date_to=${dateTo}`;
+    if (category) url += `&category=${category}`;
+    if (actor) url += `&actor=${actor}`;
+    if (entityType) url += `&entity_type=${entityType}`;
+    
+    fetch(url)
+        .then(r => r.json())
+        .then(data => {
+            const tbody = document.getElementById('system-events-body');
+            document.getElementById('system-events-count').textContent = `${data.total || 0} records found`;
+            
+            if (dateFrom || dateTo) {
+                document.getElementById('system-events-date-range').textContent = `Showing: ${dateFrom || 'start'} to ${dateTo || 'now'}`;
+            } else {
+                document.getElementById('system-events-date-range').textContent = 'Showing: Last 24 hours (default)';
+            }
+            
+            if (!data.items || data.items.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No events found. Click "Backfill Historical Data" to import existing logs.</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = data.items.map(item => `
+                <tr onclick="showDetail('System Event', ${JSON.stringify(item).replace(/"/g, '&quot;')})" style="cursor:pointer">
+                    <td><small>${formatDate(item.timestamp)}</small></td>
+                    <td>${categoryBadge(item.category)}</td>
+                    <td><span class="badge ${item.actor === 'agent' ? 'bg-warning text-dark' : item.actor === 'user' ? 'bg-info' : 'bg-secondary'}">${item.actor}</span></td>
+                    <td>${item.entity_type ? item.entity_type + (item.entity_id ? ':' + item.entity_id : '') : '-'}</td>
+                    <td><small class="text-muted">${(item.description || '').substring(0, 80)}</small></td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-secondary" onclick='event.stopPropagation(); showDetail("System Event", ${JSON.stringify(item).replace(/'/g, "&#39;")})'>
+                            <i data-feather="eye" style="width:14px;height:14px"></i>
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+            
+            feather.replace();
+            renderPagination('system-events-pagination', data, loadSystemEvents);
+        })
+        .catch(e => {
+            document.getElementById('system-events-body').innerHTML = '<tr><td colspan="6" class="text-center text-danger">Error loading data</td></tr>';
+        });
+}
+
+function renderPagination(containerId, data, loadFunc) {
+    const container = document.getElementById(containerId);
+    if (data.pages <= 1) {
+        container.innerHTML = '';
+        return;
+    }
+    
+    let html = '<ul class="pagination pagination-sm mb-0">';
+    const maxPages = 10;
+    const startPage = Math.max(1, data.page - Math.floor(maxPages / 2));
+    const endPage = Math.min(data.pages, startPage + maxPages - 1);
+    
+    if (data.page > 1) {
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="${loadFunc.name}(${data.page - 1}); return false;">&laquo;</a></li>`;
+    }
+    
+    for (let i = startPage; i <= endPage; i++) {
+        html += `<li class="page-item ${i === data.page ? 'active' : ''}">
+            <a class="page-link" href="#" onclick="${loadFunc.name}(${i}); return false;">${i}</a>
+        </li>`;
+    }
+    
+    if (data.page < data.pages) {
+        html += `<li class="page-item"><a class="page-link" href="#" onclick="${loadFunc.name}(${data.page + 1}); return false;">&raquo;</a></li>`;
+    }
+    
+    html += '</ul>';
+    container.innerHTML = html;
+}
+
+function showDetail(title, item) {
+    document.getElementById('detailModalTitle').textContent = title;
+    document.getElementById('detailModalContent').textContent = JSON.stringify(item, null, 2);
+    new bootstrap.Modal(document.getElementById('detailModal')).show();
+}
+
+function showDiff(item) {
+    let content = `SUMMARY: ${item.summary}\n\n`;
+    content += `BEFORE:\n${JSON.stringify(item.before_json, null, 2)}\n\n`;
+    content += `AFTER:\n${JSON.stringify(item.after_json, null, 2)}`;
+    
+    document.getElementById('detailModalTitle').textContent = 'Config Change Diff';
+    document.getElementById('detailModalContent').textContent = content;
+    new bootstrap.Modal(document.getElementById('detailModal')).show();
+}
+
+function exportLogs(logType, format) {
+    let url = `/admin/api/export/${logType}?format=${format}`;
+    
+    if (logType === 'sync_jobs') {
+        const dateFrom = document.getElementById('filter-sync-date-from').value;
+        const dateTo = document.getElementById('filter-sync-date-to').value;
+        const storeId = document.getElementById('filter-sync-store').value;
+        const status = document.getElementById('filter-sync-status').value;
+        const jobType = document.getElementById('filter-sync-type').value;
+        if (dateFrom) url += `&date_from=${dateFrom}`;
+        if (dateTo) url += `&date_to=${dateTo}`;
+        if (storeId) url += `&store_id=${storeId}`;
+        if (status) url += `&status=${status}`;
+        if (jobType) url += `&job_type=${jobType}`;
+    } else if (logType === 'api_errors') {
+        const dateFrom = document.getElementById('filter-error-date-from').value;
+        const dateTo = document.getElementById('filter-error-date-to').value;
+        const provider = document.getElementById('filter-error-provider').value;
+        const errorCode = document.getElementById('filter-error-code').value;
+        if (dateFrom) url += `&date_from=${dateFrom}`;
+        if (dateTo) url += `&date_to=${dateTo}`;
+        if (provider) url += `&provider=${provider}`;
+        if (errorCode) url += `&error_code=${encodeURIComponent(errorCode)}`;
+    } else if (logType === 'config_changes') {
+        const dateFrom = document.getElementById('filter-config-date-from').value;
+        const dateTo = document.getElementById('filter-config-date-to').value;
+        const entityType = document.getElementById('filter-config-entity').value;
+        const actorType = document.getElementById('filter-config-actor').value;
+        if (dateFrom) url += `&date_from=${dateFrom}`;
+        if (dateTo) url += `&date_to=${dateTo}`;
+        if (entityType) url += `&entity_type=${entityType}`;
+        if (actorType) url += `&actor_type=${actorType}`;
+    } else if (logType === 'agent_runs') {
+        const dateFrom = document.getElementById('filter-agent-date-from').value;
+        const dateTo = document.getElementById('filter-agent-date-to').value;
+        const status = document.getElementById('filter-agent-status').value;
+        const agent = document.getElementById('filter-agent-name').value;
+        if (dateFrom) url += `&date_from=${dateFrom}`;
+        if (dateTo) url += `&date_to=${dateTo}`;
+        if (status) url += `&status=${status}`;
+        if (agent) url += `&agent=${encodeURIComponent(agent)}`;
+    } else if (logType === 'system_events') {
+        const dateFrom = document.getElementById('filter-events-date-from').value;
+        const dateTo = document.getElementById('filter-events-date-to').value;
+        const category = document.getElementById('filter-events-category').value;
+        const actor = document.getElementById('filter-events-actor').value;
+        const entityType = document.getElementById('filter-events-entity').value;
+        if (dateFrom) url += `&date_from=${dateFrom}`;
+        if (dateTo) url += `&date_to=${dateTo}`;
+        if (category) url += `&category=${category}`;
+        if (actor) url += `&actor=${actor}`;
+        if (entityType) url += `&entity_type=${entityType}`;
+    }
+    
+    window.location.href = url;
+}
+</script>
+{% endblock %}

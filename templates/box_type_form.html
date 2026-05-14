@@ -1,0 +1,158 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ 'Edit' if box_type else 'Add' }} Box Type - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="mb-4">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('routes.settings') }}">Box Types</a></li>
+                <li class="breadcrumb-item active">{{ 'Edit' if box_type else 'Add New' }}</li>
+            </ol>
+        </nav>
+        <h1 class="h3">{{ 'Edit Box Type' if box_type else 'Add Box Type' }}</h1>
+    </div>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card">
+                <div class="card-body">
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Code <span class="text-danger">*</span></label>
+                                <input type="text" name="code" class="form-control" 
+                                       value="{{ box_type.code if box_type else '' }}"
+                                       placeholder="e.g., SM, MD, LG" required>
+                                <div class="form-text">Short identifier (auto-uppercase)</div>
+                            </div>
+                            <div class="col-md-8">
+                                <label class="form-label">Name <span class="text-danger">*</span></label>
+                                <input type="text" name="name" class="form-control" 
+                                       value="{{ box_type.name if box_type else '' }}"
+                                       placeholder="e.g., Small Box, Medium Carton" required>
+                            </div>
+                        </div>
+                        
+                        <h6 class="mb-3 mt-4 border-bottom pb-2">Dimensions</h6>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Width (cm) <span class="text-danger">*</span></label>
+                                <input type="number" name="width_cm" class="form-control" step="0.1" min="0"
+                                       value="{{ box_type.width_cm if box_type else '' }}"
+                                       placeholder="e.g., 40" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Depth (cm) <span class="text-danger">*</span></label>
+                                <input type="number" name="depth_cm" class="form-control" step="0.1" min="0"
+                                       value="{{ box_type.depth_cm if box_type else '' }}"
+                                       placeholder="e.g., 30" required>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Height (cm) <span class="text-danger">*</span></label>
+                                <input type="number" name="height_cm" class="form-control" step="0.1" min="0"
+                                       value="{{ box_type.height_cm if box_type else '' }}"
+                                       placeholder="e.g., 20" required>
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Max Weight (kg)</label>
+                                <input type="number" name="max_weight_kg" class="form-control" step="0.1" min="0"
+                                       value="{{ box_type.max_weight_kg if box_type else '' }}"
+                                       placeholder="e.g., 25">
+                                <div class="form-text">Optional weight limit</div>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Color</label>
+                                <input type="color" name="color" class="form-control form-control-color"
+                                       value="{{ box_type.color if box_type else '#6c757d' }}"
+                                       title="Choose a color for visualization">
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Description</label>
+                            <textarea name="description" class="form-control" rows="2"
+                                      placeholder="Optional notes about this box type">{{ box_type.description if box_type else '' }}</textarea>
+                        </div>
+                        
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i data-feather="save" class="me-1"></i>
+                                {{ 'Update' if box_type else 'Create' }} Box Type
+                            </button>
+                            <a href="{{ url_for('routes.settings') }}" class="btn btn-outline-secondary">Cancel</a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-lg-4">
+            <div class="card">
+                <div class="card-header">
+                    <i data-feather="info" class="me-2"></i>Tips
+                </div>
+                <div class="card-body">
+                    <h6>Standard Sizes</h6>
+                    <ul class="small text-muted mb-3">
+                        <li>Small: 20×15×10 cm</li>
+                        <li>Medium: 40×30×20 cm</li>
+                        <li>Large: 60×40×40 cm</li>
+                        <li>Euro Box: 60×40×32 cm</li>
+                    </ul>
+                    
+                    <h6>Usage</h6>
+                    <p class="small text-muted mb-0">
+                        Box types help calculate how many containers fit on each shelf
+                        and track capacity utilization across your warehouse.
+                    </p>
+                </div>
+            </div>
+            
+            {% if box_type %}
+            <div class="card mt-3">
+                <div class="card-header">
+                    <i data-feather="box" class="me-2"></i>Preview
+                </div>
+                <div class="card-body text-center">
+                    <div class="mb-2">
+                        <span class="badge fs-5" style="background-color: {{ box_type.color }}">
+                            {{ box_type.code }}
+                        </span>
+                    </div>
+                    <h6>{{ box_type.name }}</h6>
+                    <p class="mb-1">{{ box_type.width_cm }}×{{ box_type.depth_cm }}×{{ box_type.height_cm }} cm</p>
+                    <p class="text-muted small mb-0">
+                        Volume: {{ "{:,.0f}".format(box_type.volume_cm3) }} cm³
+                    </p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    feather.replace();
+</script>
+{% endblock %}

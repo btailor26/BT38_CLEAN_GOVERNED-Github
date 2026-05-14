@@ -1,0 +1,158 @@
+{% extends 'base.html' %}
+
+{% block title %}Box Types - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-1">Box Types</h1>
+            <p class="text-muted mb-0">Define standard container types for shelf capacity planning</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{{ url_for('routes.settings') }}" class="btn btn-outline-secondary">
+                <i data-feather="layers" class="me-1"></i>Shelf Capacity
+            </a>
+            <a href="{{ url_for('routes.box_type_add') }}" class="btn btn-primary">
+                <i data-feather="plus" class="me-1"></i>Add Box Type
+            </a>
+        </div>
+    </div>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <div class="card">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <span><i data-feather="box" class="me-2"></i>Container Types</span>
+                <span class="badge bg-primary">{{ box_types|length }} types</span>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            {% if box_types %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Code</th>
+                            <th>Name</th>
+                            <th>Dimensions (W×D×H cm)</th>
+                            <th class="text-end">Volume (cm³)</th>
+                            <th class="text-end">Footprint (cm²)</th>
+                            <th class="text-end">Max Weight</th>
+                            <th class="text-center">Color</th>
+                            <th class="text-center">Status</th>
+                            <th class="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for bt in box_types %}
+                        <tr>
+                            <td><strong>{{ bt.code }}</strong></td>
+                            <td>{{ bt.name }}</td>
+                            <td>
+                                <code>{{ bt.width_cm }}×{{ bt.depth_cm }}×{{ bt.height_cm }}</code>
+                            </td>
+                            <td class="text-end">{{ "{:,.0f}".format(bt.volume_cm3) }}</td>
+                            <td class="text-end">{{ "{:,.0f}".format(bt.footprint_cm2) }}</td>
+                            <td class="text-end">
+                                {% if bt.max_weight_kg %}{{ bt.max_weight_kg }} kg{% else %}-{% endif %}
+                            </td>
+                            <td class="text-center">
+                                <span class="badge" style="background-color: {{ bt.color }}; width: 30px;">&nbsp;</span>
+                            </td>
+                            <td class="text-center">
+                                {% if bt.is_active %}
+                                <span class="badge bg-success">Active</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <div class="btn-group btn-group-sm">
+                                    <a href="{{ url_for('routes.box_type_edit', box_id=bt.id) }}" 
+                                       class="btn btn-outline-primary" title="Edit">
+                                        <i data-feather="edit-2"></i>
+                                    </a>
+                                    <form action="{{ url_for('routes.box_type_delete', box_id=bt.id) }}" 
+                                          method="POST" style="display: inline;" 
+                                          onsubmit="return confirm('Delete this box type?');">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                        <button type="submit" class="btn btn-outline-danger" title="Delete">
+                                            <i data-feather="trash-2"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i data-feather="box" style="width: 48px; height: 48px;" class="text-muted mb-3"></i>
+                <h5 class="text-muted">No box types defined</h5>
+                <p class="text-muted">Create standard container sizes for capacity planning</p>
+                <a href="{{ url_for('routes.box_type_add') }}" class="btn btn-primary">
+                    <i data-feather="plus" class="me-1"></i>Add First Box Type
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="card mt-4">
+        <div class="card-header">
+            <i data-feather="info" class="me-2"></i>Common Box Sizes
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <div class="border rounded p-3 h-100">
+                        <h6>Small</h6>
+                        <p class="mb-1 text-muted small">20×15×10 cm</p>
+                        <p class="mb-0 text-muted small">Good for small items</p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="border rounded p-3 h-100">
+                        <h6>Medium</h6>
+                        <p class="mb-1 text-muted small">40×30×20 cm</p>
+                        <p class="mb-0 text-muted small">Standard shipping box</p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="border rounded p-3 h-100">
+                        <h6>Large</h6>
+                        <p class="mb-1 text-muted small">60×40×40 cm</p>
+                        <p class="mb-0 text-muted small">Bulk storage</p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="border rounded p-3 h-100">
+                        <h6>Euro Pallet Box</h6>
+                        <p class="mb-1 text-muted small">60×40×32 cm</p>
+                        <p class="mb-0 text-muted small">Fits euro pallets</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    feather.replace();
+</script>
+{% endblock %}

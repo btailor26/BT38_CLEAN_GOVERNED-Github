@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#1a1a2e">
+    <title>BT38 Scanner</title>
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/mobile-scanner.css">
+    <script src="https://unpkg.com/feather-icons"></script>
+</head>
+<body>
+    <div class="scanner-container">
+        <header class="scanner-header">
+            <h1>BT38 Scanner</h1>
+            <span class="mode-badge" id="mode-indicator">Single</span>
+        </header>
+
+        <div class="mode-tabs">
+            <button class="mode-tab active" data-mode="single">Single Scan</button>
+            <button class="mode-tab" data-mode="bulk">Bulk Scan</button>
+        </div>
+
+        <div class="camera-section">
+            <video id="camera-feed" autoplay playsinline muted></video>
+            <div class="scan-overlay">
+                <div class="scan-line"></div>
+            </div>
+        </div>
+
+        <div class="product-info">
+            <div id="toast-container" class="toast-container"></div>
+
+            <div id="product-card" class="product-card" style="display: none;"></div>
+
+            <div id="carton-prompt" class="carton-prompt" style="display: none;"></div>
+
+            <div id="no-product" class="no-product">
+                <i data-feather="box"></i>
+                <p>Scan a barcode or enter SKU manually</p>
+            </div>
+
+            <div class="action-buttons">
+                <button id="add-1-btn" class="action-btn add-1">
+                    +1
+                    <span class="btn-label">Add One</span>
+                </button>
+                <button id="add-5-btn" class="action-btn add-5">
+                    +5
+                    <span class="btn-label">Add Five</span>
+                </button>
+                <button id="set-qty-btn" class="action-btn set-qty">
+                    =
+                    <span class="btn-label">Set Qty</span>
+                </button>
+            </div>
+
+            <button id="confirm-btn" class="confirm-btn">
+                <i data-feather="check-circle"></i> Confirm
+            </button>
+
+            <div id="bulk-queue" class="bulk-queue" style="display: none;"></div>
+
+            <div class="manual-entry">
+                <input type="text" id="manual-sku" class="manual-input" placeholder="Enter SKU or barcode manually">
+                <button id="manual-lookup-btn" class="confirm-btn" style="background: var(--primary);">
+                    <i data-feather="search"></i> Lookup
+                </button>
+            </div>
+        </div>
+
+        <button id="voice-btn" class="voice-btn" title="Voice Commands">
+            <i data-feather="mic"></i>
+        </button>
+
+        <div id="install-prompt" class="install-prompt" style="display: none;">
+            <i data-feather="download"></i>
+            <span style="flex: 1;">Install app for quick access</span>
+            <button id="install-btn">Install</button>
+            <button id="dismiss-install" class="dismiss">Later</button>
+        </div>
+    </div>
+
+    <script src="/static/js/mobile-scanner.js"></script>
+    <script>
+        feather.replace();
+    </script>
+</body>
+</html>

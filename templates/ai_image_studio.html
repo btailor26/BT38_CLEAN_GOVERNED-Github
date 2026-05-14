@@ -1,0 +1,531 @@
+{% extends "base.html" %}
+
+{% block title %}AI Image Studio{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="mb-1">
+                <i data-feather="image" class="me-2"></i>
+                AI Image Studio
+            </h1>
+            <p class="text-muted">Enhance product photos, generate lifestyle images, and ensure marketplace compliance</p>
+        </div>
+    </div>
+
+    <!-- Tool Selection Tabs -->
+    <ul class="nav nav-tabs mb-4" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#enhance-tab" type="button">
+                <i data-feather="sliders" class="me-1"></i>
+                Enhance Image
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#background-tab" type="button">
+                <i data-feather="scissors" class="me-1"></i>
+                Remove Background
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#generate-tab" type="button">
+                <i data-feather="zap" class="me-1"></i>
+                Generate Lifestyle Image
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#compliance-tab" type="button">
+                <i data-feather="check-circle" class="me-1"></i>
+                Check Compliance
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content">
+        <!-- Enhance Image Tab -->
+        <div class="tab-pane fade show active" id="enhance-tab">
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Upload Image to Enhance</h5>
+                        </div>
+                        <div class="card-body">
+                            <form id="enhanceForm" enctype="multipart/form-data">
+                                <div class="mb-3">
+                                    <label class="form-label">Select Product Photo</label>
+                                    <input type="file" class="form-control" id="enhanceImage" accept="image/*" required>
+                                    <small class="text-muted d-block mb-2"><strong>Natural Enhancement:</strong> Professional improvements that look real - no over-processing</small>
+                                    <ul class="small text-muted mb-0" style="font-size: 0.85rem;">
+                                        <li><strong>Clean White Background</strong> - Converts light backgrounds to pure white</li>
+                                        <li><strong>Gentle Brightness</strong> - Subtle 10% boost for better lighting</li>
+                                        <li><strong>Natural Color</strong> - 15% saturation increase (looks real)</li>
+                                        <li><strong>Subtle Contrast</strong> - 10% improvement for depth</li>
+                                        <li><strong>Professional Sharpening</strong> - Crisp details without artifacts</li>
+                                        <li><strong>Noise Reduction</strong> - Clean, smooth appearance</li>
+                                    </ul>
+                                </div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i data-feather="sliders" class="me-1"></i>
+                                    Enhance Naturally
+                                </button>
+                            </form>
+                            
+                            <div id="enhancePreview" class="mt-3" style="display:none;">
+                                <h6>Original Image</h6>
+                                <img id="enhanceOriginal" class="img-fluid border rounded mb-3" style="max-height: 300px;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Enhanced Result</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="enhanceResult" style="display:none;">
+                                <img id="enhanceOutput" class="img-fluid border rounded mb-3" style="max-height: 400px;">
+                                <a id="enhanceDownload" class="btn btn-success" download="enhanced_image.png">
+                                    <i data-feather="download" class="me-1"></i>
+                                    Download Enhanced Image
+                                </a>
+                            </div>
+                            <div id="enhanceLoading" style="display:none;" class="text-center py-5">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Processing...</span>
+                                </div>
+                                <p class="mt-3">Enhancing image with AI...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Remove Background Tab -->
+        <div class="tab-pane fade" id="background-tab">
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Upload Image</h5>
+                        </div>
+                        <div class="card-body">
+                            <form id="backgroundForm" enctype="multipart/form-data">
+                                <div class="mb-3">
+                                    <label class="form-label">Select Product Photo</label>
+                                    <input type="file" class="form-control" id="backgroundImage" accept="image/*" required>
+                                    <small class="text-muted">AI will remove background and add white backdrop</small>
+                                </div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i data-feather="scissors" class="me-1"></i>
+                                    Remove Background
+                                </button>
+                            </form>
+                            
+                            <div id="backgroundPreview" class="mt-3" style="display:none;">
+                                <h6>Original Image</h6>
+                                <img id="backgroundOriginal" class="img-fluid border rounded mb-3" style="max-height: 300px;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Result</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="backgroundResult" style="display:none;">
+                                <img id="backgroundOutput" class="img-fluid border rounded mb-3" style="max-height: 400px;">
+                                <a id="backgroundDownload" class="btn btn-success" download="no_background.png">
+                                    <i data-feather="download" class="me-1"></i>
+                                    Download Image
+                                </a>
+                            </div>
+                            <div id="backgroundLoading" style="display:none;" class="text-center py-5">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Processing...</span>
+                                </div>
+                                <p class="mt-3">Removing background...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Generate Lifestyle Image Tab -->
+        <div class="tab-pane fade" id="generate-tab">
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Generate AI Image</h5>
+                        </div>
+                        <div class="card-body">
+                            <form id="generateForm" enctype="multipart/form-data">
+                                <div class="mb-3">
+                                    <label class="form-label">Upload Product Photo (Optional)</label>
+                                    <input type="file" class="form-control" id="referenceImage" accept="image/*">
+                                    <small class="text-muted">Upload a photo of your product - AI will create a lifestyle scene around it</small>
+                                </div>
+                                
+                                <div id="generatePreview" class="mt-2 mb-3" style="display:none;">
+                                    <img id="generateReference" class="img-fluid border rounded" style="max-height: 200px;">
+                                </div>
+                                
+                                <div class="mb-3">
+                                    <label class="form-label">Product Name</label>
+                                    <input type="text" class="form-control" id="productName" placeholder="e.g., Organic Threading Thread" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Scene Description</label>
+                                    <textarea class="form-control" id="productDescription" rows="3" placeholder="e.g., Thread spool on a marble countertop next to beauty supplies, professional lighting" required></textarea>
+                                    <small class="text-muted">Describe the lifestyle scene you want (background, setting, lighting, props)</small>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Style</label>
+                                    <select class="form-select" id="imageStyle">
+                                        <option value="professional product photography">Professional Product Photography</option>
+                                        <option value="lifestyle product in use">Lifestyle - Product in Use</option>
+                                        <option value="minimalist modern">Minimalist Modern</option>
+                                        <option value="clean white studio">Clean White Studio</option>
+                                        <option value="elegant professional">Elegant Professional</option>
+                                    </select>
+                                </div>
+                                <div class="alert alert-info">
+                                    <i data-feather="info" class="me-1"></i>
+                                    <small>Generated images comply with Amazon/eBay policies: white background, no text, no people, product-focused</small>
+                                </div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i data-feather="zap" class="me-1"></i>
+                                    Generate Lifestyle Image
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Generated Image</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="generateResult" style="display:none;">
+                                <img id="generateOutput" class="img-fluid border rounded mb-3" style="max-height: 400px;">
+                                <div class="mb-3">
+                                    <small class="text-muted" id="revisedPrompt"></small>
+                                </div>
+                                <a id="generateDownload" class="btn btn-success" target="_blank">
+                                    <i data-feather="download" class="me-1"></i>
+                                    Download Image
+                                </a>
+                            </div>
+                            <div id="generateLoading" style="display:none;" class="text-center py-5">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Generating...</span>
+                                </div>
+                                <p class="mt-3">AI is generating your image... This may take 10-20 seconds</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Compliance Check Tab -->
+        <div class="tab-pane fade" id="compliance-tab">
+            <div class="row">
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Upload Image to Check</h5>
+                        </div>
+                        <div class="card-body">
+                            <form id="complianceForm" enctype="multipart/form-data">
+                                <div class="mb-3">
+                                    <label class="form-label">Select Product Photo</label>
+                                    <input type="file" class="form-control" id="complianceImage" accept="image/*" required>
+                                    <small class="text-muted">Check if image meets Amazon/eBay marketplace requirements</small>
+                                </div>
+                                <button type="submit" class="btn btn-primary">
+                                    <i data-feather="check-circle" class="me-1"></i>
+                                    Check Compliance
+                                </button>
+                            </form>
+                            
+                            <div id="compliancePreview" class="mt-3" style="display:none;">
+                                <h6>Image Preview</h6>
+                                <img id="complianceOriginal" class="img-fluid border rounded mb-3" style="max-height: 300px;">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Compliance Report</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="complianceResult" style="display:none;">
+                                <div id="complianceStatus" class="alert mb-3"></div>
+                                
+                                <h6>Image Details</h6>
+                                <p id="complianceDimensions"></p>
+                                <p id="complianceFormat"></p>
+                                
+                                <div id="complianceIssuesSection" style="display:none;">
+                                    <h6 class="text-danger">Issues Found</h6>
+                                    <ul id="complianceIssues" class="text-danger"></ul>
+                                </div>
+                                
+                                <div id="complianceWarningsSection" style="display:none;">
+                                    <h6 class="text-warning">Warnings</h6>
+                                    <ul id="complianceWarnings" class="text-warning"></ul>
+                                </div>
+                            </div>
+                            <div id="complianceLoading" style="display:none;" class="text-center py-5">
+                                <div class="spinner-border text-primary" role="status">
+                                    <span class="visually-hidden">Checking...</span>
+                                </div>
+                                <p class="mt-3">Analyzing image compliance...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Initialize Feather icons
+    feather.replace();
+
+    // Enhance Image Form
+    document.getElementById('enhanceForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const fileInput = document.getElementById('enhanceImage');
+        const file = fileInput.files[0];
+        
+        // Show preview
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            document.getElementById('enhanceOriginal').src = e.target.result;
+            document.getElementById('enhancePreview').style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+        
+        // Show loading
+        document.getElementById('enhanceResult').style.display = 'none';
+        document.getElementById('enhanceLoading').style.display = 'block';
+        
+        const formData = new FormData();
+        formData.append('image', file);
+        
+        try {
+            const response = await fetch('/api/ai-image/enhance', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                document.getElementById('enhanceOutput').src = 'data:image/png;base64,' + result.image_base64;
+                document.getElementById('enhanceDownload').href = 'data:image/png;base64,' + result.image_base64;
+                document.getElementById('enhanceResult').style.display = 'block';
+            } else {
+                alert('Enhancement failed: ' + result.error);
+            }
+        } catch (error) {
+            alert('Error: ' + error.message);
+        } finally {
+            document.getElementById('enhanceLoading').style.display = 'none';
+        }
+    });
+
+    // Remove Background Form
+    document.getElementById('backgroundForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const fileInput = document.getElementById('backgroundImage');
+        const file = fileInput.files[0];
+        
+        // Show preview
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            document.getElementById('backgroundOriginal').src = e.target.result;
+            document.getElementById('backgroundPreview').style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+        
+        // Show loading
+        document.getElementById('backgroundResult').style.display = 'none';
+        document.getElementById('backgroundLoading').style.display = 'block';
+        
+        const formData = new FormData();
+        formData.append('image', file);
+        
+        try {
+            const response = await fetch('/api/ai-image/remove-background', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                document.getElementById('backgroundOutput').src = 'data:image/png;base64,' + result.image_base64;
+                document.getElementById('backgroundDownload').href = 'data:image/png;base64,' + result.image_base64;
+                document.getElementById('backgroundResult').style.display = 'block';
+            } else {
+                alert('Background removal failed: ' + result.error);
+            }
+        } catch (error) {
+            alert('Error: ' + error.message);
+        } finally {
+            document.getElementById('backgroundLoading').style.display = 'none';
+        }
+    });
+
+    // Reference Image Preview
+    document.getElementById('referenceImage').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                document.getElementById('generateReference').src = e.target.result;
+                document.getElementById('generatePreview').style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        } else {
+            document.getElementById('generatePreview').style.display = 'none';
+        }
+    });
+
+    // Generate Lifestyle Image Form
+    document.getElementById('generateForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const productName = document.getElementById('productName').value;
+        const productDescription = document.getElementById('productDescription').value;
+        const style = document.getElementById('imageStyle').value;
+        const referenceFile = document.getElementById('referenceImage').files[0];
+        
+        // Show loading
+        document.getElementById('generateResult').style.display = 'none';
+        document.getElementById('generateLoading').style.display = 'block';
+        
+        // Use FormData to support image upload
+        const formData = new FormData();
+        formData.append('product_name', productName);
+        formData.append('product_description', productDescription);
+        formData.append('style', style);
+        if (referenceFile) {
+            formData.append('reference_image', referenceFile);
+        }
+        
+        try {
+            const response = await fetch('/api/ai-image/generate', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                document.getElementById('generateOutput').src = result.image_url;
+                document.getElementById('generateDownload').href = result.image_url;
+                document.getElementById('revisedPrompt').textContent = 'AI Prompt: ' + result.revised_prompt;
+                document.getElementById('generateResult').style.display = 'block';
+            } else {
+                alert('Image generation failed: ' + result.error);
+            }
+        } catch (error) {
+            alert('Error: ' + error.message);
+        } finally {
+            document.getElementById('generateLoading').style.display = 'none';
+        }
+    });
+
+    // Compliance Check Form
+    document.getElementById('complianceForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const fileInput = document.getElementById('complianceImage');
+        const file = fileInput.files[0];
+        
+        // Show preview
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            document.getElementById('complianceOriginal').src = e.target.result;
+            document.getElementById('compliancePreview').style.display = 'block';
+        };
+        reader.readAsDataURL(file);
+        
+        // Show loading
+        document.getElementById('complianceResult').style.display = 'none';
+        document.getElementById('complianceLoading').style.display = 'block';
+        
+        const formData = new FormData();
+        formData.append('image', file);
+        
+        try {
+            const response = await fetch('/api/ai-image/check-compliance', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const result = await response.json();
+            
+            if (result.success) {
+                // Set status alert
+                const statusDiv = document.getElementById('complianceStatus');
+                if (result.compliant) {
+                    statusDiv.className = 'alert alert-success mb-3';
+                    statusDiv.innerHTML = '<i data-feather="check-circle"></i> Image is marketplace compliant!';
+                } else {
+                    statusDiv.className = 'alert alert-danger mb-3';
+                    statusDiv.innerHTML = '<i data-feather="x-circle"></i> Image has compliance issues';
+                }
+                
+                // Set dimensions and format
+                document.getElementById('complianceDimensions').innerHTML = '<strong>Dimensions:</strong> ' + result.dimensions;
+                document.getElementById('complianceFormat').innerHTML = '<strong>Format:</strong> ' + result.format;
+                
+                // Show issues
+                if (result.issues && result.issues.length > 0) {
+                    const issuesList = document.getElementById('complianceIssues');
+                    issuesList.innerHTML = result.issues.map(issue => `<li>${issue}</li>`).join('');
+                    document.getElementById('complianceIssuesSection').style.display = 'block';
+                } else {
+                    document.getElementById('complianceIssuesSection').style.display = 'none';
+                }
+                
+                // Show warnings
+                if (result.warnings && result.warnings.length > 0) {
+                    const warningsList = document.getElementById('complianceWarnings');
+                    warningsList.innerHTML = result.warnings.map(warning => `<li>${warning}</li>`).join('');
+                    document.getElementById('complianceWarningsSection').style.display = 'block';
+                } else {
+                    document.getElementById('complianceWarningsSection').style.display = 'none';
+                }
+                
+                document.getElementById('complianceResult').style.display = 'block';
+                feather.replace();
+            } else {
+                alert('Compliance check failed: ' + result.error);
+            }
+        } catch (error) {
+            alert('Error: ' + error.message);
+        } finally {
+            document.getElementById('complianceLoading').style.display = 'none';
+        }
+    });
+</script>
+{% endblock %}

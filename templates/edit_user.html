@@ -1,0 +1,120 @@
+{% extends "base.html" %}
+
+{% block title %}Edit User - {{ user.username }} - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="card">
+                <div class="card-header">
+                    <h4 class="mb-0">
+                        <i data-feather="edit" class="me-2"></i>
+                        Edit User: {{ user.username }}
+                    </h4>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="email" class="form-label">Email</label>
+                                <input type="email" class="form-control" id="email" name="email" value="{{ user.email }}" required>
+                            </div>
+                            
+                            <div class="col-md-6 mb-3">
+                                <label for="role" class="form-label">Role</label>
+                                <select class="form-select" id="role" name="role" required>
+                                    <option value="viewer" {% if user.role == 'viewer' %}selected{% endif %}>Viewer</option>
+                                    <option value="manager" {% if user.role == 'manager' %}selected{% endif %}>Manager</option>
+                                    <option value="admin" {% if user.role == 'admin' %}selected{% endif %}>Admin</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="password" class="form-label">New Password (leave blank to keep current)</label>
+                            <input type="password" class="form-control" id="password" name="password">
+                        </div>
+                        
+                        <div class="mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="is_active" name="is_active" 
+                                       {% if user.is_active %}checked{% endif %}>
+                                <label class="form-check-label" for="is_active">Account Active</label>
+                            </div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <h5 class="mb-3">Section Permissions</h5>
+                        <p class="text-muted small">Admin users have full access to all sections automatically.</p>
+                        
+                        {% set sections = [
+                            ('inventory', 'Inventory Items', 'package'),
+                            ('warehouse', 'Warehouse Management', 'home'),
+                            ('stores', 'Store Connections', 'shopping-bag'),
+                            ('suppliers', 'Suppliers', 'truck'),
+                            ('purchase_orders', 'Purchase Orders', 'file-text'),
+                            ('sync', 'Sync Operations', 'refresh-cw'),
+                            ('settings', 'System Settings', 'settings'),
+                            ('users', 'User Management', 'users')
+                        ] %}
+                        
+                        <div class="row">
+                            {% for section_id, section_name, icon in sections %}
+                            <div class="col-md-6 mb-3">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h6>
+                                            <i data-feather="{{ icon }}" class="me-1" style="width: 16px; height: 16px;"></i>
+                                            {{ section_name }}
+                                        </h6>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" 
+                                                   id="view_{{ section_id }}" name="view_{{ section_id }}"
+                                                   {% if user.permissions.get('view_' + section_id) %}checked{% endif %}>
+                                            <label class="form-check-label" for="view_{{ section_id }}">
+                                                Can View
+                                            </label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" 
+                                                   id="edit_{{ section_id }}" name="edit_{{ section_id }}"
+                                                   {% if user.permissions.get('edit_' + section_id) %}checked{% endif %}>
+                                            <label class="form-check-label" for="edit_{{ section_id }}">
+                                                Can Edit
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i data-feather="save" class="me-1" style="width: 16px; height: 16px;"></i>
+                                Save Changes
+                            </button>
+                            <a href="{{ url_for('routes.settings') }}" class="btn btn-secondary">
+                                <i data-feather="x" class="me-1" style="width: 16px; height: 16px;"></i>
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    feather.replace();
+});
+</script>
+{% endblock %}

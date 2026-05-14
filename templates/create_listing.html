@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+
+{% block title %}Create Listing - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                <i data-feather="plus-circle" class="me-2"></i>
+                Create Multi-Channel Listing
+            </h1>
+            <a href="{{ url_for('routes.listings') }}" class="btn btn-outline-secondary">
+                <i data-feather="arrow-left" class="me-1"></i>
+                Back to Listings
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('routes.create_listing') }}" id="createListingForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    
+                    <!-- Product Selection -->
+                    <h5 class="mb-3">
+                        <i data-feather="box" class="me-2"></i>
+                        Select Product
+                    </h5>
+                    
+                    <div class="mb-3">
+                        <label for="warehouse_stock_id" class="form-label">Warehouse Stock <span class="text-danger">*</span></label>
+                        <select class="form-select" id="warehouse_stock_id" name="warehouse_stock_id" required onchange="updateProductInfo()">
+                            <option value="">Choose a product...</option>
+                            {% for item in warehouse_items %}
+                                <option value="{{ item.id }}" 
+                                        data-sku="{{ item.sku }}"
+                                        data-quantity="{{ item.sellable_quantity }}"
+                                        data-name="{{ item.product_name or '' }}">
+                                    {{ item.sku }} - {{ item.product_name or 'No name' }} (Qty: {{ item.sellable_quantity }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Select the warehouse stock item to create listings for</div>
+                    </div>
+                    
+                    <!-- Product Info Display -->
+                    <div id="productInfo" class="alert alert-info d-none mb-4">
+                        <h6 class="mb-2">Selected Product:</h6>
+                        <div><strong>SKU:</strong> <span id="selectedSku"></span></div>
+                        <div><strong>Available Quantity:</strong> <span id="selectedQuantity"></span></div>
+                        <div><strong>Product Name:</strong> <span id="selectedName"></span></div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <!-- Marketplace Selection -->
+                    <h5 class="mb-3">
+                        <i data-feather="shopping-bag" class="me-2"></i>
+                        Select Marketplaces
+                    </h5>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Marketplaces <span class="text-danger">*</span></label>
+                        {% if stores %}
+                            {% for store in stores %}
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" name="store_ids" value="{{ store.id }}" id="store_{{ store.id }}">
+                                <label class="form-check-label" for="store_{{ store.id }}">
+                                    <strong>{{ store.name }}</strong> <span class="badge bg-info">{{ store.platform }}</span>
+                                </label>
+                            </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="alert alert-warning">
+                                <i data-feather="alert-circle" class="me-2"></i>
+                                No active stores configured. <a href="{{ url_for('routes.add_store') }}">Add a store</a> first.
+                            </div>
+                        {% endif %}
+                        <div class="form-text">Select one or more marketplaces to create listings on</div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <!-- Listing Details -->
+                    <h5 class="mb-3">
+                        <i data-feather="edit" class="me-2"></i>
+                        Listing Details
+                    </h5>
+                    
+                    <div class="mb-3">
+                        <label for="title" class="form-label">Title <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="title" name="title" required maxlength="500">
+                        <div class="form-text">Product title as it will appear on marketplaces</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="4"></textarea>
+                        <div class="form-text">Detailed product description</div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="price" class="form-label">Price <span class="text-danger">*</span></label>
+                                <input type="number" class="form-control" id="price" name="price" step="0.01" min="0" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="currency" class="form-label">Currency</label>
+                                <select class="form-select" id="currency" name="currency">
+                                    <option value="GBP" selected>GBP (£)</option>
+                                    <option value="USD">USD ($)</option>
+                                    <option value="EUR">EUR (€)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <!-- Sync Settings -->
+                    <h5 class="mb-3">
+                        <i data-feather="settings" class="me-2"></i>
+                        Synchronization Settings
+                    </h5>
+                    
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="sync_quantity" name="sync_quantity" checked>
+                            <label class="form-check-label" for="sync_quantity">
+                                <strong>Sync Quantity</strong>
+                                <div class="text-muted small">Automatically update marketplace quantity based on warehouse stock</div>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="sync_price" name="sync_price">
+                            <label class="form-check-label" for="sync_price">
+                                <strong>Sync Price</strong>
+                                <div class="text-muted small">Automatically update marketplace price (use with caution)</div>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="quantity_buffer" class="form-label">Quantity Buffer</label>
+                                <input type="number" class="form-control" id="quantity_buffer" name="quantity_buffer" value="0" min="0">
+                                <div class="form-text">Reduce marketplace quantity by this amount for safety stock</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="max_quantity_limit" class="form-label">Maximum Quantity</label>
+                                <input type="number" class="form-control" id="max_quantity_limit" name="max_quantity_limit" min="0">
+                                <div class="form-text">Optional: Cap marketplace quantity at this value</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <!-- Submit Buttons -->
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{{ url_for('routes.listings') }}" class="btn btn-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-primary">
+                            <i data-feather="check" class="me-1"></i>
+                            Create Listing(s)
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Help Sidebar -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i data-feather="help-circle" class="me-2"></i>
+                    Quick Guide
+                </h5>
+            </div>
+            <div class="card-body">
+                <h6>Creating Listings</h6>
+                <ol class="small">
+                    <li>Select a warehouse stock item</li>
+                    <li>Choose one or more marketplaces</li>
+                    <li>Enter listing details (title, price, etc.)</li>
+                    <li>Configure sync settings</li>
+                    <li>Click "Create Listing(s)"</li>
+                </ol>
+                
+                <hr>
+                
+                <h6>Sync Settings</h6>
+                <div class="small">
+                    <p><strong>Sync Quantity:</strong> Keeps marketplace stock in sync with your warehouse automatically.</p>
+                    <p><strong>Quantity Buffer:</strong> Reduces the visible quantity on marketplaces to maintain safety stock.</p>
+                    <p><strong>Maximum Quantity:</strong> Prevents showing too much stock on marketplaces (useful for high-volume items).</p>
+                </div>
+                
+                <hr>
+                
+                <div class="alert alert-info small mb-0">
+                    <i data-feather="info" class="me-2"></i>
+                    <strong>Note:</strong> Listings are created in "pending" status. Use the "Push" function to publish them to actual marketplaces.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function updateProductInfo() {
+    const select = document.getElementById('warehouse_stock_id');
+    const option = select.options[select.selectedIndex];
+    const productInfo = document.getElementById('productInfo');
+    
+    if (option.value) {
+        document.getElementById('selectedSku').textContent = option.dataset.sku;
+        document.getElementById('selectedQuantity').textContent = option.dataset.quantity;
+        document.getElementById('selectedName').textContent = option.dataset.name || 'N/A';
+        productInfo.classList.remove('d-none');
+        
+        // Auto-populate title if empty
+        const titleInput = document.getElementById('title');
+        if (!titleInput.value && option.dataset.name) {
+            titleInput.value = option.dataset.name;
+        }
+    } else {
+        productInfo.classList.add('d-none');
+    }
+}
+
+// Initialize feather icons
+document.addEventListener('DOMContentLoaded', function() {
+    feather.replace();
+});
+</script>
+{% endblock %}

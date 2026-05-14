@@ -1,0 +1,1196 @@
+{% extends "base.html" %}
+
+{% block title %}Inventory - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                <i data-feather="box" class="me-2"></i>
+                Inventory
+            </h1>
+<div class="alert alert-warning py-2 small mb-3">
+    <strong>Legacy push area:</strong> For the newer stock push flow, use <strong>Master Stock</strong> or <strong>GroupView</strong>. This page remains active for compatibility.
+</div>
+
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-danger" id="deleteSelectedBtn" onclick="deleteSelectedItems()" disabled>
+                    <i data-feather="trash-2" class="me-1"></i>
+                    Delete Selected
+                </button>
+                <button type="button" class="btn btn-success" id="pushSelectedBtn" onclick="pushSelectedItems()" disabled>
+                    <i data-feather="upload" class="me-1"></i>
+                    Push Selected
+                </button>
+                <button type="button" class="btn btn-warning" id="pushAllBtn" onclick="pushAllItems()">
+                    <i data-feather="refresh-cw" class="me-1"></i>
+                    Push All
+                </button>
+                <a href="{{ url_for('routes.add_item') }}" class="btn btn-primary">
+                    <i data-feather="plus" class="me-1"></i>
+                    Add New Item
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- View Controls -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <!-- Search Bar -->
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <div class="d-flex align-items-center">
+                            <label for="searchInput" class="form-label mb-0 me-2">
+                                <i data-feather="search" class="me-1"></i>
+                                Search:
+                            </label>
+                            <div class="input-group" style="max-width: 400px;">
+                                <input type="text" class="form-control" id="searchInput" 
+                                       placeholder="Search by SKU or name..." 
+                                       value="{{ current_search or '' }}"
+                                       onkeyup="handleSearchKeyup(event)">
+                                <button class="btn btn-outline-secondary" type="button" onclick="performSearch()">
+                                    <i data-feather="search"></i>
+                                </button>
+                                {% if current_search %}
+                                <button class="btn btn-outline-danger" type="button" onclick="clearSearch()" title="Clear search">
+                                    <i data-feather="x"></i>
+                                </button>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- View Mode and Filters -->
+                <div class="row align-items-center">
+                    <div class="col-md-4">
+                        <div class="btn-group" role="group" aria-label="View Mode">
+                            <a href="{{ url_for('routes.inventory', view='flat', search=current_search, group=current_group_filter, marketplace=current_marketplace_filter) }}" 
+                               class="btn btn-primary">
+                                <i data-feather="list" class="me-1"></i>
+                                Flat View
+                            </a>
+                            <button type="button" class="btn btn-outline-secondary" disabled title="Grouped View is coming soon">
+                                <i data-feather="layers" class="me-1"></i>
+                                Grouped View (Coming Soon)
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="col-md-8">
+                        <div class="d-flex justify-content-end align-items-center gap-3">
+                            <div class="d-flex align-items-center gap-2">
+                                <label for="marketplaceFilter" class="form-label mb-0 text-nowrap">Marketplace:</label>
+                                <select class="form-select" id="marketplaceFilter" style="width: auto;" onchange="filterByMarketplace(this.value)">
+                                    <option value="">All</option>
+                                    {% for marketplace in all_marketplaces %}
+                                        <option value="{{ marketplace }}" {% if current_marketplace_filter == marketplace %}selected{% endif %}>
+                                            {{ marketplace }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                <label for="groupFilter" class="form-label mb-0 text-nowrap">Group:</label>
+                                <select class="form-select" id="groupFilter" style="width: auto;" onchange="filterByGroup(this.value)">
+                                    <option value="">All Items</option>
+                                    <option value="ungrouped" {% if current_group_filter == 'ungrouped' %}selected{% endif %}>Ungrouped Items</option>
+                                    {% for group in all_groups %}
+                                        <option value="{{ group.id }}" {% if current_group_filter == group.id|string %}selected{% endif %}>
+                                            {{ group.name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if items %}
+    <!-- Grouped View -->
+    {% if view_mode == 'grouped' %}
+        <!-- Ungrouped Items Section -->
+        {% if ungrouped_items %}
+        <div class="card mb-3">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h6 class="mb-0">
+                        <i data-feather="inbox" class="me-2"></i>
+                        Ungrouped Items
+                        <span class="badge bg-secondary ms-2">{{ ungrouped_items|length }}</span>
+                    </h6>
+                    <small class="text-muted">
+                        Total Qty: <span data-group-total>{{ ungrouped_items|sum(attribute='quantity') }}</span>
+                    </small>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>
+                                    <input type="checkbox" class="form-check-input" id="selectAllUngrouped" onchange="toggleSelectAll(this, 'ungrouped')">
+                                </th>
+                                <th>SKU</th>
+                                <th>Name</th>
+                                <th>Warehouse Stock</th>
+                                <th>Marketplaces</th>
+                                <th>Reorder At</th>
+                                <th>Supplier</th>
+                                <th>Price</th>
+                                <th>Variants</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in ungrouped_items %}
+                            {% set warehouse_qty = item.warehouse_stock.available_quantity if item.warehouse_stock else 0 %}
+                            <tr {% if warehouse_qty < 10 %}class="table-warning"{% endif %}>
+                                <td>
+                                    <input type="checkbox" class="form-check-input item-checkbox ungrouped-checkbox" value="{{ item.id }}" onchange="updateBulkButtons()">
+                                </td>
+                                <td><code>{{ item.sku }}</code></td>
+                                <td>
+                                    <strong>{{ item.name }}</strong>
+                                    {% if warehouse_qty < 10 %}
+                                        <span class="badge bg-warning text-dark ms-1">Low</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="text-center">
+                                        <span class="badge fs-6 {% if warehouse_qty < 10 %}bg-warning text-dark{% elif warehouse_qty > 50 %}bg-success{% else %}bg-secondary{% endif %}" 
+                                              title="Quantity managed via Product Linking">
+                                            📦 {{ warehouse_qty }}
+                                        </span>
+                                        <div class="small text-muted mt-1" title="Use Product Linking to adjust quantities">
+                                            <i data-feather="lock" style="width: 10px; height: 10px;"></i> View only
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    {% if item.marketplace_summary %}
+                                        <div class="d-flex flex-wrap gap-1">
+                                            {% for platform, data in item.marketplace_summary.items() %}
+                                                <span class="badge bg-{% if data.needs_push %}warning{% elif data.active_listings > 0 %}success{% else %}secondary{% endif %} text-dark" 
+                                                      title="{{ platform }}: {{ data.active_listings }}/{{ data.total_listings }} active{% if data.needs_push %} (needs push){% endif %}">
+                                                    {{ platform }} ({{ data.active_listings }})
+                                                </span>
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        <span class="badge bg-secondary" title="Not connected to any marketplace">No Channels</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if item.warehouse_stock and item.warehouse_stock.reorder_point > 0 %}
+                                        {{ item.warehouse_stock.reorder_point }}
+                                        {% if item.warehouse_stock.needs_reorder %}
+                                            <span class="badge bg-danger ms-1">!</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if item.warehouse_stock and item.warehouse_stock.supplier %}
+                                        <small>{{ item.warehouse_stock.supplier.name }}</small>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>£{{ "%.2f"|format(item.price) }}</td>
+                                <td>
+                                    {% if item.variant_attributes %}
+                                        {% for key, value in item.variant_attributes.items() %}
+                                            <span class="badge bg-info me-1">{{ key|title }}: {{ value }}</span>
+                                        {% endfor %}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        {% if item.warehouse_stock %}
+                                        <a href="{{ url_for('routes.product_linking') }}?search={{ item.sku }}" class="btn btn-primary" title="Adjust & Push via Product Linking">
+                                            <i data-feather="sliders"></i>
+                                        </a>
+                                        {% endif %}
+                                        <button type="button" class="btn btn-outline-success" onclick="pushIndividualItem({{ item.id }}, '{{ item.sku }}')" title="Push Stock">
+                                            <i data-feather="upload"></i>
+                                        </button>
+                                        <a href="{{ url_for('routes.edit_item', item_id=item.id) }}" class="btn btn-outline-primary">
+                                            <i data-feather="edit-2"></i>
+                                        </a>
+                                        <button type="button" class="btn btn-outline-danger" onclick="confirmDelete({{ item.id }}, '{{ item.name }}')">
+                                            <i data-feather="trash-2"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Grouped Items Sections -->
+        {% for group_id, group_data in grouped_items.items() %}
+        {% set group = group_data.group %}
+        {% set group_items = group_data['items'] %}
+        {% set stats = group.get_aggregate_stats() %}
+        <div class="card mb-3">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center">
+                        <button class="btn btn-link text-decoration-none p-0 me-2" type="button" 
+                                data-bs-toggle="collapse" data-bs-target="#group{{ group.id }}" 
+                                aria-expanded="true" aria-controls="group{{ group.id }}">
+                            <i data-feather="chevron-down" class="collapse-icon"></i>
+                        </button>
+                        <h6 class="mb-0">
+                            <i data-feather="layers" class="me-2"></i>
+                            {{ group.name }}
+                            <span class="badge bg-primary ms-2">{{ stats.item_count }}</span>
+                        </h6>
+                    </div>
+                    <div class="d-flex align-items-center gap-3">
+                        <small class="text-muted">
+                            Total Qty: <strong><span data-group-total>{{ stats.total_quantity }}</span></strong>
+                        </small>
+                        <small class="text-muted">
+                            Price: £{{ "%.2f"|format(stats.min_price) }}
+                            {% if stats.min_price != stats.max_price %}
+                                - £{{ "%.2f"|format(stats.max_price) }}
+                            {% endif %}
+                        </small>
+                        
+                        <!-- Marketplace Summary Icons -->
+                        {% if group_data.marketplace_summary %}
+                            <div class="d-flex align-items-center gap-2">
+                                {% for platform, summary in group_data.marketplace_summary.items() %}
+                                    <span class="badge {% if summary.needs_push %}bg-warning text-dark{% else %}bg-success{% endif %}" 
+                                          title="{{ platform }}: {{ summary.active_listings }} active listing(s), Total Qty: {{ summary.total_quantity }}">
+                                        {{ platform }}
+                                        <span class="badge bg-light text-dark ms-1">{{ summary.active_listings }}</span>
+                                        {% if summary.needs_push %}
+                                            <i data-feather="alert-circle" style="width: 12px; height: 12px;"></i>
+                                        {% endif %}
+                                    </span>
+                                {% endfor %}
+                            </div>
+                        {% endif %}
+                        
+                        <div class="btn-group btn-group-sm">
+                            <a href="{{ url_for('routes.edit_group', group_id=group.id) }}" class="btn btn-outline-secondary">
+                                <i data-feather="edit-2"></i>
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Marketplace Summary Details -->
+                {% if group_data.marketplace_summary %}
+                <div class="card-body border-bottom bg-light">
+                    <div class="row">
+                        <div class="col-12">
+                            <small class="text-muted d-block mb-2"><strong>Marketplace Status:</strong></small>
+                            <div class="d-flex flex-wrap gap-3">
+                                {% for platform, summary in group_data.marketplace_summary.items() %}
+                                <div class="border rounded p-2 bg-white">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <strong>{{ platform }}:</strong>
+                                        <span class="badge bg-primary">{{ summary.total_listings }} listing(s)</span>
+                                        <span class="badge bg-success">{{ summary.active_listings }} active</span>
+                                        <span class="badge bg-info">Qty: {{ summary.total_quantity }}</span>
+                                        {% if summary.needs_push %}
+                                            <span class="badge bg-warning text-dark">
+                                                <i data-feather="alert-circle" style="width: 12px; height: 12px;"></i> Needs Push
+                                            </span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            <div class="collapse show" id="group{{ group.id }}">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>
+                                        <input type="checkbox" class="form-check-input" id="selectAllGroup{{ group.id }}" onchange="toggleSelectAll(this, 'group{{ group.id }}')">
+                                    </th>
+                                    <th>SKU</th>
+                                    <th>Name</th>
+                                    <th>Warehouse Stock</th>
+                                    <th>Marketplaces</th>
+                                    <th>Reorder At</th>
+                                    <th>Supplier</th>
+                                    <th>Price</th>
+                                    <th>Variants</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in group_items %}
+                                {% set warehouse_qty = item.warehouse_stock.available_quantity if item.warehouse_stock else 0 %}
+                                <tr {% if warehouse_qty < 10 %}class="table-warning"{% endif %}>
+                                    <td>
+                                        <input type="checkbox" class="form-check-input item-checkbox group{{ group.id }}-checkbox" value="{{ item.id }}" onchange="updateBulkButtons()">
+                                    </td>
+                                    <td><code>{{ item.sku }}</code></td>
+                                    <td>
+                                        {{ item.name }}
+                                        {% if warehouse_qty < 10 %}
+                                            <span class="badge bg-warning text-dark ms-1">Low</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="text-center">
+                                            <span class="badge fs-6 {% if warehouse_qty < 10 %}bg-warning text-dark{% elif warehouse_qty > 50 %}bg-success{% else %}bg-secondary{% endif %}" 
+                                                  title="Quantity managed via Product Linking">
+                                                📦 {{ warehouse_qty }}
+                                            </span>
+                                            <div class="small text-muted mt-1" title="Use Product Linking to adjust quantities">
+                                                <i data-feather="lock" style="width: 10px; height: 10px;"></i> View only
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        {% if item.marketplace_summary %}
+                                            <div class="d-flex flex-wrap gap-1">
+                                                {% for platform, data in item.marketplace_summary.items() %}
+                                                    <span class="badge bg-{% if data.needs_push %}warning{% elif data.active_listings > 0 %}success{% else %}secondary{% endif %} text-dark" 
+                                                          title="{{ platform }}: {{ data.active_listings }}/{{ data.total_listings }} active{% if data.needs_push %} (needs push){% endif %}">
+                                                        {{ platform }} ({{ data.active_listings }})
+                                                    </span>
+                                                {% endfor %}
+                                            </div>
+                                        {% else %}
+                                            <span class="badge bg-secondary" title="Not connected to any marketplace">No Channels</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if item.warehouse_stock and item.warehouse_stock.reorder_point > 0 %}
+                                            {{ item.warehouse_stock.reorder_point }}
+                                            {% if item.warehouse_stock.needs_reorder %}
+                                                <span class="badge bg-danger ms-1">!</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if item.warehouse_stock and item.warehouse_stock.supplier %}
+                                            <small>{{ item.warehouse_stock.supplier.name }}</small>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>£{{ "%.2f"|format(item.price) }}</td>
+                                    <td>
+                                        {% if item.variant_attributes %}
+                                            {% for key, value in item.variant_attributes.items() %}
+                                                <span class="badge bg-info me-1">{{ key|title }}: {{ value }}</span>
+                                            {% endfor %}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            {% if item.warehouse_stock %}
+                                            <a href="{{ url_for('routes.product_linking') }}?search={{ item.sku }}" class="btn btn-primary" title="Adjust & Push via Product Linking">
+                                                <i data-feather="sliders"></i>
+                                            </a>
+                                            {% endif %}
+                                            <button type="button" class="btn btn-outline-success" onclick="pushIndividualItem({{ item.id }}, '{{ item.sku }}')" title="Push Stock">
+                                                <i data-feather="upload"></i>
+                                            </button>
+                                            {% if item.group_id %}
+                                                <button type="button" class="btn btn-outline-warning" onclick="releaseFromGroup(this, {{ item.id }}, '{{ item.sku }}')" title="Release from Group">
+                                                    <i data-feather="arrow-left"></i>
+                                                </button>
+                                            {% endif %}
+                                            <a href="{{ url_for('routes.edit_item', item_id=item.id) }}" class="btn btn-outline-primary">
+                                                <i data-feather="edit-2"></i>
+                                            </a>
+                                            <button type="button" class="btn btn-outline-danger" onclick="confirmDelete({{ item.id }}, '{{ item.name }}')">
+                                                <i data-feather="trash-2"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+        
+        {% if not grouped_items and not ungrouped_items %}
+        <div class="card">
+            <div class="card-body text-center py-5">
+                <i data-feather="layers" size="64" class="text-muted mb-3"></i>
+                <h4 class="text-muted">No items in this view</h4>
+                <p class="text-muted mb-4">Try switching to flat view or adjusting your filter</p>
+                <a href="{{ url_for('routes.inventory', view='flat') }}" class="btn btn-outline-primary me-2">
+                    <i data-feather="list" class="me-1"></i>
+                    Switch to Flat View
+                </a>
+                <a href="{{ url_for('routes.add_item') }}" class="btn btn-primary">
+                    <i data-feather="plus" class="me-1"></i>
+                    Add New Item
+                </a>
+            </div>
+        </div>
+        {% endif %}
+        
+    <!-- Flat View (Original Table) -->
+    {% else %}
+        <div class="card">
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>
+                                    <input type="checkbox" class="form-check-input" id="selectAllFlat" onchange="toggleSelectAll(this, 'flat')">
+                                </th>
+                                <th>SKU</th>
+                                <th>Name</th>
+                                <th>Group</th>
+                                <th>Warehouse Stock</th>
+                                <th>Marketplaces</th>
+                                <th>Reorder At</th>
+                                <th>Supplier</th>
+                                <th>Price</th>
+                                <th>Variants</th>
+                                <th>Last Updated</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in items %}
+                            {% set warehouse_qty = item.warehouse_stock.available_quantity if item.warehouse_stock else 0 %}
+                            <tr {% if warehouse_qty < 10 %}class="table-warning"{% endif %}>
+                                <td>
+                                    <input type="checkbox" class="form-check-input item-checkbox flat-checkbox" value="{{ item.id }}" onchange="updateBulkButtons()">
+                                </td>
+                                <td>
+                                    <code>{{ item.sku }}</code>
+                                </td>
+                                <td>
+                                    <strong>{{ item.name }}</strong>
+                                    {% if warehouse_qty < 10 %}
+                                        <span class="badge bg-warning text-dark ms-2">Low Stock</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if item.group %}
+                                        <a href="{{ url_for('routes.inventory', view='grouped', group=item.group.id) }}" 
+                                           class="badge bg-primary text-decoration-none">
+                                            {{ item.group.name }}
+                                        </a>
+                                    {% else %}
+                                        <span class="badge bg-secondary">No Group</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="text-center">
+                                        <span class="badge fs-6 {% if warehouse_qty < 10 %}bg-warning text-dark{% elif warehouse_qty > 50 %}bg-success{% else %}bg-secondary{% endif %}" 
+                                              title="Quantity managed via Product Linking">
+                                            📦 {{ warehouse_qty }}
+                                        </span>
+                                        <div class="small text-muted mt-1" title="Use Product Linking to adjust quantities">
+                                            <i data-feather="lock" style="width: 10px; height: 10px;"></i> View only
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>
+                                    {% if item.marketplace_summary %}
+                                        <div class="d-flex flex-wrap gap-1">
+                                            {% for platform, data in item.marketplace_summary.items() %}
+                                                <span class="badge bg-{% if data.needs_push %}warning{% elif data.active_listings > 0 %}success{% else %}secondary{% endif %} text-dark" 
+                                                      title="{{ platform }}: {{ data.active_listings }}/{{ data.total_listings }} active{% if data.needs_push %} (needs push){% endif %}">
+                                                    {{ platform }} ({{ data.active_listings }})
+                                                    {% if data.needs_push %}
+                                                        <i data-feather="alert-circle" style="width: 10px; height: 10px;"></i>
+                                                    {% endif %}
+                                                </span>
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        <span class="badge bg-secondary" title="Not connected to any marketplace">No Channels</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if item.warehouse_stock and item.warehouse_stock.reorder_point > 0 %}
+                                        {{ item.warehouse_stock.reorder_point }}
+                                        {% if item.warehouse_stock.needs_reorder %}
+                                            <span class="badge bg-danger ms-1">!</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if item.warehouse_stock and item.warehouse_stock.supplier %}
+                                        <small>{{ item.warehouse_stock.supplier.name }}</small>
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>£{{ "%.2f"|format(item.price) }}</td>
+                                <td>
+                                    {% if item.variant_attributes %}
+                                        {% for key, value in item.variant_attributes.items() %}
+                                            <span class="badge bg-info me-1">{{ key|title }}: {{ value }}</span>
+                                        {% endfor %}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if item.description %}
+                                        {{ item.description[:30] + ('...' if item.description|length > 30 else '') }}
+                                    {% else %}
+                                        <span class="text-muted">No description</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <small class="text-muted">
+                                        {{ item.updated_at.strftime('%Y-%m-%d %H:%M') if item.updated_at else 'Unknown' }}
+                                    </small>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <button type="button" class="btn btn-outline-success" onclick="pushIndividualItem({{ item.id }}, '{{ item.sku }}')" title="Push Stock">
+                                            <i data-feather="upload"></i>
+                                        </button>
+                                        {% if item.group_id %}
+                                            <button type="button" class="btn btn-outline-warning" onclick="releaseFromGroup(this, {{ item.id }}, '{{ item.sku }}')" title="Release from Group">
+                                                <i data-feather="arrow-left"></i>
+                                            </button>
+                                        {% endif %}
+                                        <a href="{{ url_for('routes.edit_item', item_id=item.id) }}" 
+                                           class="btn btn-outline-primary">
+                                            <i data-feather="edit-2"></i>
+                                        </a>
+                                        <button type="button" 
+                                                class="btn btn-outline-danger"
+                                                onclick="confirmDelete({{ item.id }}, '{{ item.name }}')">
+                                            <i data-feather="trash-2"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    {% endif %}
+{% else %}
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <i data-feather="inbox" size="64" class="text-muted mb-3"></i>
+            <h4 class="text-muted">No inventory items yet</h4>
+            <p class="text-muted mb-4">Get started by adding your first inventory item</p>
+            <a href="{{ url_for('routes.add_item') }}" class="btn btn-primary">
+                <i data-feather="plus" class="me-1"></i>
+                Add Your First Item
+            </a>
+        </div>
+    </div>
+{% endif %}
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete <strong id="deleteItemName"></strong>?</p>
+                <p class="text-muted small">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form id="deleteForm" method="POST" style="display: inline;">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <button type="submit" class="btn btn-danger">
+                        <i data-feather="trash-2" class="me-1"></i>
+                        Delete
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function confirmDelete(itemId, itemName) {
+    document.getElementById('deleteItemName').textContent = itemName;
+    document.getElementById('deleteForm').action = `/inventory/delete/${itemId}`;
+    
+    const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
+    modal.show();
+}
+
+function filterByGroup(groupId) {
+    const currentUrl = new URL(window.location.href);
+    
+    if (groupId) {
+        currentUrl.searchParams.set('group', groupId);
+    } else {
+        currentUrl.searchParams.delete('group');
+    }
+    
+    // Preserve search parameter if it exists
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput && searchInput.value.trim()) {
+        currentUrl.searchParams.set('search', searchInput.value.trim());
+    }
+    
+    window.location.href = currentUrl.toString();
+}
+
+function filterByMarketplace(marketplace) {
+    const currentUrl = new URL(window.location.href);
+    
+    if (marketplace) {
+        currentUrl.searchParams.set('marketplace', marketplace);
+    } else {
+        currentUrl.searchParams.delete('marketplace');
+    }
+    
+    // Preserve search parameter if it exists
+    const searchInput = document.getElementById('searchInput');
+    if (searchInput && searchInput.value.trim()) {
+        currentUrl.searchParams.set('search', searchInput.value.trim());
+    }
+    
+    window.location.href = currentUrl.toString();
+}
+
+// Search Functions
+function performSearch() {
+    const searchInput = document.getElementById('searchInput');
+    const searchQuery = searchInput.value.trim();
+    const currentUrl = new URL(window.location.href);
+    
+    if (searchQuery) {
+        currentUrl.searchParams.set('search', searchQuery);
+    } else {
+        currentUrl.searchParams.delete('search');
+    }
+    
+    window.location.href = currentUrl.toString();
+}
+
+function clearSearch() {
+    const currentUrl = new URL(window.location.href);
+    currentUrl.searchParams.delete('search');
+    window.location.href = currentUrl.toString();
+}
+
+function handleSearchKeyup(event) {
+    if (event.key === 'Enter') {
+        performSearch();
+    }
+}
+
+// Handle collapse icon rotation
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize feather icons
+    feather.replace();
+    
+    // Add event listeners for collapse state changes
+    document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(function(element) {
+        element.addEventListener('click', function() {
+            const icon = this.querySelector('.collapse-icon');
+            setTimeout(() => {
+                const target = document.querySelector(this.getAttribute('data-bs-target'));
+                if (target.classList.contains('show')) {
+                    icon.setAttribute('data-feather', 'chevron-up');
+                } else {
+                    icon.setAttribute('data-feather', 'chevron-down');
+                }
+                feather.replace();
+            }, 350); // Wait for bootstrap transition
+        });
+    });
+});
+
+// Re-initialize feather icons after modal content changes
+document.getElementById('deleteModal').addEventListener('shown.bs.modal', function () {
+    feather.replace();
+});
+
+// Group Management Functions
+function releaseFromGroup(btn, itemId, itemSku) {
+    if (!confirm(`⚠️ Release ${itemSku} from its group? This will make it an ungrouped item.`)) {
+        return;
+    }
+    
+    const button = btn;
+    const originalContent = button.innerHTML;
+    
+    // Show loading state
+    button.innerHTML = '<i data-feather="loader" class="spin"></i>';
+    button.disabled = true;
+    feather.replace();
+    
+    fetch(`/release_from_group/${itemId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': '{{ csrf_token }}'
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showAlert('success', `✅ ${itemSku} has been released from its group.`);
+            // Reload the page to show updated grouping
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        } else {
+            showAlert('danger', `❌ Error: ${data.error || 'Failed to release item from group'}`);
+            // Restore button
+            button.innerHTML = originalContent;
+            button.disabled = false;
+            feather.replace();
+        }
+    })
+    .catch(error => {
+        console.error('Error releasing item from group:', error);
+        showAlert('danger', '❌ Network error - please try again');
+        // Restore button
+        button.innerHTML = originalContent;
+        button.disabled = false;
+        feather.replace();
+    });
+}
+
+// Stock Push Functions
+function pushIndividualItem(itemId, itemSku) {
+    const button = event.target.closest('button');
+    const originalContent = button.innerHTML;
+    
+    // Show loading state
+    button.innerHTML = '<i data-feather="loader" class="spin"></i>';
+    button.disabled = true;
+    feather.replace();
+    
+    fetch(`/push_stock/${itemId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            showAlert('success', `✅ Stock pushed successfully for ${itemSku}!`);
+            
+            // Show detailed results if available
+            if (data.results && Array.isArray(data.results)) {
+                let details = data.results.map(result => 
+                    `${result.platform}: ${result.success ? '✅' : '❌'} ${result.message}`
+                ).join('<br>');
+                
+                if (details) {
+                    setTimeout(() => {
+                        showAlert('info', `Push results:<br>${details}`);
+                    }, 1000);
+                }
+            }
+        } else {
+            showAlert('danger', `❌ Failed to push stock for ${itemSku}: ${data.error}`);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('danger', `❌ Error pushing stock for ${itemSku}: ${error.message}`);
+    })
+    .finally(() => {
+        // Restore button state
+        button.innerHTML = originalContent;
+        button.disabled = false;
+        feather.replace();
+    });
+}
+
+function pushSelectedItems() {
+    const selectedItems = Array.from(document.querySelectorAll('.item-checkbox:checked'))
+                              .map(cb => parseInt(cb.value));
+    
+    if (selectedItems.length === 0) {
+        showAlert('warning', '⚠️ Please select at least one item to push.');
+        return;
+    }
+    
+    const button = document.getElementById('pushSelectedBtn');
+    const originalContent = button.innerHTML;
+    
+    // Show loading state
+    button.innerHTML = '<i data-feather="loader" class="spin me-1"></i>Pushing...';
+    button.disabled = true;
+    feather.replace();
+    
+    fetch('/push_stock_bulk', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            item_ids: selectedItems
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            const message = data.message || `✅ Queued ${data.total_jobs_enqueued || 0} push jobs for ${data.successful_items || data.total_items} items!`;
+            showAlert('success', message);
+            
+            if (data.total_jobs_enqueued > 0) {
+                setTimeout(() => {
+                    showAlert('info', `📡 Background workers are processing your push jobs. Changes will appear on marketplaces within 1-2 minutes.`);
+                }, 1500);
+            }
+            
+            // Clear selections
+            uncheckAllItems();
+        } else {
+            if (data.successful_items > 0) {
+                showAlert('warning', `⚠️ Mixed results: ${data.successful_items} succeeded, ${data.failed_items} failed.`);
+                
+                if (data.results && Array.isArray(data.results)) {
+                    const failedItems = data.results.filter(r => !r.success);
+                    if (failedItems.length > 0) {
+                        const failedDetails = failedItems.map(item => 
+                            `${item.item_sku}: ${item.error || 'Unknown error'}`
+                        ).join('<br>');
+                        setTimeout(() => {
+                            showAlert('danger', `Failed items:<br>${failedDetails}`);
+                        }, 1000);
+                    }
+                }
+            } else {
+                let errorMsg = data.error || data.message || 'Unknown error';
+                showAlert('danger', `❌ Failed to push stock: ${errorMsg}`);
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('danger', `❌ Error during bulk push: ${error.message}`);
+    })
+    .finally(() => {
+        // Restore button state
+        button.innerHTML = originalContent;
+        button.disabled = true; // Keep disabled until new selection
+        feather.replace();
+    });
+}
+
+function deleteSelectedItems() {
+    const selectedItems = Array.from(document.querySelectorAll('.item-checkbox:checked'))
+                              .map(cb => parseInt(cb.value));
+    
+    if (selectedItems.length === 0) {
+        showAlert('warning', '⚠️ Please select at least one item to delete.');
+        return;
+    }
+    
+    // Confirm deletion
+    const confirmMsg = `Are you sure you want to delete ${selectedItems.length} item(s)? This action cannot be undone.`;
+    if (!confirm(confirmMsg)) {
+        return;
+    }
+    
+    const button = document.getElementById('deleteSelectedBtn');
+    const originalContent = button.innerHTML;
+    
+    // Show loading state
+    button.innerHTML = '<i data-feather="loader" class="spin me-1"></i>Deleting...';
+    button.disabled = true;
+    feather.replace();
+    
+    // Get CSRF token
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    
+    fetch('/inventory/delete_bulk', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-Token': csrfToken
+        },
+        body: JSON.stringify({
+            item_ids: selectedItems
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.success) {
+            showAlert('success', `✅ ${data.message}`);
+            
+            // Clear selections and reload page after short delay
+            uncheckAllItems();
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
+        } else {
+            showAlert('danger', `❌ Error: ${data.error}`);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        showAlert('danger', `❌ Error during bulk delete: ${error.message}`);
+    })
+    .finally(() => {
+        // Restore button state
+        button.innerHTML = originalContent;
+        button.disabled = true; // Keep disabled until new selection
+        feather.replace();
+    });
+}
+
+function pushAllItems() {
+    if (!confirm('⚠️ This will push stock for ALL inventory items to all connected stores. This may take a while. Continue?')) {
+        return;
+    }
+    
+    const button = document.getElementById('pushAllBtn');
+    const originalContent = button.innerHTML;
+    
+    // Show loading state
+    button.innerHTML = '<i data-feather="loader" class="spin me-1"></i>Pushing All...';
+    button.disabled = true;
+    document.getElementById('pushSelectedBtn').disabled = true;
+    feather.replace();
+    
+    // Show progress modal
+    showProgressModal('Pushing stock to all connected stores...', 'This may take several minutes for large inventories.');
+    
+    fetch('/push_stock_all', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        hideProgressModal();
+        
+        if (data.success) {
+            showAlert('success', `✅ Successfully pushed stock for all ${data.total_synced} items!`);
+        } else {
+            showAlert('warning', `⚠️ Push completed with mixed results: ${data.total_synced}/${data.total_items} items succeeded.`);
+        }
+        
+        // Show summary
+        setTimeout(() => {
+            showAlert('info', `Summary: ${data.total_synced} successful, ${data.total_failed} failed out of ${data.total_items} total items.`);
+        }, 2000);
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        hideProgressModal();
+        showAlert('danger', `❌ Error during push all operation: ${error.message}`);
+    })
+    .finally(() => {
+        // Restore button states
+        button.innerHTML = originalContent;
+        button.disabled = false;
+        updateBulkButtons(); // Re-enable based on selections
+        feather.replace();
+    });
+}
+
+// Checkbox Management Functions
+function toggleSelectAll(checkbox, scope) {
+    const isChecked = checkbox.checked;
+    const targetCheckboxes = document.querySelectorAll(`.${scope}-checkbox`);
+    
+    targetCheckboxes.forEach(cb => {
+        cb.checked = isChecked;
+    });
+    
+    updateBulkButtons();
+}
+
+function updateBulkButtons() {
+    const selectedItems = document.querySelectorAll('.item-checkbox:checked');
+    const pushSelectedBtn = document.getElementById('pushSelectedBtn');
+    const deleteSelectedBtn = document.getElementById('deleteSelectedBtn');
+    
+    if (selectedItems.length > 0) {
+        pushSelectedBtn.disabled = false;
+        pushSelectedBtn.innerHTML = `<i data-feather="upload" class="me-1"></i>Push Selected (${selectedItems.length})`;
+        deleteSelectedBtn.disabled = false;
+        deleteSelectedBtn.innerHTML = `<i data-feather="trash-2" class="me-1"></i>Delete Selected (${selectedItems.length})`;
+    } else {
+        pushSelectedBtn.disabled = true;
+        pushSelectedBtn.innerHTML = '<i data-feather="upload" class="me-1"></i>Push Selected';
+        deleteSelectedBtn.disabled = true;
+        deleteSelectedBtn.innerHTML = '<i data-feather="trash-2" class="me-1"></i>Delete Selected';
+    }
+    
+    feather.replace();
+}
+
+function uncheckAllItems() {
+    document.querySelectorAll('.item-checkbox').forEach(cb => {
+        cb.checked = false;
+    });
+    
+    // Uncheck all "select all" checkboxes
+    document.querySelectorAll('[id^="selectAll"]').forEach(cb => {
+        cb.checked = false;
+    });
+    
+    updateBulkButtons();
+}
+
+// UI Helper Functions
+function showAlert(type, message) {
+    // Create alert element
+    const alertDiv = document.createElement('div');
+    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
+    alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 400px;';
+    alertDiv.innerHTML = `
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(alertDiv);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (alertDiv.parentNode) {
+            alertDiv.remove();
+        }
+    }, 5000);
+}
+
+function showPushResults(results) {
+    if (!results || results.length === 0) return;
+    
+    let detailsHtml = '<div class="mt-3"><strong>Push Results:</strong><ul class="mt-2">';
+    
+    results.forEach(result => {
+        const icon = result.success ? '✅' : '❌';
+        detailsHtml += `<li><code>${result.item_sku}</code> - ${result.item_name}: ${icon}</li>`;
+    });
+    
+    detailsHtml += '</ul></div>';
+    
+    setTimeout(() => {
+        showAlert('info', detailsHtml);
+    }, 1500);
+}
+
+function showProgressModal(title, message) {
+    // Create progress modal if it doesn't exist
+    let modal = document.getElementById('progressModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.className = 'modal fade';
+        modal.id = 'progressModal';
+        modal.setAttribute('data-bs-backdrop', 'static');
+        modal.innerHTML = `
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="progressModalTitle">${title}</h5>
+                    </div>
+                    <div class="modal-body text-center">
+                        <div class="spinner-border text-primary mb-3" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p id="progressModalMessage">${message}</p>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    
+    const bsModal = new bootstrap.Modal(modal);
+    bsModal.show();
+}
+
+function hideProgressModal() {
+    const modal = document.getElementById('progressModal');
+    if (modal) {
+        const bsModal = bootstrap.Modal.getInstance(modal);
+        if (bsModal) {
+            bsModal.hide();
+        }
+    }
+}
+
+// CSS for spinning animation
+const style = document.createElement('style');
+style.textContent = `
+    .spin {
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+`;
+document.head.appendChild(style);
+</script>
+{% endblock %}

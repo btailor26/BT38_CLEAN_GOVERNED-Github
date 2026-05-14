@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SENTINEL-1 - System Control</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #1a1a2e;
+            color: #eee;
+            min-height: 100vh;
+        }
+        .env-badge {
+            font-size: 3rem;
+            padding: 1rem 3rem;
+            border-radius: 1rem;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+        }
+        .env-production { background: linear-gradient(135deg, #dc3545, #b02a37); }
+        .env-staging { background: linear-gradient(135deg, #fd7e14, #dc6a00); }
+        .env-dev { background: linear-gradient(135deg, #198754, #146c43); }
+        .env-unknown { background: linear-gradient(135deg, #6c757d, #495057); }
+        
+        .mode-badge {
+            font-size: 1.5rem;
+            padding: 0.5rem 1.5rem;
+            border-radius: 0.5rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .mode-locked { background: linear-gradient(135deg, #dc3545, #b02a37); }
+        .mode-observe { background: linear-gradient(135deg, #0dcaf0, #0aa2c0); }
+        .mode-plan { background: linear-gradient(135deg, #ffc107, #d9a406); color: #000; }
+        
+        .exec-badge {
+            font-size: 2rem;
+            padding: 0.75rem 2rem;
+            border-radius: 0.75rem;
+            font-weight: bold;
+        }
+        .exec-disabled { background: linear-gradient(135deg, #dc3545, #b02a37); }
+        .exec-enabled { background: linear-gradient(135deg, #198754, #146c43); }
+        .exec-readonly { background: linear-gradient(135deg, #fd7e14, #dc6a00); }
+        
+        .fingerprint-table {
+            background: #16213e;
+            border-radius: 0.5rem;
+        }
+        .fingerprint-table th {
+            width: 200px;
+            color: #adb5bd;
+        }
+        .fingerprint-table td {
+            font-family: monospace;
+            color: #00d9ff;
+        }
+        .section-card {
+            background: #16213e;
+            border-radius: 0.5rem;
+            border: 1px solid #0f3460;
+        }
+        .stop-condition {
+            color: #dc3545;
+            font-weight: 600;
+        }
+        .go-live-check {
+            color: #198754;
+        }
+        .loading {
+            color: #6c757d;
+            font-style: italic;
+        }
+        .db-fingerprint {
+            font-size: 1.5rem;
+            font-family: monospace;
+            color: #ffc107;
+            background: #2a2a4a;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            display: inline-block;
+        }
+        .safety-box {
+            background: #2a1a1a;
+            border: 2px solid #dc3545;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+        .command-input {
+            background: #0f1020;
+            border: 1px solid #333;
+            color: #00ff00;
+            font-family: monospace;
+        }
+        .command-result {
+            background: #0a0a15;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            font-family: monospace;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .vault-file {
+            background: #1a2a3a;
+            border-radius: 0.25rem;
+            padding: 0.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .vault-hash {
+            font-family: monospace;
+            font-size: 0.8rem;
+            color: #ffc107;
+        }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <div class="text-center mb-5">
+            <h1 class="mb-2">SENTINEL-1</h1>
+            <h4 class="text-muted mb-4">SYSTEM CONTROL</h4>
+        </div>
+        
+        <div class="row justify-content-center mb-3">
+            <div class="col-auto">
+                <div id="env-badge" class="env-badge env-unknown">
+                    LOADING...
+                </div>
+            </div>
+        </div>
+        
+        <div class="row justify-content-center mb-3">
+            <div class="col-auto">
+                <div id="mode-badge" class="mode-badge mode-locked">
+                    MODE: LOADING...
+                </div>
+            </div>
+        </div>
+        
+        <div class="row justify-content-center mb-4">
+            <div class="col-auto">
+                <div id="exec-badge" class="exec-badge exec-disabled">
+                    EXECUTION: DISABLED
+                </div>
+            </div>
+        </div>
+        
+        <div class="row justify-content-center mb-4">
+            <div class="col-auto">
+                <div class="text-center">
+                    <small class="text-muted">Database Fingerprint</small>
+                    <div id="db-fingerprint" class="db-fingerprint">loading...</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-lg-10 mx-auto">
+                <div class="section-card p-4 mb-4">
+                    <h4 class="mb-3">System Fingerprint</h4>
+                    <table class="table table-dark fingerprint-table mb-0">
+                        <tbody id="fingerprint-body">
+                            <tr>
+                                <td colspan="2" class="loading">Loading fingerprint data...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                {% if is_staging and is_admin %}
+                <div id="architect-controls" class="section-card p-4 mb-4" style="border: 2px solid #ffc107;">
+                    <h4 class="mb-3 text-warning">ARCHITECT CONTROLS (Admin Only)</h4>
+                {% else %}
+                <div id="architect-controls" class="section-card p-4 mb-4" style="display: none; border: 2px solid #ffc107;">
+                    <h4 class="mb-3 text-warning">ARCHITECT CONTROLS (Admin Only)</h4>
+                {% endif %}
+                    <p class="text-danger mb-3"><strong>WARNING:</strong> Execution remains OFF unless explicitly enabled with confirmation.</p>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="switch-input" onchange="toggleSwitch('input')">
+                                <label class="form-check-label" for="switch-input">
+                                    <strong>Command INPUT</strong>
+                                    <br><small class="text-muted">Allow typing commands</small>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="switch-output" onchange="toggleSwitch('output')">
+                                <label class="form-check-label" for="switch-output">
+                                    <strong>Command OUTPUT</strong>
+                                    <br><small class="text-muted">Show validation results</small>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="switch-execution" onchange="toggleSwitch('execution')" disabled>
+                                <label class="form-check-label text-danger" for="switch-execution">
+                                    <strong>EXECUTION</strong>
+                                    <br><small class="text-danger">DANGEROUS - Requires confirmation</small>
+                                </label>
+                            </div>
+                            <button class="btn btn-outline-danger btn-sm mt-2" onclick="unlockExecutionToggle()">
+                                Unlock Execution Toggle
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-3 p-2 bg-dark rounded">
+                        <small class="text-muted">Last modified: <span id="control-last-modified">Never</span></small>
+                    </div>
+                </div>
+                
+                <div id="command-panel" class="section-card p-4 mb-4">
+                    <h4 class="mb-3">Command Validation (PLAN MODE)</h4>
+                    <p class="text-warning mb-3">Commands are validated but NEVER executed. This is a planning tool only.</p>
+                    <div class="mb-3">
+                        <textarea id="command-input" class="form-control command-input" rows="3" 
+                            placeholder="Enter command to validate (will NOT be executed)..."></textarea>
+                    </div>
+                    <button id="validate-btn" class="btn btn-warning mb-3" onclick="validateCommand()">
+                        Validate Command
+                    </button>
+                    <div id="command-result" class="command-result" style="display: none;"></div>
+                </div>
+                
+                <div id="vault-panel" class="section-card p-4 mb-4" style="display: none;">
+                    <h4 class="mb-3">Knowledge Vault</h4>
+                    <p class="text-muted mb-3">Read-only document storage. No auto-processing or execution.</p>
+                    
+                    <div id="upload-panel" style="display: none;">
+                        <div class="mb-3">
+                            <label class="form-label">Upload Document (PDF, CSV, TXT, MD - max 10MB)</label>
+                            <input type="file" id="vault-file" class="form-control bg-dark text-light" 
+                                accept=".pdf,.csv,.txt,.md">
+                        </div>
+                        <button class="btn btn-outline-info btn-sm mb-3" onclick="uploadFile()">
+                            Upload to Vault
+                        </button>
+                    </div>
+                    
+                    <div id="vault-files">
+                        <p class="text-muted">Loading vault contents...</p>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="section-card p-4 mb-4">
+                            <h5 class="stop-condition mb-3">STOP CONDITIONS</h5>
+                            <ul class="list-unstyled mb-0">
+                                <li class="mb-2">&#9888; Environment mismatch detected</li>
+                                <li class="mb-2">&#9888; Database fingerprint differs from expected</li>
+                                <li class="mb-2">&#9888; Session cookie domain mismatch</li>
+                                <li class="mb-2">&#9888; EXECUTION_MODE not explicitly set</li>
+                                <li class="mb-2">&#9888; Unknown deployment identifier</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="section-card p-4 mb-4">
+                            <h5 class="go-live-check mb-3">GO-LIVE CHECKLIST</h5>
+                            <ul class="list-unstyled mb-0">
+                                <li class="mb-2">&#9744; Verify app_env matches expected environment</li>
+                                <li class="mb-2">&#9744; Verify request_host matches expected domain</li>
+                                <li class="mb-2">&#9744; Verify database fingerprint matches expected DB</li>
+                                <li class="mb-2">&#9744; Verify session cookie domain is correct</li>
+                                <li class="mb-2">&#9744; Confirm EXECUTION_MODE setting is intentional</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="safety-box">
+                    <h5 class="text-danger mb-3">SAFETY CONFIRMATION</h5>
+                    <ul class="list-unstyled mb-0">
+                        <li>&#128274; <strong>Execution is DISABLED</strong> - This page is read-only</li>
+                        <li>&#128274; <strong>DB_WRITES = NONE</strong> - No database modifications</li>
+                        <li>&#128274; <strong>NETWORK_CALLS = NONE</strong> - No external API calls</li>
+                        <li>&#128274; <strong>STATE_CHANGES = NONE</strong> - No system state changes</li>
+                    </ul>
+                </div>
+                
+                <div class="section-card p-4 mt-4">
+                    <h5 class="mb-3">Raw JSON Response</h5>
+                    <pre id="raw-json" class="bg-dark p-3 rounded text-light" style="max-height: 300px; overflow: auto;">Loading...</pre>
+                </div>
+            </div>
+        </div>
+        
+        <div class="text-center mt-5">
+            <small class="text-muted">
+                SENTINEL-1 v2.0 | BT38 Inventory System | Read-Only Control Panel
+            </small>
+        </div>
+    </div>
+    
+    <script>
+        let currentMode = 'LOCKED';
+        let currentEnv = '{{ app_env | default("unknown") }}';
+        let isAdmin = {{ 'true' if is_admin else 'false' }};
+        let isStaging = {{ 'true' if is_staging else 'false' }};
+        let controlSwitches = {% if control_switches %}{{ control_switches | tojson | safe }}{% else %}{
+            command_input_enabled: false,
+            command_output_enabled: false,
+            execution_enabled: false
+        }{% endif %};
+        
+        async function loadControlSwitches() {
+            try {
+                const response = await fetch('/api/sentinel/control');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.ok && data.switches) {
+                        controlSwitches = data.switches;
+                        updateSwitchUI();
+                        isAdmin = true;
+                    }
+                }
+            } catch (error) {
+                console.log('Control switches not available:', error.message);
+            }
+        }
+        
+        function updateSwitchUI() {
+            document.getElementById('switch-input').checked = controlSwitches.command_input_enabled || false;
+            document.getElementById('switch-output').checked = controlSwitches.command_output_enabled || false;
+            document.getElementById('switch-execution').checked = controlSwitches.execution_enabled || false;
+            
+            const lastMod = controlSwitches.last_modified_at ? 
+                `${controlSwitches.last_modified_at} by ${controlSwitches.last_modified_by || 'unknown'}` : 'Never';
+            document.getElementById('control-last-modified').textContent = lastMod;
+            
+            // Show/hide command panel based on input switch ONLY (not staging)
+            if (controlSwitches.command_input_enabled) {
+                document.getElementById('command-panel').style.display = 'block';
+                document.getElementById('command-input').disabled = false;
+                document.getElementById('validate-btn').disabled = false;
+                document.getElementById('command-panel').querySelector('h4').textContent = 'Command Validation (PLAN MODE)';
+            } else {
+                document.getElementById('command-panel').style.display = 'block';
+                document.getElementById('command-input').disabled = true;
+                document.getElementById('validate-btn').disabled = true;
+                document.getElementById('command-panel').querySelector('h4').textContent = 'Command Input (Locked by Architect)';
+            }
+        }
+        
+        async function toggleSwitch(switchType) {
+            const payload = {};
+            
+            if (switchType === 'input') {
+                payload.command_input_enabled = document.getElementById('switch-input').checked;
+            } else if (switchType === 'output') {
+                payload.command_output_enabled = document.getElementById('switch-output').checked;
+            } else if (switchType === 'execution') {
+                const newValue = document.getElementById('switch-execution').checked;
+                if (newValue) {
+                    if (!confirm('WARNING: You are about to ENABLE EXECUTION. This is dangerous. Are you absolutely sure?')) {
+                        document.getElementById('switch-execution').checked = false;
+                        return;
+                    }
+                    payload.execution_enabled = true;
+                    payload.confirm_execution = true;
+                } else {
+                    payload.execution_enabled = false;
+                }
+            }
+            
+            try {
+                const response = await fetch('/api/sentinel/control', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    controlSwitches = data.switches;
+                    updateSwitchUI();
+                    loadFingerprint();
+                } else {
+                    alert('Failed to update switch: ' + (data.error || 'Unknown error'));
+                    loadControlSwitches();
+                }
+            } catch (error) {
+                alert('Error updating switch: ' + error.message);
+                loadControlSwitches();
+            }
+        }
+        
+        function unlockExecutionToggle() {
+            if (confirm('WARNING: This will unlock the EXECUTION toggle. Only proceed if you understand the consequences.')) {
+                document.getElementById('switch-execution').disabled = false;
+                document.getElementById('switch-execution').parentElement.classList.add('border', 'border-danger', 'p-2', 'rounded');
+            }
+        }
+        
+        async function loadFingerprint() {
+            try {
+                const response = await fetch('/api/system/fingerprint');
+                const data = await response.json();
+                
+                const envBadge = document.getElementById('env-badge');
+                const env = data.app_env || 'unknown';
+                currentEnv = env;
+                envBadge.textContent = env.toUpperCase();
+                envBadge.className = 'env-badge env-' + (
+                    env === 'prod' || env === 'production' ? 'production' :
+                    env === 'staging' ? 'staging' :
+                    env === 'dev' || env === 'development' ? 'dev' : 'unknown'
+                );
+                
+                const modeBadge = document.getElementById('mode-badge');
+                currentMode = data.sentinel_mode || 'LOCKED';
+                modeBadge.textContent = 'SENTINEL: ' + currentMode;
+                modeBadge.className = 'mode-badge mode-' + currentMode.toLowerCase();
+                
+                // Load control switches (will show admin panel if authorized)
+                // Note: updateSwitchUI() handles command panel visibility
+                loadControlSwitches();
+                
+                if (currentMode === 'OBSERVE' || currentMode === 'PLAN') {
+                    document.getElementById('vault-panel').style.display = 'block';
+                    document.getElementById('upload-panel').style.display = 'block';
+                    loadVaultFiles();
+                } else {
+                    document.getElementById('vault-panel').style.display = 'none';
+                }
+                
+                const execBadge = document.getElementById('exec-badge');
+                const mode = data.execution_mode || 'disabled';
+                execBadge.textContent = 'EXECUTION: ' + mode.toUpperCase();
+                execBadge.className = 'exec-badge exec-' + (
+                    mode === 'enabled' ? 'enabled' :
+                    mode === 'read-only' ? 'readonly' : 'disabled'
+                );
+                
+                document.getElementById('db-fingerprint').textContent = 
+                    data.database?.fingerprint || 'unknown';
+                
+                const tbody = document.getElementById('fingerprint-body');
+                tbody.innerHTML = '';
+                
+                const rows = [
+                    ['App Environment', data.app_env],
+                    ['Flask Environment', data.flask_env || '(not set)'],
+                    ['Request Host', data.request_host],
+                    ['Hostname', data.hostname],
+                    ['Deployment ID', data.deployment_id],
+                    ['Git Commit', data.git_commit],
+                    ['Execution Mode', data.execution_mode],
+                    ['Sentinel Mode', data.sentinel_mode],
+                    ['Command Input', data.command_input_enabled ? 'ENABLED' : 'DISABLED'],
+                    ['Cookie Name', data.session_cookie?.name],
+                    ['Cookie Domain', data.session_cookie?.domain || '(dynamic)'],
+                    ['Cookie Secure', data.session_cookie?.secure],
+                    ['Cookie SameSite', data.session_cookie?.samesite],
+                    ['DB Host', data.database?.host],
+                    ['DB Name', data.database?.name],
+                    ['DB Fingerprint', data.database?.fingerprint],
+                    ['Timestamp', data.timestamp]
+                ];
+                
+                rows.forEach(([label, value]) => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `<th>${label}</th><td>${value}</td>`;
+                    tbody.appendChild(tr);
+                });
+                
+                document.getElementById('raw-json').textContent = 
+                    JSON.stringify(data, null, 2);
+                    
+            } catch (error) {
+                console.error('Failed to load fingerprint:', error);
+                document.getElementById('fingerprint-body').innerHTML = 
+                    '<tr><td colspan="2" class="text-danger">Error loading fingerprint: ' + error.message + '</td></tr>';
+            }
+        }
+        
+        async function validateCommand() {
+            const command = document.getElementById('command-input').value;
+            const resultDiv = document.getElementById('command-result');
+            
+            if (!command.trim()) {
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = '<span class="text-warning">Please enter a command to validate</span>';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/sentinel/validate-command', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command })
+                });
+                
+                const data = await response.json();
+                resultDiv.style.display = 'block';
+                
+                if (data.valid) {
+                    resultDiv.innerHTML = `
+                        <span class="text-success">&#10004; ${data.status}</span><br>
+                        <small class="text-muted">${data.reason}</small><br>
+                        <small class="text-warning">NOTE: Command was validated but NOT executed</small>
+                    `;
+                } else {
+                    let html = `<span class="text-danger">&#10008; ${data.status}</span><br>
+                        <small class="text-muted">${data.reason}</small>`;
+                    if (data.violations && data.violations.length > 0) {
+                        html += '<br><br><strong>Violations:</strong><ul>';
+                        data.violations.forEach(v => {
+                            html += `<li class="text-danger">${v}</li>`;
+                        });
+                        html += '</ul>';
+                    }
+                    resultDiv.innerHTML = html;
+                }
+            } catch (error) {
+                resultDiv.style.display = 'block';
+                resultDiv.innerHTML = `<span class="text-danger">Error: ${error.message}</span>`;
+            }
+        }
+        
+        async function loadVaultFiles() {
+            try {
+                const response = await fetch('/api/sentinel/knowledge');
+                const data = await response.json();
+                
+                const container = document.getElementById('vault-files');
+                
+                if (!data.files || data.files.length === 0) {
+                    container.innerHTML = '<p class="text-muted">Knowledge Vault is empty. Ready for uploads.</p>';
+                    return;
+                }
+                
+                let html = `<p class="text-info mb-2">${data.count} file(s) in vault</p>`;
+                data.files.forEach(file => {
+                    html += `
+                        <div class="vault-file">
+                            <strong>${file.original_filename || file.filename}</strong>
+                            <span class="badge bg-secondary ms-2">${file.file_type?.toUpperCase()}</span>
+                            <span class="badge bg-success ms-1">INGESTED</span>
+                            <br>
+                            <span class="vault-hash">${file.hash?.substring(0, 12)}...</span>
+                            <small class="text-muted ms-2">${file.uploaded_at}</small>
+                            <small class="text-muted ms-2">by ${file.uploaded_by}</small>
+                        </div>
+                    `;
+                });
+                container.innerHTML = html;
+            } catch (error) {
+                document.getElementById('vault-files').innerHTML = 
+                    `<p class="text-danger">Error loading vault: ${error.message}</p>`;
+            }
+        }
+        
+        async function uploadFile() {
+            const fileInput = document.getElementById('vault-file');
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert('Please select a file to upload');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+            
+            try {
+                const response = await fetch('/api/sentinel/knowledge/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    alert('File uploaded successfully: ' + data.filename);
+                    fileInput.value = '';
+                    loadVaultFiles();
+                } else {
+                    alert('Upload failed: ' + data.error);
+                }
+            } catch (error) {
+                alert('Upload error: ' + error.message);
+            }
+        }
+        
+        // Initialize switch UI with server-side data if available
+        if (isAdmin && isStaging) {
+            updateSwitchUI();
+        }
+        
+        loadFingerprint();
+        setInterval(loadFingerprint, 30000);
+    </script>
+</body>
+</html>

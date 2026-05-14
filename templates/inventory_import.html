@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+
+{% block title %}Import Inventory - Inventory Manager{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="{{ url_for('routes.warehouse') }}">Warehouse</a></li>
+                    <li class="breadcrumb-item active">Import Inventory</li>
+                </ol>
+            </nav>
+            
+            <h2 class="mb-0">
+                <i data-feather="upload" class="me-2"></i>
+                Import Inventory from Amazon
+            </h2>
+            <p class="text-muted mt-2">
+                Upload your Amazon Seller Central inventory export to sync quantities.
+                Use this when API access is unavailable.
+            </p>
+        </div>
+    </div>
+    
+    <!-- Flash Messages -->
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <div class="row">
+        <!-- Upload Form -->
+        <div class="col-lg-6 mb-4">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header bg-primary bg-opacity-25">
+                    <h5 class="card-title mb-0">
+                        <i data-feather="file-text" class="me-2"></i>
+                        Upload Amazon Export
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data">
+                        <div class="mb-4">
+                            <label class="form-label">How to Export from Amazon:</label>
+                            <ol class="text-muted small">
+                                <li>Go to Amazon Seller Central → Inventory → Manage All Inventory</li>
+                                <li>Select all listings (or use filters)</li>
+                                <li>Copy the entire page content (Ctrl+A, Ctrl+C)</li>
+                                <li>Paste into a text file and save as .txt</li>
+                                <li>Upload the file here</li>
+                            </ol>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label for="import_file" class="form-label">Select Export File</label>
+                            <input type="file" class="form-control bg-dark text-light border-secondary" 
+                                   id="import_file" name="import_file" accept=".txt,.csv" required>
+                            <div class="form-text">Accepts .txt or .csv files from Amazon Seller Central</div>
+                        </div>
+                        
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i data-feather="upload" class="me-2"></i>
+                                Upload & Parse
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Info Panel -->
+        <div class="col-lg-6 mb-4">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header bg-info bg-opacity-25">
+                    <h5 class="card-title mb-0">
+                        <i data-feather="info" class="me-2"></i>
+                        About This Feature
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <h6>Why Manual Import?</h6>
+                    <p class="text-muted">
+                        When Amazon API authorization is unavailable (OAuth issues, pending approvals), 
+                        you can manually sync inventory using Seller Central exports.
+                    </p>
+                    
+                    <h6>How It Works</h6>
+                    <ul class="text-muted">
+                        <li>Parse your Amazon export file to extract SKUs and quantities</li>
+                        <li>Compare with current warehouse quantities</li>
+                        <li>Review mismatches before applying changes</li>
+                        <li>Choose to apply all or selected updates</li>
+                    </ul>
+                    
+                    <h6>Data Extracted</h6>
+                    <ul class="text-muted">
+                        <li>SKU and ASIN</li>
+                        <li>Product name</li>
+                        <li>Available quantity (FBA/FBM)</li>
+                        <li>Price and listing status</li>
+                    </ul>
+                    
+                    <div class="alert alert-warning mt-3">
+                        <i data-feather="alert-triangle" class="me-2"></i>
+                        <strong>Note:</strong> This updates the warehouse stock to match Amazon. 
+                        Review carefully before applying changes.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Pending Batches -->
+    {% if pending_batches %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card bg-dark border-secondary">
+                <div class="card-header bg-warning bg-opacity-25">
+                    <h5 class="card-title mb-0">
+                        <i data-feather="clock" class="me-2"></i>
+                        Pending Import Batches
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Batch ID</th>
+                                    <th>Items</th>
+                                    <th>Mismatches</th>
+                                    <th>Imported</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for batch in pending_batches %}
+                                <tr>
+                                    <td><code>{{ batch.import_batch_id }}</code></td>
+                                    <td>{{ batch.item_count }}</td>
+                                    <td>
+                                        {% if batch.mismatch_count > 0 %}
+                                        <span class="badge bg-warning">{{ batch.mismatch_count }}</span>
+                                        {% else %}
+                                        <span class="badge bg-success">0</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ batch.created_at.strftime('%d %b %Y %H:%M') if batch.created_at else 'Unknown' }}</td>
+                                    <td>
+                                        <a href="{{ url_for('routes.inventory_import_review', batch_id=batch.import_batch_id) }}" 
+                                           class="btn btn-sm btn-primary">
+                                            <i data-feather="eye" class="me-1"></i>
+                                            Review
+                                        </a>
+                                        <form method="POST" action="{{ url_for('routes.inventory_import_reject', batch_id=batch.import_batch_id) }}" 
+                                              class="d-inline" onsubmit="return confirm('Reject this import batch?');">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                <i data-feather="x" class="me-1"></i>
+                                                Reject
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

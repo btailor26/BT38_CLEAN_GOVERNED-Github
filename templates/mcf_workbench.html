@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}MCF Workbench{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+  <div class="col-12 d-flex justify-content-between align-items-center">
+    <div>
+      <h1><i data-feather="shuffle" class="me-2"></i>MCF Workbench</h1>
+      <p class="text-muted mb-0">Stores, sync readiness, master stock truth, marketplace links, and grouping.</p>
+    </div>
+    <a href="{{ url_for('routes.mcf_workbench') }}" class="btn btn-outline-primary">
+      <i data-feather="refresh-cw" class="me-1"></i> Refresh
+    </a>
+  </div>
+</div>
+
+<div class="row mb-4 g-3">
+  <div class="col-md-3"><div class="card"><div class="card-body"><div class="text-muted small">Active Stores</div><div class="fs-3 fw-bold">{{ summary.active_stores }}</div></div></div></div>
+  <div class="col-md-3"><div class="card"><div class="card-body"><div class="text-muted small">Master Stock</div><div class="fs-3 fw-bold">{{ summary.stock_count }}</div></div></div></div>
+  <div class="col-md-3"><div class="card"><div class="card-body"><div class="text-muted small">Grouped SKUs</div><div class="fs-3 fw-bold">{{ summary.grouped_count }}</div></div></div></div>
+  <div class="col-md-3"><div class="card"><div class="card-body"><div class="text-muted small">Push Targets</div><div class="fs-3 fw-bold">{{ summary.pushable_count }}</div></div></div></div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header"><strong>Store connection + sync readiness</strong></div>
+  <div class="card-body table-responsive">
+    <table class="table table-sm align-middle">
+      <thead>
+        <tr>
+          <th>Store</th>
+          <th>Platform</th>
+          <th>Status</th>
+          <th>FBA Import</th>
+          <th>FBM Sync</th>
+          <th>Auto Push</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in stores %}
+        <tr>
+          <td>{{ s.name }}</td>
+          <td><span class="badge bg-secondary">{{ s.platform }}</span></td>
+          <td>{% if s.is_active %}<span class="badge bg-success">Active</span>{% else %}<span class="badge bg-danger">Inactive</span>{% endif %}</td>
+          <td>{% if s.fba_import_enabled %}<span class="badge bg-info">Read-only FBA</span>{% else %}<span class="text-muted">-</span>{% endif %}</td>
+          <td>{% if s.fbm_sync_enabled %}<span class="badge bg-primary">Ready</span>{% else %}<span class="text-muted">Off</span>{% endif %}</td>
+          <td>{% if s.auto_push_enabled %}<span class="badge bg-warning text-dark">Auto</span>{% else %}<span class="text-muted">Manual</span>{% endif %}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-muted">No active stores found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><strong>Master stock truth + grouping logic</strong></div>
+  <div class="card-body table-responsive">
+    <table class="table table-sm align-middle">
+      <thead>
+        <tr>
+          <th>Master SKU</th>
+          <th>Truth Qty</th>
+          <th>Group</th>
+          <th>Members</th>
+          <th>Marketplace Links</th>
+          <th>Push / MCF Readiness</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in stock_rows %}
+        <tr>
+          <td>
+            <code>{{ r.sku }}</code>
+            <div class="small text-muted">{{ r.product_name or "" }}</div>
+          </td>
+          <td><strong>{{ r.quantity }}</strong></td>
+          <td>
+            {% if r.is_grouped %}
+              <span class="badge bg-success">Grouped</span>
+              <div class="small text-muted">{{ r.group_name }}</div>
+            {% else %}
+              <span class="badge bg-secondary">Single SKU</span>
+            {% endif %}
+          </td>
+          <td>{{ r.member_count }}</td>
+          <td>
+            {% for l in r.listings %}
+              <div class="mb-1">
+                <span class="badge {% if 'amazon' in l.platform|lower %}bg-warning text-dark{% elif 'ebay' in l.platform|lower %}bg-info{% else %}bg-secondary{% endif %}">
+                  {{ l.platform }}
+                </span>
+                <code>{{ l.sku or "-" }}</code>
+                {% if l.fulfillment == "AFN" %}
+                  <span class="badge bg-info">AFN/FBA read-only</span>
+                {% else %}
+                  <span class="badge bg-success">FBM/eBay pushable</span>
+                {% endif %}
+              </div>
+            {% else %}
+              <span class="text-muted">No linked listings</span>
+            {% endfor %}
+          </td>
+          <td>
+            {% if r.pushable_count %}
+              <span class="badge bg-success">{{ r.pushable_count }} push target(s)</span>
+            {% else %}
+              <span class="badge bg-secondary">No push target</span>
+            {% endif %}
+
+            {% if r.fba_readonly_count %}
+              <div class="small text-muted">{{ r.fba_readonly_count }} FBA/AFN read-only</div>
+            {% endif %}
+
+            {% if r.mcf_candidate %}
+              <div class="mt-1"><span class="badge bg-primary">MCF candidate</span></div>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-muted">No warehouse stock found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+  if (window.feather) feather.replace();
+});
+</script>
+{% endblock %}

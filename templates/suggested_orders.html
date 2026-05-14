@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+
+{% block title %}Suggested Orders - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h2><i data-feather="alert-circle"></i> Suggested Purchase Orders</h2>
+        <a href="{{ url_for('routes.purchase_orders') }}" class="btn btn-outline-secondary">
+            <i data-feather="list"></i> View All POs
+        </a>
+    </div>
+    <p class="text-muted">Items below reorder point, grouped by supplier</p>
+    
+    <!-- Search Bar -->
+    <div class="row mb-3">
+        <div class="col-md-6">
+            <form method="GET" action="{{ url_for('routes.suggested_orders') }}" class="input-group">
+                <input type="text" 
+                       class="form-control" 
+                       name="search" 
+                       placeholder="Search by SKU or Location..." 
+                       value="{{ search_query or '' }}">
+                <button class="btn btn-primary" type="submit">
+                    <i data-feather="search"></i> Search
+                </button>
+                {% if search_query %}
+                <a href="{{ url_for('routes.suggested_orders') }}" class="btn btn-outline-secondary">
+                    <i data-feather="x"></i> Clear
+                </a>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+</div>
+
+{% if by_supplier or no_supplier_items %}
+    <form method="POST" action="{{ url_for('routes.create_purchase_order_from_suggestions') }}">
+        <!-- Items grouped by supplier -->
+        {% for supplier_id, data in by_supplier.items() %}
+        <div class="card mb-3">
+            <div class="card-header bg-warning bg-opacity-10">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-0">
+                            <i data-feather="package"></i> {{ data.supplier.name }}
+                        </h5>
+                        <small class="text-muted">
+                            {% if data.supplier.email %}{{ data.supplier.email }}{% endif %}
+                            {% if data.supplier.phone %} | {{ data.supplier.phone }}{% endif %}
+                        </small>
+                    </div>
+                    <div>
+                        <input type="checkbox" class="form-check-input me-2" id="selectSupplier{{ supplier_id }}" 
+                               onchange="toggleSupplierItems({{ supplier_id }}, this.checked)">
+                        <label for="selectSupplier{{ supplier_id }}">Select All</label>
+                        <button type="submit" name="supplier_id" value="{{ supplier_id }}" 
+                                class="btn btn-sm btn-primary ms-3">
+                            <i data-feather="shopping-cart"></i> Create PO for this Supplier
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th width="40"><input type="checkbox" class="form-check-input" onchange="toggleSupplierItems({{ supplier_id }}, this.checked)"></th>
+                                <th>SKU</th>
+                                <th>Product Name</th>
+                                <th>Location</th>
+                                <th>Available</th>
+                                <th>Reorder Point</th>
+                                <th>Reorder Qty</th>
+                                <th>Unit Cost</th>
+                                <th>Total Cost</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in data.items %}
+                            <tr class="table-danger">
+                                <td>
+                                    <input type="checkbox" class="form-check-input supplier-{{ supplier_id }}-item" 
+                                           name="selected_items[]" value="{{ item.id }}">
+                                </td>
+                                <td><code>{{ item.sku }}</code></td>
+                                <td>{{ item.product_name }}</td>
+                                <td>{{ item.location or '-' }}</td>
+                                <td>
+                                    <span class="badge bg-danger">{{ item.available_quantity }}</span>
+                                </td>
+                                <td>{{ item.reorder_point }}</td>
+                                <td>
+                                    <strong>{{ item.reorder_quantity }}</strong>
+                                    <input type="hidden" name="qty_{{ item.id }}" value="{{ item.reorder_quantity }}">
+                                    <input type="hidden" name="sku_{{ item.id }}" value="{{ item.sku }}">
+                                    <input type="hidden" name="cost_{{ item.id }}" value="{{ item.unit_cost }}">
+                                </td>
+                                <td>£{{ "%.2f"|format(item.unit_cost) }}</td>
+                                <td>£{{ "%.2f"|format(item.reorder_quantity * item.unit_cost) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <th colspan="7" class="text-end">Estimated Total:</th>
+                                <th>£{{ "%.2f"|format(data.items|sum(attribute='reorder_quantity')|float * data.items|map(attribute='unit_cost')|sum) }}</th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+
+        <!-- Items without supplier -->
+        {% if no_supplier_items %}
+        <div class="card mb-3">
+            <div class="card-header bg-secondary bg-opacity-10">
+                <h5 class="mb-0">
+                    <i data-feather="alert-triangle"></i> Items Without Supplier
+                </h5>
+                <small class="text-muted">These items need reordering but have no supplier assigned</small>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>SKU</th>
+                                <th>Product Name</th>
+                                <th>Location</th>
+                                <th>Available</th>
+                                <th>Reorder Point</th>
+                                <th>Reorder Qty</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in no_supplier_items %}
+                            <tr class="table-warning">
+                                <td><code>{{ item.sku }}</code></td>
+                                <td>{{ item.product_name }}</td>
+                                <td>{{ item.location or '-' }}</td>
+                                <td><span class="badge bg-warning text-dark">{{ item.available_quantity }}</span></td>
+                                <td>{{ item.reorder_point }}</td>
+                                <td>{{ item.reorder_quantity }}</td>
+                                <td>
+                                    <a href="{{ url_for('routes.warehouse_detail', sku=item.sku) }}" 
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i data-feather="edit"></i> Assign Supplier
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Global action button -->
+        {% if by_supplier %}
+        <div class="text-end">
+            <button type="submit" name="create_all" value="1" class="btn btn-lg btn-success">
+                <i data-feather="shopping-cart"></i> Create POs for All Suppliers
+            </button>
+        </div>
+        {% endif %}
+    </form>
+{% else %}
+    <div class="card">
+        <div class="card-body text-center py-5">
+            <i data-feather="check-circle" size="64" class="text-success mb-3"></i>
+            <h4>All Stock Levels Good!</h4>
+            <p class="text-muted">No items are currently below their reorder point.</p>
+            <a href="{{ url_for('routes.inventory') }}" class="btn btn-primary">
+                <i data-feather="package"></i> View Inventory
+            </a>
+        </div>
+    </div>
+{% endif %}
+
+<script>
+function toggleSupplierItems(supplierId, checked) {
+    const checkboxes = document.querySelectorAll('.supplier-' + supplierId + '-item');
+    checkboxes.forEach(cb => cb.checked = checked);
+}
+
+// Initialize feather icons
+feather.replace();
+</script>
+
+{% endblock %}

@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i data-feather="activity" class="me-2"></i>
+            Dashboard
+        </h1>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title mb-0">Total Items</h6>
+                        <h3 class="mb-0">{{ stats.total_items }}</h3>
+                    </div>
+                    <i data-feather="box" size="32"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title mb-0">Active Stores</h6>
+                        <h3 class="mb-0">{{ stats.active_stores }}</h3>
+                    </div>
+                    <i data-feather="shopping-bag" size="32"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title mb-0">Total Stores</h6>
+                        <h3 class="mb-0">{{ stats.total_stores }}</h3>
+                    </div>
+                    <i data-feather="shopping-bag" size="32"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3 mb-3">
+        <a href="{{ url_for('routes.low_stock_items') }}" class="text-decoration-none">
+            <div class="card {% if stats.low_stock_items > 0 %}bg-warning{% else %}bg-secondary{% endif %} text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="card-title mb-0">Low Stock</h6>
+                            <h3 class="mb-0">{{ stats.low_stock_items }}</h3>
+                            <small>Click to view</small>
+                        </div>
+                        <i data-feather="alert-triangle" size="32"></i>
+                    </div>
+                </div>
+            </div>
+        </a>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i data-feather="zap" class="me-2"></i>
+                    Quick Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <a href="{{ url_for('routes.inventory') }}" class="btn btn-info btn-lg w-100">
+                            <i data-feather="package" class="me-2"></i>
+                            View Products
+                        </a>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <a href="{{ url_for('routes.add_item') }}" class="btn btn-primary btn-lg w-100">
+                            <i data-feather="plus" class="me-2"></i>
+                            Add New Item
+                        </a>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <a href="{{ url_for('routes.add_store') }}" class="btn btn-success btn-lg w-100">
+                            <i data-feather="plus-circle" class="me-2"></i>
+                            Add New Store
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Products -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i data-feather="package" class="me-2"></i>
+                    Recent Products
+                </h5>
+                <a href="{{ url_for('routes.inventory') }}" class="btn btn-sm btn-outline-primary">
+                    View All
+                </a>
+            </div>
+            <div class="card-body">
+                {% if recent_items %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>SKU</th>
+                                    <th>Name</th>
+                                    <th>Quantity</th>
+                                    <th>Price</th>
+                                    <th>Amazon</th>
+                                    <th>Last Updated</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in recent_items %}
+                                <tr>
+                                    <td><code class="small">{{ item.sku }}</code></td>
+                                    <td>{{ item.name }}</td>
+                                    <td>
+                                        <span class="badge {% if item.quantity < 10 %}bg-warning text-dark{% elif item.quantity > 50 %}bg-success{% else %}bg-secondary{% endif %}">
+                                            {{ item.quantity }}
+                                        </span>
+                                    </td>
+                                    <td>£{{ "%.2f"|format(item.price) }}</td>
+                                    <td>
+                                        {% if item.asin %}
+                                            <div class="small">
+                                                <div><strong>ASIN:</strong> <code>{{ item.asin }}</code></div>
+                                                {% if item.fnsku %}
+                                                    <div class="text-muted"><strong>FNSKU:</strong> <code>{{ item.fnsku }}</code></div>
+                                                {% endif %}
+                                            </div>
+                                        {% else %}
+                                            <span class="text-muted small">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {{ item.updated_at.strftime('%m/%d %H:%M') if item.updated_at else 'Unknown' }}
+                                        </small>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i data-feather="package" size="48" class="text-muted mb-3"></i>
+                        <p class="text-muted">No products imported yet</p>
+                        <p class="small text-muted">Products will appear here once stores sync their inventory</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Sync Activity -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i data-feather="refresh-cw" class="me-2"></i>
+                    Recent Sync Activity
+                </h5>
+                <button class="btn btn-sm btn-outline-secondary" onclick="refreshSyncStatus()">
+                    <i data-feather="refresh-cw" class="me-1"></i>
+                    Refresh
+                </button>
+            </div>
+            <div class="card-body">
+                {% if recent_logs %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Store</th>
+                                    <th>Status</th>
+                                    <th>Items Synced</th>
+                                    <th>Message</th>
+                                    <th>Time</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for log in recent_logs %}
+                                <tr>
+                                    <td>{{ log.store.name if log.store else 'Unknown' }}</td>
+                                    <td>
+                                        {% if log.status == 'completed' %}
+                                            <span class="badge bg-success">{{ log.status.title() }}</span>
+                                        {% elif log.status == 'failed' %}
+                                            <span class="badge bg-danger">{{ log.status.title() }}</span>
+                                        {% elif log.status == 'started' %}
+                                            <span class="badge bg-info">{{ log.status.title() }}</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ log.status.title() }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ log.items_synced or 0 }}</td>
+                                    <td>{{ log.message or 'No message' }}</td>
+                                    <td>
+                                        <small class="text-muted">
+                                            {{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') if log.created_at else 'Unknown' }}
+                                        </small>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i data-feather="inbox" size="48" class="text-muted mb-3"></i>
+                        <p class="text-muted">No sync activity yet</p>
+                        <p class="small text-muted">Sync logs will appear here once stores start syncing</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Auto-refresh sync status every 30 seconds
+    setInterval(function() {
+        refreshSyncStatus();
+    }, 30000);
+    
+    function refreshSyncStatus() {
+        fetch('/api/sync-status')
+            .then(response => response.json())
+            .then(data => {
+                updateSyncStatusDisplay(data);
+            })
+            .catch(error => {
+                console.error('Error fetching sync status:', error);
+            });
+    }
+    
+    function updateSyncStatusDisplay(stores) {
+        const statusElement = document.getElementById('sync-status');
+        if (stores && stores.length > 0) {
+            const syncingStores = stores.filter(store => store.sync_status === 'syncing').length;
+            const errorStores = stores.filter(store => store.sync_status === 'error').length;
+            
+            let statusText = '';
+            let badgeClass = '';
+            
+            if (syncingStores > 0) {
+                statusText = `${syncingStores} Syncing`;
+                badgeClass = 'bg-warning';
+            } else if (errorStores > 0) {
+                statusText = `${errorStores} Error(s)`;
+                badgeClass = 'bg-danger';
+            } else {
+                statusText = 'All Synced';
+                badgeClass = 'bg-success';
+            }
+            
+            statusElement.innerHTML = `Sync Status: <span class="badge ${badgeClass}">${statusText}</span>`;
+        }
+    }
+    
+    // Initial sync status check
+    refreshSyncStatus();
+</script>
+{% endblock %}

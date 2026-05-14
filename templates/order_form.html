@@ -1,0 +1,102 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ 'Edit' if order else 'New' }} Order - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="mb-4">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('routes.stores') }}">Orders</a></li>
+                <li class="breadcrumb-item active">New Order</li>
+            </ol>
+        </nav>
+        <h1 class="h3">Create New Order</h1>
+    </div>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header">Order Details</div>
+                    <div class="card-body">
+                        <div class="row mb-3">
+                            <div class="col-md-8">
+                                <label class="form-label">Customer <span class="text-danger">*</span></label>
+                                <select name="customer_id" class="form-select" required>
+                                    <option value="">Select a customer...</option>
+                                    {% for customer in customers %}
+                                    <option value="{{ customer.id }}" 
+                                            {% if request.args.get('customer_id')|int == customer.id %}selected{% endif %}>
+                                        {{ customer.name }}{% if customer.company_name %} ({{ customer.company_name }}){% endif %}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Tax Rate (%)</label>
+                                <input type="number" name="tax_rate" class="form-control" 
+                                       value="20" step="0.1" min="0" max="100">
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Notes</label>
+                            <textarea name="notes" class="form-control" rows="3"
+                                      placeholder="Any special instructions or notes for this order"></textarea>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-lg-4">
+                <div class="card">
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary btn-lg">
+                                <i data-feather="plus" class="me-1"></i>Create Order
+                            </button>
+                            <a href="{{ url_for('routes.stores') }}" class="btn btn-outline-secondary">
+                                Cancel
+                            </a>
+                        </div>
+                        <hr>
+                        <p class="text-muted small mb-0">
+                            After creating the order, you can add items and process payment.
+                        </p>
+                    </div>
+                </div>
+                
+                <div class="card mt-3">
+                    <div class="card-header">Quick Add Customer</div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-2">Need to add a new customer first?</p>
+                        <a href="{{ url_for('routes.customer_add') }}" class="btn btn-outline-primary btn-sm w-100">
+                            <i data-feather="user-plus" class="me-1"></i>Add Customer
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    feather.replace();
+</script>
+{% endblock %}

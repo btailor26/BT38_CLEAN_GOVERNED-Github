@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BT38 Amazon Setup - One Click</title>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/feather-icons"></script>
+    <style>
+        .big-button {
+            padding: 2rem;
+            font-size: 1.8rem;
+            font-weight: bold;
+            border-radius: 1rem;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .credential-box {
+            background: #2d3748;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            font-family: monospace;
+            font-size: 0.9rem;
+            word-break: break-all;
+            border: 2px solid #4a5568;
+        }
+        .step-card {
+            border-left: 4px solid #48bb78;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                
+                <!-- Header -->
+                <div class="text-center mb-5">
+                    <h1 class="display-4">🚀 BT38 Amazon Setup</h1>
+                    <p class="lead text-muted">One click to activate your Amazon integration</p>
+                </div>
+
+                <!-- Flash Messages -->
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                    <div class="alert alert-{{ 'danger' if category == 'error' else category }} alert-dismissible fade show">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    {% endfor %}
+                {% endif %}
+                {% endwith %}
+
+                <!-- OAuth Success Message -->
+                {% if amazon_authorized and refresh_token %}
+                <div class="alert alert-success alert-dismissible fade show">
+                    <h5>🎉 Amazon Authorization Successful!</h5>
+                    <p class="mb-0">Your refresh token has been obtained. Saving to BT38 store...</p>
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+                {% endif %}
+
+                <!-- One-Click Setup Card -->
+                <div class="card step-card mb-4">
+                    <div class="card-header bg-success text-white">
+                        <h4 class="mb-0">
+                            <i data-feather="check-circle"></i> Ready to Activate
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info">
+                            <h5>✅ Everything is Ready!</h5>
+                            <p class="mb-0">Your new BT38 Multi-Channel Inventory app credentials are loaded and ready. Click the button below to:</p>
+                            <ol class="mt-2 mb-0">
+                                <li>Save credentials to your BT38 store</li>
+                                <li>Redirect to Amazon for authorization</li>
+                                <li>Start syncing your inventory automatically</li>
+                            </ol>
+                        </div>
+
+                        <!-- Credentials Preview -->
+                        <div class="mb-4">
+                            <h6 class="text-muted mb-3">📋 Credentials Preview:</h6>
+                            <div class="row">
+                                <div class="col-12 mb-2">
+                                    <small class="text-muted">Client ID:</small>
+                                    <div class="credential-box">{{ AMAZON_LWA_CLIENT_ID }}</div>
+                                </div>
+                                <div class="col-12 mb-2">
+                                    <small class="text-muted">Client Secret:</small>
+                                    <div class="credential-box">{{ AMAZON_LWA_CLIENT_SECRET }}</div>
+                                </div>
+                                <div class="col-12 mb-2">
+                                    <small class="text-muted">Seller ID:</small>
+                                    <div class="credential-box">A2WUN0OF9UHU23</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Test Connection Button -->
+                        <div class="d-grid mb-3">
+                            <button type="button" class="btn btn-outline-primary" id="testBtn" onclick="testConnection()">
+                                <i data-feather="shield"></i> Test Connection (Check if roles are added)
+                            </button>
+                        </div>
+                        
+                        <!-- Connection Status -->
+                        <div id="connectionStatus" class="alert" style="display: none;"></div>
+
+                        <!-- One-Click Button -->
+                        <div class="d-grid">
+                            <button type="button" class="btn btn-success big-button" id="activateBtn" onclick="activateIntegration()">
+                                <i data-feather="zap"></i> Activate Amazon Integration Now
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Manual Authorization Code Entry (if redirect fails) -->
+                <div class="card mb-4">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0">
+                            <i data-feather="clipboard"></i> Manual Authorization (If Redirect Fails)
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info">
+                            <p class="mb-0"><strong>If Amazon's authorization page gets stuck:</strong> Use this manual method to paste the authorization code.</p>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Step 1: Get Authorization URL</label>
+                            <button type="button" class="btn btn-primary w-100" id="getAuthUrlBtn" onclick="getAuthorizationUrl()">
+                                <i data-feather="link"></i> Generate Amazon Authorization Link
+                            </button>
+                        </div>
+                        
+                        <div id="authUrlSection" style="display: none;" class="mb-3">
+                            <label class="form-label fw-bold">Step 2: Click this link to authorize:</label>
+                            <div class="input-group mb-2">
+                                <input type="text" class="form-control" id="authUrlDisplay" readonly>
+                                <button class="btn btn-outline-secondary" type="button" onclick="copyAuthUrl()">
+                                    <i data-feather="copy"></i> Copy
+                                </button>
+                            </div>
+                            <a href="#" id="authUrlLink" target="_blank" class="btn btn-success w-100 mb-3">
+                                <i data-feather="external-link"></i> Open Amazon Authorization Page
+                            </a>
+                        </div>
+                        
+                        <div id="manualCodeSection" style="display: none;">
+                            <label class="form-label fw-bold">Step 3: After authorization, paste the code from the URL:</label>
+                            <div class="input-group mb-2">
+                                <input type="text" class="form-control" id="manualAuthCode" placeholder="Paste the spapi_oauth_code parameter here">
+                                <button class="btn btn-success" type="button" onclick="submitManualCode()">
+                                    <i data-feather="check"></i> Submit Code
+                                </button>
+                            </div>
+                            <small class="text-muted">Look for <code>spapi_oauth_code=</code> in your browser's address bar after Amazon redirects</small>
+                        </div>
+                        
+                        <div id="manualStatus" class="alert" style="display: none;"></div>
+                    </div>
+                </div>
+
+                <!-- What Happens Next -->
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">
+                            <i data-feather="info"></i> What Happens When You Click?
+                        </h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-4 text-center mb-3">
+                                <div class="display-1 text-success">1</div>
+                                <h6>Save Credentials</h6>
+                                <p class="small text-muted">Credentials stored securely in BT38 store</p>
+                            </div>
+                            <div class="col-md-4 text-center mb-3">
+                                <div class="display-1 text-warning">2</div>
+                                <h6>Amazon Authorization</h6>
+                                <p class="small text-muted">Redirects to Amazon to authorize the app</p>
+                            </div>
+                            <div class="col-md-4 text-center mb-3">
+                                <div class="display-1 text-primary">3</div>
+                                <h6>Start Syncing</h6>
+                                <p class="small text-muted">Inventory syncs automatically every 30 seconds</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Back Button -->
+                <div class="text-center">
+                    <a href="/" class="btn btn-secondary">
+                        <i data-feather="arrow-left"></i> Back to Dashboard
+                    </a>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        feather.replace();
+        
+        // Auto-save refresh_token if OAuth was successful
+        {% if amazon_authorized and refresh_token %}
+        (function() {
+            // Auto-save the refresh_token to the BT38 store
+            fetch('/bt38-setup/save-refresh-token', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    refresh_token: '{{ refresh_token }}'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Show success message
+                    const alertDiv = document.querySelector('.alert-success');
+                    if (alertDiv) {
+                        alertDiv.innerHTML = '<h5>✅ Setup Complete!</h5><p class="mb-0">Refresh token saved successfully. Your BT38 store is now syncing inventory every 30 seconds!</p>';
+                    }
+                    
+                    // Update button to show completion
+                    const btn = document.getElementById('activateBtn');
+                    if (btn) {
+                        btn.innerHTML = '<i data-feather="check-circle"></i> Integration Active!';
+                        btn.classList.remove('btn-success');
+                        btn.classList.add('btn-primary');
+                        btn.disabled = true;
+                        feather.replace();
+                    }
+                }
+            });
+        })();
+        {% endif %}
+        
+        function testConnection() {
+            const btn = document.getElementById('testBtn');
+            const statusDiv = document.getElementById('connectionStatus');
+            const originalHTML = btn.innerHTML;
+            
+            // Disable button and show loading
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Testing connection...';
+            
+            // Call test connection API
+            fetch('/bt38-setup/test-connection', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Show status
+                statusDiv.style.display = 'block';
+                
+                if (data.success) {
+                    statusDiv.className = 'alert alert-success';
+                    statusDiv.innerHTML = `<h6>✅ Connection Successful!</h6><p class="mb-0">${data.message}</p><p class="mt-2 mb-0"><small>Your Amazon integration is ready! Inventory will sync automatically every 30 seconds.</small></p>`;
+                } else {
+                    statusDiv.className = 'alert alert-warning';
+                    statusDiv.innerHTML = `
+                        <h6>⚠️ Connection Failed</h6>
+                        <p>${data.message}</p>
+                        <hr>
+                        <p class="mb-0"><strong>Ensure these roles are enabled:</strong></p>
+                        <ol class="small mb-0">
+                            <li>Go to <a href="https://sellercentral.amazon.co.uk/apps/develop/list" target="_blank">Seller Central → Develop Apps</a></li>
+                            <li>Click "View" on "BT38 Multi-Channel Inventory" app</li>
+                            <li>Verify these roles are checked: ✓ <strong>Inventory and Order Tracking</strong>, ✓ <strong>Amazon Fulfillment</strong></li>
+                            <li>Click "Save and exit"</li>
+                            <li>Click "Test Connection" again</li>
+                        </ol>
+                    `;
+                }
+                
+                // Reset button
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+                feather.replace();
+            })
+            .catch(error => {
+                statusDiv.style.display = 'block';
+                statusDiv.className = 'alert alert-danger';
+                statusDiv.innerHTML = `<h6>❌ Error</h6><p class="mb-0">${error}</p>`;
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+                feather.replace();
+            });
+        }
+
+        function activateIntegration() {
+            const btn = document.getElementById('activateBtn');
+            const originalHTML = btn.innerHTML;
+            
+            // Disable button and show loading
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Saving credentials...';
+            
+            // Step 1: Save credentials to BT38 store
+            fetch('/bt38-setup/save-credentials', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    client_id: '{{ AMAZON_LWA_CLIENT_ID }}',
+                    client_secret: '{{ AMAZON_LWA_CLIENT_SECRET }}',
+                    seller_id: 'A2WUN0OF9UHU23',
+                    marketplace_id: 'A1F83G8C2ARO7P'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    btn.innerHTML = '<i data-feather="check"></i> Credentials Saved! Opening Amazon...';
+                    feather.replace();
+                    
+                    // Step 2: Open Amazon authorization in new tab
+                    setTimeout(() => {
+                        const authUrl = data.auth_url;
+                        window.open(authUrl, '_blank');
+                        
+                        // Show instructions
+                        btn.innerHTML = '<i data-feather="external-link"></i> Authorize in New Tab';
+                        btn.classList.remove('btn-success');
+                        btn.classList.add('btn-warning');
+                        feather.replace();
+                        
+                        // Show completion message
+                        alert('✅ Credentials saved!\n\n📋 Next Steps:\n1. A new tab opened with Amazon authorization\n2. Click "Confirm" on Amazon\'s page\n3. You\'ll be redirected back here automatically\n4. Your BT38 store will start syncing!');
+                    }, 1000);
+                } else {
+                    alert('Error: ' + data.error);
+                    btn.innerHTML = originalHTML;
+                    btn.disabled = false;
+                    feather.replace();
+                }
+            })
+            .catch(error => {
+                alert('Error: ' + error);
+                btn.innerHTML = originalHTML;
+                btn.disabled = false;
+                feather.replace();
+            });
+        }
+        
+        // Manual authorization functions
+        function getAuthorizationUrl() {
+            const btn = document.getElementById('getAuthUrlBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generating...';
+            
+            // Save credentials first
+            fetch('/bt38-setup/save-credentials', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    client_id: '{{ AMAZON_LWA_CLIENT_ID }}',
+                    client_secret: '{{ AMAZON_LWA_CLIENT_SECRET }}',
+                    seller_id: 'A2WUN0OF9UHU23',
+                    marketplace_id: 'A1F83G8C2ARO7P'
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const authUrl = data.auth_url;
+                    
+                    // Display the URL
+                    document.getElementById('authUrlDisplay').value = authUrl;
+                    document.getElementById('authUrlLink').href = authUrl;
+                    document.getElementById('authUrlSection').style.display = 'block';
+                    document.getElementById('manualCodeSection').style.display = 'block';
+                    
+                    btn.innerHTML = '<i data-feather="check"></i> URL Generated';
+                    btn.classList.add('btn-success');
+                    feather.replace();
+                } else {
+                    alert('Error: ' + data.error);
+                    btn.innerHTML = '<i data-feather="link"></i> Generate Amazon Authorization Link';
+                    btn.disabled = false;
+                    feather.replace();
+                }
+            })
+            .catch(error => {
+                alert('Error: ' + error);
+                btn.innerHTML = '<i data-feather="link"></i> Generate Amazon Authorization Link';
+                btn.disabled = false;
+                feather.replace();
+            });
+        }
+        
+        function copyAuthUrl() {
+            const urlInput = document.getElementById('authUrlDisplay');
+            urlInput.select();
+            document.execCommand('copy');
+            alert('✅ URL copied to clipboard!');
+        }
+        
+        function submitManualCode() {
+            const code = document.getElementById('manualAuthCode').value.trim();
+            const statusDiv = document.getElementById('manualStatus');
+            
+            if (!code) {
+                alert('Please paste the authorization code first');
+                return;
+            }
+            
+            statusDiv.style.display = 'block';
+            statusDiv.className = 'alert alert-info';
+            statusDiv.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Exchanging code for tokens...';
+            
+            // Exchange code for tokens
+            fetch('/auth/amazon/manual-refresh', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    auth_code: code
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    statusDiv.className = 'alert alert-success';
+                    statusDiv.innerHTML = `
+                        <h5>✅ Authorization Successful!</h5>
+                        <p>Refresh token obtained and saved to BT38 store.</p>
+                        <p class="mb-0"><strong>Your Amazon integration is now active!</strong> Inventory will sync automatically.</p>
+                    `;
+                    
+                    // Update the activate button
+                    const activateBtn = document.getElementById('activateBtn');
+                    if (activateBtn) {
+                        activateBtn.innerHTML = '<i data-feather="check-circle"></i> Integration Active!';
+                        activateBtn.classList.remove('btn-success', 'btn-warning');
+                        activateBtn.classList.add('btn-primary');
+                        activateBtn.disabled = true;
+                        feather.replace();
+                    }
+                    
+                    // Refresh page after 3 seconds
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 3000);
+                } else {
+                    statusDiv.className = 'alert alert-danger';
+                    statusDiv.innerHTML = `<h6>❌ Error</h6><p class="mb-0">${data.error}</p>`;
+                }
+            })
+            .catch(error => {
+                statusDiv.className = 'alert alert-danger';
+                statusDiv.innerHTML = `<h6>❌ Error</h6><p class="mb-0">${error}</p>`;
+            });
+        }
+    </script>
+</body>
+</html>

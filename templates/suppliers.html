@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+
+{% block title %}Suppliers - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i data-feather="truck"></i> Suppliers</h2>
+    <a href="{{ url_for('routes.add_supplier') }}" class="btn btn-primary">
+        <i data-feather="plus"></i> Add Supplier
+    </a>
+</div>
+
+{% if suppliers %}
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>Contact Person</th>
+                        <th>Email</th>
+                        <th>Phone</th>
+                        <th>WhatsApp</th>
+                        <th>Products</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for supplier in suppliers %}
+                    <tr>
+                        <td><strong>{{ supplier.name }}</strong></td>
+                        <td>{{ supplier.contact_person or '-' }}</td>
+                        <td>
+                            {% if supplier.email %}
+                            <a href="mailto:{{ supplier.email }}">{{ supplier.email }}</a>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td>{{ supplier.phone or '-' }}</td>
+                        <td>
+                            {% if supplier.whatsapp_number %}
+                            <a href="https://wa.me/{{ supplier.whatsapp_number }}" target="_blank">{{ supplier.whatsapp_number }}</a>
+                            {% else %}
+                            -
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="badge bg-secondary">{{ supplier.warehouse_items | length }}</span>
+                        </td>
+                        <td>
+                            <a href="{{ url_for('routes.edit_supplier', supplier_id=supplier.id) }}" 
+                               class="btn btn-sm btn-outline-primary" title="Edit">
+                                <i data-feather="edit-2"></i>
+                            </a>
+                            <form method="POST" action="{{ url_for('routes.delete_supplier', supplier_id=supplier.id) }}" 
+                                  class="d-inline" onsubmit="return confirm('Delete {{ supplier.name }}?');">
+                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
+                                    <i data-feather="trash-2"></i>
+                                </button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% else %}
+<div class="text-center py-5">
+    <i data-feather="truck" style="width: 64px; height: 64px;" class="text-muted mb-3"></i>
+    <p class="text-muted">No suppliers yet. Add your first supplier to get started!</p>
+    <a href="{{ url_for('routes.add_supplier') }}" class="btn btn-primary mt-2">
+        <i data-feather="plus"></i> Add Supplier
+    </a>
+</div>
+{% endif %}
+
+<script>
+    feather.replace();
+</script>
+{% endblock %}

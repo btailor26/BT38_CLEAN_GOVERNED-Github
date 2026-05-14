@@ -1,0 +1,37 @@
+{
+  "name": "BT38 Inventory Scanner",
+  "short_name": "BT38 Scan",
+  "description": "Mobile inventory scanning and stock management",
+  "start_url": "/mobile/scan",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#0d6efd",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/static/icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Quick Scan",
+      "url": "/mobile/scan",
+      "icons": [{"src": "/static/icons/icon-192.png", "sizes": "192x192"}]
+    },
+    {
+      "name": "Bulk Scan",
+      "url": "/mobile/bulk-scan",
+      "icons": [{"src": "/static/icons/icon-192.png", "sizes": "192x192"}]
+    }
+  ]
+}

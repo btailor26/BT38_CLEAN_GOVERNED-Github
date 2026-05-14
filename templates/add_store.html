@@ -1,0 +1,672 @@
+{% extends "base.html" %}
+
+{% block title %}Add Store - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex align-items-center mb-4">
+            <a href="{{ url_for('routes.stores') }}" class="btn btn-outline-secondary me-3">
+                <i data-feather="arrow-left"></i>
+            </a>
+            <h1 class="mb-0">
+                <i data-feather="plus" class="me-2"></i>
+                Add New Store
+            </h1>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Store Details</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="addStoreForm">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="name" class="form-label">
+                                <i data-feather="tag" class="me-1"></i>
+                                Store Name *
+                            </label>
+                            <input type="text" class="form-control" id="name" name="name" required>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="platform" class="form-label">
+                                <i data-feather="shopping-bag" class="me-1"></i>
+                                Platform *
+                            </label>
+                            <select class="form-select" id="platform" name="platform" required>
+                                <option value="">Select Platform</option>
+                                <option value="Amazon">Amazon</option>
+                                <option value="eBay">eBay</option>
+                                <option value="Shopify">Shopify</option>
+                                <option value="WooCommerce">WooCommerce</option>
+                                <option value="Etsy">Etsy</option>
+                                <option value="Facebook Marketplace">Facebook Marketplace</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="api_endpoint" class="form-label">
+                            <i data-feather="link" class="me-1"></i>
+                            API Endpoint
+                        </label>
+                        <input type="url" class="form-control" id="api_endpoint" name="api_endpoint" 
+                               placeholder="https://api.example.com/v1/">
+                        <div class="form-text">The base URL for the store's API</div>
+                    </div>
+                    
+                    <!-- Generic API Credentials (for non-Amazon platforms) -->
+                    <div class="mb-3" id="genericCredentials">
+                        <label for="api_key" class="form-label">
+                            <i data-feather="key" class="me-1"></i>
+                            API Credentials
+                        </label>
+                        <div class="input-group">
+                            <textarea class="form-control" id="api_key" name="api_key" rows="3"
+                                      placeholder="Enter API credentials (JSON format for Amazon/eBay)"></textarea>
+                            <button type="button" class="btn btn-outline-secondary" id="toggleApiKey">
+                                <i data-feather="eye"></i>
+                            </button>
+                        </div>
+                        <div class="form-text" id="api_help_text">API key or credentials for authentication with the store platform</div>
+                    </div>
+
+                    <!-- Amazon Manual Credentials Form -->
+                    <div id="amazonCredentials" style="display: none;">
+                        <h6><i data-feather="shopping-cart" class="me-1"></i> Amazon SP-API Credentials</h6>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="refresh_token" class="form-label">SP-API Refresh Token *</label>
+                                <input type="text" class="form-control" id="refresh_token" name="refresh_token" 
+                                       placeholder="Atzr|IwEBII...">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="lwa_app_id" class="form-label">LWA Client ID *</label>
+                                <input type="text" class="form-control" id="lwa_app_id" name="lwa_app_id" 
+                                       placeholder="YOUR_AMAZON_LWA_CLIENT_ID">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="lwa_client_secret" class="form-label">LWA Client Secret *</label>
+                                <input type="password" class="form-control" id="lwa_client_secret" name="lwa_client_secret" 
+                                       placeholder="YOUR_AMAZON_LWA_CLIENT_SECRET">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="seller_id" class="form-label">Seller ID *</label>
+                                <input type="text" class="form-control" id="seller_id" name="seller_id" 
+                                       placeholder="A1234567890123">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="marketplace_id" class="form-label">Marketplace ID</label>
+                                <input type="text" class="form-control" id="marketplace_id" name="marketplace_id" 
+                                       value="A1F83G8C2ARO7P" placeholder="A1F83G8C2ARO7P (UK)">
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label for="region" class="form-label">Region</label>
+                                <select class="form-select" id="region" name="region">
+                                    <option value="US">United States (NA)</option>
+                                    <option value="UK" selected>United Kingdom (EU)</option>
+                                    <option value="CA">Canada (NA)</option>
+                                    <option value="DE">Germany (EU)</option>
+                                    <option value="FR">France (EU)</option>
+                                    <option value="IT">Italy (EU)</option>
+                                    <option value="ES">Spain (EU)</option>
+                                    <option value="JP">Japan (FE)</option>
+                                    <option value="AU">Australia (FE)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                        <div class="mt-2" id="amazonHelp" style="display: none;">
+                            <div class="card border-info">
+                                <div class="card-body py-2">
+                                    <small class="text-muted">
+                                        <strong>Easy Setup Options:</strong>
+                                    </small>
+                                    <div class="mt-2">
+                                        <button type="button" class="btn btn-info btn-sm me-2" id="authorizeAmazon">
+                                            <i data-feather="link" class="me-1"></i>
+                                            Authorize with Amazon
+                                        </button>
+                                        <button type="button" class="btn btn-success btn-sm me-2" id="autoFillCredentials" style="display: none;">
+                                            <i data-feather="download" class="me-1"></i>
+                                            Auto-fill Credentials
+                                        </button>
+                                        <button type="button" class="btn btn-link btn-sm p-0" id="showAmazonTemplate">
+                                            Manual template
+                                        </button>
+                                    </div>
+                                    <div class="mt-2" id="authStatus" style="display: none;">
+                                        <small class="text-success">
+                                            <i data-feather="check-circle" class="me-1"></i>
+                                            Amazon account authorized! Click "Auto-fill Credentials" to complete setup.
+                                        </small>
+                                    </div>
+                                    <div class="mt-1">
+                                        <small class="text-muted">
+                                            Or manually enter JSON format with: refresh_token, lwa_app_id, lwa_client_secret, seller_id
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-2" id="ebayHelp" style="display: none;">
+                            <small class="text-muted">
+                                For eBay, use JSON format with: app_id, cert_id, dev_id, access_token, user_token
+                                <br>
+                                <button type="button" class="btn btn-link btn-sm p-0" id="showEbayTemplate">
+                                    Show template
+                                </button>
+                            </small>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="is_active" name="is_active" checked>
+                            <label class="form-check-label" for="is_active">
+                                <i data-feather="power" class="me-1"></i>
+                                Store is Active
+                            </label>
+                            <div class="form-text">Active stores will be included in automatic sync operations</div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="auto_push_enabled" name="auto_push_enabled" checked>
+                            <label class="form-check-label" for="auto_push_enabled">
+                                <i data-feather="refresh-cw" class="me-1"></i>
+                                Enable Automatic Stock Push
+                            </label>
+                            <div class="form-text">Automatically sync inventory changes to this store when quantities are updated</div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-info" id="connectionStatus" style="display: none;">
+                        <i data-feather="info" class="me-1"></i>
+                        <span id="statusMessage">Testing connection...</span>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('routes.stores') }}" class="btn btn-secondary">
+                            <i data-feather="x" class="me-1"></i>
+                            Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary" id="submitBtn">
+                            <span id="submitText">
+                                <i data-feather="save" class="me-1"></i>
+                                Add Store
+                            </span>
+                            <span id="submitLoading" style="display: none;">
+                                <div class="spinner-border spinner-border-sm me-1" role="status"></div>
+                                Testing Connection...
+                            </span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i data-feather="info" class="me-1"></i>
+                    Platform Information
+                </h6>
+            </div>
+            <div class="card-body">
+                <div id="platformInfo" class="small text-muted">
+                    Select a platform to see integration details.
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i data-feather="help-circle" class="me-1"></i>
+                    Tips
+                </h6>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled small">
+                    <li class="mb-2">
+                        <i data-feather="check" class="text-success me-2"></i>
+                        Keep API keys secure and don't share them
+                    </li>
+                    <li class="mb-2">
+                        <i data-feather="check" class="text-success me-2"></i>
+                        Test connectivity before making the store active
+                    </li>
+                    <li class="mb-2">
+                        <i data-feather="check" class="text-success me-2"></i>
+                        Use descriptive store names for easy identification
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Platform information
+    const platformInfo = {
+        'Amazon': 'Amazon SP-API integration. Requires seller account with SP-API access. Use JSON format for credentials.',
+        'eBay': 'eBay Trading API integration. Requires developer account and authentication tokens. Use JSON format for credentials.',
+        'Shopify': 'Shopify Admin API integration. Requires Shopify store and API credentials.',
+        'WooCommerce': 'WooCommerce REST API integration. Requires consumer key and secret.',
+        'Etsy': 'Etsy Open API integration. Requires Etsy developer account and OAuth tokens.',
+        'Facebook Marketplace': 'Facebook Marketing API integration for catalog management.',
+        'Other': 'Custom integration - specify your own API endpoint and authentication.'
+    };
+    
+    // Update platform information when selection changes
+    const platformSelect = document.getElementById('platform');
+    if (platformSelect) {
+        platformSelect.addEventListener('change', function() {
+            const platformInfoElement = document.getElementById('platformInfo');
+            if (platformInfoElement) {
+                const info = platformInfo[this.value] || 'Select a platform to see integration details.';
+                platformInfoElement.textContent = info;
+            }
+            
+            // Show platform-specific help
+            const amazonHelp = document.getElementById('amazonHelp');
+            const ebayHelp = document.getElementById('ebayHelp');
+            const apiHelpText = document.getElementById('api_help_text');
+            const testConnectionBtn = document.getElementById('testConnection');
+            
+            // Hide all help sections first
+            if (amazonHelp) amazonHelp.style.display = 'none';
+            if (ebayHelp) ebayHelp.style.display = 'none';
+            if (testConnectionBtn) testConnectionBtn.style.display = 'none';
+            
+            if (this.value === 'Amazon') {
+                if (amazonHelp) amazonHelp.style.display = 'block';
+                if (testConnectionBtn) testConnectionBtn.style.display = 'block';
+                // Show Amazon credential form, hide generic form
+                const amazonCredentials = document.getElementById('amazonCredentials');
+                const genericCredentials = document.getElementById('genericCredentials');
+                if (amazonCredentials) amazonCredentials.style.display = 'block';
+                if (genericCredentials) genericCredentials.style.display = 'none';
+                if (apiHelpText) apiHelpText.textContent = 'Amazon SP-API credentials in JSON format';
+            } else if (this.value === 'eBay') {
+                if (ebayHelp) ebayHelp.style.display = 'block';
+                if (testConnectionBtn) testConnectionBtn.style.display = 'block';
+                // Show generic form, hide Amazon form
+                const amazonCredentials = document.getElementById('amazonCredentials');
+                const genericCredentials = document.getElementById('genericCredentials');
+                if (amazonCredentials) amazonCredentials.style.display = 'none';
+                if (genericCredentials) genericCredentials.style.display = 'block';
+                if (apiHelpText) apiHelpText.textContent = 'eBay Trading API credentials in JSON format';
+            } else {
+                // Show generic form, hide Amazon form (for Shopify, WooCommerce, etc.)
+                const amazonCredentials = document.getElementById('amazonCredentials');
+                const genericCredentials = document.getElementById('genericCredentials');
+                if (amazonCredentials) amazonCredentials.style.display = 'none';
+                if (genericCredentials) genericCredentials.style.display = 'block';
+                if (apiHelpText) apiHelpText.textContent = 'API key or token for authentication with the store platform';
+            }
+        });
+    }
+    
+    // Toggle API key visibility
+    const toggleApiKeyBtn = document.getElementById('toggleApiKey');
+    if (toggleApiKeyBtn) {
+        toggleApiKeyBtn.addEventListener('click', function() {
+            const apiKeyField = document.getElementById('api_key');
+            const icon = this.querySelector('i');
+            
+            if (apiKeyField && icon) {
+                if (apiKeyField.style.filter === 'blur(3px)') {
+                    apiKeyField.style.filter = 'none';
+                    icon.setAttribute('data-feather', 'eye-off');
+                } else {
+                    apiKeyField.style.filter = 'blur(3px)';
+                    icon.setAttribute('data-feather', 'eye');
+                }
+                
+                if (typeof feather !== 'undefined') {
+                    feather.replace();
+                }
+            }
+        });
+    }
+    
+    // Show Amazon credential template
+    const showAmazonTemplateBtn = document.getElementById('showAmazonTemplate');
+    if (showAmazonTemplateBtn) {
+        showAmazonTemplateBtn.addEventListener('click', function() {
+        const template = {
+            "refresh_token": "YOUR_REFRESH_TOKEN",
+            "lwa_app_id": "YOUR_LWA_APP_ID", 
+            "lwa_client_secret": "YOUR_LWA_CLIENT_SECRET",
+            "seller_id": "YOUR_SELLER_ID",
+            "marketplace_id": "A1PA6795UKMFR9",
+            "region": "DE"
+        };
+        
+        const apiKeyField = document.getElementById('api_key');
+        if (apiKeyField) {
+            apiKeyField.value = JSON.stringify(template, null, 2);
+            
+            // Show region info
+            alert('Template shows German marketplace. Change "marketplace_id" and "region" for other countries:\n\n' +
+                  'UK: A1F83G8C2ARO7P, region: "UK"\n' +
+                  'DE: A1PA6795UKMFR9, region: "DE"\n' +
+                  'FR: A13V1IB3VIYZZH, region: "FR"\n' +
+                  'IT: APJ6JRA9NG5V4, region: "IT"\n' +
+                  'ES: A1RKKUPIHCS9HS, region: "ES"\n' +
+                  'US: ATVPDKIKX0DER, region: "US"');
+        }
+        });
+    }
+    
+    // Show eBay credential template
+    const showEbayTemplateBtn = document.getElementById('showEbayTemplate');
+    if (showEbayTemplateBtn) {
+        showEbayTemplateBtn.addEventListener('click', function() {
+        const template = {
+            "app_id": "YOUR_APP_ID",
+            "cert_id": "YOUR_CERT_ID",
+            "dev_id": "YOUR_DEV_ID",
+            "access_token": "YOUR_ACCESS_TOKEN",
+            "refresh_token": "YOUR_REFRESH_TOKEN",
+            "user_token": "YOUR_USER_TOKEN",
+            "site_id": "0",
+            "sandbox": true
+        };
+        
+        const apiKeyField = document.getElementById('api_key');
+        if (apiKeyField) {
+            apiKeyField.value = JSON.stringify(template, null, 2);
+        }
+        });
+    }
+    
+    // Test connection functionality
+    const testConnectionBtn = document.getElementById('testConnection');
+    if (testConnectionBtn) {
+        testConnectionBtn.addEventListener('click', function() {
+        const platform = document.getElementById('platform').value;
+        const credentials = document.getElementById('api_key').value.trim();
+        const statusDiv = document.getElementById('connectionStatus');
+        const statusMessage = document.getElementById('statusMessage');
+        const testBtn = this;
+        
+        if (!platform || !credentials) {
+            showStatus('Please select a platform and enter credentials', 'warning');
+            return;
+        }
+        
+        if (platform !== 'Amazon' && platform !== 'eBay') {
+            showStatus('Connection testing is only available for Amazon and eBay platforms', 'warning');
+            return;
+        }
+        
+        // Disable button and show testing status
+        testBtn.disabled = true;
+        testBtn.innerHTML = '<i data-feather="loader" class="me-1"></i>Testing...';
+        feather.replace();
+        showStatus('Testing connection to ' + platform + '...', 'info');
+        
+        // Make AJAX request to test connection
+        fetch('/api/test-connection', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                platform: platform.toLowerCase(),
+                credentials: credentials
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showStatus(data.message, 'success');
+            } else {
+                showStatus(data.error || 'Connection test failed', 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error testing connection:', error);
+            showStatus('Error testing connection: ' + error.message, 'danger');
+        })
+        .finally(() => {
+            // Re-enable button
+            testBtn.disabled = false;
+            testBtn.innerHTML = '<i data-feather="wifi" class="me-1"></i>Test Connection';
+            if (typeof feather !== 'undefined') {
+                feather.replace();
+            }
+        });
+        });
+    }
+    
+    function showStatus(message, type) {
+        const statusDiv = document.getElementById('connectionStatus');
+        const statusMessage = document.getElementById('statusMessage');
+        
+        statusDiv.className = 'alert alert-' + type;
+        statusMessage.textContent = message;
+        statusDiv.style.display = 'block';
+        
+        // Auto-hide success messages after 5 seconds
+        if (type === 'success') {
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 5000);
+        }
+    }
+    
+    // Form validation
+    const addStoreForm = document.getElementById('addStoreForm');
+    if (addStoreForm) {
+        addStoreForm.addEventListener('submit', function(e) {
+        const name = document.getElementById('name').value.trim();
+        const platform = document.getElementById('platform').value;
+        
+        if (!name || !platform) {
+            e.preventDefault();
+            alert('Please fill in all required fields');
+            return;
+        }
+        });
+    }
+    
+    // Initialize API key field styling
+    const apiKeyField = document.getElementById('api_key');
+    if (apiKeyField) {
+        apiKeyField.style.filter = 'blur(3px)';
+    }
+    
+    // Amazon OAuth functionality
+    const authorizeBtn = document.getElementById('authorizeAmazon');
+    if (authorizeBtn) {
+        authorizeBtn.addEventListener('click', function() {
+            const btn = this;
+            const originalText = btn.innerHTML;
+            
+            // Show loading state
+            btn.disabled = true;
+            btn.innerHTML = '<i data-feather="loader" class="me-1"></i>Starting authorization...';
+            
+            // Get OAuth URL from server
+            fetch('/auth/amazon/start')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.auth_url) {
+                        // Open OAuth flow in popup window
+                        const popup = window.open(
+                            data.auth_url,
+                            'amazon-oauth',
+                            'width=600,height=700,scrollbars=yes,resizable=yes'
+                        );
+                        
+                        // Monitor popup for closure
+                        const checkClosed = setInterval(function() {
+                            if (popup.closed) {
+                                clearInterval(checkClosed);
+                                // Reset button
+                                btn.disabled = false;
+                                btn.innerHTML = originalText;
+                                feather.replace(); // Re-render icons
+                                
+                                // Check if authorization was successful
+                                checkAuthorizationStatus();
+                            }
+                        }, 1000);
+                    } else {
+                        throw new Error(data.error || 'Failed to start authorization');
+                    }
+                })
+                .catch(error => {
+                    console.error('OAuth error:', error);
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                    feather.replace(); // Re-render icons
+                    alert('Authorization failed: ' + error.message);
+                });
+        });
+    }
+    
+    // Check authorization status after popup closes
+    function checkAuthorizationStatus() {
+        fetch('/auth/amazon/status')
+            .then(response => response.json())
+            .then(data => {
+                if (data.authorized) {
+                    // Show auto-fill button
+                    const autoFillBtn = document.getElementById('autoFillCredentials');
+                    if (autoFillBtn) {
+                        autoFillBtn.style.display = 'inline-block';
+                    }
+                    
+                    // Show success message
+                    const alertContainer = document.querySelector('.container-fluid');
+                    if (alertContainer) {
+                        const alert = document.createElement('div');
+                        alert.className = 'alert alert-success alert-dismissible fade show mt-3';
+                        alert.innerHTML = `
+                            <i data-feather="check-circle" class="me-2"></i>
+                            Amazon authorization successful! You can now auto-fill credentials.
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        `;
+                        alertContainer.insertBefore(alert, alertContainer.firstChild);
+                        feather.replace();
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Status check error:', error);
+            });
+    }
+    
+    // Auto-fill credentials from OAuth tokens
+    const autoFillBtn = document.getElementById('autoFillCredentials');
+    if (autoFillBtn) {
+        autoFillBtn.addEventListener('click', function() {
+        const region = prompt('Enter your Amazon marketplace region (UK, DE, FR, IT, ES, US):', 'DE');
+        const sellerId = prompt('Enter your Amazon Seller ID:', '');
+        
+        if (region && sellerId) {
+            fetch('/auth/amazon/auto-fill', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    region: region.toUpperCase(),
+                    seller_id: sellerId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('api_key').value = data.credentials;
+                    document.getElementById('api_key').style.filter = 'none';
+                    showStatus('Amazon credentials auto-filled successfully!', 'success');
+                } else {
+                    showStatus(data.error || 'Failed to auto-fill credentials', 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Error auto-filling credentials:', error);
+                showStatus('Error auto-filling credentials: ' + error.message, 'danger');
+            });
+        }
+        });
+    }
+    
+    // Check if user returned from Amazon OAuth
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('amazon_authorized') === 'true') {
+        const authStatus = document.getElementById('authStatus');
+        const autoFillBtn = document.getElementById('autoFillCredentials');
+        
+        if (authStatus && autoFillBtn) {
+            authStatus.style.display = 'block';
+            autoFillBtn.style.display = 'inline-block';
+            if (typeof feather !== 'undefined') {
+                feather.replace();
+            }
+        }
+    }
+    
+    // Show loading state when form is submitted
+    const storeForm = document.querySelector('form');
+    if (storeForm) {
+        storeForm.addEventListener('submit', function() {
+            const submitBtn = document.getElementById('submitBtn');
+            const submitText = document.getElementById('submitText');
+            const submitLoading = document.getElementById('submitLoading');
+            
+            if (submitBtn && submitText && submitLoading) {
+                // Show loading state
+                submitBtn.disabled = true;
+                submitText.style.display = 'none';
+                submitLoading.style.display = 'inline-block';
+                
+                // Add loading text based on platform
+                const platform = document.getElementById('platform');
+                const apiKey = document.getElementById('api_key');
+                
+                if (platform && apiKey) {
+                    const platformValue = platform.value.toLowerCase();
+                    const apiKeyValue = apiKey.value.trim();
+                    
+                    if (platformValue === 'amazon' && apiKeyValue) {
+                        submitLoading.innerHTML = '<div class="spinner-border spinner-border-sm me-1" role="status"></div>Connecting to Amazon...';
+                    } else if (platformValue === 'ebay' && apiKeyValue) {
+                        submitLoading.innerHTML = '<div class="spinner-border spinner-border-sm me-1" role="status"></div>Connecting to eBay...';
+                    } else {
+                        submitLoading.innerHTML = '<div class="spinner-border spinner-border-sm me-1" role="status"></div>Adding Store...';
+                    }
+                }
+            }
+        });
+    }
+    
+    // Focus on first input
+    const nameField = document.getElementById('name');
+    if (nameField) {
+        nameField.focus();
+    }
+</script>
+{% endblock %}

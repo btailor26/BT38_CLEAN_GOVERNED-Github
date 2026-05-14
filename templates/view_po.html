@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+
+{% block title %}Purchase Order {{ po.po_number }} - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i data-feather="file-text"></i> Purchase Order {{ po.po_number }}</h2>
+    <div>
+        {% if po.supplier and po.supplier.email and po.status in ['draft', 'sent'] %}
+        <a href="{{ url_for('routes.send_po_to_supplier', po_id=po.id) }}" class="btn btn-primary me-2" 
+           onclick="return confirm('Send this purchase order to {{ po.supplier.name }} at {{ po.supplier.email }}?')">
+            <i data-feather="mail"></i> Send to Supplier
+        </a>
+        {% endif %}
+        {% if po.status in ['draft', 'sent', 'partially_received'] %}
+        <a href="{{ url_for('routes.receive_purchase_order', po_id=po.id) }}" class="btn btn-success me-2">
+            <i data-feather="check-circle"></i> Receive Items
+        </a>
+        {% endif %}
+        <a href="{{ url_for('routes.purchase_orders') }}" class="btn btn-secondary">
+            <i data-feather="arrow-left"></i> Back to List
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5>Purchase Order Details</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <strong>Supplier:</strong><br>
+                        {{ po.supplier.name if po.supplier else 'N/A' }}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <strong>Status:</strong><br>
+                        {% if po.status == 'draft' %}
+                        <span class="badge bg-secondary">Draft</span>
+                        {% elif po.status == 'sent' %}
+                        <span class="badge bg-info">Sent</span>
+                        {% elif po.status == 'partially_received' %}
+                        <span class="badge bg-warning">Partially Received</span>
+                        {% elif po.status == 'received' %}
+                        <span class="badge bg-success">Received</span>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <strong>Order Date:</strong><br>
+                        {{ po.order_date.strftime('%Y-%m-%d') }}
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <strong>Expected Date:</strong><br>
+                        {{ po.expected_date.strftime('%Y-%m-%d') if po.expected_date else 'Not specified' }}
+                    </div>
+                    {% if po.notes %}
+                    <div class="col-12 mb-3">
+                        <strong>Notes:</strong><br>
+                        {{ po.notes }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h5>Line Items</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th style="width: 80px;">Image</th>
+                                <th>SKU</th>
+                                <th>Product Name</th>
+                                <th>Ordered</th>
+                                <th>Received</th>
+                                <th>Damaged</th>
+                                <th>Pending</th>
+                                <th>Unit Cost</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item_data in items_with_names %}
+                            <tr>
+                                <td>
+                                    {% if item_data.image_url %}
+                                        <img src="{{ item_data.image_url }}" alt="{{ item_data.item.sku }}" 
+                                             class="img-thumbnail" style="max-width: 60px; max-height: 60px; object-fit: cover;">
+                                    {% else %}
+                                        <div class="text-center text-muted" style="width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; border: 1px dashed #ccc; border-radius: 4px;">
+                                            <i data-feather="image" size="24"></i>
+                                        </div>
+                                    {% endif %}
+                                </td>
+                                <td><code>{{ item_data.item.sku }}</code></td>
+                                <td>{{ item_data.actual_name }}</td>
+                                <td>{{ item_data.item.ordered_quantity }}</td>
+                                <td><span class="badge bg-success">{{ item_data.item.received_quantity }}</span></td>
+                                <td><span class="badge bg-danger">{{ item_data.item.damaged_quantity }}</span></td>
+                                <td><span class="badge bg-warning">{{ item_data.item.pending_quantity }}</span></td>
+                                <td>£{{ '%.2f' | format(item_data.item.unit_cost) }}</td>
+                                <td>£{{ '%.2f' | format(item_data.item.total_cost) }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5>Summary</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <strong>Total Items:</strong> {{ po.items | length }}
+                </div>
+                <div class="mb-2">
+                    <strong>Total Units Ordered:</strong> {{ po.items | sum(attribute='ordered_quantity') }}
+                </div>
+                <div class="mb-2">
+                    <strong>Total Units Received:</strong> {{ po.items | sum(attribute='received_quantity') }}
+                </div>
+                <div class="mb-2">
+                    <strong>Total Amount:</strong> £{{ '%.2f' | format(po.total_amount) }}
+                </div>
+            </div>
+        </div>
+        
+        {% if po.supplier %}
+        <div class="card">
+            <div class="card-header">
+                <h5>Supplier Contact</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <strong>Contact Person:</strong><br>
+                    {{ po.supplier.contact_person or 'N/A' }}
+                </div>
+                {% if po.supplier.email %}
+                <div class="mb-2">
+                    <strong>Email:</strong><br>
+                    <a href="mailto:{{ po.supplier.email }}">{{ po.supplier.email }}</a>
+                </div>
+                {% endif %}
+                {% if po.supplier.phone %}
+                <div class="mb-2">
+                    <strong>Phone:</strong><br>
+                    {{ po.supplier.phone }}
+                </div>
+                {% endif %}
+                {% if po.supplier.whatsapp_number %}
+                <div class="mb-2">
+                    <strong>WhatsApp:</strong><br>
+                    <a href="https://wa.me/{{ po.supplier.whatsapp_number }}" target="_blank">{{ po.supplier.whatsapp_number }}</a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+        
+        <div class="card mt-3">
+            <div class="card-header bg-primary text-white">
+                <h5><i data-feather="camera"></i> Invoice OCR Scanner</h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted small">Upload a photo of your supplier invoice to automatically extract details</p>
+                
+                <form id="ocrForm" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <input type="file" class="form-control" id="invoice_image" name="invoice_image" 
+                               accept="image/*,application/pdf" required>
+                        <div class="form-text">Supported: JPG, PNG, PDF</div>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-sm w-100">
+                        <i data-feather="upload"></i> Scan Invoice
+                    </button>
+                </form>
+                
+                <div id="ocrResults" class="mt-3" style="display:none;">
+                    <div class="alert alert-success">
+                        <strong><i data-feather="check-circle"></i> Invoice Scanned!</strong>
+                    </div>
+                    
+                    <form method="POST" action="{{ url_for('routes.update_po_invoice', po_id=po.id) }}" id="invoiceDataForm">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        
+                        <div class="mb-2">
+                            <label class="form-label small"><strong>Invoice Number:</strong></label>
+                            <input type="text" class="form-control form-control-sm" name="invoice_number" id="ocr_invoice_number">
+                        </div>
+                        
+                        <div class="mb-2">
+                            <label class="form-label small"><strong>Invoice Date:</strong></label>
+                            <input type="date" class="form-control form-control-sm" name="invoice_date" id="ocr_invoice_date">
+                        </div>
+                        
+                        <div class="mb-2">
+                            <label class="form-label small"><strong>Total Amount:</strong></label>
+                            <input type="number" class="form-control form-control-sm" name="payment_amount" id="ocr_payment_amount" step="0.01">
+                        </div>
+                        
+                        <div class="mb-2">
+                            <label class="form-label small"><strong>Payment Status:</strong></label>
+                            <select class="form-select form-select-sm" name="payment_status" id="ocr_payment_status">
+                                <option value="pending">Pending</option>
+                                <option value="paid">Paid</option>
+                                <option value="partial">Partial</option>
+                            </select>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-success btn-sm w-100 mt-2">
+                            <i data-feather="save"></i> Save Invoice Details
+                        </button>
+                    </form>
+                </div>
+                
+                <div id="ocrError" class="alert alert-danger mt-3" style="display:none;"></div>
+                <div id="ocrLoading" class="text-center mt-3" style="display:none;">
+                    <div class="spinner-border spinner-border-sm" role="status">
+                        <span class="visually-hidden">Processing...</span>
+                    </div>
+                    <p class="small mt-2">Processing invoice...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    feather.replace();
+    
+    // OCR Form Handler
+    document.getElementById('ocrForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const fileInput = document.getElementById('invoice_image');
+        const file = fileInput.files[0];
+        
+        if (!file) {
+            alert('Please select a file');
+            return;
+        }
+        
+        // Show loading, hide results/errors
+        document.getElementById('ocrLoading').style.display = 'block';
+        document.getElementById('ocrResults').style.display = 'none';
+        document.getElementById('ocrError').style.display = 'none';
+        
+        try {
+            const formData = new FormData();
+            formData.append('invoice_image', file);
+            
+            const response = await fetch('/api/ocr/invoice', {
+                method: 'POST',
+                body: formData
+            });
+            
+            const data = await response.json();
+            
+            document.getElementById('ocrLoading').style.display = 'none';
+            
+            if (data.success) {
+                // Fill form with extracted data
+                if (data.invoice_number) {
+                    document.getElementById('ocr_invoice_number').value = data.invoice_number;
+                }
+                if (data.invoice_date) {
+                    document.getElementById('ocr_invoice_date').value = data.invoice_date;
+                }
+                if (data.total_amount) {
+                    document.getElementById('ocr_payment_amount').value = data.total_amount;
+                }
+                
+                document.getElementById('ocrResults').style.display = 'block';
+                feather.replace();
+            } else {
+                document.getElementById('ocrError').textContent = 'OCR Error: ' + (data.error || 'Failed to process invoice');
+                document.getElementById('ocrError').style.display = 'block';
+            }
+        } catch (error) {
+            document.getElementById('ocrLoading').style.display = 'none';
+            document.getElementById('ocrError').textContent = 'Upload Error: ' + error.message;
+            document.getElementById('ocrError').style.display = 'block';
+        }
+    });
+</script>
+{% endblock %}

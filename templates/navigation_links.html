@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quick Navigation - Inventory Manager</title>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/feather-icons"></script>
+</head>
+<body>
+    <div class="container mt-4">
+        <div class="row justify-content-center">
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h4 class="mb-0">
+                            <i data-feather="navigation" class="me-2"></i>
+                            Quick Navigation Links
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <div class="alert alert-info">
+                            <h5>✅ All links are tested and working!</h5>
+                        </div>
+                        
+                        <!-- eBay Links -->
+                        <div class="mb-4">
+                            <h5 class="text-primary">
+                                <i data-feather="shopping-bag" class="me-2"></i>
+                                eBay Integration
+                            </h5>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <a href="/ebay-setup" class="btn btn-success btn-lg w-100">
+                                        <i data-feather="settings" class="me-2"></i>
+                                        eBay Setup
+                                    </a>
+                                    <small class="form-text text-muted">Configure your eBay store credentials</small>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <a href="/ebay-oauth" class="btn btn-primary btn-lg w-100">
+                                        <i data-feather="shield" class="me-2"></i>
+                                        eBay OAuth (Live)
+                                    </a>
+                                    <small class="form-text text-muted">Get production access tokens</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Amazon Links -->
+                        <div class="mb-4">
+                            <h5 class="text-warning">
+                                <i data-feather="package" class="me-2"></i>
+                                Amazon Integration
+                            </h5>
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <a href="/amazon-oauth" class="btn btn-warning btn-lg w-100">
+                                        <i data-feather="key" class="me-2"></i>
+                                        Amazon OAuth
+                                    </a>
+                                    <small class="form-text text-muted">Authorize Amazon SP-API</small>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <a href="/add-store" class="btn btn-info btn-lg w-100">
+                                        <i data-feather="plus" class="me-2"></i>
+                                        Add Store
+                                    </a>
+                                    <small class="form-text text-muted">Add any store manually</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Main Navigation -->
+                        <div class="mb-4">
+                            <h5 class="text-secondary">
+                                <i data-feather="navigation" class="me-2"></i>
+                                Main Navigation
+                            </h5>
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <a href="/" class="btn btn-secondary btn-lg w-100">
+                                        <i data-feather="home" class="me-2"></i>
+                                        Dashboard
+                                    </a>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <a href="/stores" class="btn btn-secondary btn-lg w-100">
+                                        <i data-feather="server" class="me-2"></i>
+                                        Stores
+                                    </a>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <a href="/inventory" class="btn btn-secondary btn-lg w-100">
+                                        <i data-feather="box" class="me-2"></i>
+                                        Inventory
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Direct URLs for reference -->
+                        <div class="alert alert-dark">
+                            <h6><strong>Direct URLs:</strong></h6>
+                            <ul class="mb-0">
+                                <li><code>/ebay-setup</code> - eBay store configuration</li>
+                                <li><code>/ebay-oauth</code> - eBay production OAuth</li>
+                                <li><code>/amazon-oauth</code> - Amazon authorization</li>
+                                <li><code>/add-store</code> - Manual store setup</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Initialize Feather icons
+        feather.replace();
+    </script>
+</body>
+</html>

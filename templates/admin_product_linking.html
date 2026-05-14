@@ -1,0 +1,1703 @@
+{% extends "base.html" %}
+
+{% block title %}GroupView - Multi-Channel Management{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1><i data-feather="link" class="me-2"></i>GroupView</h1>
+                    <p class="text-muted mb-0">Link warehouse SKUs to Amazon, eBay, and other marketplace listings</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-info" onclick="showJobsTab()">
+                        <i data-feather="activity" class="me-1"></i>Automation / Jobs
+                    </button>
+                    <div class="dropdown">
+                        <button class="btn btn-success dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <i data-feather="plus" class="me-1"></i>Bulk Import
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="{{ url_for('routes.bulk_product_linking') }}">
+                                <i data-feather="package" class="me-1"></i>Amazon Bulk CSV
+                            </a></li>
+                            <li><a class="dropdown-item" href="#" onclick="showEbayBulkModal()">
+                                <i data-feather="shopping-bag" class="me-1"></i>eBay Bulk CSV
+                            </a></li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Actions Bar (shown when items selected) -->
+    <div class="row mb-3" id="bulkActionsBar" style="display: none;">
+        <div class="col-12">
+            <div class="card bg-primary">
+                <div class="card-body py-3">
+                    <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                        <div class="d-flex align-items-center text-white">
+                            <i data-feather="check-square" class="me-2"></i>
+                            <span id="selectedCount">0</span> product(s) selected
+                            <button type="button" class="btn btn-sm btn-outline-light ms-3" id="selectAllPagesBtn" onclick="selectAllPages()" style="display: none;">
+                                Select all {{ total_count }} items
+                            </button>
+                            <span id="allPagesSelected" class="badge bg-warning text-dark ms-3" style="display: none;">
+                                All {{ total_count }} items selected
+                            </span>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2">
+                            <button type="button" class="btn btn-light btn-sm" onclick="bulkDiagnostics()">
+                                <i data-feather="search" class="me-1"></i>Run Diagnostics
+                            </button>
+                            <button type="button" class="btn btn-warning btn-sm" onclick="bulkRepairLinks()">
+                                <i data-feather="tool" class="me-1"></i>Repair Links
+                            </button>
+                            <button type="button" class="btn btn-info btn-sm" onclick="bulkPushSelected()">
+                                <i data-feather="upload" class="me-1"></i>Push to Marketplaces
+                            </button>
+                            <div class="dropdown">
+                                <button class="btn btn-secondary btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                    <i data-feather="layers" class="me-1"></i>Grouping
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="#" onclick="showMergeModal()">
+                                        <i data-feather="git-merge" class="me-1"></i>Merge Products
+                                    </a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="showReassignModal()">
+                                        <i data-feather="move" class="me-1"></i>Reassign Listings
+                                    </a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="bulkUngroup()">
+                                        <i data-feather="scissors" class="me-1"></i>Ungroup Selected
+                                    </a></li>
+                                </ul>
+                            </div>
+                            <div class="dropdown">
+                                <button class="btn btn-danger btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                                    <i data-feather="tool" class="me-1"></i>Repair Tools
+                                </button>
+                                <ul class="dropdown-menu">
+                                    <li><a class="dropdown-item" href="#" onclick="repairResetFailures()">
+                                        <i data-feather="refresh-cw" class="me-1"></i>Reset Failure Counts
+                                    </a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="repairRebuildLinks()">
+                                        <i data-feather="link" class="me-1"></i>Rebuild Links (Orphaned)
+                                    </a></li>
+                                    <li><a class="dropdown-item" href="#" onclick="repairCreateMissingSKUs()">
+                                        <i data-feather="plus-square" class="me-1"></i>Create Missing SKUs
+                                    </a></li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li><a class="dropdown-item" href="#" onclick="repairSyncNow()">
+                                        <i data-feather="send" class="me-1"></i>Sync Now (Push Queue)
+                                    </a></li>
+                                </ul>
+                            </div>
+                            <button type="button" class="btn btn-outline-light btn-sm" onclick="clearSelection()">
+                                <i data-feather="x" class="me-1"></i>Clear
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search & Filter Bar -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body py-3">
+                    <form method="GET" action="{{ url_for('routes.product_linking') }}" id="searchForm">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-4">
+                                <label class="form-label small text-muted mb-1">Search (SKU, ASIN, eBay ID, Title)</label>
+                                <input type="text" class="form-control" name="search" id="searchInput"
+                                       value="{{ current_search or '' }}" placeholder="Type to search...">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small text-muted mb-1">Platform</label>
+                                <select class="form-select" name="platform" onchange="this.form.submit()">
+                                    <option value="">All Platforms</option>
+                                    {% for platform in all_platforms %}
+                                    <option value="{{ platform }}" {% if current_platform == platform %}selected{% endif %}>
+                                        {{ platform }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small text-muted mb-1">Status</label>
+                                <select class="form-select" name="status" onchange="this.form.submit()">
+                                    <option value="">All Statuses</option>
+                                    <option value="linked" {% if current_status == 'linked' %}selected{% endif %}>Linked</option>
+                                    <option value="unlinked" {% if current_status == 'unlinked' %}selected{% endif %}>Unlinked</option>
+                                    <option value="broken" {% if current_status == 'broken' %}selected{% endif %}>Broken</option>
+                                    <option value="blocked" {% if current_status == 'blocked' %}selected{% endif %}>Blocked</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label small text-muted mb-1">Store</label>
+                                <select class="form-select" name="store" onchange="this.form.submit()">
+                                    <option value="">All Stores</option>
+                                    {% for store in all_stores %}
+                                    <option value="{{ store.id }}" {% if current_store == store.id|string %}selected{% endif %}>
+                                        {{ store.name }} ({{ store.platform }})
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <button type="submit" class="btn btn-primary me-1">
+                                    <i data-feather="search" class="feather-sm"></i> Search
+                                </button>
+                                <a href="{{ url_for('routes.product_linking') }}" class="btn btn-outline-secondary">
+                                    <i data-feather="x" class="feather-sm"></i>
+                                </a>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-success bg-opacity-10 border-success">
+                <div class="card-body py-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="text-success">Total Products</span>
+                        <span class="badge bg-success fs-6">{{ stats.total }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-primary bg-opacity-10 border-primary">
+                <div class="card-body py-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="text-primary">Fully Linked</span>
+                        <span class="badge bg-primary fs-6">{{ stats.linked }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning bg-opacity-10 border-warning">
+                <div class="card-body py-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="text-warning">Unlinked</span>
+                        <span class="badge bg-warning text-dark fs-6">{{ stats.unlinked }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-danger bg-opacity-10 border-danger">
+                <div class="card-body py-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="text-danger">Broken/Blocked</span>
+                        <span class="badge bg-danger fs-6">{{ stats.broken }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Auto-Fix Mode Toggle -->
+    <div class="row mb-3">
+        <div class="col-12">
+            <div class="card border-warning">
+                <div class="card-body py-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center">
+                            <div class="form-check form-switch me-3">
+                                <input class="form-check-input" type="checkbox" id="autoFixMode" onchange="toggleAutoFixMode()">
+                                <label class="form-check-label fw-bold" for="autoFixMode">
+                                    <i data-feather="zap" class="me-1"></i>Auto-Fix Mode
+                                </label>
+                            </div>
+                            <small class="text-muted">When enabled, shows one-click fix buttons for broken/blocked items</small>
+                        </div>
+                        <div id="autoFixStats" style="display: none;">
+                            <span class="badge bg-danger me-2">{{ stats.broken }} items need attention</span>
+                            <button type="button" class="btn btn-warning btn-sm" onclick="fixAllIssues()">
+                                <i data-feather="tool" class="me-1"></i>Fix All Issues
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Products Table -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i data-feather="package" class="me-2"></i>Products & Marketplace Links
+                    </h5>
+                    <span class="badge bg-secondary">{{ products|length }} products</span>
+                </div>
+                <div class="card-body p-0">
+                    {% if products %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="width: 40px;">
+                                        <input type="checkbox" class="form-check-input" id="selectAll" onchange="toggleSelectAll()">
+                                    </th>
+                                    <th style="width: 12%">Warehouse SKU</th>
+                                    <th style="width: 18%">Product Name</th>
+                                    <th style="width: 7%">Stock</th>
+                                    <th style="width: 8%">Variant</th>
+                                    <th style="width: 10%">Status</th>
+                                    <th style="width: 28%">Marketplace Links</th>
+                                    <th style="width: 12%">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for product in products %}
+                                <tr class="product-row" data-ws-id="{{ product.id }}">
+                                    <td>
+                                        <input type="checkbox" class="form-check-input product-checkbox" 
+                                               value="{{ product.id }}" onchange="updateBulkActionsBar()">
+                                    </td>
+                                    <td>
+                                        <strong><code>{{ product.sku }}</code></strong>
+                                        {% if product.group_id %}
+                                        <span class="badge bg-secondary ms-1" title="Grouped product">G</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="text-truncate d-inline-block" style="max-width: 180px;" 
+                                              title="{{ product.name }}">{{ product.name or '-' }}</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-{{ 'success' if product.quantity > 10 else ('warning' if product.quantity > 0 else 'danger') }}">
+                                            {{ product.quantity }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        {% if product.variant_info %}
+                                        <small class="text-info">{{ product.variant_info }}</small>
+                                        {% else %}
+                                        <small class="text-muted">-</small>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if product.link_status == 'linked' %}
+                                        <span class="badge bg-success"><i data-feather="check" class="feather-sm me-1"></i>Linked</span>
+                                        {% elif product.link_status == 'unlinked' %}
+                                        <span class="badge bg-warning text-dark"><i data-feather="alert-circle" class="feather-sm me-1"></i>Unlinked</span>
+                                        {% elif product.link_status == 'broken' %}
+                                        <span class="badge bg-danger"><i data-feather="x-circle" class="feather-sm me-1"></i>Broken</span>
+                                        {% elif product.link_status == 'blocked' %}
+                                        <span class="badge bg-danger"><i data-feather="lock" class="feather-sm me-1"></i>Blocked</span>
+                                        {% endif %}
+                                        {% if product.blocked_reasons %}
+                                        <button class="btn btn-link btn-sm p-0 text-danger" 
+                                                onclick="showBlockedReasons({{ product.blocked_reasons|tojson|e }})"
+                                                title="View blocked reasons">
+                                            <i data-feather="info" class="feather-sm"></i>
+                                        </button>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if product.mappings %}
+                                            {% for mapping in product.mappings %}
+                                            <div class="d-inline-flex align-items-center me-2 mb-1 p-1 border rounded 
+                                                        {% if mapping.status == 'error' %}border-danger bg-danger bg-opacity-10{% elif mapping.status == 'blocked' %}border-warning bg-warning bg-opacity-10{% else %}bg-light{% endif %}">
+                                                {% if mapping.platform == 'AmazonFBA' %}
+                                                <span class="badge bg-info me-1">FBA</span>
+                                                {% elif mapping.platform == 'AmazonFBM' %}
+                                                <span class="badge bg-primary me-1">FBM</span>
+                                                {% elif mapping.platform == 'Amazon' %}
+                                                <span class="badge bg-warning text-dark me-1">AMZ</span>
+                                                {% elif mapping.platform == 'eBay' %}
+                                                <span class="badge bg-success me-1">eBay</span>
+                                                {% else %}
+                                                <span class="badge bg-secondary me-1">{{ mapping.platform[:3] }}</span>
+                                                {% endif %}
+                                                <small class="text-truncate" style="max-width: 100px;" title="{{ mapping.external_id }}">
+                                                    {{ mapping.external_id[:12] }}{% if mapping.external_id|length > 12 %}...{% endif %}
+                                                </small>
+                                                {% if mapping.fulfillment %}
+                                                <span class="badge bg-dark ms-1" style="font-size: 0.6rem;">{{ mapping.fulfillment }}</span>
+                                                {% endif %}
+                                                {% if mapping.status == 'error' or mapping.status == 'blocked' %}
+                                                <i data-feather="alert-circle" class="text-danger ms-1 feather-sm" 
+                                                   title="{{ mapping.blocked_reason or mapping.error or 'Error' }}"></i>
+                                                {% endif %}
+                                                <button class="btn btn-link btn-sm p-0 ms-1 text-danger" 
+                                                        onclick="unlinkMapping({{ mapping.id }}, '{{ mapping.platform }}')"
+                                                        title="Unlink">
+                                                    <i data-feather="x" class="feather-sm"></i>
+                                                </button>
+                                            </div>
+                                            {% endfor %}
+                                        {% else %}
+                                            <span class="text-muted small">No marketplace links</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <button class="btn btn-outline-primary" onclick="showLinkModal({{ product.id }}, '{{ product.sku }}')" title="Add Link">
+                                                <i data-feather="link" class="feather-sm"></i>
+                                            </button>
+                                            <button class="btn btn-outline-info" onclick="showDiagnostics({{ product.id }}, '{{ product.sku }}')" title="Diagnostics">
+                                                <i data-feather="activity" class="feather-sm"></i>
+                                            </button>
+                                            {% if product.link_status in ['broken', 'blocked'] %}
+                                            <button class="btn btn-outline-warning" onclick="repairLinks({{ product.id }}, '{{ product.sku }}')" title="Fix Links">
+                                                <i data-feather="tool" class="feather-sm"></i>
+                                            </button>
+                                            {% endif %}
+                                            {% if product.group_id %}
+                                            <button class="btn btn-outline-danger" onclick="ungroupProduct({{ product.id }}, '{{ product.sku }}')" title="Ungroup / Break Group">
+                                                <i data-feather="scissors" class="feather-sm"></i>
+                                            </button>
+                                            {% endif %}
+                                            <button class="btn btn-outline-secondary" onclick="markNotSameProduct({{ product.id }}, '{{ product.sku }}')" title="Not Same Product">
+                                                <i data-feather="alert-triangle" class="feather-sm"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Pagination -->
+                    {% if total_pages > 1 %}
+                    <nav class="mt-3" aria-label="Product linking pagination">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="text-muted">
+                                Showing page {{ current_page }} of {{ total_pages }} ({{ total_count }} items)
+                            </div>
+                            <ul class="pagination mb-0">
+                                {% if current_page > 1 %}
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ url_for('routes.product_linking', search=current_search, platform=current_platform, status=current_status, store=current_store, page=1) }}">
+                                        <i data-feather="chevrons-left" class="feather-sm"></i>
+                                    </a>
+                                </li>
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ url_for('routes.product_linking', search=current_search, platform=current_platform, status=current_status, store=current_store, page=current_page-1) }}">
+                                        <i data-feather="chevron-left" class="feather-sm"></i>
+                                    </a>
+                                </li>
+                                {% endif %}
+                                
+                                {% for p in range([1, current_page-2]|max, [total_pages, current_page+2]|min + 1) %}
+                                <li class="page-item {{ 'active' if p == current_page else '' }}">
+                                    <a class="page-link" href="{{ url_for('routes.product_linking', search=current_search, platform=current_platform, status=current_status, store=current_store, page=p) }}">{{ p }}</a>
+                                </li>
+                                {% endfor %}
+                                
+                                {% if current_page < total_pages %}
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ url_for('routes.product_linking', search=current_search, platform=current_platform, status=current_status, store=current_store, page=current_page+1) }}">
+                                        <i data-feather="chevron-right" class="feather-sm"></i>
+                                    </a>
+                                </li>
+                                <li class="page-item">
+                                    <a class="page-link" href="{{ url_for('routes.product_linking', search=current_search, platform=current_platform, status=current_status, store=current_store, page=total_pages) }}">
+                                        <i data-feather="chevrons-right" class="feather-sm"></i>
+                                    </a>
+                                </li>
+                                {% endif %}
+                            </ul>
+                        </div>
+                    </nav>
+                    {% endif %}
+                    
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i data-feather="package" class="mb-3" style="width: 48px; height: 48px;"></i>
+                        <h5>No products found</h5>
+                        <p class="text-muted">Adjust your filters or add warehouse stock first.</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Link Modal -->
+<div class="modal fade" id="linkModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title"><i data-feather="link" class="me-2"></i>Link to Marketplace</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Link <strong id="linkSkuLabel"></strong> to a marketplace:</p>
+                <input type="hidden" id="linkWarehouseId">
+                
+                <ul class="nav nav-tabs mb-3" role="tablist">
+                    <li class="nav-item">
+                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#amazonFbmTab">
+                            <i data-feather="truck" class="me-1"></i>Amazon FBM
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#amazonFbaTab">
+                            <i data-feather="archive" class="me-1"></i>Amazon FBA
+                        </button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#ebayTab">
+                            <i data-feather="shopping-bag" class="me-1"></i>eBay
+                        </button>
+                    </li>
+                </ul>
+                
+                <div class="tab-content">
+                    <div class="tab-pane fade show active" id="amazonFbmTab">
+                        <div class="alert alert-primary mb-3">
+                            <i data-feather="info" class="me-1"></i>
+                            <strong>FBM:</strong> Merchant Fulfilled - Warehouse controls inventory. Pushes enabled.
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Amazon FBM Store</label>
+                            <select class="form-select" id="amazonFbmStore">
+                                {% for store in all_stores if store.platform in ['AmazonFBM', 'Amazon'] %}
+                                <option value="{{ store.id }}">{{ store.name }} ({{ store.platform }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Seller SKU</label>
+                            <input type="text" class="form-control" id="amazonFbmSku" placeholder="Your seller SKU">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">ASIN (10 characters)</label>
+                            <input type="text" class="form-control" id="amazonFbmAsin" maxlength="10" placeholder="B0XXXXXXXXX">
+                        </div>
+                        <button class="btn btn-primary" onclick="saveAmazonFbmLink()">
+                            <i data-feather="save" class="me-1"></i>Save FBM Link
+                        </button>
+                    </div>
+                    
+                    <div class="tab-pane fade" id="amazonFbaTab">
+                        <div class="alert alert-info mb-3">
+                            <i data-feather="info" class="me-1"></i>
+                            <strong>FBA:</strong> Fulfilled by Amazon - Read-only. Amazon controls inventory. Import only.
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Amazon FBA Store</label>
+                            <select class="form-select" id="amazonFbaStore">
+                                {% for store in all_stores if store.platform == 'AmazonFBA' %}
+                                <option value="{{ store.id }}">{{ store.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">FNSKU (Amazon FBA Identifier)</label>
+                            <input type="text" class="form-control" id="amazonFbaFnsku" placeholder="X0XXXXXXXXX">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">ASIN (10 characters)</label>
+                            <input type="text" class="form-control" id="amazonFbaAsin" maxlength="10" placeholder="B0XXXXXXXXX">
+                        </div>
+                        <button class="btn btn-info" onclick="saveAmazonFbaLink()">
+                            <i data-feather="save" class="me-1"></i>Save FBA Link
+                        </button>
+                    </div>
+                    
+                    <div class="tab-pane fade" id="ebayTab">
+                        <div class="mb-3">
+                            <label class="form-label">eBay Store</label>
+                            <select class="form-select" id="ebayStore">
+                                {% for store in all_stores if store.platform == 'eBay' %}
+                                <option value="{{ store.id }}">{{ store.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">eBay Item ID (numeric)</label>
+                            <input type="text" class="form-control" id="ebayItemId" placeholder="123456789012">
+                        </div>
+                        <button class="btn btn-success" onclick="saveEbayLink()">
+                            <i data-feather="save" class="me-1"></i>Save eBay Link
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Diagnostics Modal -->
+<div class="modal fade" id="diagnosticsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title"><i data-feather="activity" class="me-2"></i>Diagnostics: <span id="diagSkuLabel"></span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="diagLoading" class="text-center py-4">
+                    <div class="spinner-border text-primary"></div>
+                    <p class="mt-2">Loading diagnostics...</p>
+                </div>
+                <div id="diagContent" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Repair Modal -->
+<div class="modal fade" id="repairModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title"><i data-feather="tool" class="me-2"></i>Repair Links: <span id="repairSkuLabel"></span></h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="repairLoading" class="text-center py-4">
+                    <div class="spinner-border text-primary"></div>
+                    <p class="mt-2">Analyzing issues...</p>
+                </div>
+                <div id="repairContent" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Jobs Modal -->
+<div class="modal fade" id="jobsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title"><i data-feather="activity" class="me-2"></i>Automation / Jobs</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="jobsLoading" class="text-center py-4">
+                    <div class="spinner-border text-primary"></div>
+                    <p class="mt-2">Loading jobs...</p>
+                </div>
+                <div id="jobsList" style="display: none;">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Type</th>
+                                    <th>Status</th>
+                                    <th>Progress</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="jobsTableBody"></tbody>
+                        </table>
+                    </div>
+                    <div id="noJobs" class="text-center py-4 text-muted" style="display: none;">
+                        <i data-feather="inbox" style="width: 48px; height: 48px;"></i>
+                        <p class="mt-2">No jobs found. Run a bulk action to see jobs here.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- eBay Bulk Import Modal -->
+<div class="modal fade" id="ebayBulkModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title"><i data-feather="upload" class="me-2"></i>eBay Bulk CSV Import</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="ebayBulkForm" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label class="form-label">eBay Store</label>
+                        <select class="form-select" id="ebayBulkStore" name="store_id" required>
+                            {% for store in all_stores if store.platform == 'eBay' %}
+                            <option value="{{ store.id }}">{{ store.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">CSV File</label>
+                        <input type="file" class="form-control" id="ebayBulkFile" name="file" accept=".csv" required>
+                        <div class="form-text">
+                            Required columns: <code>sku</code>, <code>ebay_item_id</code>
+                        </div>
+                    </div>
+                    <div class="alert alert-info small">
+                        <strong>CSV Format:</strong><br>
+                        <code>sku,ebay_item_id</code><br>
+                        <code>MY-SKU-001,123456789012</code>
+                    </div>
+                    <button type="submit" class="btn btn-success" id="ebayBulkSubmit">
+                        <i data-feather="upload-cloud" class="me-1"></i>Upload & Process
+                    </button>
+                </form>
+                <div id="ebayBulkResults" class="mt-3" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Merge Products Modal -->
+<div class="modal fade" id="mergeModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title"><i data-feather="git-merge" class="me-2"></i>Merge Products</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Merge selected products into one. All marketplace listings will be reassigned to the target product.</p>
+                
+                <div class="mb-3">
+                    <label class="form-label">Target Product (keep this one)</label>
+                    <select class="form-select" id="mergeTargetSelect">
+                        <!-- Populated by JS -->
+                    </select>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Merge Mode</label>
+                    <select class="form-select" id="mergeModeSelect">
+                        <option value="group">Create Group (keep all products, link as variants)</option>
+                        <option value="combine_quantity">Combine Quantity (merge stock into target, deactivate others)</option>
+                    </select>
+                </div>
+                
+                <div class="alert alert-warning small">
+                    <strong>Warning:</strong> This action will reassign all marketplace listings from source products to the target product.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="executeMerge()">
+                    <i data-feather="git-merge" class="me-1"></i>Merge Products
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Reassign Listings Modal -->
+<div class="modal fade" id="reassignModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title"><i data-feather="move" class="me-2"></i>Reassign Listings</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Move marketplace listings from one product to another.</p>
+                
+                <div class="mb-3">
+                    <label class="form-label">Source Product (move FROM)</label>
+                    <select class="form-select" id="reassignSourceSelect">
+                        <!-- Populated by JS -->
+                    </select>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Target Product (move TO)</label>
+                    <select class="form-select" id="reassignTargetSelect">
+                        <!-- Populated by JS -->
+                    </select>
+                </div>
+                
+                <div class="alert alert-info small">
+                    All marketplace listings from the source product will be moved to the target product.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="executeReassign()">
+                    <i data-feather="move" class="me-1"></i>Reassign Listings
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let currentWarehouseId = null;
+let selectAllPagesMode = false;
+const totalCount = {{ total_count }};
+const visibleCount = {{ products|length }};
+
+// Selection functions
+function toggleSelectAll() {
+    const selectAll = document.getElementById('selectAll');
+    const checkboxes = document.querySelectorAll('.product-checkbox');
+    checkboxes.forEach(cb => cb.checked = selectAll.checked);
+    selectAllPagesMode = false;
+    updateBulkActionsBar();
+}
+
+function updateBulkActionsBar() {
+    const checkboxes = document.querySelectorAll('.product-checkbox:checked');
+    const allCheckboxes = document.querySelectorAll('.product-checkbox');
+    const count = checkboxes.length;
+    const bar = document.getElementById('bulkActionsBar');
+    const selectAllBtn = document.getElementById('selectAllPagesBtn');
+    const allPagesSpan = document.getElementById('allPagesSelected');
+    
+    document.getElementById('selectedCount').textContent = selectAllPagesMode ? totalCount : count;
+    bar.style.display = count > 0 ? 'block' : 'none';
+    
+    // Show "Select all X items" button only when all visible items are selected and there are more pages
+    if (count === allCheckboxes.length && count === visibleCount && totalCount > visibleCount && !selectAllPagesMode) {
+        selectAllBtn.style.display = 'inline-block';
+        allPagesSpan.style.display = 'none';
+    } else if (selectAllPagesMode) {
+        selectAllBtn.style.display = 'none';
+        allPagesSpan.style.display = 'inline-block';
+    } else {
+        selectAllBtn.style.display = 'none';
+        allPagesSpan.style.display = 'none';
+    }
+    
+    feather.replace();
+}
+
+function selectAllPages() {
+    selectAllPagesMode = true;
+    updateBulkActionsBar();
+}
+
+function clearSelection() {
+    document.querySelectorAll('.product-checkbox').forEach(cb => cb.checked = false);
+    document.getElementById('selectAll').checked = false;
+    selectAllPagesMode = false;
+    updateBulkActionsBar();
+}
+
+function getSelectedIds() {
+    if (selectAllPagesMode) {
+        return 'all'; // Special marker for server-side handling
+    }
+    return Array.from(document.querySelectorAll('.product-checkbox:checked')).map(cb => parseInt(cb.value));
+}
+
+// Show blocked reasons
+function showBlockedReasons(reasons) {
+    if (!reasons || reasons.length === 0) {
+        alert('No blocked reasons available');
+        return;
+    }
+    const message = 'Blocked Reasons:\n\n' + reasons.join('\n\n');
+    alert(message);
+}
+
+// Ungroup product
+async function ungroupProduct(warehouseId, sku) {
+    if (!confirm(`Remove SKU "${sku}" from its product group?\n\nThis will treat it as a separate product with its own inventory.`)) return;
+    
+    try {
+        const resp = await fetch('/api/product-linking/ungroup', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({warehouse_stock_id: warehouseId})
+        });
+        const data = await resp.json();
+        if (data.success) {
+            alert('Product ungrouped successfully!');
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+// Mark not same product
+async function markNotSameProduct(warehouseId, sku) {
+    const newSku = prompt(`The current SKU is "${sku}".\n\nIf this SKU is incorrectly linked to the wrong marketplace listing, you can:\n\n1. Enter a NEW SKU to create a separate product\n2. Click Cancel to keep the current SKU\n\nEnter new SKU (leave empty to just unlink all mappings):`);
+    
+    if (newSku === null) return; // Cancelled
+    
+    try {
+        const resp = await fetch('/api/product-linking/not-same-product', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                warehouse_stock_id: warehouseId,
+                new_sku: newSku.trim() || null
+            })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            alert(data.message || 'Product corrected successfully!');
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+// Link Modal
+function showLinkModal(warehouseId, sku) {
+    currentWarehouseId = warehouseId;
+    document.getElementById('linkWarehouseId').value = warehouseId;
+    document.getElementById('linkSkuLabel').textContent = sku;
+    // Clear FBM fields
+    document.getElementById('amazonFbmSku').value = '';
+    document.getElementById('amazonFbmAsin').value = '';
+    // Clear FBA fields
+    document.getElementById('amazonFbaFnsku').value = '';
+    document.getElementById('amazonFbaAsin').value = '';
+    // Clear eBay fields
+    document.getElementById('ebayItemId').value = '';
+    new bootstrap.Modal(document.getElementById('linkModal')).show();
+}
+
+async function saveAmazonFbmLink() {
+    const warehouseId = document.getElementById('linkWarehouseId').value;
+    const storeId = document.getElementById('amazonFbmStore').value;
+    const sellerSku = document.getElementById('amazonFbmSku').value.trim();
+    const asin = document.getElementById('amazonFbmAsin').value.trim();
+    
+    if (!sellerSku) {
+        alert('Seller SKU is required');
+        return;
+    }
+    
+    if (asin && asin.length !== 10) {
+        alert('ASIN must be exactly 10 characters');
+        return;
+    }
+    
+    try {
+        const resp = await fetch('/api/product-linking/link', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                warehouse_stock_id: warehouseId,
+                store_id: storeId,
+                platform: 'AmazonFBM',
+                external_id: asin || sellerSku,
+                seller_sku: sellerSku,
+                fulfillment_type: 'MFN'
+            })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            alert('Amazon FBM link created successfully!');
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function saveAmazonFbaLink() {
+    const warehouseId = document.getElementById('linkWarehouseId').value;
+    const storeId = document.getElementById('amazonFbaStore').value;
+    const fnsku = document.getElementById('amazonFbaFnsku').value.trim();
+    const asin = document.getElementById('amazonFbaAsin').value.trim();
+    
+    if (!fnsku && !asin) {
+        alert('FNSKU or ASIN is required');
+        return;
+    }
+    
+    if (asin && asin.length !== 10) {
+        alert('ASIN must be exactly 10 characters');
+        return;
+    }
+    
+    try {
+        const resp = await fetch('/api/product-linking/link', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                warehouse_stock_id: warehouseId,
+                store_id: storeId,
+                platform: 'AmazonFBA',
+                external_id: asin || fnsku,
+                fnsku: fnsku,
+                fulfillment_type: 'FBA'
+            })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            alert('Amazon FBA link created successfully!');
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function saveEbayLink() {
+    const warehouseId = document.getElementById('linkWarehouseId').value;
+    const storeId = document.getElementById('ebayStore').value;
+    const itemId = document.getElementById('ebayItemId').value.trim();
+    
+    if (!itemId) {
+        alert('eBay Item ID is required');
+        return;
+    }
+    
+    try {
+        const resp = await fetch('/api/product-linking/link', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                warehouse_stock_id: warehouseId,
+                store_id: storeId,
+                platform: 'eBay',
+                external_id: itemId
+            })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            alert('eBay link created successfully!');
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function unlinkMapping(listingId, platform) {
+    if (!confirm(`Unlink this ${platform} mapping?`)) return;
+    
+    try {
+        const resp = await fetch('/api/unlink_listing', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({listing_id: listingId})
+        });
+        const data = await resp.json();
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+// Diagnostics
+async function showDiagnostics(warehouseId, sku) {
+    document.getElementById('diagSkuLabel').textContent = sku;
+    document.getElementById('diagLoading').style.display = 'block';
+    document.getElementById('diagContent').style.display = 'none';
+    
+    new bootstrap.Modal(document.getElementById('diagnosticsModal')).show();
+    
+    try {
+        const resp = await fetch(`/api/product-linking/diagnostics/${warehouseId}`);
+        const data = await resp.json();
+        
+        let html = '';
+        
+        // Warehouse section
+        html += `<div class="card mb-3 bg-secondary">
+            <div class="card-header"><i data-feather="package" class="me-2"></i>Warehouse Stock</div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4"><strong>SKU:</strong> ${data.warehouse.sku}</div>
+                    <div class="col-md-4"><strong>Available:</strong> ${data.warehouse.available_quantity}</div>
+                    <div class="col-md-4"><strong>Reserved:</strong> ${data.warehouse.reserved_quantity}</div>
+                </div>
+            </div>
+        </div>`;
+        
+        // Mappings section
+        if (data.mappings && data.mappings.length > 0) {
+            html += `<div class="card mb-3 bg-secondary">
+                <div class="card-header"><i data-feather="link" class="me-2"></i>Marketplace Mappings (${data.mappings.length})</div>
+                <div class="card-body p-0">
+                    <table class="table table-sm mb-0">
+                        <thead><tr><th>Platform</th><th>External ID</th><th>Sync Qty</th><th>Last Push</th><th>Status</th></tr></thead>
+                        <tbody>`;
+            
+            for (const m of data.mappings) {
+                const statusBadge = m.last_push_status === 'success' ? 'bg-success' : (m.last_push_status === 'error' ? 'bg-danger' : 'bg-warning');
+                html += `<tr>
+                    <td><span class="badge bg-info">${m.platform}</span> ${m.fulfillment || ''}</td>
+                    <td><code>${m.external_id}</code></td>
+                    <td>${m.sync_quantity}</td>
+                    <td>${m.last_push_at || 'Never'}</td>
+                    <td><span class="badge ${statusBadge}">${m.last_push_status || 'pending'}</span></td>
+                </tr>`;
+                if (m.last_push_error) {
+                    html += `<tr><td colspan="5" class="text-danger small">${m.last_push_error}</td></tr>`;
+                }
+            }
+            html += '</tbody></table></div></div>';
+        }
+        
+        // Issues section
+        if (data.issues && data.issues.length > 0) {
+            html += `<div class="alert alert-warning">
+                <h6><i data-feather="alert-triangle" class="me-2"></i>Issues Found</h6>
+                <ul class="mb-0">`;
+            for (const issue of data.issues) {
+                html += `<li>${issue}</li>`;
+            }
+            html += '</ul></div>';
+        }
+        
+        // Mismatches section
+        if (data.mismatches && data.mismatches.length > 0) {
+            html += `<div class="alert alert-danger">
+                <h6><i data-feather="x-circle" class="me-2"></i>Quantity Mismatches</h6>
+                <ul class="mb-0">`;
+            for (const m of data.mismatches) {
+                html += `<li>${m.platform}: Warehouse has ${m.warehouse_qty}, Marketplace shows ${m.marketplace_qty}</li>`;
+            }
+            html += '</ul></div>';
+        }
+        
+        if (!data.issues?.length && !data.mismatches?.length) {
+            html += '<div class="alert alert-success"><i data-feather="check-circle" class="me-2"></i>All checks passed - no issues found!</div>';
+        }
+        
+        document.getElementById('diagContent').innerHTML = html;
+        document.getElementById('diagLoading').style.display = 'none';
+        document.getElementById('diagContent').style.display = 'block';
+        feather.replace();
+        
+    } catch (e) {
+        document.getElementById('diagContent').innerHTML = `<div class="alert alert-danger">Error: ${e.message}</div>`;
+        document.getElementById('diagLoading').style.display = 'none';
+        document.getElementById('diagContent').style.display = 'block';
+    }
+}
+
+// Repair Links
+async function repairLinks(warehouseId, sku) {
+    document.getElementById('repairSkuLabel').textContent = sku;
+    document.getElementById('repairLoading').style.display = 'block';
+    document.getElementById('repairContent').style.display = 'none';
+    
+    new bootstrap.Modal(document.getElementById('repairModal')).show();
+    
+    try {
+        const resp = await fetch(`/api/product-linking/repair/${warehouseId}`, {method: 'POST'});
+        const data = await resp.json();
+        
+        let html = '';
+        
+        if (data.success) {
+            html += '<div class="alert alert-success"><i data-feather="check-circle" class="me-2"></i>Repair completed!</div>';
+            if (data.fixes && data.fixes.length > 0) {
+                html += '<h6>Fixes Applied:</h6><ul>';
+                for (const fix of data.fixes) {
+                    html += `<li>${fix}</li>`;
+                }
+                html += '</ul>';
+            }
+        } else {
+            html += `<div class="alert alert-warning"><i data-feather="alert-triangle" class="me-2"></i>${data.message || 'Some issues could not be fixed automatically.'}</div>`;
+            if (data.remaining_issues) {
+                html += '<h6>Manual Action Required:</h6><ul>';
+                for (const issue of data.remaining_issues) {
+                    html += `<li>${issue}</li>`;
+                }
+                html += '</ul>';
+            }
+        }
+        
+        html += '<button class="btn btn-primary mt-3" onclick="location.reload()">Refresh Page</button>';
+        
+        document.getElementById('repairContent').innerHTML = html;
+        document.getElementById('repairLoading').style.display = 'none';
+        document.getElementById('repairContent').style.display = 'block';
+        feather.replace();
+        
+    } catch (e) {
+        document.getElementById('repairContent').innerHTML = `<div class="alert alert-danger">Error: ${e.message}</div>`;
+        document.getElementById('repairLoading').style.display = 'none';
+        document.getElementById('repairContent').style.display = 'block';
+    }
+}
+
+// Get current filter parameters
+function getCurrentFilters() {
+    return {
+        search: '{{ current_search or "" }}',
+        platform: '{{ current_platform or "" }}',
+        status: '{{ current_status or "" }}',
+        store: '{{ current_store or "" }}'
+    };
+}
+
+// Bulk actions
+async function bulkDiagnostics() {
+    const ids = getSelectedIds();
+    const count = selectAllPagesMode ? totalCount : (Array.isArray(ids) ? ids.length : 0);
+    if (count === 0) return;
+    
+    if (!confirm(`Run diagnostics on ${count} products? This will create a background job.`)) return;
+    
+    try {
+        const payload = selectAllPagesMode 
+            ? { select_all: true, filters: getCurrentFilters() }
+            : { warehouse_stock_ids: ids };
+        
+        const resp = await fetch('/api/product-linking/bulk/diagnostics', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const data = await resp.json();
+        if (data.success) {
+            alert(`Diagnostics job started (ID: ${data.job_id}). Check the Jobs tab for results.`);
+            clearSelection();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function bulkRepairLinks() {
+    const ids = getSelectedIds();
+    const count = selectAllPagesMode ? totalCount : (Array.isArray(ids) ? ids.length : 0);
+    if (count === 0) return;
+    
+    if (!confirm(`Repair links for ${count} products? This will attempt to fix broken/blocked mappings.`)) return;
+    
+    try {
+        const payload = selectAllPagesMode 
+            ? { select_all: true, filters: getCurrentFilters() }
+            : { warehouse_stock_ids: ids };
+        
+        const resp = await fetch('/api/product-linking/bulk/repair', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const data = await resp.json();
+        if (data.success) {
+            alert(`Repair job started (ID: ${data.job_id}). Check the Jobs tab for results.`);
+            clearSelection();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function bulkPushSelected() {
+    const ids = getSelectedIds();
+    const count = selectAllPagesMode ? totalCount : (Array.isArray(ids) ? ids.length : 0);
+    if (count === 0) return;
+    
+    if (!confirm(`Push ${count} products to their linked marketplaces?`)) return;
+    
+    try {
+        const payload = selectAllPagesMode 
+            ? { select_all: true, filters: getCurrentFilters() }
+            : { warehouse_stock_ids: ids };
+        
+        const resp = await fetch('/api/product-linking/bulk/push', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const data = await resp.json();
+        if (data.success) {
+            alert(`Push job started (ID: ${data.job_id}). Check the Jobs tab for results.`);
+            clearSelection();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+// Jobs Modal
+async function showJobsTab() {
+    document.getElementById('jobsLoading').style.display = 'block';
+    document.getElementById('jobsList').style.display = 'none';
+    
+    new bootstrap.Modal(document.getElementById('jobsModal')).show();
+    
+    try {
+        const resp = await fetch('/api/listings/bulk/jobs');
+        const data = await resp.json();
+        
+        const tbody = document.getElementById('jobsTableBody');
+        tbody.innerHTML = '';
+        
+        if (data.jobs && data.jobs.length > 0) {
+            for (const job of data.jobs) {
+                const statusBadge = {
+                    'pending': 'bg-secondary',
+                    'running': 'bg-primary',
+                    'success': 'bg-success',
+                    'partial': 'bg-warning',
+                    'failed': 'bg-danger'
+                }[job.status] || 'bg-secondary';
+                
+                const progress = job.total_items > 0 ? Math.round((job.processed_items / job.total_items) * 100) : 0;
+                
+                tbody.innerHTML += `<tr>
+                    <td>${job.id}</td>
+                    <td>${job.job_type}</td>
+                    <td><span class="badge ${statusBadge}">${job.status}</span></td>
+                    <td>
+                        <div class="progress" style="height: 20px;">
+                            <div class="progress-bar" style="width: ${progress}%">${job.processed_items}/${job.total_items}</div>
+                        </div>
+                        <small class="text-success">${job.success_count} ok</small> / <small class="text-danger">${job.error_count} err</small>
+                    </td>
+                    <td>${job.created_at || '-'}</td>
+                    <td>
+                        ${job.error_count > 0 ? `<a href="/api/listings/bulk/jobs/${job.id}/errors.csv" class="btn btn-sm btn-outline-danger"><i data-feather="download" class="feather-sm"></i></a>` : ''}
+                    </td>
+                </tr>`;
+            }
+            document.getElementById('noJobs').style.display = 'none';
+        } else {
+            document.getElementById('noJobs').style.display = 'block';
+        }
+        
+        document.getElementById('jobsLoading').style.display = 'none';
+        document.getElementById('jobsList').style.display = 'block';
+        feather.replace();
+        
+    } catch (e) {
+        document.getElementById('jobsTableBody').innerHTML = `<tr><td colspan="6" class="text-danger">Error: ${e.message}</td></tr>`;
+        document.getElementById('jobsLoading').style.display = 'none';
+        document.getElementById('jobsList').style.display = 'block';
+    }
+}
+
+// eBay Bulk Modal
+function showEbayBulkModal() {
+    document.getElementById('ebayBulkResults').style.display = 'none';
+    new bootstrap.Modal(document.getElementById('ebayBulkModal')).show();
+}
+
+document.getElementById('ebayBulkForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const btn = document.getElementById('ebayBulkSubmit');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processing...';
+    
+    const formData = new FormData(this);
+    
+    try {
+        const resp = await fetch('/api/product-linking/ebay/bulk', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await resp.json();
+        
+        const results = document.getElementById('ebayBulkResults');
+        results.style.display = 'block';
+        
+        if (data.success) {
+            results.innerHTML = `
+                <div class="alert alert-success">
+                    <strong>Job Complete!</strong><br>
+                    Success: ${data.results.success_count} | Errors: ${data.results.error_count}
+                </div>
+                ${data.results.error_log_path ? `<a href="${data.results.error_log_path}" class="btn btn-outline-warning btn-sm">Download Errors</a>` : ''}
+            `;
+        } else {
+            results.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+        }
+    } catch (e) {
+        document.getElementById('ebayBulkResults').innerHTML = `<div class="alert alert-danger">${e.message}</div>`;
+        document.getElementById('ebayBulkResults').style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-feather="upload-cloud" class="me-1"></i>Upload & Process';
+        feather.replace();
+    }
+});
+
+// =================== REPAIR TOOLS FUNCTIONS ===================
+
+async function repairResetFailures() {
+    const ids = getSelectedIds();
+    const count = ids === 'all' ? totalCount : (Array.isArray(ids) ? ids.length : 0);
+    
+    if (count === 0) return;
+    if (!confirm(`Reset failure counts for ${count} product(s)? This will unblock listings that were blocked due to errors.`)) return;
+    
+    try {
+        const resp = await fetch('/api/product-linking/repair/reset-failures', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ warehouse_stock_ids: ids === 'all' ? [] : ids })
+        });
+        const data = await resp.json();
+        
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function repairRebuildLinks() {
+    if (!confirm('Rebuild links for orphaned marketplace listings?\n\nThis will try to match orphaned listings back to warehouse products by SKU.')) return;
+    
+    try {
+        const resp = await fetch('/api/product-linking/repair/rebuild-link', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ listing_ids: [] })
+        });
+        const data = await resp.json();
+        
+        if (data.success) {
+            alert(data.message + (data.remaining_orphans > 0 ? ` ${data.remaining_orphans} still orphaned (no matching SKU).` : ''));
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function repairCreateMissingSKUs() {
+    if (!confirm('Create warehouse stock entries for orphaned listings?\n\nThis will create new Master Stock entries for listings that have no matching warehouse SKU.')) return;
+    
+    try {
+        const resp = await fetch('/api/product-linking/repair/create-missing-sku', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ listing_ids: [] })
+        });
+        const data = await resp.json();
+        
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function repairSyncNow() {
+    const ids = getSelectedIds();
+    const count = ids === 'all' ? totalCount : (Array.isArray(ids) ? ids.length : 0);
+    
+    if (count === 0) return;
+    if (!confirm(`Queue ${count} product(s) for immediate sync?\n\nThis will push the current warehouse quantities to all linked marketplaces.`)) return;
+    
+    try {
+        const resp = await fetch('/api/product-linking/repair/sync-now', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ warehouse_stock_ids: ids === 'all' ? [] : ids })
+        });
+        const data = await resp.json();
+        
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+// =================== GROUPING FUNCTIONS ===================
+
+function showMergeModal() {
+    const ids = getSelectedIds();
+    if (ids === 'all' || !Array.isArray(ids) || ids.length < 2) {
+        alert('Select at least 2 products to merge');
+        return;
+    }
+    
+    // Get selected product details
+    const select = document.getElementById('mergeTargetSelect');
+    select.innerHTML = '';
+    
+    ids.forEach(id => {
+        const row = document.querySelector(`.product-row[data-ws-id="${id}"]`);
+        if (row) {
+            const sku = row.querySelector('td:nth-child(2) code').textContent;
+            const name = row.querySelector('td:nth-child(3) span').textContent.trim() || '-';
+            select.innerHTML += `<option value="${id}">${sku} - ${name.substring(0, 30)}</option>`;
+        }
+    });
+    
+    new bootstrap.Modal(document.getElementById('mergeModal')).show();
+    feather.replace();
+}
+
+async function executeMerge() {
+    const ids = getSelectedIds();
+    const targetId = parseInt(document.getElementById('mergeTargetSelect').value);
+    const mergeMode = document.getElementById('mergeModeSelect').value;
+    
+    if (!targetId) {
+        alert('Please select a target product');
+        return;
+    }
+    
+    if (!confirm(`Merge ${ids.length} products into the selected target?\n\nMode: ${mergeMode === 'group' ? 'Create Group' : 'Combine Quantity'}`)) return;
+    
+    try {
+        const resp = await fetch('/api/product-linking/bulk/merge', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                warehouse_stock_ids: ids,
+                target_id: targetId,
+                merge_mode: mergeMode
+            })
+        });
+        const data = await resp.json();
+        
+        if (data.success) {
+            alert(data.message);
+            bootstrap.Modal.getInstance(document.getElementById('mergeModal')).hide();
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+function showReassignModal() {
+    const ids = getSelectedIds();
+    if (ids === 'all' || !Array.isArray(ids) || ids.length < 2) {
+        alert('Select at least 2 products (source and target)');
+        return;
+    }
+    
+    const sourceSelect = document.getElementById('reassignSourceSelect');
+    const targetSelect = document.getElementById('reassignTargetSelect');
+    sourceSelect.innerHTML = '';
+    targetSelect.innerHTML = '';
+    
+    ids.forEach(id => {
+        const row = document.querySelector(`.product-row[data-ws-id="${id}"]`);
+        if (row) {
+            const sku = row.querySelector('td:nth-child(2) code').textContent;
+            const name = row.querySelector('td:nth-child(3) span').textContent.trim() || '-';
+            const option = `<option value="${id}">${sku} - ${name.substring(0, 30)}</option>`;
+            sourceSelect.innerHTML += option;
+            targetSelect.innerHTML += option;
+        }
+    });
+    
+    // Pre-select different items for source and target
+    if (targetSelect.options.length > 1) {
+        targetSelect.selectedIndex = 1;
+    }
+    
+    new bootstrap.Modal(document.getElementById('reassignModal')).show();
+    feather.replace();
+}
+
+async function executeReassign() {
+    const sourceId = parseInt(document.getElementById('reassignSourceSelect').value);
+    const targetId = parseInt(document.getElementById('reassignTargetSelect').value);
+    
+    if (!sourceId || !targetId) {
+        alert('Please select source and target products');
+        return;
+    }
+    
+    if (sourceId === targetId) {
+        alert('Source and target must be different products');
+        return;
+    }
+    
+    if (!confirm('Move all marketplace listings from source to target?')) return;
+    
+    try {
+        const resp = await fetch('/api/product-linking/bulk/reassign', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                source_id: sourceId,
+                target_id: targetId
+            })
+        });
+        const data = await resp.json();
+        
+        if (data.success) {
+            alert(data.message);
+            bootstrap.Modal.getInstance(document.getElementById('reassignModal')).hide();
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+async function bulkUngroup() {
+    const ids = getSelectedIds();
+    const count = ids === 'all' ? totalCount : (Array.isArray(ids) ? ids.length : 0);
+    
+    if (count === 0) return;
+    if (!confirm(`Ungroup ${count} selected product(s)? They will no longer be part of any product group.`)) return;
+    
+    try {
+        const resp = await fetch('/api/product-linking/bulk/ungroup', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                warehouse_stock_ids: ids === 'all' ? [] : ids
+            })
+        });
+        const data = await resp.json();
+        
+        if (data.success) {
+            alert(data.message);
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
+}
+
+// =================== AUTO-FIX MODE FUNCTIONS ===================
+
+function toggleAutoFixMode() {
+    const isEnabled = document.getElementById('autoFixMode').checked;
+    document.getElementById('autoFixStats').style.display = isEnabled ? 'flex' : 'none';
+    
+    // Highlight broken/blocked rows when Auto-Fix is enabled
+    document.querySelectorAll('.product-row').forEach(row => {
+        const statusBadge = row.querySelector('.badge.bg-danger');
+        if (statusBadge && (statusBadge.textContent.includes('Broken') || statusBadge.textContent.includes('Blocked'))) {
+            if (isEnabled) {
+                row.classList.add('table-danger');
+            } else {
+                row.classList.remove('table-danger');
+            }
+        }
+    });
+}
+
+async function fixAllIssues() {
+    if (!confirm('This will attempt to fix all broken and blocked items by:\n\n• Resetting failure counters\n• Unblocking items with valid stock/price\n• Triggering a sync push\n\nProceed?')) return;
+    
+    const fixBtn = document.querySelector('#autoFixStats button');
+    const originalText = fixBtn.innerHTML;
+    fixBtn.disabled = true;
+    fixBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Fixing...';
+    
+    try {
+        // Get all broken/blocked items from the current page
+        const brokenRows = Array.from(document.querySelectorAll('.product-row')).filter(row => {
+            const statusBadge = row.querySelector('.badge.bg-danger');
+            return statusBadge && (statusBadge.textContent.includes('Broken') || statusBadge.textContent.includes('Blocked'));
+        });
+        
+        const ids = brokenRows.map(row => parseInt(row.dataset.wsId));
+        
+        if (ids.length === 0) {
+            alert('No broken or blocked items found on this page.');
+            return;
+        }
+        
+        const resp = await fetch('/api/product-linking/bulk/repair', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ warehouse_stock_ids: ids })
+        });
+        const data = await resp.json();
+        
+        if (data.success) {
+            alert(`Fix job started (ID: ${data.job_id}).\n\n${ids.length} items queued for repair.\n\nRefresh the page in a few seconds to see results.`);
+            setTimeout(() => location.reload(), 3000);
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    } finally {
+        fixBtn.disabled = false;
+        fixBtn.innerHTML = originalText;
+        feather.replace();
+    }
+}
+
+async function quickFix(warehouseStockId, sku) {
+    const row = document.querySelector(`.product-row[data-ws-id="${warehouseStockId}"]`);
+    if (row) row.classList.add('table-warning');
+    
+    try {
+        const resp = await fetch(`/api/product-linking/repair/${warehouseStockId}`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'}
+        });
+        const data = await resp.json();
+        
+        if (data.success) {
+            if (data.fixes && data.fixes.length > 0) {
+                alert(`Fixed: ${data.fixes.join(', ')}`);
+            } else if (data.remaining_issues && data.remaining_issues.length > 0) {
+                alert(`Could not auto-fix:\n\n• ${data.remaining_issues.join('\n• ')}`);
+            } else {
+                alert('No issues found or all issues fixed!');
+            }
+            location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    } finally {
+        if (row) row.classList.remove('table-warning');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    feather.replace();
+});
+</script>
+{% endblock %}

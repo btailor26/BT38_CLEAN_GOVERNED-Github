@@ -1,0 +1,255 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Listing - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                <i data-feather="edit" class="me-2"></i>
+                Edit Listing
+            </h1>
+            <a href="{{ url_for('routes.listings') }}" class="btn btn-outline-secondary">
+                <i data-feather="arrow-left" class="me-1"></i>
+                Back to Listings
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('routes.edit_listing', listing_id=listing.id) }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    
+                    <!-- Listing Info -->
+                    <div class="alert alert-info mb-4">
+                        <h6 class="mb-2">Listing Information:</h6>
+                        <div><strong>SKU:</strong> {{ listing.warehouse_stock.sku if listing.warehouse_stock else 'N/A' }}</div>
+                        <div><strong>Store:</strong> {{ listing.store.name if listing.store else 'Unknown' }} ({{ listing.store.platform if listing.store else '' }})</div>
+                        <div><strong>External ID:</strong> {{ listing.external_listing_id }}</div>
+                        {% if listing.warehouse_stock %}
+                        <div class="mt-2 p-2 bg-light rounded">
+                            <strong>Warehouse Quantity:</strong> 
+                            <span class="badge bg-primary fs-6">{{ listing.warehouse_stock.sellable_quantity }}</span>
+                            <span class="badge bg-secondary ms-2">
+                                <i data-feather="lock" style="width: 12px; height: 12px;"></i> Managed by Product Linking
+                            </span>
+                        </div>
+                        <div class="mt-2">
+                            <a href="{{ url_for('routes.product_linking') }}?search={{ listing.warehouse_stock.sku }}" class="btn btn-sm btn-primary">
+                                <i data-feather="sliders" class="me-1"></i>Adjust Quantity via Product Linking
+                            </a>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <!-- Listing Details -->
+                    <h5 class="mb-3">
+                        <i data-feather="edit" class="me-2"></i>
+                        Listing Details
+                    </h5>
+                    
+                    <div class="mb-3">
+                        <label for="title" class="form-label">Title <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="title" name="title" value="{{ listing.title }}" required maxlength="500">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control" id="description" name="description" rows="4">{{ listing.description or '' }}</textarea>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="price" class="form-label">Price <span class="text-danger">*</span></label>
+                                <input type="number" class="form-control" id="price" name="price" step="0.01" min="0" value="{{ listing.price }}" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="currency" class="form-label">Currency</label>
+                                <select class="form-select" id="currency" name="currency">
+                                    <option value="GBP" {% if listing.currency == 'GBP' %}selected{% endif %}>GBP (£)</option>
+                                    <option value="USD" {% if listing.currency == 'USD' %}selected{% endif %}>USD ($)</option>
+                                    <option value="EUR" {% if listing.currency == 'EUR' %}selected{% endif %}>EUR (€)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <!-- Sync Settings -->
+                    <h5 class="mb-3">
+                        <i data-feather="settings" class="me-2"></i>
+                        Synchronization Settings
+                    </h5>
+                    
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="sync_quantity" name="sync_quantity" {% if listing.sync_quantity %}checked{% endif %}>
+                            <label class="form-check-label" for="sync_quantity">
+                                <strong>Sync Quantity</strong>
+                                <div class="text-muted small">Automatically update marketplace quantity based on warehouse stock</div>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="sync_price" name="sync_price" {% if listing.sync_price %}checked{% endif %}>
+                            <label class="form-check-label" for="sync_price">
+                                <strong>Sync Price</strong>
+                                <div class="text-muted small">Automatically update marketplace price (use with caution)</div>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="quantity_buffer" class="form-label">Quantity Buffer</label>
+                                <input type="number" class="form-control" id="quantity_buffer" name="quantity_buffer" value="{{ listing.quantity_buffer or 0 }}" min="0">
+                                <div class="form-text">Reduce marketplace quantity by this amount</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="max_quantity_limit" class="form-label">Maximum Quantity</label>
+                                <input type="number" class="form-control" id="max_quantity_limit" name="max_quantity_limit" value="{{ listing.max_quantity_limit or '' }}" min="0">
+                                <div class="form-text">Optional: Cap marketplace quantity</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <!-- Status Settings -->
+                    <h5 class="mb-3">
+                        <i data-feather="activity" class="me-2"></i>
+                        Status Settings
+                    </h5>
+                    
+                    <div class="mb-3">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="is_active" name="is_active" {% if listing.is_active %}checked{% endif %}>
+                            <label class="form-check-label" for="is_active">
+                                <strong>Active Listing</strong>
+                                <div class="text-muted small">Enable or disable this listing</div>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="push_state" class="form-label">Push State</label>
+                        <select class="form-select" id="push_state" name="push_state">
+                            <option value="active" {% if listing.push_state == 'active' %}selected{% endif %}>Active - Ready to push</option>
+                            <option value="blocked" {% if listing.push_state == 'blocked' %}selected{% endif %}>Blocked - Do not push</option>
+                            <option value="needs_review" {% if listing.push_state == 'needs_review' %}selected{% endif %}>Needs Review - Requires attention</option>
+                            <option value="disabled" {% if listing.push_state == 'disabled' %}selected{% endif %}>Disabled - Temporarily disabled</option>
+                        </select>
+                        <div class="form-text">Control whether this listing can be pushed to marketplace</div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <!-- Push Status (Read-only) -->
+                    {% if listing.last_push_at %}
+                    <div class="alert alert-secondary">
+                        <h6 class="mb-2">Last Push Information:</h6>
+                        <div><strong>Date:</strong> {{ listing.last_push_at.strftime('%Y-%m-%d %H:%M:%S') }}</div>
+                        <div><strong>Status:</strong> 
+                            {% if listing.last_push_status == 'success' %}
+                                <span class="badge bg-success">Success</span>
+                            {% elif listing.last_push_status == 'error' %}
+                                <span class="badge bg-danger">Error</span>
+                            {% else %}
+                                <span class="badge bg-warning">{{ listing.last_push_status }}</span>
+                            {% endif %}
+                        </div>
+                        <div><strong>Quantity Pushed:</strong> {{ listing.last_push_quantity or 'N/A' }}</div>
+                        {% if listing.last_push_error %}
+                        <div><strong>Error:</strong> <span class="text-danger">{{ listing.last_push_error }}</span></div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Submit Buttons -->
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{{ url_for('routes.listings') }}" class="btn btn-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-primary">
+                            <i data-feather="save" class="me-1"></i>
+                            Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Info Sidebar -->
+    <div class="col-md-4">
+        <div class="card mb-3">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i data-feather="info" class="me-2"></i>
+                    Calculated Values
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-2">
+                    <strong>Effective Quantity:</strong>
+                    <span class="badge bg-primary">{{ listing.effective_quantity }}</span>
+                </div>
+                <div class="small text-muted">
+                    This is the quantity that will be shown on the marketplace, calculated from warehouse stock minus buffer and applying any limits.
+                </div>
+                
+                <hr>
+                
+                <div class="mb-2">
+                    <strong>Needs Push:</strong>
+                    {% if listing.needs_push %}
+                        <span class="badge bg-warning">Yes</span>
+                    {% else %}
+                        <span class="badge bg-success">No</span>
+                    {% endif %}
+                </div>
+                <div class="small text-muted">
+                    Indicates whether the listing needs to be pushed due to quantity changes or errors.
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i data-feather="help-circle" class="me-2"></i>
+                    Help
+                </h5>
+            </div>
+            <div class="card-body small">
+                <p><strong>Push State Options:</strong></p>
+                <ul>
+                    <li><strong>Active:</strong> Listing can be pushed normally</li>
+                    <li><strong>Blocked:</strong> Prevent pushing (e.g., due to errors)</li>
+                    <li><strong>Needs Review:</strong> Requires manual review before pushing</li>
+                    <li><strong>Disabled:</strong> Temporarily disabled</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Initialize feather icons
+document.addEventListener('DOMContentLoaded', function() {
+    feather.replace();
+});
+</script>
+{% endblock %}

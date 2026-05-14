@@ -1,0 +1,1116 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Item - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex align-items-center mb-4">
+            <a href="{{ url_for('routes.inventory') }}" class="btn btn-outline-secondary me-3">
+                <i data-feather="arrow-left"></i>
+            </a>
+            <h1 class="mb-0">
+                <i data-feather="edit-2" class="me-2"></i>
+                Edit Item: {{ item.name }}
+            </h1>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Item Details</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" id="editItemForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="name" class="form-label">
+                                <i data-feather="tag" class="me-1"></i>
+                                Item Name *
+                            </label>
+                            <input type="text" class="form-control" id="name" name="name" 
+                                   value="{{ item.name }}" required>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="sku" class="form-label">
+                                <i data-feather="hash" class="me-1"></i>
+                                SKU *
+                            </label>
+                            <input type="text" class="form-control" id="sku" name="sku" 
+                                   value="{{ item.sku }}" required>
+                            <div class="form-text">Stock Keeping Unit - must be unique</div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="quantity" class="form-label">
+                                <i data-feather="package" class="me-1"></i>
+                                Quantity *
+                            </label>
+                            <input type="number" class="form-control" id="quantity" name="quantity" 
+                                   min="0" value="{{ item.quantity }}" required>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label for="reorder_point" class="form-label">
+                                <i data-feather="alert-triangle" class="me-1"></i>
+                                Reorder Point
+                            </label>
+                            <input type="number" class="form-control" id="reorder_point" name="reorder_point" 
+                                   min="0" value="{{ item.reorder_point or 0 }}">
+                            <div class="form-text">Alert when stock reaches this level</div>
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label for="price" class="form-label">
+                                <i data-feather="credit-card" class="me-1"></i>
+                                Price *
+                            </label>
+                            <div class="input-group">
+                                <span class="input-group-text">£</span>
+                                <input type="number" class="form-control" id="price" name="price" 
+                                       min="0" step="0.01" value="{{ '%.2f'|format(item.price) }}" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Advanced Group Linkage Section -->
+                    <div class="mb-4">
+                        <label class="form-label">
+                            <i data-feather="layers" class="me-1"></i>
+                            Product Group Linking
+                        </label>
+                        
+                        <!-- Current Group Display -->
+                        <div class="mb-3" id="current-group-display">
+                            {% if item.group %}
+                            <div class="alert alert-info d-flex align-items-center">
+                                <i data-feather="layers" class="me-2"></i>
+                                <div class="flex-grow-1">
+                                    <strong>Current Group:</strong> {{ item.group.name }}<br>
+                                    <small class="text-muted">
+                                        Group Key: {{ item.group.group_key }}
+                                        {% set group_item_count = item.group.items|length %}
+                                        ({{ group_item_count }} item{{ 's' if group_item_count != 1 else '' }})
+                                    </small>
+                                </div>
+                                <button type="button" class="btn btn-outline-warning btn-sm ms-2" 
+                                        onclick="unlinkFromGroup()" title="Remove from group">
+                                    <i data-feather="x-circle" class="me-1"></i>
+                                    Unlink
+                                </button>
+                            </div>
+                            {% else %}
+                            <div class="alert alert-secondary">
+                                <i data-feather="info" class="me-2"></i>
+                                <strong>No Group:</strong> This item is not linked to any product group.
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Group Search Interface -->
+                        <div class="mb-3">
+                            <label for="group-search" class="form-label">
+                                <i data-feather="search" class="me-1"></i>
+                                Search Groups or Items with Groups
+                            </label>
+                            <div class="position-relative">
+                                <input type="text" class="form-control" id="group-search" 
+                                       placeholder="Type to search groups or items..." autocomplete="off">
+                                <div class="position-absolute top-0 end-0 me-2 mt-2">
+                                    <div id="search-spinner" class="spinner-border spinner-border-sm text-primary d-none" role="status">
+                                        <span class="visually-hidden">Searching...</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-text">
+                                Search by group name or item name to find existing groups. 
+                                <a href="{{ url_for('routes.add_group') }}" class="link-primary">Create new group</a>
+                            </div>
+                        </div>
+                        
+                        <!-- Search Results -->
+                        <div id="search-results" class="d-none">
+                            <div class="card">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-0">
+                                        <i data-feather="list" class="me-1"></i>
+                                        Search Results
+                                    </h6>
+                                    <button type="button" class="btn-close btn-sm" onclick="clearSearch()"></button>
+                                </div>
+                                <div class="card-body p-0">
+                                    <div id="results-container" class="list-group list-group-flush">
+                                        <!-- Results will be populated here -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Hidden field for form submission -->
+                        <input type="hidden" id="group_id" name="group_id" value="{{ item.group_id or '' }}">
+                    </div>
+                    
+                    <!-- Add Items to This Group Section (only show when item is in a group) -->
+                    {% if item.group_id %}
+                    <div class="mb-4">
+                        <label class="form-label">
+                            <i data-feather="plus-circle" class="me-1"></i>
+                            Add Items to This Group
+                        </label>
+                        
+                        <!-- Group Info Header -->
+                        <div class="mb-3">
+                            <div class="alert alert-info">
+                                <div class="d-flex align-items-center">
+                                    <i data-feather="layers" class="me-2"></i>
+                                    <div class="flex-grow-1">
+                                        <strong>Adding items to:</strong> {{ item.group.name }}<br>
+                                        <small class="text-muted">Search for ungrouped items to add them to this group</small>
+                                    </div>
+                                    <div class="badge bg-primary">
+                                        {% set current_group_item_count = item.group.items|length %}
+                                        {{ current_group_item_count }} item{{ 's' if current_group_item_count != 1 else '' }}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Search Interface for Ungrouped Items -->
+                        <div class="mb-3">
+                            <label for="ungrouped-search" class="form-label">
+                                <i data-feather="search" class="me-1"></i>
+                                Search Ungrouped Items
+                            </label>
+                            <div class="position-relative">
+                                <input type="text" class="form-control" id="ungrouped-search" 
+                                       placeholder="Type to search ungrouped items by SKU or name..." autocomplete="off">
+                                <div class="position-absolute top-0 end-0 me-2 mt-2">
+                                    <div id="ungrouped-search-spinner" class="spinner-border spinner-border-sm text-primary d-none" role="status">
+                                        <span class="visually-hidden">Searching...</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-text">
+                                Only items that are not currently in any group will appear in search results. 
+                                <strong>Maximum 100 items can be added at once.</strong>
+                            </div>
+                        </div>
+                        
+                        <!-- Ungrouped Items Search Results -->
+                        <div id="ungrouped-search-results" class="d-none">
+                            <div class="card">
+                                <div class="card-header d-flex justify-content-between align-items-center">
+                                    <h6 class="mb-0">
+                                        <i data-feather="package" class="me-1"></i>
+                                        Available Items
+                                    </h6>
+                                    <div class="d-flex align-items-center">
+                                        <span id="selected-count" class="badge bg-secondary me-2">0 selected</span>
+                                        <button type="button" class="btn btn-sm btn-primary me-2" id="add-selected-btn" disabled>
+                                            <i data-feather="plus" class="me-1"></i>
+                                            Add Selected
+                                        </button>
+                                        <button type="button" class="btn-close btn-sm" onclick="clearUngroupedSearch()"></button>
+                                    </div>
+                                </div>
+                                <div class="card-body p-0">
+                                    <div class="p-3 border-bottom">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="select-all-ungrouped">
+                                            <label class="form-check-label" for="select-all-ungrouped">
+                                                <strong>Select All</strong>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div id="ungrouped-results-container" class="list-group list-group-flush" style="max-height: 400px; overflow-y: auto;">
+                                        <!-- Results will be populated here -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mb-3">
+                        <label class="form-label">
+                            <i data-feather="settings" class="me-1"></i>
+                            Variant Attributes <span class="text-muted">(Optional)</span>
+                        </label>
+                        <div class="row">
+                            <div class="col-md-6 mb-2">
+                                <input type="text" class="form-control form-control-sm" 
+                                       id="variant_color" name="variant_color" 
+                                       value="{{ item.variant_attributes.color if item.variant_attributes else '' }}"
+                                       placeholder="Color (e.g., Red, Blue)">
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <input type="text" class="form-control form-control-sm" 
+                                       id="variant_size" name="variant_size" 
+                                       value="{{ item.variant_attributes.size if item.variant_attributes else '' }}"
+                                       placeholder="Size (e.g., S, M, L, XL)">
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <input type="text" class="form-control form-control-sm" 
+                                       id="variant_material" name="variant_material" 
+                                       value="{{ item.variant_attributes.material if item.variant_attributes else '' }}"
+                                       placeholder="Material (e.g., Cotton, Leather)">
+                            </div>
+                            <div class="col-md-6 mb-2">
+                                <input type="text" class="form-control form-control-sm" 
+                                       id="variant_style" name="variant_style" 
+                                       value="{{ item.variant_attributes.style if item.variant_attributes else '' }}"
+                                       placeholder="Style (e.g., Classic, Modern)">
+                            </div>
+                        </div>
+                        <div class="form-text">Use these fields to specify what makes this item unique within its group</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">
+                            <i data-feather="file-text" class="me-1"></i>
+                            Description
+                        </label>
+                        <textarea class="form-control" id="description" name="description" rows="4" 
+                                  placeholder="Optional description of the item">{{ item.description or '' }}</textarea>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between">
+                        <a href="{{ url_for('routes.inventory') }}" class="btn btn-secondary">
+                            <i data-feather="x" class="me-1"></i>
+                            Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i data-feather="save" class="me-1"></i>
+                            Update Item
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i data-feather="info" class="me-1"></i>
+                    Item Information
+                </h6>
+            </div>
+            <div class="card-body">
+                <dl class="row small">
+                    <dt class="col-sm-5">Created:</dt>
+                    <dd class="col-sm-7">
+                        {% if item.created_at %}
+                            {{ item.created_at.strftime('%Y-%m-%d %H:%M') }}
+                        {% else %}
+                            Unknown
+                        {% endif %}
+                    </dd>
+                    
+                    <dt class="col-sm-5">Last Updated:</dt>
+                    <dd class="col-sm-7">
+                        {% if item.updated_at %}
+                            {{ item.updated_at.strftime('%Y-%m-%d %H:%M') }}
+                        {% else %}
+                            Unknown
+                        {% endif %}
+                    </dd>
+                    
+                    <dt class="col-sm-5">Stock Status:</dt>
+                    <dd class="col-sm-7">
+                        {% if item.quantity == 0 %}
+                            <span class="badge bg-danger">Out of Stock</span>
+                        {% elif item.quantity < 10 %}
+                            <span class="badge bg-warning text-dark">Low Stock</span>
+                        {% elif item.quantity > 50 %}
+                            <span class="badge bg-success">Well Stocked</span>
+                        {% else %}
+                            <span class="badge bg-info">In Stock</span>
+                        {% endif %}
+                    </dd>
+                </dl>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i data-feather="help-circle" class="me-1"></i>
+                    Tips
+                </h6>
+            </div>
+            <div class="card-body">
+                <ul class="list-unstyled small">
+                    <li class="mb-2">
+                        <i data-feather="check" class="text-success me-2"></i>
+                        Changes will sync to connected stores
+                    </li>
+                    <li class="mb-2">
+                        <i data-feather="check" class="text-success me-2"></i>
+                        SKU changes may affect external listings
+                    </li>
+                    <li class="mb-2">
+                        <i data-feather="check" class="text-success me-2"></i>
+                        Price updates will be reflected in next sync
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Advanced Group Linking JavaScript
+    class GroupLinkingManager {
+        constructor(itemId, csrfToken) {
+            this.itemId = itemId;
+            this.csrfToken = csrfToken;
+            this.searchTimeout = null;
+            this.currentGroupId = {{ item.group_id or 'null' }};
+            
+            this.initEventListeners();
+        }
+        
+        initEventListeners() {
+            const searchInput = document.getElementById('group-search');
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => this.handleSearchInput(e));
+                searchInput.addEventListener('focus', () => this.showSearchTips());
+                searchInput.addEventListener('blur', () => this.hideSearchTips()); 
+            }
+        }
+        
+        handleSearchInput(e) {
+            const query = e.target.value.trim();
+            
+            // Clear previous timeout
+            if (this.searchTimeout) {
+                clearTimeout(this.searchTimeout);
+            }
+            
+            // Hide results if query is empty
+            if (!query) {
+                this.hideResults();
+                return;
+            }
+            
+            // Show spinner
+            this.showSpinner(true);
+            
+            // Debounce search with 250ms delay
+            this.searchTimeout = setTimeout(() => {
+                this.performSearch(query);
+            }, 250);
+        }
+        
+        async performSearch(query) {
+            try {
+                // Search both groups and items in parallel
+                const [groupsResponse, itemsResponse] = await Promise.all([
+                    fetch(`/groups/search?q=${encodeURIComponent(query)}`),
+                    fetch(`/items/search?q=${encodeURIComponent(query)}&require_group=true`)
+                ]);
+                
+                const [groupsData, itemsData] = await Promise.all([
+                    groupsResponse.json(),
+                    itemsResponse.json()
+                ]);
+                
+                this.displayResults(groupsData, itemsData);
+                
+            } catch (error) {
+                console.error('Search error:', error);
+                this.showError('Search failed. Please try again.');
+            } finally {
+                this.showSpinner(false);
+            }
+        }
+        
+        displayResults(groupsData, itemsData) {
+            const resultsContainer = document.getElementById('results-container');
+            const searchResults = document.getElementById('search-results');
+            
+            if (!resultsContainer || !searchResults) return;
+            
+            // Clear previous results
+            resultsContainer.innerHTML = '';
+            
+            let hasResults = false;
+            
+            // Add group results
+            if (groupsData.success && groupsData.groups.length > 0) {
+                hasResults = true;
+                this.addGroupResults(resultsContainer, groupsData.groups);
+            }
+            
+            // Add items results
+            if (itemsData.success && itemsData.items.length > 0) {
+                hasResults = true;
+                this.addItemResults(resultsContainer, itemsData.items);
+            }
+            
+            if (!hasResults) {
+                resultsContainer.innerHTML = `
+                    <div class="p-3 text-muted text-center">
+                        <i data-feather="search" class="mb-2"></i><br>
+                        No groups or items found matching your search.
+                        <br><a href="{{ url_for('routes.add_group') }}" class="link-primary">Create a new group</a>
+                    </div>
+                `;
+                feather.replace();
+            }
+            
+            // Show results
+            searchResults.classList.remove('d-none');
+        }
+        
+        addGroupResults(container, groups) {
+            // Add header for groups section
+            const groupHeader = document.createElement('div');
+            groupHeader.className = 'p-2 bg-light border-bottom';
+            groupHeader.innerHTML = '<strong><i data-feather="layers" class="me-1"></i>Product Groups</strong>';
+            container.appendChild(groupHeader);
+            
+            groups.forEach(group => {
+                const groupItem = document.createElement('div');
+                groupItem.className = `list-group-item list-group-item-action ${group.id === this.currentGroupId ? 'active disabled' : ''}`;
+                
+                groupItem.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1">${this.escapeHtml(group.name)}</h6>
+                            <p class="mb-1 small">
+                                <strong>Group Key:</strong> ${this.escapeHtml(group.group_key)}<br>
+                                <strong>Items:</strong> ${group.item_count} item${group.item_count !== 1 ? 's' : ''}
+                            </p>
+                            ${group.description ? `<small class="text-muted">${this.escapeHtml(group.description)}</small>` : ''}
+                        </div>
+                        <div class="ms-2">
+                            ${group.id === this.currentGroupId 
+                                ? '<span class="badge bg-success">Current</span>' 
+                                : '<button type="button" class="btn btn-outline-primary btn-sm" onclick="groupLinking.linkToGroup(' + group.id + ', \'' + this.escapeHtml(group.name) + '\')">Link</button>'
+                            }
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(groupItem);
+            });
+            
+            // Refresh feather icons
+            feather.replace();
+        }
+        
+        addItemResults(container, items) {
+            // Add header for items section
+            const itemHeader = document.createElement('div');
+            itemHeader.className = 'p-2 bg-light border-bottom';
+            itemHeader.innerHTML = '<strong><i data-feather="package" class="me-1"></i>Items with Groups</strong>';
+            container.appendChild(itemHeader);
+            
+            items.forEach(item => {
+                const itemElement = document.createElement('div');
+                itemElement.className = `list-group-item list-group-item-action ${item.group_id === this.currentGroupId ? 'active disabled' : ''}`;
+                
+                itemElement.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div class="flex-grow-1">
+                            <h6 class="mb-1">${this.escapeHtml(item.name)}</h6>
+                            <p class="mb-1 small">
+                                <strong>SKU:</strong> ${this.escapeHtml(item.sku)}<br>
+                                <strong>Group:</strong> ${item.group_name ? this.escapeHtml(item.group_name) : 'Unknown'}
+                            </p>
+                            <small class="text-muted">£${parseFloat(item.price).toFixed(2)} • Qty: ${item.quantity}</small>
+                        </div>
+                        <div class="ms-2">
+                            ${item.group_id === this.currentGroupId 
+                                ? '<span class="badge bg-success">Current</span>' 
+                                : '<button type="button" class="btn btn-outline-primary btn-sm" onclick="groupLinking.linkToGroup(' + item.group_id + ', \'' + this.escapeHtml(item.group_name) + '\')">Link to Group</button>'
+                            }
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(itemElement);
+            });
+            
+            // Refresh feather icons
+            feather.replace();
+        }
+        
+        async linkToGroup(groupId, groupName) {
+            // Show confirmation dialog
+            const confirmMsg = this.currentGroupId 
+                ? `Move this item from its current group to "${groupName}"?`
+                : `Link this item to group "${groupName}"?`;
+                
+            if (!confirm(confirmMsg)) {
+                return;
+            }
+            
+            try {
+                // Show loading state
+                this.showNotification('Linking to group...', 'info');
+                
+                // Make API call
+                const formData = new FormData();
+                formData.append('group_id', groupId);
+                formData.append('csrf_token', this.csrfToken);
+                
+                const response = await fetch(`/items/${this.itemId}/link_group`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-Token': this.csrfToken
+                    },
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    this.showNotification(data.message, 'success');
+                    // Update the UI to reflect the change
+                    this.updateCurrentGroup(groupId, groupName);
+                    this.clearSearch();
+                } else {
+                    this.showNotification(data.error || 'Failed to link to group', 'danger');
+                }
+                
+            } catch (error) {
+                console.error('Link error:', error);
+                this.showNotification('Network error. Please try again.', 'danger');
+            }
+        }
+        
+        async unlinkFromGroup() {
+            if (!confirm('Remove this item from its current group? It will become an individual item.')) {
+                return;
+            }
+            
+            try {
+                // Show loading state
+                this.showNotification('Removing from group...', 'info');
+                
+                // Make API call
+                const formData = new FormData();
+                formData.append('group_id', '');
+                formData.append('csrf_token', this.csrfToken);
+                
+                const response = await fetch(`/items/${this.itemId}/link_group`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-Token': this.csrfToken
+                    },
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    this.showNotification(data.message, 'success');
+                    // Update the UI to show no group
+                    this.updateCurrentGroup(null, null);
+                } else {
+                    this.showNotification(data.error || 'Failed to remove from group', 'danger');
+                }
+                
+            } catch (error) {
+                console.error('Unlink error:', error);
+                this.showNotification('Network error. Please try again.', 'danger');
+            }
+        }
+        
+        updateCurrentGroup(groupId, groupName) {
+            this.currentGroupId = groupId;
+            document.getElementById('group_id').value = groupId || '';
+            
+            const currentGroupDisplay = document.getElementById('current-group-display');
+            if (!currentGroupDisplay) return;
+            
+            if (groupId && groupName) {
+                currentGroupDisplay.innerHTML = `
+                    <div class="alert alert-info d-flex align-items-center">
+                        <i data-feather="layers" class="me-2"></i>
+                        <div class="flex-grow-1">
+                            <strong>Current Group:</strong> ${this.escapeHtml(groupName)}<br>
+                            <small class="text-muted">Group updated successfully</small>
+                        </div>
+                        <button type="button" class="btn btn-outline-warning btn-sm ms-2" 
+                                onclick="groupLinking.unlinkFromGroup()" title="Remove from group">
+                            <i data-feather="x-circle" class="me-1"></i>
+                            Unlink
+                        </button>
+                    </div>
+                `;
+            } else {
+                currentGroupDisplay.innerHTML = `
+                    <div class="alert alert-secondary">
+                        <i data-feather="info" class="me-2"></i>
+                        <strong>No Group:</strong> This item is not linked to any product group.
+                    </div>
+                `;
+            }
+            
+            feather.replace();
+        }
+        
+        showSpinner(show) {
+            const spinner = document.getElementById('search-spinner');
+            if (spinner) {
+                spinner.classList.toggle('d-none', !show);
+            }
+        }
+        
+        hideResults() {
+            const searchResults = document.getElementById('search-results');
+            if (searchResults) {
+                searchResults.classList.add('d-none');
+            }
+        }
+        
+        clearSearch() {
+            const searchInput = document.getElementById('group-search');
+            if (searchInput) {
+                searchInput.value = '';
+            }
+            this.hideResults();
+        }
+        
+        showNotification(message, type = 'info') {
+            if (window.inventoryDashboard) {
+                window.inventoryDashboard.showNotification(message, type);
+            } else {
+                // Fallback alert
+                alert(message);
+            }
+        }
+        
+        showError(message) {
+            this.showNotification(message, 'danger');
+        }
+        
+        escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        showSearchTips() {
+            // Optional: Show search tips when focused
+        }
+        
+        hideSearchTips() {
+            // Optional: Hide search tips when blurred
+        }
+    }
+    
+    // Ungrouped Items Manager Class for adding items to current group
+    class UngroupedItemsManager {
+        constructor(groupId, csrfToken) {
+            this.groupId = groupId;
+            this.csrfToken = csrfToken;
+            this.searchTimeout = null;
+            this.selectedItems = new Set();
+            
+            this.initEventListeners();
+        }
+        
+        initEventListeners() {
+            const searchInput = document.getElementById('ungrouped-search');
+            if (searchInput) {
+                searchInput.addEventListener('input', (e) => this.handleSearchInput(e));
+            }
+            
+            const addSelectedBtn = document.getElementById('add-selected-btn');
+            if (addSelectedBtn) {
+                addSelectedBtn.addEventListener('click', () => this.addSelectedItems());
+            }
+            
+            const selectAllCheckbox = document.getElementById('select-all-ungrouped');
+            if (selectAllCheckbox) {
+                selectAllCheckbox.addEventListener('change', (e) => this.handleSelectAll(e));
+            }
+        }
+        
+        handleSearchInput(e) {
+            const query = e.target.value.trim();
+            
+            // Clear previous timeout
+            if (this.searchTimeout) {
+                clearTimeout(this.searchTimeout);
+            }
+            
+            // Hide results if query is empty
+            if (!query) {
+                this.hideUngroupedResults();
+                return;
+            }
+            
+            // Show spinner
+            this.showUngroupedSpinner(true);
+            
+            // Debounce search with 300ms delay
+            this.searchTimeout = setTimeout(() => {
+                this.performUngroupedSearch(query);
+            }, 300);
+        }
+        
+        async performUngroupedSearch(query) {
+            try {
+                const response = await fetch('/search_ungrouped_items', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': this.csrfToken
+                    },
+                    body: JSON.stringify({
+                        query: query,
+                        csrf_token: this.csrfToken
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    this.displayUngroupedResults(data.items);
+                } else {
+                    this.showError(data.error || 'Search failed');
+                }
+                
+            } catch (error) {
+                console.error('Ungrouped search error:', error);
+                this.showError('Search failed. Please try again.');
+            } finally {
+                this.showUngroupedSpinner(false);
+            }
+        }
+        
+        displayUngroupedResults(items) {
+            const resultsContainer = document.getElementById('ungrouped-results-container');
+            const searchResults = document.getElementById('ungrouped-search-results');
+            
+            if (!resultsContainer || !searchResults) return;
+            
+            // Clear previous results and reset selection
+            resultsContainer.innerHTML = '';
+            this.selectedItems.clear();
+            this.updateSelectedCount();
+            
+            if (items.length === 0) {
+                resultsContainer.innerHTML = `
+                    <div class="p-3 text-muted text-center">
+                        <i data-feather="search" class="mb-2"></i><br>
+                        No ungrouped items found matching your search.
+                    </div>
+                `;
+                feather.replace();
+            } else {
+                // Performance optimization: Client-side rendering cap
+                const MAX_CLIENT_RENDER = 50;
+                const itemsToRender = items.slice(0, MAX_CLIENT_RENDER);
+                const hasMoreItems = items.length > MAX_CLIENT_RENDER;
+                
+                if (hasMoreItems) {
+                    resultsContainer.innerHTML = `
+                        <div class="p-2 bg-warning text-dark text-center small">
+                            <i data-feather="info" class="me-1"></i>
+                            Showing first ${MAX_CLIENT_RENDER} of ${items.length} results. Refine your search for better performance.
+                        </div>
+                    `;
+                }
+                
+                itemsToRender.forEach(item => {
+                    const itemElement = document.createElement('div');
+                    itemElement.className = 'list-group-item';
+                    
+                    itemElement.innerHTML = `
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="form-check me-3">
+                                <input class="form-check-input" type="checkbox" 
+                                       value="${item.id}" id="item-${item.id}"
+                                       onchange="ungroupedManager.handleItemSelection(${item.id}, this.checked)">
+                            </div>
+                            <div class="flex-grow-1">
+                                <h6 class="mb-1">${this.escapeHtml(item.name)}</h6>
+                                <p class="mb-1 small">
+                                    <strong>SKU:</strong> ${this.escapeHtml(item.sku)}<br>
+                                    <strong>Price:</strong> £${parseFloat(item.price).toFixed(2)} | 
+                                    <strong>Quantity:</strong> ${item.quantity}
+                                </p>
+                                ${item.description ? `<small class="text-muted">${this.escapeHtml(item.description)}</small>` : ''}
+                                ${item.variant_attributes && Object.keys(item.variant_attributes).length > 0 ? 
+                                    `<div class="mt-1">
+                                        ${Object.entries(item.variant_attributes).map(([key, value]) => 
+                                            `<span class="badge bg-light text-dark me-1">${key}: ${value}</span>`
+                                        ).join('')}
+                                    </div>` : ''
+                                }
+                            </div>
+                        </div>
+                    `;
+                    
+                    resultsContainer.appendChild(itemElement);
+                });
+                
+                feather.replace();
+            }
+            
+            // Show results
+            searchResults.classList.remove('d-none');
+        }
+        
+        handleItemSelection(itemId, isSelected) {
+            if (isSelected) {
+                this.selectedItems.add(itemId);
+            } else {
+                this.selectedItems.delete(itemId);
+            }
+            this.updateSelectedCount();
+            this.updateSelectAllState();
+        }
+        
+        handleSelectAll(e) {
+            const checkboxes = document.querySelectorAll('#ungrouped-results-container input[type="checkbox"]');
+            const selectAll = e.target.checked;
+            
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = selectAll;
+                const itemId = parseInt(checkbox.value);
+                if (selectAll) {
+                    this.selectedItems.add(itemId);
+                } else {
+                    this.selectedItems.delete(itemId);
+                }
+            });
+            
+            this.updateSelectedCount();
+        }
+        
+        updateSelectAllState() {
+            const checkboxes = document.querySelectorAll('#ungrouped-results-container input[type="checkbox"]');
+            const selectAllCheckbox = document.getElementById('select-all-ungrouped');
+            
+            if (!selectAllCheckbox || checkboxes.length === 0) return;
+            
+            const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+            
+            if (checkedCount === 0) {
+                selectAllCheckbox.indeterminate = false;
+                selectAllCheckbox.checked = false;
+            } else if (checkedCount === checkboxes.length) {
+                selectAllCheckbox.indeterminate = false;
+                selectAllCheckbox.checked = true;
+            } else {
+                selectAllCheckbox.indeterminate = true;
+                selectAllCheckbox.checked = false;
+            }
+        }
+        
+        updateSelectedCount() {
+            const countElement = document.getElementById('selected-count');
+            const addButton = document.getElementById('add-selected-btn');
+            
+            if (countElement) {
+                countElement.textContent = `${this.selectedItems.size} selected`;
+            }
+            
+            if (addButton) {
+                addButton.disabled = this.selectedItems.size === 0;
+            }
+        }
+        
+        async addSelectedItems() {
+            if (this.selectedItems.size === 0) {
+                this.showError('Please select at least one item to add');
+                return;
+            }
+            
+            const selectedArray = Array.from(this.selectedItems);
+            
+            // Security: Client-side validation to match server-side limits
+            if (selectedArray.length > 100) {
+                this.showError('Cannot add more than 100 items at once. Please reduce your selection.');
+                return;
+            }
+            
+            if (!confirm(`Add ${selectedArray.length} item${selectedArray.length !== 1 ? 's' : ''} to this group?`)) {
+                return;
+            }
+            
+            try {
+                // Show loading state
+                this.showNotification('Adding items to group...', 'info');
+                const addButton = document.getElementById('add-selected-btn');
+                if (addButton) {
+                    addButton.disabled = true;
+                    addButton.innerHTML = '<i data-feather="loader" class="me-1"></i>Adding...';
+                    feather.replace();
+                }
+                
+                const response = await fetch(`/add_sku_to_group/${this.groupId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-Token': this.csrfToken
+                    },
+                    body: JSON.stringify({
+                        operation: 'add',
+                        item_ids: selectedArray,
+                        csrf_token: this.csrfToken
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok && data.success) {
+                    this.showNotification(data.message || `Successfully added ${selectedArray.length} item${selectedArray.length !== 1 ? 's' : ''} to group!`, 'success');
+                    
+                    // Clear search and refresh results
+                    this.clearUngroupedSearch();
+                    
+                    // Update group item count in header if possible
+                    this.updateGroupItemCount();
+                    
+                } else {
+                    this.showError(data.error || 'Failed to add items to group');
+                }
+                
+            } catch (error) {
+                console.error('Add items error:', error);
+                this.showError('Network error. Please try again.');
+            } finally {
+                // Reset button state
+                const addButton = document.getElementById('add-selected-btn');
+                if (addButton) {
+                    addButton.disabled = this.selectedItems.size === 0;
+                    addButton.innerHTML = '<i data-feather="plus" class="me-1"></i>Add Selected';
+                    feather.replace();
+                }
+            }
+        }
+        
+        updateGroupItemCount() {
+            // Update the badge showing current group item count
+            const badge = document.querySelector('.alert-info .badge.bg-primary');
+            if (badge) {
+                const currentText = badge.textContent;
+                const match = currentText.match(/(\d+)/);
+                if (match) {
+                    const currentCount = parseInt(match[1]);
+                    const newCount = currentCount + this.selectedItems.size;
+                    badge.textContent = `${newCount} item${newCount !== 1 ? 's' : ''}`;
+                }
+            }
+        }
+        
+        showUngroupedSpinner(show) {
+            const spinner = document.getElementById('ungrouped-search-spinner');
+            if (spinner) {
+                spinner.classList.toggle('d-none', !show);
+            }
+        }
+        
+        hideUngroupedResults() {
+            const searchResults = document.getElementById('ungrouped-search-results');
+            if (searchResults) {
+                searchResults.classList.add('d-none');
+            }
+        }
+        
+        clearUngroupedSearch() {
+            const searchInput = document.getElementById('ungrouped-search');
+            if (searchInput) {
+                searchInput.value = '';
+            }
+            this.hideUngroupedResults();
+            this.selectedItems.clear();
+            this.updateSelectedCount();
+        }
+        
+        showNotification(message, type = 'info') {
+            if (window.inventoryDashboard) {
+                window.inventoryDashboard.showNotification(message, type);
+            } else {
+                // Fallback alert
+                alert(message);
+            }
+        }
+        
+        showError(message) {
+            this.showNotification(message, 'danger');
+        }
+        
+        escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    }
+    
+    // Global functions for template onclick handlers
+    function clearSearch() {
+        if (window.groupLinking) {
+            window.groupLinking.clearSearch();
+        }
+    }
+    
+    function unlinkFromGroup() {
+        if (window.groupLinking) {
+            window.groupLinking.unlinkFromGroup();
+        }
+    }
+    
+    function clearUngroupedSearch() {
+        if (window.ungroupedManager) {
+            window.ungroupedManager.clearUngroupedSearch();
+        }
+    }
+    
+    // Initialize when DOM is ready
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize group linking manager
+        window.groupLinking = new GroupLinkingManager({{ item.id }}, '{{ csrf_token }}');
+        
+        // Initialize ungrouped items manager (only if item is in a group)
+        {% if item.group_id %}
+        window.ungroupedManager = new UngroupedItemsManager({{ item.group_id }}, '{{ csrf_token }}');
+        {% endif %}
+        
+        // Form validation (original functionality)
+        document.getElementById('editItemForm').addEventListener('submit', function(e) {
+            const name = document.getElementById('name').value.trim();
+            const sku = document.getElementById('sku').value.trim();
+            const quantity = parseInt(document.getElementById('quantity').value);
+            const price = parseFloat(document.getElementById('price').value);
+            
+            if (!name || !sku) {
+                e.preventDefault();
+                alert('Please fill in all required fields');
+                return;
+            }
+            
+            if (quantity < 0) {
+                e.preventDefault();
+                alert('Quantity cannot be negative');
+                return;
+            }
+            
+            if (price < 0) {
+                e.preventDefault();
+                alert('Price cannot be negative');
+                return;
+            }
+        });
+    });
+</script>
+{% endblock %}

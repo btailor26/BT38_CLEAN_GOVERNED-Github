@@ -1,0 +1,859 @@
+{% extends "base.html" %}
+
+{% block title %}FAQ - Frequently Asked Questions{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <!-- Language Selector -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 id="page-title">
+                    <i data-feather="help-circle" class="me-2"></i>
+                    <span data-translate="title">Frequently Asked Questions</span>
+                </h1>
+                <div class="btn-group" role="group" aria-label="Language selector">
+                    <button type="button" class="btn btn-outline-primary lang-btn active" data-lang="en">
+                        English
+                    </button>
+                    <button type="button" class="btn btn-outline-primary lang-btn" data-lang="hi">
+                        हिन्दी
+                    </button>
+                    <button type="button" class="btn btn-outline-primary lang-btn" data-lang="ur">
+                        اردو
+                    </button>
+                    <button type="button" class="btn btn-outline-primary lang-btn" data-lang="pa">
+                        ਪੰਜਾਬੀ
+                    </button>
+                    <button type="button" class="btn btn-outline-primary lang-btn" data-lang="es">
+                        Español
+                    </button>
+                    <button type="button" class="btn btn-outline-primary lang-btn" data-lang="fr">
+                        Français
+                    </button>
+                </div>
+            </div>
+
+            <!-- Search Bar -->
+            <div class="mb-4">
+                <div class="input-group">
+                    <span class="input-group-text bg-dark border-secondary">
+                        <i data-feather="search"></i>
+                    </span>
+                    <input type="text" class="form-control bg-dark text-white border-secondary" 
+                           id="faqSearch" placeholder="Search FAQs..." 
+                           onkeyup="filterFAQs(this.value)">
+                </div>
+            </div>
+
+            <!-- FAQ Accordion -->
+            <div class="accordion" id="faqAccordion">
+                
+                <!-- Section: Getting Started -->
+                <div class="card bg-dark mb-3">
+                    <div class="card-header">
+                        <h5 class="mb-0" data-translate="section_getting_started">Getting Started</h5>
+                    </div>
+                </div>
+
+                <!-- Q1: What is this system? -->
+                <div class="accordion-item bg-dark">
+                    <h2 class="accordion-header" id="headingOne">
+                        <button class="accordion-button bg-dark text-white" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne">
+                            <span data-translate="q1">What is this inventory management system?</span>
+                        </button>
+                    </h2>
+                    <div id="collapseOne" class="accordion-collapse collapse show" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body text-light">
+                            <span data-translate="a1">This is a multi-channel inventory management system that helps you manage stock across multiple selling platforms like Amazon and eBay. It keeps all your inventory synchronized automatically, so when you sell on one platform, stock updates everywhere.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Q2: How do I add a store? -->
+                <div class="accordion-item bg-dark">
+                    <h2 class="accordion-header" id="headingTwo">
+                        <button class="accordion-button collapsed bg-dark text-white" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTwo">
+                            <span data-translate="q2">How do I connect my Amazon or eBay store?</span>
+                        </button>
+                    </h2>
+                    <div id="collapseTwo" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body text-light">
+                            <span data-translate="a2">Go to the Stores page and click "Add Store". Choose your platform (Amazon or eBay), enter your store details, and follow the authentication process. Once connected, your listings will be imported automatically.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section: Stock Management -->
+                <div class="card bg-dark mb-3 mt-4">
+                    <div class="card-header">
+                        <h5 class="mb-0" data-translate="section_stock">Stock Management</h5>
+                    </div>
+                </div>
+
+                <!-- Q3: Where do I update stock? -->
+                <div class="accordion-item bg-dark">
+                    <h2 class="accordion-header" id="headingThree">
+                        <button class="accordion-button collapsed bg-dark text-white" type="button" data-bs-toggle="collapse" data-bs-target="#collapseThree">
+                            <span data-translate="q3">Where should I update my stock levels?</span>
+                        </button>
+                    </h2>
+                    <div id="collapseThree" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body text-light">
+                            <span data-translate="a3">Always update stock in the Warehouse page. This is your single source of truth. When you change a quantity there, it automatically pushes to all connected marketplaces (Amazon, eBay, etc.).</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Q4: How does syncing work? -->
+                <div class="accordion-item bg-dark">
+                    <h2 class="accordion-header" id="headingFour">
+                        <button class="accordion-button collapsed bg-dark text-white" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFour">
+                            <span data-translate="q4">How does the automatic syncing work?</span>
+                        </button>
+                    </h2>
+                    <div id="collapseFour" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body text-light">
+                            <span data-translate="a4">The system works in two directions: 1) When you update warehouse stock, it pushes to all marketplaces. 2) When someone buys on a marketplace, that sale syncs back to update your warehouse stock. This keeps everything balanced automatically.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Q5: What are product groups? -->
+                <div class="accordion-item bg-dark">
+                    <h2 class="accordion-header" id="headingFive">
+                        <button class="accordion-button collapsed bg-dark text-white" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFive">
+                            <span data-translate="q5">What are Product Groups and when should I use them?</span>
+                        </button>
+                    </h2>
+                    <div id="collapseFive" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body text-light">
+                            <span data-translate="a5">Product Groups are for managing variations of the same product (like different sizes or colors). When items are grouped, they share the same stock level. Update one, and all items in the group update together. Use groups when you have the same physical product listed with different SKUs.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section: Linking -->
+                <div class="card bg-dark mb-3 mt-4">
+                    <div class="card-header">
+                        <h5 class="mb-0" data-translate="section_linking">Linking Products</h5>
+                    </div>
+                </div>
+
+                <!-- Q6: How does linking work? -->
+                <div class="accordion-item bg-dark">
+                    <h2 class="accordion-header" id="headingSix">
+                        <button class="accordion-button collapsed bg-dark text-white" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSix">
+                            <span data-translate="q6">How does product linking between platforms work?</span>
+                        </button>
+                    </h2>
+                    <div id="collapseSix" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body text-light">
+                            <span data-translate="a6">Products are linked automatically by SKU. If you have "GAME-001" on Amazon and "GAME-001" on eBay, they will automatically connect to the same warehouse stock. When you update stock for GAME-001 in the warehouse, both Amazon and eBay listings update.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Q7: Different SKUs same product -->
+                <div class="accordion-item bg-dark">
+                    <h2 class="accordion-header" id="headingSeven">
+                        <button class="accordion-button collapsed bg-dark text-white" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSeven">
+                            <span data-translate="q7">What if my product has different SKUs on different platforms?</span>
+                        </button>
+                    </h2>
+                    <div id="collapseSeven" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body text-light">
+                            <span data-translate="a7">Use Product Groups! Create a group, add both SKUs to it, and they will share the same stock level. For example, if Amazon uses "AMZ-GAME-001" and eBay uses "EBAY-GAME-001", group them together and they'll stay synchronized.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Q7b: Variant products -->
+                <div class="accordion-item bg-dark">
+                    <h2 class="accordion-header" id="headingSevenB">
+                        <button class="accordion-button collapsed bg-dark text-white" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSevenB">
+                            <span data-translate="q7b">Are 50g and 100g versions of the same product linked together?</span>
+                        </button>
+                    </h2>
+                    <div id="collapseSevenB" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body text-light">
+                            <span data-translate="a7b">No - different sizes (50g, 100g, etc.) are treated as completely separate products. Each size has its own SKU, its own stock level, and its own marketplace links. We never auto-group products by title similarity. If you have "Cream 50g" and "Cream 100g", they are distinct inventory items and must be managed separately.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Q7c: Admin Product Linking page -->
+                <div class="accordion-item bg-dark">
+                    <h2 class="accordion-header" id="headingSevenC">
+                        <button class="accordion-button collapsed bg-dark text-white" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSevenC">
+                            <span data-translate="q7c">What is the Admin Product Linking page for?</span>
+                        </button>
+                    </h2>
+                    <div id="collapseSevenC" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body text-light">
+                            <span data-translate="a7c">The Admin Product Linking page (found under Settings) lets you view and manage how warehouse products connect to marketplace listings. You can: 1) See which SKUs are linked to Amazon/eBay listings 2) View blocked reasons when syncing fails 3) Link new products to marketplace IDs 4) Run bulk diagnostics and repairs 5) Ungroup products that were incorrectly grouped 6) Fix wrong mappings with the "Not Same Product" tool.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Q7d: Blocked listings -->
+                <div class="accordion-item bg-dark">
+                    <h2 class="accordion-header" id="headingSevenD">
+                        <button class="accordion-button collapsed bg-dark text-white" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSevenD">
+                            <span data-translate="q7d">Why is my listing "Blocked" and how do I fix it?</span>
+                        </button>
+                    </h2>
+                    <div id="collapseSevenD" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body text-light">
+                            <span data-translate="a7d">A listing becomes "Blocked" when the system cannot push stock updates to the marketplace. Common reasons: 1) Zero price - set a valid price 2) Warehouse stock not linked - link the product 3) Store disconnected - reconnect the store 4) Too many failures - use the Repair button to reset. To see the exact reason, go to Admin Product Linking and look at the red badge or click "View Blocked Reasons".</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Q7e: Bulk actions -->
+                <div class="accordion-item bg-dark">
+                    <h2 class="accordion-header" id="headingSevenE">
+                        <button class="accordion-button collapsed bg-dark text-white" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSevenE">
+                            <span data-translate="q7e">How do bulk actions work on the Product Linking page?</span>
+                        </button>
+                    </h2>
+                    <div id="collapseSevenE" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body text-light">
+                            <span data-translate="a7e">Select products using the checkboxes, then choose an action: 1) Run Diagnostics - checks for issues like blocked listings, missing links 2) Repair Links - attempts to fix blocked listings automatically 3) Push Selected - forces a stock update to marketplaces. These run as background jobs so you can continue working. Check the Jobs tab to see progress and any errors.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Q7f: Select all pages -->
+                <div class="accordion-item bg-dark">
+                    <h2 class="accordion-header" id="headingSevenF">
+                        <button class="accordion-button collapsed bg-dark text-white" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSevenF">
+                            <span data-translate="q7f">What does "Select All X Items" mean?</span>
+                        </button>
+                    </h2>
+                    <div id="collapseSevenF" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body text-light">
+                            <span data-translate="a7f">When you check all items on the current page, you'll see a "Select all X items" button appear. Clicking it selects ALL matching items across every page, not just what's visible. This is useful for bulk operations on hundreds of products at once. The count includes any filters you've applied (like platform or search), so you're only selecting products that match your current view.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section: Purchase Orders -->
+                <div class="card bg-dark mb-3 mt-4">
+                    <div class="card-header">
+                        <h5 class="mb-0" data-translate="section_orders">Purchase Orders & Suppliers</h5>
+                    </div>
+                </div>
+
+                <!-- Q8: How to receive stock? -->
+                <div class="accordion-item bg-dark">
+                    <h2 class="accordion-header" id="headingEight">
+                        <button class="accordion-button collapsed bg-dark text-white" type="button" data-bs-toggle="collapse" data-bs-target="#collapseEight">
+                            <span data-translate="q8">How do I receive new stock into the warehouse?</span>
+                        </button>
+                    </h2>
+                    <div id="collapseEight" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body text-light">
+                            <span data-translate="a8">There are two ways: 1) Quick method: Go to Warehouse, find the SKU, and update the quantity directly. 2) Proper method: Create a Purchase Order from a Supplier, receive the goods, and the system will update warehouse stock and track costs automatically.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section: Troubleshooting -->
+                <div class="card bg-dark mb-3 mt-4">
+                    <div class="card-header">
+                        <h5 class="mb-0" data-translate="section_trouble">Troubleshooting</h5>
+                    </div>
+                </div>
+
+                <!-- Q9: Stock not syncing -->
+                <div class="accordion-item bg-dark">
+                    <h2 class="accordion-header" id="headingNine">
+                        <button class="accordion-button collapsed bg-dark text-white" type="button" data-bs-toggle="collapse" data-bs-target="#collapseNine">
+                            <span data-translate="q9">My stock isn't syncing to the marketplace. What's wrong?</span>
+                        </button>
+                    </h2>
+                    <div id="collapseNine" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body text-light">
+                            <span data-translate="a9">Check these things: 1) Is the store connected and showing green status? 2) Is the listing linked to warehouse stock? (Check the Listings page) 3) Try clicking "Push" on the warehouse item to force a sync. If problems persist, check the Stores page for any authentication errors.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Q10: Low stock alerts -->
+                <div class="accordion-item bg-dark">
+                    <h2 class="accordion-header" id="headingTen">
+                        <button class="accordion-button collapsed bg-dark text-white" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTen">
+                            <span data-translate="q10">How do low stock alerts work?</span>
+                        </button>
+                    </h2>
+                    <div id="collapseTen" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body text-light">
+                            <span data-translate="a10">Each warehouse item has a "Reorder Point". When stock falls below this number, the item shows a warning and appears in the Low Stock filter. You can set reorder points in the warehouse item details page.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Q11: Amazon authorization error -->
+                <div class="accordion-item bg-dark">
+                    <h2 class="accordion-header" id="headingEleven">
+                        <button class="accordion-button collapsed bg-dark text-white" type="button" data-bs-toggle="collapse" data-bs-target="#collapseEleven">
+                            <span data-translate="q11">Why is my Amazon store showing "unauthorized" or not syncing?</span>
+                        </button>
+                    </h2>
+                    <div id="collapseEleven" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body text-light">
+                            <span data-translate="a11">This happens when Amazon hasn't approved the required API roles for your app. You need to: 1) Contact Amazon Seller Support or check your Developer Central account 2) Request approval for "Inventory and Order Management" and "Amazon Fulfillment" roles 3) Once Amazon approves, you must re-authorize the app to generate a new refresh token. This is an Amazon approval process, not a system bug.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Q12: Amazon FBA vs FBM -->
+                <div class="accordion-item bg-dark">
+                    <h2 class="accordion-header" id="headingTwelve">
+                        <button class="accordion-button collapsed bg-dark text-white" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTwelve">
+                            <span data-translate="q12">What is the difference between Amazon FBA and FBM?</span>
+                        </button>
+                    </h2>
+                    <div id="collapseTwelve" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body text-light">
+                            <span data-translate="a12">Amazon FBA (Fulfilled by Amazon) and FBM (Fulfilled by Merchant) are treated as completely separate integrations. FBA: Amazon controls inventory at their warehouses - we can only import/read stock levels, cannot push changes. FBM: You control inventory - the warehouse is authoritative and pushes stock updates to Amazon. They use separate store connections, credentials, and sync rules. This prevents confusion and ensures accurate inventory management.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Q13: Why can't I push to FBA -->
+                <div class="accordion-item bg-dark">
+                    <h2 class="accordion-header" id="headingThirteen">
+                        <button class="accordion-button collapsed bg-dark text-white" type="button" data-bs-toggle="collapse" data-bs-target="#collapseThirteen">
+                            <span data-translate="q13">Why can't I push stock updates to my Amazon FBA listings?</span>
+                        </button>
+                    </h2>
+                    <div id="collapseThirteen" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body text-light">
+                            <span data-translate="a13">Amazon FBA inventory is controlled by Amazon at their fulfillment centers - you cannot directly change stock levels. The system imports FBA quantities for visibility but blocks push attempts because Amazon manages that inventory. To update FBA stock, you must send shipments to Amazon's warehouses through Seller Central. For merchant-fulfilled items (FBM), you can push from your warehouse.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section: Multi-Channel Fulfillment -->
+                <div class="card bg-dark mb-3 mt-4">
+                    <div class="card-header">
+                        <h5 class="mb-0" data-translate="section_mcf">Multi-Channel Fulfillment (MCF)</h5>
+                    </div>
+                </div>
+
+                <!-- Q14: What is MCF? -->
+                <div class="accordion-item bg-dark">
+                    <h2 class="accordion-header" id="headingFourteen">
+                        <button class="accordion-button collapsed bg-dark text-white" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFourteen">
+                            <span data-translate="q14">What is Multi-Channel Fulfillment (MCF)?</span>
+                        </button>
+                    </h2>
+                    <div id="collapseFourteen" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body text-light">
+                            <span data-translate="a14">MCF lets you use your Amazon FBA inventory to fulfill orders from other channels (eBay, Etsy, your website). When an order comes from eBay, the system can automatically send it to Amazon for fulfillment using your FBA stock. Amazon picks, packs, and ships the order directly to your customer. This saves you from managing separate warehouse operations.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Q15: How does MCF work? -->
+                <div class="accordion-item bg-dark">
+                    <h2 class="accordion-header" id="headingFifteen">
+                        <button class="accordion-button collapsed bg-dark text-white" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFifteen">
+                            <span data-translate="q15">How does MCF work with my inventory?</span>
+                        </button>
+                    </h2>
+                    <div id="collapseFifteen" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body text-light">
+                            <span data-translate="a15">MCF uses your existing FBA inventory - the same stock you have at Amazon's warehouses. When an MCF order is created, Amazon deducts the stock from your FBA inventory and ships it. Important: MCF does NOT use your warehouse stock. It only works with products you already have stored at Amazon's fulfillment centers.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Q16: MCF shipping speeds -->
+                <div class="accordion-item bg-dark">
+                    <h2 class="accordion-header" id="headingSixteen">
+                        <button class="accordion-button collapsed bg-dark text-white" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSixteen">
+                            <span data-translate="q16">What shipping options are available with MCF?</span>
+                        </button>
+                    </h2>
+                    <div id="collapseSixteen" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body text-light">
+                            <span data-translate="a16">MCF offers three shipping speeds: 1) Standard (3-5 business days) - most economical option 2) Expedited (2-3 business days) - faster delivery 3) Priority (1-2 business days) - fastest option. Prices vary by speed and destination. The system calculates fees automatically before you confirm an MCF order.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section: Profit & Margins -->
+                <div class="card bg-dark mb-3 mt-4">
+                    <div class="card-header">
+                        <h5 class="mb-0" data-translate="section_profit">Profit & Margin Tracking</h5>
+                    </div>
+                </div>
+
+                <!-- Q17: Profit calculation -->
+                <div class="accordion-item bg-dark">
+                    <h2 class="accordion-header" id="headingSeventeen">
+                        <button class="accordion-button collapsed bg-dark text-white" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSeventeen">
+                            <span data-translate="q17">How does the system calculate profit for each sale?</span>
+                        </button>
+                    </h2>
+                    <div id="collapseSeventeen" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body text-light">
+                            <span data-translate="a17">The system calculates profit by subtracting all costs from the sale price: 1) Product cost (what you paid for the item) 2) Landed cost (import duties, shipping from supplier) 3) Platform fees (eBay final value fee, Amazon referral fee) 4) Fulfillment fees (FBA fees, MCF fees, or shipping labels) 5) VAT on fees. The result is your gross profit, shown as a percentage margin.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Q18: Margin alerts -->
+                <div class="accordion-item bg-dark">
+                    <h2 class="accordion-header" id="headingEighteen">
+                        <button class="accordion-button collapsed bg-dark text-white" type="button" data-bs-toggle="collapse" data-bs-target="#collapseEighteen">
+                            <span data-translate="q18">What is the 15% margin baseline and why is it important?</span>
+                        </button>
+                    </h2>
+                    <div id="collapseEighteen" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                        <div class="accordion-body text-light">
+                            <span data-translate="a18">The system uses a 15% target margin as a baseline for profitability. When a sale would result in less than 15% margin, you'll see a warning. You can customize this target per product or per channel. Margin alerts help you avoid selling at a loss and identify products that need price adjustments.</span>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Contact Section -->
+            <div class="card bg-dark mt-4">
+                <div class="card-body text-center">
+                    <h5 data-translate="still_need_help">Still need help?</h5>
+                    <p class="text-muted" data-translate="contact_text">Contact your system administrator for additional support.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Translations object
+const translations = {
+    en: {
+        title: "Frequently Asked Questions",
+        section_getting_started: "Getting Started",
+        section_stock: "Stock Management",
+        section_linking: "Linking Products",
+        section_orders: "Purchase Orders & Suppliers",
+        section_trouble: "Troubleshooting",
+        q1: "What is this inventory management system?",
+        a1: "This is a multi-channel inventory management system that helps you manage stock across multiple selling platforms like Amazon and eBay. It keeps all your inventory synchronized automatically, so when you sell on one platform, stock updates everywhere.",
+        q2: "How do I connect my Amazon or eBay store?",
+        a2: "Go to the Stores page and click 'Add Store'. Choose your platform (Amazon or eBay), enter your store details, and follow the authentication process. Once connected, your listings will be imported automatically.",
+        q3: "Where should I update my stock levels?",
+        a3: "Always update stock in the Warehouse page. This is your single source of truth. When you change a quantity there, it automatically pushes to all connected marketplaces (Amazon, eBay, etc.).",
+        q4: "How does the automatic syncing work?",
+        a4: "The system works in two directions: 1) When you update warehouse stock, it pushes to all marketplaces. 2) When someone buys on a marketplace, that sale syncs back to update your warehouse stock. This keeps everything balanced automatically.",
+        q5: "What are Product Groups and when should I use them?",
+        a5: "Product Groups are for managing variations of the same product (like different sizes or colors). When items are grouped, they share the same stock level. Update one, and all items in the group update together. Use groups when you have the same physical product listed with different SKUs.",
+        q6: "How does product linking between platforms work?",
+        a6: "Products are linked automatically by SKU. If you have 'GAME-001' on Amazon and 'GAME-001' on eBay, they will automatically connect to the same warehouse stock. When you update stock for GAME-001 in the warehouse, both Amazon and eBay listings update.",
+        q7: "What if my product has different SKUs on different platforms?",
+        a7: "Use Product Groups! Create a group, add both SKUs to it, and they will share the same stock level. For example, if Amazon uses 'AMZ-GAME-001' and eBay uses 'EBAY-GAME-001', group them together and they'll stay synchronized.",
+        q7b: "Are 50g and 100g versions of the same product linked together?",
+        a7b: "No - different sizes (50g, 100g, etc.) are treated as completely separate products. Each size has its own SKU, its own stock level, and its own marketplace links. We never auto-group products by title similarity. If you have 'Cream 50g' and 'Cream 100g', they are distinct inventory items and must be managed separately.",
+        q7c: "What is the Admin Product Linking page for?",
+        a7c: "The Admin Product Linking page (found under Settings) lets you view and manage how warehouse products connect to marketplace listings. You can: 1) See which SKUs are linked to Amazon/eBay listings 2) View blocked reasons when syncing fails 3) Link new products to marketplace IDs 4) Run bulk diagnostics and repairs 5) Ungroup products that were incorrectly grouped 6) Fix wrong mappings with the 'Not Same Product' tool.",
+        q7d: "Why is my listing 'Blocked' and how do I fix it?",
+        a7d: "A listing becomes 'Blocked' when the system cannot push stock updates to the marketplace. Common reasons: 1) Zero price - set a valid price 2) Warehouse stock not linked - link the product 3) Store disconnected - reconnect the store 4) Too many failures - use the Repair button to reset. To see the exact reason, go to Admin Product Linking and look at the red badge or click 'View Blocked Reasons'.",
+        q7e: "How do bulk actions work on the Product Linking page?",
+        a7e: "Select products using the checkboxes, then choose an action: 1) Run Diagnostics - checks for issues like blocked listings, missing links 2) Repair Links - attempts to fix blocked listings automatically 3) Push Selected - forces a stock update to marketplaces. These run as background jobs so you can continue working. Check the Jobs tab to see progress and any errors.",
+        q7f: "What does 'Select All X Items' mean?",
+        a7f: "When you check all items on the current page, you'll see a 'Select all X items' button appear. Clicking it selects ALL matching items across every page, not just what's visible. This is useful for bulk operations on hundreds of products at once. The count includes any filters you've applied (like platform or search), so you're only selecting products that match your current view.",
+        q8: "How do I receive new stock into the warehouse?",
+        a8: "There are two ways: 1) Quick method: Go to Warehouse, find the SKU, and update the quantity directly. 2) Proper method: Create a Purchase Order from a Supplier, receive the goods, and the system will update warehouse stock and track costs automatically.",
+        q9: "My stock isn't syncing to the marketplace. What's wrong?",
+        a9: "Check these things: 1) Is the store connected and showing green status? 2) Is the listing linked to warehouse stock? (Check the Listings page) 3) Try clicking 'Push' on the warehouse item to force a sync. If problems persist, check the Stores page for any authentication errors.",
+        q10: "How do low stock alerts work?",
+        a10: "Each warehouse item has a 'Reorder Point'. When stock falls below this number, the item shows a warning and appears in the Low Stock filter. You can set reorder points in the warehouse item details page.",
+        q11: "Why is my Amazon store showing 'unauthorized' or not syncing?",
+        a11: "This happens when Amazon hasn't approved the required API roles for your app. You need to: 1) Contact Amazon Seller Support or check your Developer Central account 2) Request approval for 'Inventory and Order Management' and 'Amazon Fulfillment' roles 3) Once Amazon approves, you must re-authorize the app to generate a new refresh token. This is an Amazon approval process, not a system bug.",
+        q12: "What is the difference between Amazon FBA and FBM?",
+        a12: "Amazon FBA (Fulfilled by Amazon) and FBM (Fulfilled by Merchant) are treated as completely separate integrations. FBA: Amazon controls inventory at their warehouses - we can only import/read stock levels, cannot push changes. FBM: You control inventory - the warehouse is authoritative and pushes stock updates to Amazon. They use separate store connections, credentials, and sync rules. This prevents confusion and ensures accurate inventory management.",
+        q13: "Why can't I push stock updates to my Amazon FBA listings?",
+        a13: "Amazon FBA inventory is controlled by Amazon at their fulfillment centers - you cannot directly change stock levels. The system imports FBA quantities for visibility but blocks push attempts because Amazon manages that inventory. To update FBA stock, you must send shipments to Amazon's warehouses through Seller Central. For merchant-fulfilled items (FBM), you can push from your warehouse.",
+        section_mcf: "Multi-Channel Fulfillment (MCF)",
+        q14: "What is Multi-Channel Fulfillment (MCF)?",
+        a14: "MCF lets you use your Amazon FBA inventory to fulfill orders from other channels (eBay, Etsy, your website). When an order comes from eBay, the system can automatically send it to Amazon for fulfillment using your FBA stock. Amazon picks, packs, and ships the order directly to your customer. This saves you from managing separate warehouse operations.",
+        q15: "How does MCF work with my inventory?",
+        a15: "MCF uses your existing FBA inventory - the same stock you have at Amazon's warehouses. When an MCF order is created, Amazon deducts the stock from your FBA inventory and ships it. Important: MCF does NOT use your warehouse stock. It only works with products you already have stored at Amazon's fulfillment centers.",
+        q16: "What shipping options are available with MCF?",
+        a16: "MCF offers three shipping speeds: 1) Standard (3-5 business days) - most economical option 2) Expedited (2-3 business days) - faster delivery 3) Priority (1-2 business days) - fastest option. Prices vary by speed and destination. The system calculates fees automatically before you confirm an MCF order.",
+        section_profit: "Profit & Margin Tracking",
+        q17: "How does the system calculate profit for each sale?",
+        a17: "The system calculates profit by subtracting all costs from the sale price: 1) Product cost (what you paid for the item) 2) Landed cost (import duties, shipping from supplier) 3) Platform fees (eBay final value fee, Amazon referral fee) 4) Fulfillment fees (FBA fees, MCF fees, or shipping labels) 5) VAT on fees. The result is your gross profit, shown as a percentage margin.",
+        q18: "What is the 15% margin baseline and why is it important?",
+        a18: "The system uses a 15% target margin as a baseline for profitability. When a sale would result in less than 15% margin, you'll see a warning. You can customize this target per product or per channel. Margin alerts help you avoid selling at a loss and identify products that need price adjustments.",
+        still_need_help: "Still need help?",
+        contact_text: "Contact your system administrator for additional support."
+    },
+    hi: {
+        title: "अक्सर पूछे जाने वाले प्रश्न",
+        section_getting_started: "शुरू करना",
+        section_stock: "स्टॉक प्रबंधन",
+        section_linking: "उत्पाद लिंकिंग",
+        section_orders: "खरीद आदेश और आपूर्तिकर्ता",
+        section_trouble: "समस्या निवारण",
+        q1: "यह इन्वेंट्री मैनेजमेंट सिस्टम क्या है?",
+        a1: "यह एक मल्टी-चैनल इन्वेंट्री मैनेजमेंट सिस्टम है जो आपको Amazon और eBay जैसे कई प्लेटफॉर्म पर स्टॉक मैनेज करने में मदद करता है। यह आपके सभी इन्वेंट्री को स्वचालित रूप से सिंक्रनाइज़ रखता है।",
+        q2: "मैं अपना Amazon या eBay स्टोर कैसे कनेक्ट करूं?",
+        a2: "Stores पेज पर जाएं और 'Add Store' पर क्लिक करें। अपना प्लेटफॉर्म चुनें, स्टोर डिटेल्स दर्ज करें, और ऑथेंटिकेशन प्रोसेस का पालन करें। कनेक्ट होने के बाद, आपकी लिस्टिंग स्वचालित रूप से इम्पोर्ट हो जाएंगी।",
+        q3: "मुझे स्टॉक लेवल कहां अपडेट करना चाहिए?",
+        a3: "हमेशा Warehouse पेज में स्टॉक अपडेट करें। यह आपका एकमात्र सत्य स्रोत है। जब आप वहां मात्रा बदलते हैं, तो यह स्वचालित रूप से सभी कनेक्टेड मार्केटप्लेस पर पुश हो जाता है।",
+        q4: "स्वचालित सिंकिंग कैसे काम करती है?",
+        a4: "सिस्टम दो दिशाओं में काम करता है: 1) जब आप वेयरहाउस स्टॉक अपडेट करते हैं, तो यह सभी मार्केटप्लेस पर पुश होता है। 2) जब कोई मार्केटप्लेस पर खरीदता है, तो वह बिक्री वापस सिंक होती है।",
+        q5: "प्रोडक्ट ग्रुप्स क्या हैं और मुझे इनका उपयोग कब करना चाहिए?",
+        a5: "प्रोडक्ट ग्रुप्स एक ही प्रोडक्ट के वेरिएशन को मैनेज करने के लिए हैं (जैसे विभिन्न साइज़ या रंग)। जब आइटम ग्रुप किए जाते हैं, तो वे एक ही स्टॉक लेवल शेयर करते हैं।",
+        q6: "प्लेटफॉर्म के बीच प्रोडक्ट लिंकिंग कैसे काम करती है?",
+        a6: "प्रोडक्ट्स SKU द्वारा स्वचालित रूप से लिंक होते हैं। अगर Amazon और eBay पर आपका एक ही SKU है, तो वे स्वचालित रूप से एक ही वेयरहाउस स्टॉक से कनेक्ट होंगे।",
+        q7: "अगर मेरे प्रोडक्ट के अलग-अलग प्लेटफॉर्म पर अलग-अलग SKU हैं तो?",
+        a7: "प्रोडक्ट ग्रुप्स का उपयोग करें! एक ग्रुप बनाएं, दोनों SKU को इसमें जोड़ें, और वे एक ही स्टॉक लेवल शेयर करेंगे।",
+        q7b: "क्या एक ही प्रोडक्ट के 50g और 100g वर्शन एक साथ लिंक होते हैं?",
+        a7b: "नहीं - अलग-अलग साइज़ (50g, 100g, आदि) पूरी तरह से अलग प्रोडक्ट्स के रूप में माने जाते हैं। प्रत्येक साइज़ का अपना SKU, अपना स्टॉक लेवल, और अपने मार्केटप्लेस लिंक होते हैं।",
+        q7c: "Admin Product Linking पेज किसके लिए है?",
+        a7c: "Admin Product Linking पेज (Settings में) आपको वेयरहाउस प्रोडक्ट्स और मार्केटप्लेस लिस्टिंग के बीच कनेक्शन देखने और मैनेज करने देता है। आप: 1) देख सकते हैं कि कौन से SKU लिंक हैं 2) ब्लॉक्ड रीज़न देखें 3) नए प्रोडक्ट लिंक करें 4) बल्क डायग्नोस्टिक्स और रिपेयर करें।",
+        q7d: "मेरी लिस्टिंग 'Blocked' क्यों है और इसे कैसे ठीक करूं?",
+        a7d: "लिस्टिंग तब 'Blocked' होती है जब सिस्टम मार्केटप्लेस पर स्टॉक अपडेट पुश नहीं कर पाता। सामान्य कारण: 1) ज़ीरो प्राइस - वैलिड प्राइस सेट करें 2) वेयरहाउस स्टॉक लिंक नहीं - प्रोडक्ट लिंक करें 3) स्टोर डिस्कनेक्टेड 4) बहुत सारी फेलियर्स - Repair बटन यूज़ करें।",
+        q7e: "Product Linking पेज पर बल्क एक्शन कैसे काम करते हैं?",
+        a7e: "चेकबॉक्स से प्रोडक्ट सिलेक्ट करें, फिर एक्शन चुनें: 1) Run Diagnostics - इश्यूज़ चेक करता है 2) Repair Links - ब्लॉक्ड लिस्टिंग्स को ठीक करता है 3) Push Selected - मार्केटप्लेस पर स्टॉक अपडेट भेजता है।",
+        q7f: "'Select All X Items' का क्या मतलब है?",
+        a7f: "जब आप करंट पेज पर सभी आइटम्स चेक करते हैं, तो 'Select all X items' बटन दिखता है। इसे क्लिक करने से हर पेज के सभी मैचिंग आइटम्स सिलेक्ट होते हैं, न कि सिर्फ दिखाई देने वाले।",
+        q8: "मैं वेयरहाउस में नया स्टॉक कैसे प्राप्त करूं?",
+        a8: "दो तरीके हैं: 1) त्वरित तरीका: Warehouse पर जाएं, SKU खोजें, और मात्रा सीधे अपडेट करें। 2) उचित तरीका: Supplier से Purchase Order बनाएं और सामान प्राप्त करें।",
+        q9: "मेरा स्टॉक मार्केटप्लेस पर सिंक नहीं हो रहा। क्या गलत है?",
+        a9: "ये चीजें चेक करें: 1) क्या स्टोर कनेक्टेड है और ग्रीन स्टेटस दिखा रहा है? 2) क्या लिस्टिंग वेयरहाउस स्टॉक से लिंक है? 3) सिंक फोर्स करने के लिए 'Push' पर क्लिक करें।",
+        q10: "लो स्टॉक अलर्ट कैसे काम करते हैं?",
+        a10: "प्रत्येक वेयरहाउस आइटम में एक 'Reorder Point' होता है। जब स्टॉक इस नंबर से नीचे गिरता है, तो आइटम चेतावनी दिखाता है।",
+        q11: "मेरा Amazon स्टोर 'unauthorized' दिखा रहा है या सिंक नहीं हो रहा?",
+        a11: "ऐसा तब होता है जब Amazon ने आपके ऐप के लिए आवश्यक API रोल्स को मंजूरी नहीं दी है। आपको: 1) Amazon Seller Support से संपर्क करें या अपना Developer Central अकाउंट चेक करें 2) 'Inventory and Order Management' और 'Amazon Fulfillment' रोल्स के लिए अप्रूवल का अनुरोध करें 3) Amazon के अप्रूव करने के बाद, नया refresh token जनरेट करने के लिए ऐप को री-ऑथराइज़ करें। यह Amazon की अप्रूवल प्रक्रिया है, सिस्टम बग नहीं।",
+        q12: "Amazon FBA और FBM में क्या अंतर है?",
+        a12: "Amazon FBA (Fulfilled by Amazon) और FBM (Fulfilled by Merchant) पूरी तरह से अलग-अलग इंटीग्रेशन हैं। FBA: Amazon अपने वेयरहाउस में इन्वेंट्री कंट्रोल करता है - हम सिर्फ स्टॉक लेवल इम्पोर्ट/रीड कर सकते हैं, पुश नहीं कर सकते। FBM: आप इन्वेंट्री कंट्रोल करते हैं - वेयरहाउस ऑथोरिटेटिव है और Amazon को स्टॉक अपडेट पुश करता है।",
+        q13: "मैं अपनी Amazon FBA लिस्टिंग्स पर स्टॉक अपडेट क्यों पुश नहीं कर सकता?",
+        a13: "Amazon FBA इन्वेंट्री Amazon के फुलफिलमेंट सेंटर्स पर कंट्रोल होती है - आप सीधे स्टॉक लेवल नहीं बदल सकते। सिस्टम FBA क्वांटिटी विज़िबिलिटी के लिए इम्पोर्ट करता है लेकिन पुश अटेम्प्ट्स ब्लॉक करता है क्योंकि Amazon उस इन्वेंट्री को मैनेज करता है।",
+        still_need_help: "अभी भी मदद चाहिए?",
+        contact_text: "अतिरिक्त सहायता के लिए अपने सिस्टम एडमिनिस्ट्रेटर से संपर्क करें।"
+    },
+    ur: {
+        title: "اکثر پوچھے جانے والے سوالات",
+        section_getting_started: "شروع کرنا",
+        section_stock: "اسٹاک مینجمنٹ",
+        section_linking: "پروڈکٹ لنکنگ",
+        section_orders: "خریداری کے آرڈرز اور سپلائرز",
+        section_trouble: "مسائل کا حل",
+        q1: "یہ انوینٹری مینجمنٹ سسٹم کیا ہے؟",
+        a1: "یہ ایک ملٹی چینل انوینٹری مینجمنٹ سسٹم ہے جو آپ کو Amazon اور eBay جیسے متعدد پلیٹ فارمز پر اسٹاک منظم کرنے میں مدد کرتا ہے۔ یہ آپ کی تمام انوینٹری کو خود بخود سنکرونائز رکھتا ہے۔",
+        q2: "میں اپنا Amazon یا eBay اسٹور کیسے کنیکٹ کروں؟",
+        a2: "Stores پیج پر جائیں اور 'Add Store' پر کلک کریں۔ اپنا پلیٹ فارم منتخب کریں، اسٹور کی تفصیلات درج کریں، اور تصدیق کے عمل پر عمل کریں۔",
+        q3: "مجھے اسٹاک لیولز کہاں اپڈیٹ کرنے چاہییں؟",
+        a3: "ہمیشہ Warehouse پیج میں اسٹاک اپڈیٹ کریں۔ یہ آپ کا واحد سچائی کا ذریعہ ہے۔ جب آپ وہاں مقدار تبدیل کرتے ہیں، یہ خود بخود تمام جڑے ہوئے مارکیٹ پلیسز پر پہنچ جاتا ہے۔",
+        q4: "خودکار سنکنگ کیسے کام کرتی ہے؟",
+        a4: "سسٹم دو سمتوں میں کام کرتا ہے: 1) جب آپ ویئر ہاؤس اسٹاک اپڈیٹ کرتے ہیں، یہ تمام مارکیٹ پلیسز پر پہنچ جاتا ہے۔ 2) جب کوئی مارکیٹ پلیس پر خریدتا ہے، وہ فروخت واپس سنک ہو جاتی ہے۔",
+        q5: "پروڈکٹ گروپس کیا ہیں اور مجھے انہیں کب استعمال کرنا چاہیے؟",
+        a5: "پروڈکٹ گروپس ایک ہی پروڈکٹ کی مختلف قسموں کو منظم کرنے کے لیے ہیں (جیسے مختلف سائز یا رنگ)۔ جب آئٹمز گروپ کیے جاتے ہیں، وہ ایک ہی اسٹاک لیول شیئر کرتے ہیں۔",
+        q6: "پلیٹ فارمز کے درمیان پروڈکٹ لنکنگ کیسے کام کرتی ہے؟",
+        a6: "پروڈکٹس SKU کے ذریعے خود بخود لنک ہو جاتی ہیں۔ اگر Amazon اور eBay پر آپ کا ایک ہی SKU ہے، تو وہ خود بخود ایک ہی ویئر ہاؤس اسٹاک سے جڑ جائیں گے۔",
+        q7: "اگر میرے پروڈکٹ کے مختلف پلیٹ فارمز پر مختلف SKU ہیں تو؟",
+        a7: "پروڈکٹ گروپس استعمال کریں! ایک گروپ بنائیں، دونوں SKU کو اس میں شامل کریں، اور وہ ایک ہی اسٹاک لیول شیئر کریں گے۔",
+        q7b: "کیا ایک ہی پروڈکٹ کے 50g اور 100g ورژن لنک ہوتے ہیں؟",
+        a7b: "نہیں - مختلف سائز (50g، 100g) مکمل طور پر الگ پروڈکٹس ہیں۔ ہر سائز کا اپنا SKU اور اسٹاک ہوتا ہے۔",
+        q7c: "Admin Product Linking پیج کس لیے ہے؟",
+        a7c: "یہ پیج آپ کو ویئر ہاؤس اور مارکیٹ پلیس لنکس منظم کرنے دیتا ہے۔",
+        q7d: "لسٹنگ 'Blocked' کیوں ہے؟",
+        a7d: "جب سسٹم اسٹاک اپڈیٹ پش نہیں کر پاتا تو لسٹنگ Blocked ہو جاتی ہے۔ Repair بٹن استعمال کریں۔",
+        q7e: "بلک ایکشنز کیسے کام کرتے ہیں؟",
+        a7e: "چیک باکسز سے پروڈکٹس سلیکٹ کریں، پھر Diagnostics، Repair، یا Push چنیں۔",
+        q7f: "'Select All X Items' کا مطلب؟",
+        a7f: "تمام پیجز کے آئٹمز سلیکٹ کرتا ہے، نہ صرف موجودہ پیج۔",
+        q8: "میں ویئر ہاؤس میں نیا اسٹاک کیسے وصول کروں؟",
+        a8: "دو طریقے ہیں: 1) فوری طریقہ: Warehouse پر جائیں، SKU تلاش کریں، اور مقدار براہ راست اپڈیٹ کریں۔ 2) مناسب طریقہ: سپلائر سے Purchase Order بنائیں اور سامان وصول کریں۔",
+        q9: "میرا اسٹاک مارکیٹ پلیس پر سنک نہیں ہو رہا۔ کیا مسئلہ ہے؟",
+        a9: "یہ چیزیں چیک کریں: 1) کیا اسٹور کنیکٹڈ ہے اور سبز سٹیٹس دکھا رہا ہے؟ 2) کیا لسٹنگ ویئر ہاؤس اسٹاک سے لنک ہے؟ 3) سنک فورس کرنے کے لیے 'Push' پر کلک کریں۔",
+        q10: "کم اسٹاک الرٹس کیسے کام کرتے ہیں؟",
+        a10: "ہر ویئر ہاؤس آئٹم میں ایک 'Reorder Point' ہوتا ہے۔ جب اسٹاک اس نمبر سے نیچے گرتا ہے، آئٹم انتباہ دکھاتا ہے۔",
+        q11: "میرا Amazon اسٹور 'unauthorized' دکھا رہا ہے یا سنک نہیں ہو رہا؟",
+        a11: "یہ اس وقت ہوتا ہے جب Amazon نے آپ کی ایپ کے لیے مطلوبہ API رولز کی منظوری نہیں دی ہے۔ آپ کو: 1) Amazon Seller Support سے رابطہ کریں یا اپنا Developer Central اکاؤنٹ چیک کریں 2) 'Inventory and Order Management' اور 'Amazon Fulfillment' رولز کی منظوری کی درخواست کریں 3) Amazon کی منظوری کے بعد، نیا refresh token حاصل کرنے کے لیے ایپ کو دوبارہ authorize کریں۔ یہ Amazon کا منظوری کا عمل ہے، سسٹم میں کوئی خرابی نہیں۔",
+        q12: "Amazon FBA اور FBM میں کیا فرق ہے؟",
+        a12: "Amazon FBA (Fulfilled by Amazon) اور FBM (Fulfilled by Merchant) مکمل طور پر الگ انضمام ہیں۔ FBA: Amazon اپنے گوداموں میں انوینٹری کنٹرول کرتا ہے - ہم صرف اسٹاک لیولز درآمد/پڑھ سکتے ہیں، پش نہیں کر سکتے۔ FBM: آپ انوینٹری کنٹرول کرتے ہیں - گودام مستند ہے۔",
+        q13: "میں اپنی Amazon FBA لسٹنگز پر اسٹاک اپڈیٹ کیوں پش نہیں کر سکتا؟",
+        a13: "Amazon FBA انوینٹری Amazon کے فلفلمنٹ سینٹرز پر کنٹرول ہوتی ہے۔ FBA اسٹاک اپڈیٹ کرنے کے لیے، آپ کو Seller Central کے ذریعے Amazon کے گوداموں کو شپمنٹس بھیجنی ہوں گی۔",
+        still_need_help: "ابھی بھی مدد چاہیے؟",
+        contact_text: "اضافی مدد کے لیے اپنے سسٹم ایڈمنسٹریٹر سے رابطہ کریں۔"
+    },
+    pa: {
+        title: "ਅਕਸਰ ਪੁੱਛੇ ਜਾਣ ਵਾਲੇ ਸਵਾਲ",
+        section_getting_started: "ਸ਼ੁਰੂ ਕਰਨਾ",
+        section_stock: "ਸਟਾਕ ਪ੍ਰਬੰਧਨ",
+        section_linking: "ਉਤਪਾਦ ਲਿੰਕਿੰਗ",
+        section_orders: "ਖਰੀਦ ਆਰਡਰ ਅਤੇ ਸਪਲਾਇਰ",
+        section_trouble: "ਸਮੱਸਿਆ ਨਿਵਾਰਣ",
+        q1: "ਇਹ ਇਨਵੈਂਟਰੀ ਮੈਨੇਜਮੈਂਟ ਸਿਸਟਮ ਕੀ ਹੈ?",
+        a1: "ਇਹ ਇੱਕ ਮਲਟੀ-ਚੈਨਲ ਇਨਵੈਂਟਰੀ ਮੈਨੇਜਮੈਂਟ ਸਿਸਟਮ ਹੈ ਜੋ ਤੁਹਾਨੂੰ Amazon ਅਤੇ eBay ਵਰਗੇ ਕਈ ਪਲੇਟਫਾਰਮਾਂ 'ਤੇ ਸਟਾਕ ਪ੍ਰਬੰਧਿਤ ਕਰਨ ਵਿੱਚ ਮਦਦ ਕਰਦਾ ਹੈ।",
+        q2: "ਮੈਂ ਆਪਣਾ Amazon ਜਾਂ eBay ਸਟੋਰ ਕਿਵੇਂ ਕਨੈਕਟ ਕਰਾਂ?",
+        a2: "Stores ਪੇਜ 'ਤੇ ਜਾਓ ਅਤੇ 'Add Store' 'ਤੇ ਕਲਿੱਕ ਕਰੋ। ਆਪਣਾ ਪਲੇਟਫਾਰਮ ਚੁਣੋ, ਸਟੋਰ ਵੇਰਵੇ ਦਰਜ ਕਰੋ, ਅਤੇ ਪ੍ਰਮਾਣਿਕਤਾ ਪ੍ਰਕਿਰਿਆ ਦੀ ਪਾਲਣਾ ਕਰੋ।",
+        q3: "ਮੈਨੂੰ ਸਟਾਕ ਪੱਧਰ ਕਿੱਥੇ ਅੱਪਡੇਟ ਕਰਨੇ ਚਾਹੀਦੇ ਹਨ?",
+        a3: "ਹਮੇਸ਼ਾ Warehouse ਪੇਜ ਵਿੱਚ ਸਟਾਕ ਅੱਪਡੇਟ ਕਰੋ। ਇਹ ਤੁਹਾਡਾ ਸਿੰਗਲ ਸਰੋਤ ਹੈ। ਜਦੋਂ ਤੁਸੀਂ ਉੱਥੇ ਮਾਤਰਾ ਬਦਲਦੇ ਹੋ, ਇਹ ਆਪਣੇ ਆਪ ਸਾਰੇ ਕਨੈਕਟਡ ਮਾਰਕੀਟਪਲੇਸ 'ਤੇ ਪੁਸ਼ ਹੋ ਜਾਂਦਾ ਹੈ।",
+        q4: "ਆਟੋਮੈਟਿਕ ਸਿੰਕਿੰਗ ਕਿਵੇਂ ਕੰਮ ਕਰਦੀ ਹੈ?",
+        a4: "ਸਿਸਟਮ ਦੋ ਦਿਸ਼ਾਵਾਂ ਵਿੱਚ ਕੰਮ ਕਰਦਾ ਹੈ: 1) ਜਦੋਂ ਤੁਸੀਂ ਵੇਅਰਹਾਊਸ ਸਟਾਕ ਅੱਪਡੇਟ ਕਰਦੇ ਹੋ, ਇਹ ਸਾਰੇ ਮਾਰਕੀਟਪਲੇਸ 'ਤੇ ਪੁਸ਼ ਹੁੰਦਾ ਹੈ। 2) ਜਦੋਂ ਕੋਈ ਖਰੀਦਦਾ ਹੈ, ਵਿਕਰੀ ਵਾਪਸ ਸਿੰਕ ਹੁੰਦੀ ਹੈ।",
+        q5: "ਪ੍ਰੋਡਕਟ ਗਰੁੱਪ ਕੀ ਹਨ ਅਤੇ ਮੈਨੂੰ ਇਹਨਾਂ ਦੀ ਵਰਤੋਂ ਕਦੋਂ ਕਰਨੀ ਚਾਹੀਦੀ ਹੈ?",
+        a5: "ਪ੍ਰੋਡਕਟ ਗਰੁੱਪ ਇੱਕੋ ਪ੍ਰੋਡਕਟ ਦੀਆਂ ਵੱਖ-ਵੱਖ ਕਿਸਮਾਂ ਨੂੰ ਪ੍ਰਬੰਧਿਤ ਕਰਨ ਲਈ ਹਨ। ਜਦੋਂ ਆਈਟਮਾਂ ਗਰੁੱਪ ਕੀਤੀਆਂ ਜਾਂਦੀਆਂ ਹਨ, ਉਹ ਇੱਕੋ ਸਟਾਕ ਪੱਧਰ ਸਾਂਝਾ ਕਰਦੀਆਂ ਹਨ।",
+        q6: "ਪਲੇਟਫਾਰਮਾਂ ਵਿਚਕਾਰ ਪ੍ਰੋਡਕਟ ਲਿੰਕਿੰਗ ਕਿਵੇਂ ਕੰਮ ਕਰਦੀ ਹੈ?",
+        a6: "ਪ੍ਰੋਡਕਟ SKU ਦੁਆਰਾ ਆਪਣੇ ਆਪ ਲਿੰਕ ਹੁੰਦੇ ਹਨ। ਜੇਕਰ Amazon ਅਤੇ eBay 'ਤੇ ਤੁਹਾਡਾ ਇੱਕੋ SKU ਹੈ, ਤਾਂ ਉਹ ਆਪਣੇ ਆਪ ਇੱਕੋ ਵੇਅਰਹਾਊਸ ਸਟਾਕ ਨਾਲ ਜੁੜ ਜਾਣਗੇ।",
+        q7: "ਜੇਕਰ ਮੇਰੇ ਪ੍ਰੋਡਕਟ ਦੇ ਵੱਖ-ਵੱਖ ਪਲੇਟਫਾਰਮਾਂ 'ਤੇ ਵੱਖ-ਵੱਖ SKU ਹਨ ਤਾਂ?",
+        a7: "ਪ੍ਰੋਡਕਟ ਗਰੁੱਪ ਵਰਤੋ! ਇੱਕ ਗਰੁੱਪ ਬਣਾਓ, ਦੋਵੇਂ SKU ਇਸ ਵਿੱਚ ਸ਼ਾਮਲ ਕਰੋ, ਅਤੇ ਉਹ ਇੱਕੋ ਸਟਾਕ ਪੱਧਰ ਸਾਂਝਾ ਕਰਨਗੇ।",
+        q7b: "ਕੀ 50g ਅਤੇ 100g ਵਰਜ਼ਨ ਲਿੰਕ ਹੁੰਦੇ ਹਨ?",
+        a7b: "ਨਹੀਂ - ਵੱਖ-ਵੱਖ ਸਾਈਜ਼ ਪੂਰੀ ਤਰ੍ਹਾਂ ਵੱਖਰੇ ਪ੍ਰੋਡਕਟ ਹਨ। ਹਰ ਸਾਈਜ਼ ਦਾ ਆਪਣਾ SKU ਹੁੰਦਾ ਹੈ।",
+        q7c: "Admin Product Linking ਪੇਜ ਕਿਸ ਲਈ ਹੈ?",
+        a7c: "ਇਹ ਪੇਜ ਤੁਹਾਨੂੰ ਵੇਅਰਹਾਊਸ ਅਤੇ ਮਾਰਕੀਟਪਲੇਸ ਲਿੰਕ ਪ੍ਰਬੰਧਿਤ ਕਰਨ ਦਿੰਦਾ ਹੈ।",
+        q7d: "ਲਿਸਟਿੰਗ 'Blocked' ਕਿਉਂ ਹੈ?",
+        a7d: "ਜਦੋਂ ਸਿਸਟਮ ਸਟਾਕ ਅੱਪਡੇਟ ਪੁਸ਼ ਨਹੀਂ ਕਰ ਸਕਦਾ ਤਾਂ ਲਿਸਟਿੰਗ Blocked ਹੋ ਜਾਂਦੀ ਹੈ। Repair ਬਟਨ ਵਰਤੋ।",
+        q7e: "ਬਲਕ ਐਕਸ਼ਨ ਕਿਵੇਂ ਕੰਮ ਕਰਦੇ ਹਨ?",
+        a7e: "ਚੈੱਕਬਾਕਸ ਨਾਲ ਪ੍ਰੋਡਕਟ ਚੁਣੋ, ਫਿਰ Diagnostics, Repair, ਜਾਂ Push ਚੁਣੋ।",
+        q7f: "'Select All X Items' ਦਾ ਮਤਲਬ?",
+        a7f: "ਸਾਰੇ ਪੇਜਾਂ ਦੇ ਆਈਟਮ ਚੁਣਦਾ ਹੈ, ਸਿਰਫ਼ ਮੌਜੂਦਾ ਪੇਜ ਨਹੀਂ।",
+        q8: "ਮੈਂ ਵੇਅਰਹਾਊਸ ਵਿੱਚ ਨਵਾਂ ਸਟਾਕ ਕਿਵੇਂ ਪ੍ਰਾਪਤ ਕਰਾਂ?",
+        a8: "ਦੋ ਤਰੀਕੇ ਹਨ: 1) ਤੇਜ਼ ਤਰੀਕਾ: Warehouse 'ਤੇ ਜਾਓ, SKU ਲੱਭੋ, ਅਤੇ ਮਾਤਰਾ ਸਿੱਧੀ ਅੱਪਡੇਟ ਕਰੋ। 2) ਸਹੀ ਤਰੀਕਾ: ਸਪਲਾਇਰ ਤੋਂ Purchase Order ਬਣਾਓ ਅਤੇ ਸਮਾਨ ਪ੍ਰਾਪਤ ਕਰੋ।",
+        q9: "ਮੇਰਾ ਸਟਾਕ ਮਾਰਕੀਟਪਲੇਸ 'ਤੇ ਸਿੰਕ ਨਹੀਂ ਹੋ ਰਿਹਾ। ਕੀ ਗਲਤ ਹੈ?",
+        a9: "ਇਹ ਚੀਜ਼ਾਂ ਚੈੱਕ ਕਰੋ: 1) ਕੀ ਸਟੋਰ ਕਨੈਕਟਡ ਹੈ ਅਤੇ ਹਰਾ ਸਟੇਟਸ ਦਿਖਾ ਰਿਹਾ ਹੈ? 2) ਕੀ ਲਿਸਟਿੰਗ ਵੇਅਰਹਾਊਸ ਸਟਾਕ ਨਾਲ ਲਿੰਕ ਹੈ? 3) ਸਿੰਕ ਫੋਰਸ ਕਰਨ ਲਈ 'Push' 'ਤੇ ਕਲਿੱਕ ਕਰੋ।",
+        q10: "ਘੱਟ ਸਟਾਕ ਅਲਰਟ ਕਿਵੇਂ ਕੰਮ ਕਰਦੇ ਹਨ?",
+        a10: "ਹਰ ਵੇਅਰਹਾਊਸ ਆਈਟਮ ਵਿੱਚ ਇੱਕ 'Reorder Point' ਹੁੰਦਾ ਹੈ। ਜਦੋਂ ਸਟਾਕ ਇਸ ਨੰਬਰ ਤੋਂ ਹੇਠਾਂ ਜਾਂਦਾ ਹੈ, ਆਈਟਮ ਚੇਤਾਵਨੀ ਦਿਖਾਉਂਦੀ ਹੈ।",
+        q11: "ਮੇਰਾ Amazon ਸਟੋਰ 'unauthorized' ਦਿਖਾ ਰਿਹਾ ਹੈ ਜਾਂ ਸਿੰਕ ਨਹੀਂ ਹੋ ਰਿਹਾ?",
+        a11: "ਇਹ ਉਦੋਂ ਹੁੰਦਾ ਹੈ ਜਦੋਂ Amazon ਨੇ ਤੁਹਾਡੀ ਐਪ ਲਈ ਲੋੜੀਂਦੇ API ਰੋਲ ਮਨਜ਼ੂਰ ਨਹੀਂ ਕੀਤੇ ਹਨ। ਤੁਹਾਨੂੰ: 1) Amazon Seller Support ਨਾਲ ਸੰਪਰਕ ਕਰੋ ਜਾਂ ਆਪਣਾ Developer Central ਖਾਤਾ ਚੈੱਕ ਕਰੋ 2) 'Inventory and Order Management' ਅਤੇ 'Amazon Fulfillment' ਰੋਲ ਲਈ ਮਨਜ਼ੂਰੀ ਦੀ ਬੇਨਤੀ ਕਰੋ 3) Amazon ਦੀ ਮਨਜ਼ੂਰੀ ਤੋਂ ਬਾਅਦ, ਨਵਾਂ refresh token ਬਣਾਉਣ ਲਈ ਐਪ ਨੂੰ ਦੁਬਾਰਾ authorize ਕਰੋ। ਇਹ Amazon ਦੀ ਮਨਜ਼ੂਰੀ ਪ੍ਰਕਿਰਿਆ ਹੈ, ਸਿਸਟਮ ਬੱਗ ਨਹੀਂ।",
+        q12: "Amazon FBA ਅਤੇ FBM ਵਿੱਚ ਕੀ ਫਰਕ ਹੈ?",
+        a12: "Amazon FBA (Fulfilled by Amazon) ਅਤੇ FBM (Fulfilled by Merchant) ਪੂਰੀ ਤਰ੍ਹਾਂ ਵੱਖਰੇ ਇੰਟੀਗ੍ਰੇਸ਼ਨ ਹਨ। FBA: Amazon ਆਪਣੇ ਵੇਅਰਹਾਊਸ ਵਿੱਚ ਇਨਵੈਂਟਰੀ ਕੰਟਰੋਲ ਕਰਦਾ ਹੈ। FBM: ਤੁਸੀਂ ਇਨਵੈਂਟਰੀ ਕੰਟਰੋਲ ਕਰਦੇ ਹੋ - ਵੇਅਰਹਾਊਸ ਅਧਿਕਾਰਤ ਹੈ।",
+        q13: "ਮੈਂ Amazon FBA ਲਿਸਟਿੰਗਾਂ 'ਤੇ ਸਟਾਕ ਅੱਪਡੇਟ ਕਿਉਂ ਨਹੀਂ ਪੁਸ਼ ਕਰ ਸਕਦਾ?",
+        a13: "Amazon FBA ਇਨਵੈਂਟਰੀ Amazon ਦੇ ਫੁਲਫਿਲਮੈਂਟ ਸੈਂਟਰਾਂ 'ਤੇ ਕੰਟਰੋਲ ਹੁੰਦੀ ਹੈ। FBA ਸਟਾਕ ਅੱਪਡੇਟ ਕਰਨ ਲਈ, ਤੁਹਾਨੂੰ Seller Central ਰਾਹੀਂ Amazon ਦੇ ਵੇਅਰਹਾਊਸਾਂ ਨੂੰ ਸ਼ਿਪਮੈਂਟ ਭੇਜਣੀਆਂ ਪੈਣਗੀਆਂ।",
+        still_need_help: "ਅਜੇ ਵੀ ਮਦਦ ਚਾਹੀਦੀ ਹੈ?",
+        contact_text: "ਵਾਧੂ ਸਹਾਇਤਾ ਲਈ ਆਪਣੇ ਸਿਸਟਮ ਐਡਮਿਨਿਸਟ੍ਰੇਟਰ ਨਾਲ ਸੰਪਰਕ ਕਰੋ।"
+    },
+    es: {
+        title: "Preguntas Frecuentes",
+        section_getting_started: "Comenzando",
+        section_stock: "Gestión de Stock",
+        section_linking: "Vinculación de Productos",
+        section_orders: "Órdenes de Compra y Proveedores",
+        section_trouble: "Solución de Problemas",
+        q1: "¿Qué es este sistema de gestión de inventario?",
+        a1: "Este es un sistema de gestión de inventario multicanal que te ayuda a gestionar el stock en múltiples plataformas de venta como Amazon y eBay. Mantiene todo tu inventario sincronizado automáticamente.",
+        q2: "¿Cómo conecto mi tienda de Amazon o eBay?",
+        a2: "Ve a la página de Tiendas y haz clic en 'Agregar Tienda'. Elige tu plataforma, ingresa los detalles de la tienda y sigue el proceso de autenticación. Una vez conectada, tus listados se importarán automáticamente.",
+        q3: "¿Dónde debo actualizar mis niveles de stock?",
+        a3: "Siempre actualiza el stock en la página del Almacén. Esta es tu única fuente de verdad. Cuando cambias una cantidad allí, se actualiza automáticamente en todos los marketplaces conectados.",
+        q4: "¿Cómo funciona la sincronización automática?",
+        a4: "El sistema funciona en dos direcciones: 1) Cuando actualizas el stock del almacén, se envía a todos los marketplaces. 2) Cuando alguien compra en un marketplace, esa venta se sincroniza para actualizar tu stock.",
+        q5: "¿Qué son los Grupos de Productos y cuándo debo usarlos?",
+        a5: "Los Grupos de Productos son para gestionar variaciones del mismo producto (como diferentes tallas o colores). Cuando los artículos están agrupados, comparten el mismo nivel de stock.",
+        q6: "¿Cómo funciona la vinculación de productos entre plataformas?",
+        a6: "Los productos se vinculan automáticamente por SKU. Si tienes el mismo SKU en Amazon y eBay, se conectarán automáticamente al mismo stock del almacén.",
+        q7: "¿Qué pasa si mi producto tiene diferentes SKUs en diferentes plataformas?",
+        a7: "¡Usa Grupos de Productos! Crea un grupo, agrega ambos SKUs, y compartirán el mismo nivel de stock.",
+        q7b: "¿Las versiones de 50g y 100g están vinculadas?",
+        a7b: "No - los diferentes tamaños son productos completamente separados. Cada tamaño tiene su propio SKU y nivel de stock.",
+        q7c: "¿Para qué es la página Admin Product Linking?",
+        a7c: "Esta página te permite ver y gestionar cómo los productos del almacén se conectan a los listados del marketplace.",
+        q7d: "¿Por qué mi listado está 'Bloqueado'?",
+        a7d: "Un listado se bloquea cuando el sistema no puede enviar actualizaciones de stock. Usa el botón Reparar para arreglarlo.",
+        q7e: "¿Cómo funcionan las acciones masivas?",
+        a7e: "Selecciona productos con las casillas, luego elige Diagnósticos, Reparar o Enviar.",
+        q7f: "¿Qué significa 'Seleccionar todos los X elementos'?",
+        a7f: "Selecciona todos los elementos de todas las páginas, no solo la página actual.",
+        q8: "¿Cómo recibo nuevo stock en el almacén?",
+        a8: "Hay dos formas: 1) Método rápido: Ve al Almacén, encuentra el SKU y actualiza la cantidad directamente. 2) Método adecuado: Crea una Orden de Compra de un Proveedor y recibe los productos.",
+        q9: "Mi stock no se sincroniza con el marketplace. ¿Qué está mal?",
+        a9: "Verifica estas cosas: 1) ¿Está la tienda conectada y mostrando estado verde? 2) ¿Está el listado vinculado al stock del almacén? 3) Intenta hacer clic en 'Push' para forzar una sincronización.",
+        q10: "¿Cómo funcionan las alertas de stock bajo?",
+        a10: "Cada artículo del almacén tiene un 'Punto de Reorden'. Cuando el stock cae por debajo de este número, el artículo muestra una advertencia.",
+        q11: "¿Por qué mi tienda de Amazon muestra 'unauthorized' o no sincroniza?",
+        a11: "Esto ocurre cuando Amazon no ha aprobado los roles API requeridos para tu app. Necesitas: 1) Contactar Amazon Seller Support o verificar tu cuenta Developer Central 2) Solicitar aprobación para los roles 'Inventory and Order Management' y 'Amazon Fulfillment' 3) Una vez que Amazon apruebe, debes re-autorizar la app para generar un nuevo refresh token. Este es un proceso de aprobación de Amazon, no un error del sistema.",
+        q12: "¿Cuál es la diferencia entre Amazon FBA y FBM?",
+        a12: "Amazon FBA (Fulfilled by Amazon) y FBM (Fulfilled by Merchant) son integraciones completamente separadas. FBA: Amazon controla el inventario en sus almacenes - solo podemos importar/leer niveles de stock, no podemos hacer push. FBM: Tú controlas el inventario - el almacén es autoritativo y hace push de actualizaciones de stock a Amazon.",
+        q13: "¿Por qué no puedo hacer push de actualizaciones de stock a mis listados FBA de Amazon?",
+        a13: "El inventario de Amazon FBA está controlado por Amazon en sus centros de cumplimiento. Para actualizar el stock FBA, debes enviar envíos a los almacenes de Amazon a través de Seller Central.",
+        still_need_help: "¿Todavía necesitas ayuda?",
+        contact_text: "Contacta a tu administrador del sistema para soporte adicional."
+    },
+    fr: {
+        title: "Questions Fréquemment Posées",
+        section_getting_started: "Pour Commencer",
+        section_stock: "Gestion des Stocks",
+        section_linking: "Liaison des Produits",
+        section_orders: "Commandes et Fournisseurs",
+        section_trouble: "Dépannage",
+        q1: "Qu'est-ce que ce système de gestion d'inventaire?",
+        a1: "C'est un système de gestion d'inventaire multicanal qui vous aide à gérer les stocks sur plusieurs plateformes de vente comme Amazon et eBay. Il synchronise automatiquement tout votre inventaire.",
+        q2: "Comment connecter ma boutique Amazon ou eBay?",
+        a2: "Allez sur la page Boutiques et cliquez sur 'Ajouter une Boutique'. Choisissez votre plateforme, entrez les détails de la boutique et suivez le processus d'authentification.",
+        q3: "Où dois-je mettre à jour mes niveaux de stock?",
+        a3: "Mettez toujours à jour le stock sur la page Entrepôt. C'est votre source unique de vérité. Lorsque vous modifiez une quantité là-bas, elle est automatiquement envoyée à tous les marchés connectés.",
+        q4: "Comment fonctionne la synchronisation automatique?",
+        a4: "Le système fonctionne dans deux directions: 1) Lorsque vous mettez à jour le stock de l'entrepôt, il est envoyé à tous les marchés. 2) Lorsque quelqu'un achète sur un marché, cette vente se synchronise pour mettre à jour votre stock.",
+        q5: "Que sont les Groupes de Produits et quand dois-je les utiliser?",
+        a5: "Les Groupes de Produits servent à gérer les variations d'un même produit (comme différentes tailles ou couleurs). Lorsque les articles sont groupés, ils partagent le même niveau de stock.",
+        q6: "Comment fonctionne la liaison des produits entre les plateformes?",
+        a6: "Les produits sont liés automatiquement par SKU. Si vous avez le même SKU sur Amazon et eBay, ils se connecteront automatiquement au même stock d'entrepôt.",
+        q7: "Que faire si mon produit a des SKUs différents sur différentes plateformes?",
+        a7: "Utilisez les Groupes de Produits! Créez un groupe, ajoutez les deux SKUs, et ils partageront le même niveau de stock.",
+        q7b: "Les versions 50g et 100g sont-elles liées?",
+        a7b: "Non - les différentes tailles sont des produits complètement séparés. Chaque taille a son propre SKU et niveau de stock.",
+        q7c: "À quoi sert la page Admin Product Linking?",
+        a7c: "Cette page vous permet de voir et gérer comment les produits de l'entrepôt se connectent aux annonces du marché.",
+        q7d: "Pourquoi mon annonce est-elle 'Bloquée'?",
+        a7d: "Une annonce est bloquée quand le système ne peut pas envoyer les mises à jour de stock. Utilisez le bouton Réparer pour corriger.",
+        q7e: "Comment fonctionnent les actions en masse?",
+        a7e: "Sélectionnez des produits avec les cases, puis choisissez Diagnostics, Réparer ou Envoyer.",
+        q7f: "Que signifie 'Sélectionner tous les X éléments'?",
+        a7f: "Sélectionne tous les éléments de toutes les pages, pas seulement la page actuelle.",
+        q8: "Comment recevoir du nouveau stock dans l'entrepôt?",
+        a8: "Il y a deux façons: 1) Méthode rapide: Allez à l'Entrepôt, trouvez le SKU et mettez à jour la quantité directement. 2) Méthode appropriée: Créez un Bon de Commande auprès d'un Fournisseur et recevez les marchandises.",
+        q9: "Mon stock ne se synchronise pas avec le marché. Quel est le problème?",
+        a9: "Vérifiez ces points: 1) La boutique est-elle connectée et affiche-t-elle un statut vert? 2) L'annonce est-elle liée au stock de l'entrepôt? 3) Essayez de cliquer sur 'Push' pour forcer une synchronisation.",
+        q10: "Comment fonctionnent les alertes de stock bas?",
+        a10: "Chaque article d'entrepôt a un 'Point de Réapprovisionnement'. Lorsque le stock descend en dessous de ce nombre, l'article affiche un avertissement.",
+        q11: "Pourquoi ma boutique Amazon affiche 'unauthorized' ou ne synchronise pas?",
+        a11: "Cela se produit lorsqu'Amazon n'a pas approuvé les rôles API requis pour votre app. Vous devez: 1) Contacter Amazon Seller Support ou vérifier votre compte Developer Central 2) Demander l'approbation des rôles 'Inventory and Order Management' et 'Amazon Fulfillment' 3) Une fois qu'Amazon approuve, vous devez ré-autoriser l'app pour générer un nouveau refresh token. C'est un processus d'approbation Amazon, pas un bug système.",
+        q12: "Quelle est la différence entre Amazon FBA et FBM?",
+        a12: "Amazon FBA (Fulfilled by Amazon) et FBM (Fulfilled by Merchant) sont des intégrations complètement séparées. FBA: Amazon contrôle l'inventaire dans ses entrepôts - nous ne pouvons qu'importer/lire les niveaux de stock. FBM: Vous contrôlez l'inventaire - l'entrepôt fait autorité et pousse les mises à jour de stock vers Amazon.",
+        q13: "Pourquoi ne puis-je pas pousser les mises à jour de stock vers mes annonces Amazon FBA?",
+        a13: "L'inventaire Amazon FBA est contrôlé par Amazon dans ses centres de traitement. Pour mettre à jour le stock FBA, vous devez envoyer des expéditions aux entrepôts Amazon via Seller Central.",
+        still_need_help: "Besoin d'aide supplémentaire?",
+        contact_text: "Contactez votre administrateur système pour une assistance supplémentaire."
+    }
+};
+
+// Current language
+let currentLang = 'en';
+
+// Function to switch language
+function switchLanguage(lang) {
+    currentLang = lang;
+    
+    // Update all translatable elements
+    document.querySelectorAll('[data-translate]').forEach(element => {
+        const key = element.getAttribute('data-translate');
+        if (translations[lang] && translations[lang][key]) {
+            element.textContent = translations[lang][key];
+        }
+    });
+    
+    // Update active button
+    document.querySelectorAll('.lang-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.getAttribute('data-lang') === lang) {
+            btn.classList.add('active');
+        }
+    });
+    
+    // Update HTML lang attribute
+    document.documentElement.lang = lang;
+    
+    // Set text direction for RTL languages
+    if (lang === 'ur') {
+        document.body.style.direction = 'rtl';
+    } else {
+        document.body.style.direction = 'ltr';
+    }
+    
+    // Save preference
+    localStorage.setItem('faq_language', lang);
+}
+
+// Filter FAQs based on search input
+function filterFAQs(searchText) {
+    const search = searchText.toLowerCase().trim();
+    const accordionItems = document.querySelectorAll('.accordion-item');
+    const sectionHeaders = document.querySelectorAll('.card.bg-dark.mb-3');
+    
+    if (search === '') {
+        // Show all items when search is empty
+        accordionItems.forEach(item => item.style.display = '');
+        sectionHeaders.forEach(header => header.style.display = '');
+        return;
+    }
+    
+    accordionItems.forEach(item => {
+        const questionBtn = item.querySelector('.accordion-button span');
+        const answerBody = item.querySelector('.accordion-body span');
+        
+        const questionText = questionBtn ? questionBtn.textContent.toLowerCase() : '';
+        const answerText = answerBody ? answerBody.textContent.toLowerCase() : '';
+        
+        if (questionText.includes(search) || answerText.includes(search)) {
+            item.style.display = '';
+            // Expand matching items
+            const collapse = item.querySelector('.accordion-collapse');
+            if (collapse && !collapse.classList.contains('show')) {
+                new bootstrap.Collapse(collapse, {toggle: true});
+            }
+        } else {
+            item.style.display = 'none';
+        }
+    });
+    
+    // Hide section headers if all their items are hidden
+    sectionHeaders.forEach(header => {
+        const nextElement = header.nextElementSibling;
+        let hasVisibleItems = false;
+        let current = nextElement;
+        
+        while (current && !current.classList.contains('card')) {
+            if (current.classList.contains('accordion-item') && current.style.display !== 'none') {
+                hasVisibleItems = true;
+                break;
+            }
+            current = current.nextElementSibling;
+        }
+        
+        header.style.display = hasVisibleItems ? '' : 'none';
+    });
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+    // Load saved language preference
+    const savedLang = localStorage.getItem('faq_language');
+    if (savedLang && translations[savedLang]) {
+        switchLanguage(savedLang);
+    }
+    
+    // Add click handlers to language buttons
+    document.querySelectorAll('.lang-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            switchLanguage(this.getAttribute('data-lang'));
+        });
+    });
+    
+    // Initialize Feather icons
+    if (typeof feather !== 'undefined') {
+        feather.replace();
+    }
+});
+</script>
+
+<style>
+.accordion-button:not(.collapsed) {
+    background-color: #2d3748;
+    color: white;
+}
+.accordion-button::after {
+    filter: invert(1);
+}
+.accordion-item {
+    border: 1px solid #4a5568;
+}
+.lang-btn.active {
+    background-color: #3182ce;
+    color: white;
+    border-color: #3182ce;
+}
+[dir="rtl"] .accordion-button::after {
+    margin-left: 0;
+    margin-right: auto;
+}
+</style>
+{% endblock %}

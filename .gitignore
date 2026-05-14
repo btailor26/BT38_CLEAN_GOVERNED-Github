@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.pyc
+
+# Local runtime
+instance/
+logs/
+reports/
+*.db
+*.sqlite
+
+# Virtual environments
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.*
+
+# Local backups
+_bt38_backups/
+BROKEN_STATES/
+LEGACY_ROUTE_SYSTEMS/
+LEGACY_ROUTE_BACKUPS/
+
+# Build/runtime artifacts
+*.log
+*.zip
+*.tar.gz
+*.part.*
+*.sha256
+
+# IDE
+.vscode/
+.idea/
+
+# Cache
+.pytest_cache/
+.mypy_cache/
+
+# Local attached assets
+attached_assets/

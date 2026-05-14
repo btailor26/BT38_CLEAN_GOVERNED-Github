@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block title %}Connect {{ platform_name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card border-{{ platform_color }}">
+                <div class="card-header bg-{{ platform_color }} text-white">
+                    <h5 class="mb-0">
+                        {% if platform == 'AmazonFBA' %}
+                        <i data-feather="archive" class="me-2"></i>
+                        {% else %}
+                        <i data-feather="truck" class="me-2"></i>
+                        {% endif %}
+                        Connect {{ platform_name }}
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-{{ platform_color }} mb-4">
+                        <i data-feather="info" class="me-2"></i>
+                        {{ platform_description }}
+                    </div>
+                    
+                    <form action="{{ url_for('routes.quick_setup_amazon_fba') if platform == 'AmazonFBA' else url_for('routes.quick_setup_amazon_fbm') }}" method="POST">
+                        <div class="mb-3">
+                            <label class="form-label">Store Name</label>
+                            <input type="text" name="store_name" class="form-control" 
+                                   value="BT38 {{ 'FBA' if platform == 'AmazonFBA' else '' }}" required>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label class="form-label">Region</label>
+                            <select name="region" class="form-select">
+                                <option value="UK" selected>UK (Amazon.co.uk)</option>
+                                <option value="DE">Germany (Amazon.de)</option>
+                                <option value="FR">France (Amazon.fr)</option>
+                                <option value="IT">Italy (Amazon.it)</option>
+                                <option value="ES">Spain (Amazon.es)</option>
+                                <option value="US">United States (Amazon.com)</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-4">
+                            <label class="form-label">Marketplace ID</label>
+                            <select name="marketplace_id" class="form-select">
+                                <option value="A1F83G8C2ARO7P" selected>UK - A1F83G8C2ARO7P</option>
+                                <option value="A13V1IB3VIYZZH">Germany - A13V1IB3VIYZZH</option>
+                                <option value="A1PA6795UKMFR9">France - A1PA6795UKMFR9</option>
+                                <option value="APJ6JRA9NG5V4">Italy - APJ6JRA9NG5V4</option>
+                                <option value="A1RKKUPIHCS9HS">Spain - A1RKKUPIHCS9HS</option>
+                                <option value="ATVPDKIKX0DER">United States - ATVPDKIKX0DER</option>
+                            </select>
+                        </div>
+                        
+                        <div class="alert alert-secondary mb-4">
+                            <small>
+                                <i data-feather="lock" class="me-1" style="width: 14px; height: 14px;"></i>
+                                <strong>Using environment credentials:</strong> 
+                                This will use the Amazon API credentials configured in your environment variables.
+                            </small>
+                        </div>
+                        
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-{{ platform_color }} flex-grow-1">
+                                <i data-feather="link" class="me-1"></i>
+                                Connect {{ platform_name }}
+                            </button>
+                            <a href="{{ url_for('routes.settings') }}" class="btn btn-outline-secondary">
+                                Cancel
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

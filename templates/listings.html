@@ -1,0 +1,830 @@
+{% extends "base.html" %}
+
+{% block title %}Multi-Channel Listings - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                <i data-feather="shopping-cart" class="me-2"></i>
+                Multi-Channel Listings
+            </h1>
+{% include '_inventory_area_tabs.html' %}
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-outline-info" onclick="showJobsTab()">
+                    <i data-feather="activity" class="me-1"></i>
+                    Automation / Jobs
+                </button>
+                <a href="{{ url_for('routes.create_listing') }}" class="btn btn-primary">
+                    <i data-feather="plus" class="me-1"></i>
+                    Create New Listing
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bulk Actions Bar (shown when items selected) -->
+<div class="row mb-3" id="bulkActionsBar" style="display: none;">
+    <div class="col-12">
+        <div class="card bg-primary">
+            <div class="card-body py-3">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div class="d-flex align-items-center text-white flex-wrap gap-2">
+                        <div>
+                            <i data-feather="check-square" class="me-2"></i>
+                            <span id="selectedCount">0</span> listing(s) selected
+                        </div>
+                        <!-- Select All Pages Banner -->
+                        <button type="button" class="btn btn-sm btn-light ms-2" id="selectAllPagesBtn" style="display: none;" onclick="selectAllListingsPages()">
+                            Select all <strong>{{ filtered_count }}</strong> matching listings
+                        </button>
+                        <span class="badge bg-success ms-2" id="allPagesSelected" style="display: none;">
+                            <i data-feather="check" class="me-1" style="width: 14px; height: 14px;"></i>
+                            All {{ filtered_count }} listings selected
+                        </span>
+                    </div>
+                    <div class="d-flex flex-wrap gap-2">
+                        <button type="button" class="btn btn-light btn-sm" onclick="bulkPush()">
+                            <i data-feather="upload" class="me-1"></i>
+                            Push to Marketplace
+                        </button>
+                        <button type="button" class="btn btn-warning btn-sm" onclick="bulkUnblock()">
+                            <i data-feather="unlock" class="me-1"></i>
+                            Unblock / Fix Blocked
+                        </button>
+                        <button type="button" class="btn btn-info btn-sm" onclick="bulkSyncFromWarehouse()">
+                            <i data-feather="refresh-cw" class="me-1"></i>
+                            Sync Qty from Warehouse
+                        </button>
+                        <button type="button" class="btn btn-secondary btn-sm" onclick="bulkActivate()">
+                            <i data-feather="check-circle" class="me-1"></i>
+                            Activate
+                        </button>
+                        <button type="button" class="btn btn-outline-light btn-sm" onclick="bulkDeactivate()">
+                            <i data-feather="x-circle" class="me-1"></i>
+                            Deactivate
+                        </button>
+                        <button type="button" class="btn btn-outline-light btn-sm" onclick="clearListingsSelection()">
+                            <i data-feather="x" class="me-1"></i>
+                            Clear
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Jobs Modal -->
+<div class="modal fade" id="jobsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content bg-dark">
+            <div class="modal-header">
+                <h5 class="modal-title"><i data-feather="activity" class="me-2"></i>Automation / Jobs</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="jobsLoading" class="text-center py-4">
+                    <div class="spinner-border text-primary"></div>
+                    <p class="mt-2">Loading jobs...</p>
+                </div>
+                <div id="jobsList" style="display: none;">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Type</th>
+                                    <th>Status</th>
+                                    <th>Progress</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="jobsTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="noJobs" class="text-center py-4 text-muted" style="display: none;">
+                        <i data-feather="inbox" style="width: 48px; height: 48px;"></i>
+                        <p class="mt-2">No bulk jobs found. Run a bulk action to see jobs here.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted mb-0">Total Listings</h6>
+                        <h3 class="mb-0">{{ total_listings }}</h3>
+                    </div>
+                    <i data-feather="shopping-cart" class="text-primary"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted mb-0">Active</h6>
+                        <h3 class="mb-0 text-success">{{ active_listings }}</h3>
+                    </div>
+                    <i data-feather="check-circle" class="text-success"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted mb-0">Pending Push</h6>
+                        <h3 class="mb-0 text-warning">{{ pending_push }}</h3>
+                    </div>
+                    <i data-feather="upload" class="text-warning"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="text-muted mb-0">Blocked</h6>
+                        <h3 class="mb-0 text-danger">{{ blocked_listings }}</h3>
+                    </div>
+                    <i data-feather="alert-circle" class="text-danger"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Filters -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row align-items-center">
+                    <div class="col-md-5">
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="searchInput" 
+                                   placeholder="Search by SKU, title, or listing ID..." 
+                                   value="{{ current_search or '' }}"
+                                   onkeyup="handleSearchKeyup(event)">
+                            <button class="btn btn-outline-secondary" type="button" onclick="performSearch()">
+                                <i data-feather="search"></i>
+                            </button>
+                            {% if current_search %}
+                            <button class="btn btn-outline-danger" type="button" onclick="clearSearch()" title="Clear search">
+                                <i data-feather="x"></i>
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <select class="form-select" id="platformFilter" onchange="filterByPlatform(this.value)">
+                            <option value="">All Platforms</option>
+                            <option value="Amazon" {% if current_platform_filter == 'Amazon' %}selected{% endif %}>Amazon FBA</option>
+                            <option value="Amazon" {% if current_platform_filter == 'Amazon' %}selected{% endif %}>Amazon FBM</option>
+                            <option value="Amazon" {% if current_platform_filter == 'Amazon' %}selected{% endif %}>Amazon (Legacy)</option>
+                            <option value="eBay" {% if current_platform_filter == 'eBay' %}selected{% endif %}>eBay</option>
+                            <option value="Shopify" {% if current_platform_filter == 'Shopify' %}selected{% endif %}>Shopify</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <select class="form-select" id="storeFilter" onchange="filterByStore(this.value)">
+                            <option value="">All Stores</option>
+                            {% for store in all_stores %}
+                                <option value="{{ store.id }}" {% if current_store_filter == store.id|string %}selected{% endif %}>
+                                    {{ store.name }} ({{ store.platform }})
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <select class="form-select" id="statusFilter" onchange="filterByStatus(this.value)">
+                            <option value="">All Statuses</option>
+                            <option value="active" {% if current_status_filter == 'active' %}selected{% endif %}>Active</option>
+                            <option value="inactive" {% if current_status_filter == 'inactive' %}selected{% endif %}>Inactive</option>
+                            <option value="blocked" {% if current_status_filter == 'blocked' %}selected{% endif %}>Blocked</option>
+                            <option value="needs_review" {% if current_status_filter == 'needs_review' %}selected{% endif %}>Needs Review</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Listings Table -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                {% if listings %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th style="width: 40px;">
+                                    <input type="checkbox" class="form-check-input" id="selectAllListings" onchange="toggleSelectAllListings()">
+                                </th>
+                                <th>SKU</th>
+                                <th>Title</th>
+                                <th>Store</th>
+                                <th>Price</th>
+                                <th>Quantity</th>
+                                <th>Status</th>
+                                <th>Last Push</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for listing in listings %}
+                            <tr>
+                                <td>
+                                    <input type="checkbox" class="form-check-input listing-checkbox" value="{{ listing.id }}" onchange="updateListingsBulkActionsBar()">
+                                </td>
+                                <td>
+                                    <strong>{{ listing.warehouse_stock.sku if listing.warehouse_stock else 'N/A' }}</strong>
+                                </td>
+                                <td>
+                                    <div class="text-truncate" style="max-width: 300px;" title="{{ listing.title }}">
+                                        {{ listing.title or 'No title' }}
+                                    </div>
+                                    <small class="text-muted">{{ listing.external_listing_id }}</small>
+                                </td>
+                                <td>
+                                    <span class="badge bg-info">{{ listing.store.name if listing.store else 'Unknown' }}</span>
+                                    <br>
+                                    {% if listing.store and listing.store.platform == 'Amazon' %}
+                                        <span class="badge bg-info" style="font-size: 0.7em;">FBA</span>
+                                        <span class="badge bg-secondary" style="font-size: 0.65em;">Read-Only</span>
+                                    {% elif listing.store and listing.store.platform == 'Amazon' %}
+                                        <span class="badge bg-primary" style="font-size: 0.7em;">FBM</span>
+                                    {% elif listing.store and listing.store.platform == 'Amazon' %}
+                                        <span class="badge bg-warning text-dark" style="font-size: 0.7em;">Amazon</span>
+                                    {% else %}
+                                        <small class="text-muted">{{ listing.store.platform if listing.store else '' }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {{ listing.currency }} {{ "%.2f"|format(listing.price) }}
+                                    {% if listing.sale_price %}
+                                    <br><small class="text-success">Sale: {{ listing.currency }} {{ "%.2f"|format(listing.sale_price) }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if listing.warehouse_stock %}
+                                    <div class="d-flex align-items-center gap-1">
+                                        <span class="badge bg-success" style="font-size: 1rem; padding: 0.5rem 0.75rem;">
+                                            {{ listing.warehouse_stock.available_quantity }}
+                                        </span>
+                                    </div>
+                                    <small class="text-muted">
+                                        <i data-feather="package" style="width:10px;height:10px;"></i>
+                                        Warehouse Stock
+                                    </small>
+                                    {% else %}
+                                    <strong>{{ listing.effective_quantity }}</strong>
+                                    <br><small class="text-muted">Not linked</small>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if listing.is_active %}
+                                        <span class="badge bg-success">Active</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Inactive</span>
+                                    {% endif %}
+                                    <br>
+                                    {% if listing.push_state == 'active' %}
+                                        <span class="badge bg-primary">Ready</span>
+                                    {% elif listing.push_state == 'blocked' %}
+                                        <span class="badge bg-danger">Blocked</span>
+                                    {% elif listing.push_state == 'needs_review' %}
+                                        <span class="badge bg-warning">Review</span>
+                                    {% elif listing.push_state == 'disabled' %}
+                                        <span class="badge bg-secondary">Disabled</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if listing.last_push_at %}
+                                        {{ listing.last_push_at.strftime('%Y-%m-%d %H:%M') }}
+                                        <br>
+                                        {% if listing.last_push_status == 'success' %}
+                                            <span class="badge bg-success">Success</span>
+                                        {% elif listing.last_push_status == 'error' %}
+                                            <span class="badge bg-danger">Error</span>
+                                        {% elif listing.last_push_status == 'pending' %}
+                                            <span class="badge bg-warning">Pending</span>
+                                        {% endif %}
+                                    {% else %}
+                                        <span class="text-muted">Never pushed</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm">
+                                        <button type="button" class="btn btn-outline-primary" onclick="pushListing({{ listing.id }})" title="Push to marketplace">
+                                            <i data-feather="upload"></i>
+                                        </button>
+                                        <a href="{{ url_for('routes.edit_listing', listing_id=listing.id) }}" class="btn btn-outline-secondary" title="Edit">
+                                            <i data-feather="edit"></i>
+                                        </a>
+                                        <button type="button" class="btn btn-outline-danger" onclick="deleteListing({{ listing.id }})" title="Delete">
+                                            <i data-feather="trash-2"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i data-feather="shopping-cart" class="mb-3" style="width: 48px; height: 48px;"></i>
+                    <h5>No listings found</h5>
+                    <p class="text-muted">Create your first multi-channel listing to get started.</p>
+                    <a href="{{ url_for('routes.create_listing') }}" class="btn btn-primary mt-3">
+                        <i data-feather="plus" class="me-1"></i>
+                        Create New Listing
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Search functionality
+function handleSearchKeyup(event) {
+    if (event.key === 'Enter') {
+        performSearch();
+    }
+}
+
+function performSearch() {
+    const searchValue = document.getElementById('searchInput').value;
+    const url = new URL(window.location);
+    url.searchParams.set('search', searchValue);
+    window.location = url.toString();
+}
+
+function clearSearch() {
+    const url = new URL(window.location);
+    url.searchParams.delete('search');
+    window.location = url.toString();
+}
+
+// Filter functionality
+function filterByStore(storeId) {
+    const url = new URL(window.location);
+    if (storeId) {
+        url.searchParams.set('store', storeId);
+    } else {
+        url.searchParams.delete('store');
+    }
+    window.location = url.toString();
+}
+
+function filterByStatus(status) {
+    const url = new URL(window.location);
+    if (status) {
+        url.searchParams.set('status', status);
+    } else {
+        url.searchParams.delete('status');
+    }
+    window.location = url.toString();
+}
+
+function filterByPlatform(platform) {
+    const url = new URL(window.location);
+    if (platform) {
+        url.searchParams.set('platform', platform);
+    } else {
+        url.searchParams.delete('platform');
+    }
+    window.location = url.toString();
+}
+
+// Selection state
+let selectAllPagesMode = false;
+const filteredCount = {{ filtered_count }};
+const visibleCount = {{ listings|length }};
+
+// Get current filter parameters for server-side ID fetching
+function getCurrentFilters() {
+    return {
+        search: '{{ current_search or "" }}',
+        store: '{{ current_store_filter or "" }}',
+        status: '{{ current_status_filter or "" }}',
+        platform: '{{ current_platform_filter or "" }}'
+    };
+}
+
+// Selection functionality
+function toggleSelectAllListings() {
+    const selectAll = document.getElementById('selectAllListings');
+    const checkboxes = document.querySelectorAll('.listing-checkbox');
+    checkboxes.forEach(cb => cb.checked = selectAll.checked);
+    selectAllPagesMode = false;
+    updateListingsBulkActionsBar();
+}
+
+function selectAllListingsPages() {
+    selectAllPagesMode = true;
+    updateListingsBulkActionsBar();
+}
+
+function updateListingsBulkActionsBar() {
+    const checkboxes = document.querySelectorAll('.listing-checkbox:checked');
+    const allCheckboxes = document.querySelectorAll('.listing-checkbox');
+    const count = checkboxes.length;
+    const bulkActionsBar = document.getElementById('bulkActionsBar');
+    const selectedCount = document.getElementById('selectedCount');
+    const selectAllBtn = document.getElementById('selectAllPagesBtn');
+    const allPagesSpan = document.getElementById('allPagesSelected');
+    
+    if (count > 0 || selectAllPagesMode) {
+        bulkActionsBar.style.display = 'block';
+        selectedCount.textContent = selectAllPagesMode ? filteredCount : count;
+        
+        // Show "Select all X listings" button when all visible are selected and there are more
+        if (count === allCheckboxes.length && count === visibleCount && filteredCount > visibleCount && !selectAllPagesMode) {
+            selectAllBtn.style.display = 'inline-block';
+            allPagesSpan.style.display = 'none';
+        } else if (selectAllPagesMode) {
+            selectAllBtn.style.display = 'none';
+            allPagesSpan.style.display = 'inline-block';
+        } else {
+            selectAllBtn.style.display = 'none';
+            allPagesSpan.style.display = 'none';
+        }
+    } else {
+        bulkActionsBar.style.display = 'none';
+        selectAllBtn.style.display = 'none';
+        allPagesSpan.style.display = 'none';
+    }
+    
+    feather.replace();
+}
+
+function clearListingsSelection() {
+    const checkboxes = document.querySelectorAll('.listing-checkbox');
+    checkboxes.forEach(cb => cb.checked = false);
+    document.getElementById('selectAllListings').checked = false;
+    selectAllPagesMode = false;
+    updateListingsBulkActionsBar();
+}
+
+function getSelectedIds() {
+    if (selectAllPagesMode) {
+        return 'all'; // Special marker for server-side handling
+    }
+    const checkboxes = document.querySelectorAll('.listing-checkbox:checked');
+    return Array.from(checkboxes).map(cb => parseInt(cb.value));
+}
+
+function getSelectionCount() {
+    return selectAllPagesMode ? filteredCount : document.querySelectorAll('.listing-checkbox:checked').length;
+}
+
+// Build bulk action payload (either listing_ids or use_filters)
+function buildBulkPayload() {
+    if (selectAllPagesMode) {
+        return {
+            use_filters: true,
+            filters: getCurrentFilters()
+        };
+    }
+    return {
+        listing_ids: getSelectedIds()
+    };
+}
+
+// Bulk Push to Marketplace
+function bulkPush() {
+    const count = getSelectionCount();
+    if (count === 0) return;
+    
+    const allPages = selectAllPagesMode ? ' (ALL matching listings across all pages)' : '';
+    if (!confirm(`Push ${count} listing(s) to their marketplaces?${allPages}\n\nThis will queue background jobs to update all selected items.`)) {
+        return;
+    }
+    
+    submitBulkJob('/api/listings/bulk/push', buildBulkPayload(), 'Push', count);
+}
+
+// Bulk Unblock / Fix Blocked Listings
+function bulkUnblock() {
+    const count = getSelectionCount();
+    if (count === 0) return;
+    
+    const allPages = selectAllPagesMode ? ' (ALL matching listings across all pages)' : '';
+    if (!confirm(`Attempt to unblock/fix ${count} listing(s)?${allPages}\n\nThis will try to resolve common issues and requeue push jobs.`)) {
+        return;
+    }
+    
+    submitBulkJob('/api/listings/bulk/unblock', buildBulkPayload(), 'Unblock', count);
+}
+
+// Bulk Sync Quantity from Warehouse
+function bulkSyncFromWarehouse() {
+    const count = getSelectionCount();
+    if (count === 0) return;
+    
+    const allPages = selectAllPagesMode ? ' (ALL matching listings across all pages)' : '';
+    if (!confirm(`Sync ${count} listing(s) quantities from warehouse?${allPages}\n\nThis will update listing quantities to match warehouse stock.`)) {
+        return;
+    }
+    
+    submitBulkJob('/api/listings/bulk/update-from-warehouse', buildBulkPayload(), 'Sync', count);
+}
+
+// Bulk Activate
+function bulkActivate() {
+    const count = getSelectionCount();
+    if (count === 0) return;
+    
+    const allPages = selectAllPagesMode ? ' (ALL matching listings across all pages)' : '';
+    if (!confirm(`Activate ${count} listing(s)?${allPages}`)) {
+        return;
+    }
+    
+    performBulkAction('activate', buildBulkPayload());
+}
+
+// Bulk Deactivate
+function bulkDeactivate() {
+    const count = getSelectionCount();
+    if (count === 0) return;
+    
+    const allPages = selectAllPagesMode ? ' (ALL matching listings across all pages)' : '';
+    if (!confirm(`Deactivate ${count} listing(s)?${allPages}`)) {
+        return;
+    }
+    
+    performBulkAction('deactivate', buildBulkPayload());
+}
+
+// Submit bulk job to API
+function submitBulkJob(url, data, actionName, itemCount) {
+    const submitBtn = event.target;
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Starting...';
+    
+    fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.ok || result.success) {
+            const jobId = result.job_id;
+            const count = result.total_items || itemCount;
+            alert(`${actionName} job started successfully!\n\nJob ID: ${jobId}\nItems: ${count}\n\nView status in Automation / Jobs.`);
+            clearListingsSelection();
+        } else {
+            alert('Error: ' + (result.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while starting the job');
+    })
+    .finally(() => {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = submitBtn.getAttribute('data-original-html') || actionName;
+        feather.replace();
+    });
+}
+
+function performBulkAction(action, payload) {
+    const requestData = { action: action, ...payload };
+    
+    fetch('/api/listings/bulk-action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            window.location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while performing the action');
+    });
+}
+
+// Jobs Modal
+function showJobsTab() {
+    const modal = new bootstrap.Modal(document.getElementById('jobsModal'));
+    modal.show();
+    loadJobs();
+}
+
+function loadJobs() {
+    document.getElementById('jobsLoading').style.display = 'block';
+    document.getElementById('jobsList').style.display = 'none';
+    
+    fetch('/api/listings/bulk/jobs')
+    .then(response => response.json())
+    .then(data => {
+        document.getElementById('jobsLoading').style.display = 'none';
+        document.getElementById('jobsList').style.display = 'block';
+        
+        const tbody = document.getElementById('jobsTableBody');
+        tbody.innerHTML = '';
+        
+        if (!data.jobs || data.jobs.length === 0) {
+            document.getElementById('noJobs').style.display = 'block';
+            return;
+        }
+        
+        document.getElementById('noJobs').style.display = 'none';
+        
+        data.jobs.forEach(job => {
+            const row = document.createElement('tr');
+            const statusBadge = getStatusBadge(job.status);
+            const progress = job.total_items > 0 
+                ? `${job.processed_items}/${job.total_items} (${job.success_count} OK, ${job.error_count} errors)`
+                : 'N/A';
+            
+            row.innerHTML = `
+                <td>${job.id}</td>
+                <td><span class="badge bg-secondary">${formatJobType(job.job_type)}</span></td>
+                <td>${statusBadge}</td>
+                <td>${progress}</td>
+                <td>${formatDate(job.created_at)}</td>
+                <td>
+                    ${job.error_count > 0 ? `<a href="/api/listings/bulk/jobs/${job.id}/errors.csv" class="btn btn-sm btn-outline-warning" title="Download errors CSV"><i data-feather="download"></i></a>` : ''}
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+        
+        feather.replace();
+    })
+    .catch(error => {
+        console.error('Error loading jobs:', error);
+        document.getElementById('jobsLoading').innerHTML = '<p class="text-danger">Error loading jobs</p>';
+    });
+}
+
+function getStatusBadge(status) {
+    const badges = {
+        'pending': '<span class="badge bg-secondary">Pending</span>',
+        'running': '<span class="badge bg-primary">Running</span>',
+        'success': '<span class="badge bg-success">Success</span>',
+        'failed': '<span class="badge bg-danger">Failed</span>',
+        'partial': '<span class="badge bg-warning">Partial</span>'
+    };
+    return badges[status] || `<span class="badge bg-secondary">${status}</span>`;
+}
+
+function formatJobType(type) {
+    const types = {
+        'bulk_push': 'Push',
+        'bulk_unblock': 'Unblock',
+        'bulk_sync_warehouse': 'Sync Warehouse',
+        'bulk_diagnostics': 'Diagnostics',
+        'bulk_repair': 'Repair Links'
+    };
+    return types[type] || type;
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return 'N/A';
+    const date = new Date(dateStr);
+    return date.toLocaleString();
+}
+
+// Individual actions
+function pushListing(listingId) {
+    if (!confirm('Push this listing to the marketplace?')) {
+        return;
+    }
+    
+    fetch(`/api/listings/${listingId}/push`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            window.location.reload();
+        } else {
+            alert('Error: ' + data.error);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('An error occurred while pushing the listing');
+    });
+}
+
+function deleteListing(listingId) {
+    if (!confirm('Are you sure you want to delete this listing?')) {
+        return;
+    }
+    
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `/listings/delete/${listingId}`;
+    
+    const csrfInput = document.createElement('input');
+    csrfInput.type = 'hidden';
+    csrfInput.name = 'csrf_token';
+    csrfInput.value = '{{ csrf_token }}';
+    form.appendChild(csrfInput);
+    
+    document.body.appendChild(form);
+    form.submit();
+}
+
+// Inline quantity update
+function updateQuantity(input) {
+    const listingId = input.dataset.listingId;
+    const warehouseId = input.dataset.warehouseId;
+    const originalValue = parseInt(input.dataset.original);
+    const newValue = parseInt(input.value);
+    const statusEl = document.getElementById(`qty-status-${listingId}`);
+    
+    if (isNaN(newValue) || newValue < 0) {
+        input.value = originalValue;
+        statusEl.innerHTML = '<span class="text-danger">Invalid</span>';
+        setTimeout(() => { statusEl.innerHTML = ''; }, 2000);
+        return;
+    }
+    
+    if (newValue === originalValue) {
+        statusEl.innerHTML = '';
+        return;
+    }
+    
+    statusEl.innerHTML = '<span class="spinner-border spinner-border-sm text-primary"></span>';
+    input.disabled = true;
+    
+    fetch(`/api/warehouse/${warehouseId}/quick-adjust`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            new_quantity: newValue,
+            reason: 'Adjusted via listings page'
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            statusEl.innerHTML = '<i data-feather="check" class="text-success" style="width:16px;height:16px;"></i>';
+            input.dataset.original = newValue;
+            feather.replace();
+            setTimeout(() => { statusEl.innerHTML = ''; }, 3000);
+        } else {
+            statusEl.innerHTML = '<span class="text-danger" title="' + (data.error || 'Failed') + '">!</span>';
+            input.value = originalValue;
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        statusEl.innerHTML = '<span class="text-danger">Error</span>';
+        input.value = originalValue;
+    })
+    .finally(() => {
+        input.disabled = false;
+    });
+}
+
+// Initialize feather icons
+document.addEventListener('DOMContentLoaded', function() {
+    feather.replace();
+});
+</script>
+{% endblock %}

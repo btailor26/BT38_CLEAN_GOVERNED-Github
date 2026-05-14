@@ -1,0 +1,91 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>BT38 Control Center Preview</title>
+  <style>
+    body{font-family:Arial,sans-serif;background:#f6f7f9;margin:0;padding:20px;color:#111}
+    .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+    .badge{background:#111;color:#fff;padding:5px 10px;border-radius:20px;font-size:12px}
+    .btn{border:1px solid #ccc;background:#fff;border-radius:8px;padding:8px 12px;margin-left:6px}
+    .danger{background:#111;color:#fff}
+    .grid{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-bottom:16px}
+    .card{background:#fff;border:1px solid #ddd;border-radius:12px;padding:14px}
+    .card h4{margin:0 0 6px;font-size:13px;color:#666}
+    .card strong{font-size:20px}
+    .tabs{display:flex;gap:8px;margin-bottom:14px}
+    .tab{background:#fff;border:1px solid #ddd;border-radius:20px;padding:8px 14px}
+    .tab.active{background:#111;color:#fff}
+    table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden}
+    th,td{padding:12px;border-bottom:1px solid #eee;text-align:left;font-size:13px}
+    th{background:#fafafa;color:#555}
+    .switch{display:inline-block;width:42px;height:22px;background:#111;border-radius:20px;vertical-align:middle}
+    .off{background:#bbb}
+    .lock{background:#eee;border-radius:8px;padding:5px 8px}
+    .section{margin-bottom:18px}
+  </style>
+</head>
+<body>
+  <div class="top">
+    <div>
+      <h1>BT38 Control Center <span class="badge">Admin Runtime</span></h1>
+      <p>All backend controls visible in one compact settings page.</p>
+    </div>
+    <div>
+      <button class="btn">Save Settings</button>
+      <button class="btn danger">Emergency Freeze</button>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active">Master</div>
+    <div class="tab">Marketplaces</div>
+    <div class="tab">Stores</div>
+    <div class="tab">Workers</div>
+    <div class="tab">Safety</div>
+    <div class="tab">Logs</div>
+  </div>
+
+  <div class="grid">
+    <div class="card"><h4>Runtime</h4><strong>Live</strong></div>
+    <div class="card"><h4>Queue</h4><strong>Active</strong></div>
+    <div class="card"><h4>Workers</h4><strong>4 On</strong></div>
+    <div class="card"><h4>Failed Jobs</h4><strong>0</strong></div>
+    <div class="card"><h4>Frozen Stores</h4><strong>0</strong></div>
+    <div class="card"><h4>Last Sync</h4><strong>09:15</strong></div>
+  </div>
+
+  <div class="section">
+    <h3>Master Runtime Control</h3>
+    <table>
+      <tr><th>Control</th><th>Status</th><th>Mode</th><th>Notes</th></tr>
+      <tr><td>Global Push</td><td><span class="switch"></span></td><td>Live</td><td>Master automatic push switch</td></tr>
+      <tr><td>Auto-Sync Engine</td><td><span class="switch off"></span></td><td>Dry Run</td><td>Stock changes to marketplace queue</td></tr>
+      <tr><td>Manual Only Mode</td><td><span class="switch off"></span></td><td>Safe</td><td>Blocks automatic execution</td></tr>
+      <tr><td>Notifications</td><td><span class="switch"></span></td><td>Live</td><td>Failure and summary notices</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h3>Marketplace Control</h3>
+    <table>
+      <tr><th>Marketplace</th><th>Import</th><th>Push</th><th>Delay</th><th>Status</th><th>Action</th></tr>
+      <tr><td>Amazon FBM</td><td><span class="switch"></span></td><td><span class="switch"></span></td><td>0s</td><td>Active</td><td>Test</td></tr>
+      <tr><td>Amazon FBA</td><td><span class="switch"></span></td><td><span class="lock">Locked Read Only</span></td><td>20s</td><td>Active</td><td>Import</td></tr>
+      <tr><td>eBay</td><td><span class="switch"></span></td><td><span class="switch"></span></td><td>10s</td><td>Active</td><td>Test</td></tr>
+      <tr><td>TikTok</td><td><span class="switch off"></span></td><td><span class="switch off"></span></td><td>15s</td><td>Off</td><td>Setup</td></tr>
+    </table>
+  </div>
+
+  <div class="section">
+    <h3>Safety & Governance</h3>
+    <table>
+      <tr><th>Rule</th><th>Status</th><th>Editable</th></tr>
+      <tr><td>Warehouse Source of Truth</td><td>Active</td><td><span class="lock">Locked</span></td></tr>
+      <tr><td>Marketplace Overwrite Warehouse</td><td>Disabled</td><td><span class="lock">Locked</span></td></tr>
+      <tr><td>Reverse Sync</td><td>Disabled</td><td>Admin only</td></tr>
+      <tr><td>Queue Locking</td><td>Active</td><td><span class="lock">Locked</span></td></tr>
+    </table>
+  </div>
+</body>
+</html>

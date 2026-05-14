@@ -1,0 +1,1203 @@
+{% extends "base.html" %}
+
+{% block title %}{{ stock_item.sku }} - Warehouse Stock Detail{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                <i data-feather="package" class="me-2"></i>
+                Warehouse Stock: {{ stock_item.sku }}
+            </h1>
+{% include '_inventory_area_tabs.html' %}
+
+<div class="mb-3">
+    <div class="d-flex flex-wrap gap-1">
+        <a href="#marketplace-section" class="btn btn-sm btn-outline-secondary py-1 px-2">Marketplace</a>
+        <a href="#supplier-section" class="btn btn-sm btn-outline-secondary py-1 px-2">Supplier</a>
+        <a href="#costing-section" class="btn btn-sm btn-outline-secondary py-1 px-2">Costing</a>
+        <a href="#settings-section" class="btn btn-sm btn-outline-secondary py-1 px-2">Settings</a>
+    </div>
+</div>
+
+            <div class="d-flex gap-2">
+                <a href="{{ url_for('routes.product_linking') }}?search={{ stock_item.sku }}" class="btn btn-primary">
+                    <i data-feather="send" class="me-1"></i>
+                    Push via GroupView
+                </a>
+                <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#editSettingsModal">
+                    <i data-feather="image" class="me-1"></i>
+                    Edit Product Info
+                </button>
+                <a href="{{ url_for('routes.warehouse') }}" class="btn btn-outline-secondary">
+                    <i data-feather="arrow-left" class="me-1"></i>
+                    Back to Warehouse
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Stock Overview -->
+    <div class="col-md-8">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Stock Overview</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h3 class="text-primary mb-1">{{ stock_item.available_quantity }}</h3>
+                            <p class="text-muted mb-0">Available</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h3 class="text-warning mb-1">{{ stock_item.reserved_quantity }}</h3>
+                            <p class="text-muted mb-0">Reserved</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h3 class="text-info mb-1">{{ stock_item.allocated_quantity }}</h3>
+                            <p class="text-muted mb-0">Allocated</p>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="text-center">
+                            <h3 class="text-secondary mb-1">{{ stock_item.on_order_quantity }}</h3>
+                            <p class="text-muted mb-0">On Order</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <hr class="my-4">
+                
+                <div class="row">
+                    <div class="col-md-6">
+                        <h4 class="text-success">{{ stock_item.sellable_quantity }}</h4>
+                        <p class="text-muted">Sellable Quantity</p>
+                    </div>
+                    <div class="col-md-6">
+                        <h4>{{ stock_item.total_quantity }}</h4>
+                        <p class="text-muted">Total Physical Stock</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="marketplace-section" class="small text-muted fw-semibold mt-2 mb-1">Marketplace / Group Context</div>
+<!-- GROUP CONTEXT MODE: Shows when warehouse stock has linked marketplace listings -->
+        {% if is_group_context %}
+        <div class="card mb-4 border-primary">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i data-feather="layers" class="me-2"></i>
+                    Group Context: {{ group_context.linked_count }} Linked Listing{% if group_context.linked_count != 1 %}s{% endif %}
+                </h5>
+                <button class="btn btn-light btn-sm" onclick="showGroupAdjustPush()" id="groupAdjustPushBtn">
+                    <i data-feather="sliders" class="me-1"></i>
+                    Adjust & Push
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-md-4">
+                        <div class="text-center p-3 bg-light rounded">
+                            <h3 class="text-primary mb-1">{{ stock_item.available_quantity }}</h3>
+                            <p class="text-muted mb-0 small">Master Quantity</p>
+                            <small class="text-muted">Source of Truth</small>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-center p-3 bg-light rounded">
+                            <h3 class="text-success mb-1">{{ group_context.linked_count }}</h3>
+                            <p class="text-muted mb-0 small">Linked Listings</p>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="text-center p-3 bg-light rounded">
+                            <h3 class="text-info mb-1">
+                                {% set pushable_count = group_context.listings|selectattr('is_pushable')|list|length %}
+                                {{ pushable_count }}
+                            </h3>
+                            <p class="text-muted mb-0 small">Pushable (FBM/eBay)</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <h6 class="mb-2">Linked Marketplace Listings:</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Platform</th>
+                                <th>Store</th>
+                                <th>SKU</th>
+                                <th>ID/ASIN</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for listing in group_context.listings %}
+                            <tr>
+                                <td>
+                                    <span class="badge {% if listing.is_fba %}bg-info{% elif listing.platform == 'ebay' %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+                                        {% if listing.is_fba %}<i data-feather="lock" class="feather-xs me-1"></i>FBA{% else %}{{ listing.platform }}{% endif %}
+                                    </span>
+                                </td>
+                                <td><small>{{ listing.store_name }}</small></td>
+                                <td><code>{{ listing.external_sku }}</code></td>
+                                <td><small class="text-muted">{{ listing.external_id }}</small></td>
+                                <td>
+                                    {% if listing.is_fba %}
+                                        <span class="badge bg-info">Read-only</span>
+                                    {% else %}
+                                        <span class="badge bg-success">Pushable</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="alert alert-info mt-3 mb-0 py-2">
+                    <small>
+                        <i data-feather="info" class="feather-sm me-1"></i>
+                        <strong>Group Context Mode:</strong> This warehouse stock controls quantity for all linked listings. 
+                        Use <strong>Adjust & Push</strong> to update quantity and push to all marketplaces in parallel.
+                        <a href="{{ url_for('routes.product_linking') }}?search={{ stock_item.sku }}" class="alert-link">Manage links in GroupView</a>
+                    </small>
+                </div>
+            </div>
+        </div>
+        {% elif marketplace_listings|length == 0 %}
+        <div class="card mb-4 border-warning">
+            <div class="card-header bg-warning bg-opacity-25">
+                <h5 class="mb-0 text-warning">
+                    <i data-feather="alert-circle" class="me-2"></i>
+                    No Linked Listings
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="mb-2">This warehouse stock is not linked to any marketplace listings.</p>
+                <a href="{{ url_for('routes.product_linking') }}?search={{ stock_item.sku }}" class="btn btn-primary btn-sm">
+                    <i data-feather="link" class="me-1"></i>
+                    Link in GroupView
+                </a>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Legacy Product Group (backwards compatibility) -->
+        {% if product_group and not is_group_context %}
+        <div class="card mb-4">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">
+                    <i data-feather="link" class="me-2"></i>
+                    Legacy Group: {{ product_group.name }}
+                </h5>
+            </div>
+            <div class="card-body">
+                <p class="text-muted mb-3">{{ product_group.description }}</p>
+                <div class="alert alert-warning mb-0">
+                    <small>This is a legacy product group. Use GroupView to manage modern linking.</small>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Recent Ledger Entries -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Recent Stock Movements</h5>
+            </div>
+            <div class="card-body p-0">
+                {% if ledger_entries %}
+                    <div class="table-responsive">
+                        <table class="table table-striped mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Transaction</th>
+                                    <th>Available</th>
+                                    <th>Reserved</th>
+                                    <th>Allocated</th>
+                                    <th>On Order</th>
+                                    <th>Reason</th>
+                                    <th>User</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for entry in ledger_entries %}
+                                    <tr>
+                                        <td>
+                                            <small>{{ entry.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                                        </td>
+                                        <td>
+                                            <span class="badge {% if entry.transaction_type == 'adjustment' %}bg-warning{% elif entry.transaction_type == 'migration' %}bg-info{% else %}bg-primary{% endif %}">
+                                                {{ entry.transaction_type.title() }}
+                                            </span>
+                                            <br>
+                                            <small class="text-muted">{{ entry.adjustment_type or '—' }}</small>
+                                        </td>
+                                        <td>
+                                            {% set avail_change = entry.available_quantity_after - entry.available_quantity_before %}
+                                            <span class="d-block">{{ entry.available_quantity_before }} → {{ entry.available_quantity_after }}</span>
+                                            {% if avail_change != 0 %}
+                                                <small class="{% if avail_change > 0 %}text-success{% else %}text-danger{% endif %}">
+                                                    {% if avail_change > 0 %}+{% endif %}{{ avail_change }}
+                                                </small>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% set res_change = entry.reserved_quantity_after - entry.reserved_quantity_before %}
+                                            <span class="d-block">{{ entry.reserved_quantity_before }} → {{ entry.reserved_quantity_after }}</span>
+                                            {% if res_change != 0 %}
+                                                <small class="{% if res_change > 0 %}text-success{% else %}text-danger{% endif %}">
+                                                    {% if res_change > 0 %}+{% endif %}{{ res_change }}
+                                                </small>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% set alloc_change = entry.allocated_quantity_after - entry.allocated_quantity_before %}
+                                            <span class="d-block">{{ entry.allocated_quantity_before }} → {{ entry.allocated_quantity_after }}</span>
+                                            {% if alloc_change != 0 %}
+                                                <small class="{% if alloc_change > 0 %}text-success{% else %}text-danger{% endif %}">
+                                                    {% if alloc_change > 0 %}+{% endif %}{{ alloc_change }}
+                                                </small>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% set order_change = entry.on_order_quantity_after - entry.on_order_quantity_before %}
+                                            <span class="d-block">{{ entry.on_order_quantity_before }} → {{ entry.on_order_quantity_after }}</span>
+                                            {% if order_change != 0 %}
+                                                <small class="{% if order_change > 0 %}text-success{% else %}text-danger{% endif %}">
+                                                    {% if order_change > 0 %}+{% endif %}{{ order_change }}
+                                                </small>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if entry.reason %}
+                                                <small>{{ entry.reason }}</small>
+                                            {% else %}
+                                                <small class="text-muted">-</small>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <small>{{ entry.created_by or 'System' }}</small>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="text-center py-5">
+                        <i data-feather="activity" size="48" class="text-muted mb-3"></i>
+                        <h5 class="text-muted">No stock movements recorded</h5>
+                        <p class="text-muted">Stock adjustments will appear here once made.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Side Panel -->
+    <div class="col-md-4">
+        <div id="supplier-section" class="small text-muted fw-semibold mt-2 mb-1">Supplier / Reorder</div>
+<!-- Supplier Information -->
+        {% if stock_item.supplier %}
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i data-feather="truck" class="me-1"></i>
+                    Supplier
+                </h5>
+            </div>
+            <div class="card-body">
+                <h6 class="mb-2">{{ stock_item.supplier.name }}</h6>
+                
+                {% if stock_item.supplier.email %}
+                <div class="mb-2">
+                    <small class="text-muted">Email:</small>
+                    <br>
+                    <small>{{ stock_item.supplier.email }}</small>
+                </div>
+                {% endif %}
+                
+                {% if stock_item.supplier.phone %}
+                <div class="mb-2">
+                    <small class="text-muted">Phone:</small>
+                    <br>
+                    <small>{{ stock_item.supplier.phone }}</small>
+                </div>
+                {% endif %}
+                
+                {% if stock_item.supplier.whatsapp_number %}
+                <div class="mb-2">
+                    <small class="text-muted">WhatsApp:</small>
+                    <br>
+                    <small>{{ stock_item.supplier.whatsapp_number }}</small>
+                </div>
+                {% endif %}
+                
+                <a href="{{ url_for('routes.edit_supplier', supplier_id=stock_item.supplier.id) }}" class="btn btn-sm btn-outline-secondary mt-2">
+                    <i data-feather="external-link" size="14"></i>
+                    View Supplier
+                </a>
+            </div>
+        </div>
+        {% endif %}
+        
+        <!-- Stock Settings -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Stock Settings</h5>
+                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#editSettingsModal">
+                    <i data-feather="edit" size="14"></i>
+                    Edit
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Supplier</label>
+                    <p class="mb-1">{{ stock_item.supplier.name if stock_item.supplier else 'Not assigned' }}</p>
+                    <small class="text-muted">Default supplier for this item</small>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Reorder Point</label>
+                    <p class="mb-1">
+                        {{ stock_item.reorder_point }}
+                        {% if stock_item.needs_reorder %}
+                            <span class="badge bg-warning ms-1">Below threshold!</span>
+                        {% endif %}
+                    </p>
+                    <small class="text-muted">Minimum stock level before reordering</small>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Reorder Quantity</label>
+                    <p class="mb-1">{{ stock_item.reorder_quantity }}</p>
+                    <small class="text-muted">Quantity to order when restocking</small>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">Unit Cost</label>
+                    <p class="mb-1">£{{ "%.2f"|format(stock_item.unit_cost) }}</p>
+                    <small class="text-muted">Cost per unit</small>
+                </div>
+                
+                {% if stock_item.location %}
+                    <div class="mb-3">
+                        <label class="form-label">Location</label>
+                        <p class="mb-1">{{ stock_item.location }}</p>
+                        <small class="text-muted">Warehouse location/bin</small>
+                    </div>
+                {% endif %}
+                
+                <div class="form-check">
+                    <input class="form-check-input" type="checkbox" {% if stock_item.track_inventory %}checked{% endif %} disabled>
+                    <label class="form-check-label">
+                        Track Inventory
+                    </label>
+                </div>
+            </div>
+        </div>
+        
+        <div id="costing-section" class="small text-muted fw-semibold mt-2 mb-1">Import Costing</div>
+        <!-- India Import Costing -->
+        <div class="card mb-4">
+            <div class="card-header d-flex justify-content-between align-items-center bg-warning text-dark">
+                <h5 class="mb-0">
+                    <i data-feather="dollar-sign" class="me-1"></i>
+                    Import Costing (INR)
+                </h5>
+                <button type="button" class="btn btn-sm btn-dark" data-bs-toggle="modal" data-bs-target="#editCostingModal">
+                    <i data-feather="edit" size="14"></i>
+                    Edit
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <small class="text-muted d-block">MRP (INR)</small>
+                        <strong>₹{{ "%.2f"|format(stock_item.mrp_inr or 0) }}</strong>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted d-block">Purchase Cost</small>
+                        <strong>₹{{ "%.2f"|format(stock_item.purchase_cost_inr or 0) }}</strong>
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <small class="text-muted d-block">Weight (kg)</small>
+                        <span>{{ "%.3f"|format(stock_item.product_weight_kg or 0) }} kg</span>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted d-block">Shipping Rate</small>
+                        <span>₹{{ "%.0f"|format(stock_item.shipping_cost_per_kg or 450) }}/kg</span>
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <small class="text-muted d-block">Freight/Unit</small>
+                        <span>₹{{ "%.2f"|format(stock_item.freight_cost_per_unit or 0) }}</span>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted d-block">Pack Size</small>
+                        <span>{{ stock_item.std_pack_size or 1 }} units</span>
+                    </div>
+                </div>
+                
+                <hr class="my-2">
+                
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <small class="text-muted d-block">Agent</small>
+                        <span>{{ stock_item.agent_name or 'Not set' }}</span>
+                    </div>
+                    <div class="col-6">
+                        <small class="text-muted d-block">Commission</small>
+                        <span>{{ stock_item.agent_commission_pct or 0 }}% (₹{{ "%.2f"|format(stock_item.agent_commission_amt or 0) }})</span>
+                    </div>
+                </div>
+                
+                <hr class="my-2">
+                
+                <div class="row">
+                    <div class="col-12">
+                        <small class="text-muted d-block">Total Landed Cost (INR)</small>
+                        <h4 class="text-primary mb-0">₹{{ "%.2f"|format(stock_item.total_landed_cost or 0) }}</h4>
+                        {% if stock_item.inr_to_gbp_rate %}
+                        <small class="text-muted">≈ £{{ "%.2f"|format((stock_item.total_landed_cost or 0) / stock_item.inr_to_gbp_rate) }} @ {{ "%.2f"|format(stock_item.inr_to_gbp_rate) }} INR/GBP</small>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Status -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Status</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    {% if stock_item.needs_reorder %}
+                        <span class="badge bg-warning fs-6">
+                            <i data-feather="alert-triangle" size="16"></i>
+                            Needs Reordering
+                        </span>
+                    {% elif stock_item.available_quantity == 0 %}
+                        <span class="badge bg-danger fs-6">
+                            <i data-feather="x-circle" size="16"></i>
+                            Out of Stock
+                        </span>
+                    {% else %}
+                        <span class="badge bg-success fs-6">
+                            <i data-feather="check-circle" size="16"></i>
+                            In Stock
+                        </span>
+                    {% endif %}
+                </div>
+                
+                {% if stock_item.last_adjustment_at %}
+                    <div class="mb-2">
+                        <small class="text-muted">Last Adjusted:</small>
+                        <br>
+                        <small>{{ stock_item.last_adjustment_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                        {% if stock_item.last_adjustment_by %}
+                            <br><small>by {{ stock_item.last_adjustment_by }}</small>
+                        {% endif %}
+                    </div>
+                {% endif %}
+                
+                {% if stock_item.last_sync_at %}
+                    <div>
+                        <small class="text-muted">Last Synced:</small>
+                        <br>
+                        <small>{{ stock_item.last_sync_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Marketplace Listings -->
+        {% if marketplace_listings %}
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="mb-0">Marketplace Listings</h5>
+                </div>
+                <div class="card-body">
+                    {% for listing in marketplace_listings %}
+                        <div class="mb-3 p-3 border rounded">
+                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                <strong>{{ listing.store.name if listing.store else 'Unknown Store' }}</strong>
+                                <span class="badge {% if listing.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                                    {% if listing.is_active %}Active{% else %}Inactive{% endif %}
+                                </span>
+                            </div>
+                            
+                            <div class="row text-sm">
+                                <div class="col-6">
+                                    <small class="text-muted">External ID:</small>
+                                    <br>
+                                    <small>{{ listing.external_listing_id }}</small>
+                                </div>
+                                <div class="col-6">
+                                    <small class="text-muted">Effective Qty:</small>
+                                    <br>
+                                    <small class="fw-bold">{{ listing.effective_quantity }}</small>
+                                </div>
+                            </div>
+                            
+                            {% if listing.price > 0 or stock_item.unit_cost > 0 %}
+                            <hr class="my-2">
+                            <div class="row text-sm">
+                                <div class="col-3">
+                                    <small class="text-muted">Listing Price:</small>
+                                    <br>
+                                    <small class="fw-bold">{{ listing.currency }} {{ "%.2f"|format(listing.price) }}</small>
+                                </div>
+                                <div class="col-3">
+                                    <small class="text-muted">Unit Cost:</small>
+                                    <br>
+                                    <small>{{ listing.currency }} {{ "%.2f"|format(stock_item.unit_cost) }}</small>
+                                </div>
+                                {% if listing.price > 0 and stock_item.unit_cost > 0 %}
+                                    {% set profit = listing.price - stock_item.unit_cost %}
+                                    {% set margin = ((profit / listing.price) * 100) if listing.price > 0 else 0 %}
+                                    <div class="col-3">
+                                        <small class="text-muted">Profit/Unit:</small>
+                                        <br>
+                                        <small class="fw-bold {% if profit > 0 %}text-success{% elif profit < 0 %}text-danger{% endif %}">
+                                            {{ listing.currency }} {{ "%.2f"|format(profit) }}
+                                        </small>
+                                    </div>
+                                    <div class="col-3">
+                                        <small class="text-muted">Margin:</small>
+                                        <br>
+                                        <small class="fw-bold {% if margin > 20 %}text-success{% elif margin > 10 %}text-warning{% else %}text-danger{% endif %}">
+                                            {{ "%.1f"|format(margin) }}%
+                                        </small>
+                                    </div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                            
+                            {% if listing.last_push_at %}
+                                <div class="mt-2">
+                                    <small class="text-muted">Last pushed: {{ listing.last_push_at.strftime('%m/%d %H:%M') }}</small>
+                                    <span class="badge {% if listing.last_push_status == 'success' %}bg-success{% elif listing.last_push_status == 'error' %}bg-danger{% else %}bg-warning{% endif %} ms-1">
+                                        {{ listing.last_push_status }}
+                                    </span>
+                                </div>
+                            {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Stock Adjustment Info Modal (Read-only - use Product Linking) -->
+<div class="modal fade" id="adjustModal" tabindex="-1" aria-labelledby="adjustModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="adjustModalLabel">
+                    <i data-feather="info" class="me-2"></i>
+                    Stock Adjustment
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-primary">
+                    <i data-feather="sliders" class="me-2"></i>
+                    <strong>Stock adjustments are now managed via Product Linking.</strong>
+                </div>
+                
+                <p class="text-muted">
+                    Product Linking is the single control centre for adjusting quantities and pushing to marketplaces.
+                    This ensures all channels stay in sync.
+                </p>
+                
+                <div class="mb-3">
+                    <label class="form-label">Current Available Quantity</label>
+                    <p class="form-control-plaintext"><strong class="fs-4">{{ stock_item.available_quantity }}</strong></p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <a href="{{ url_for('routes.product_linking') }}?search={{ stock_item.sku }}" class="btn btn-primary">
+                    <i data-feather="sliders" class="me-1"></i>
+                    Go to Product Linking
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+        <div id="settings-section" class="small text-muted fw-semibold mt-2 mb-1">Edit / Settings</div>
+<!-- Edit Settings Modal -->
+<div class="modal fade" id="editSettingsModal" tabindex="-1" aria-labelledby="editSettingsModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="editSettingsModalLabel">
+                    <i data-feather="settings" class="me-2"></i>
+                    Edit Stock Settings: {{ stock_item.sku }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="{{ url_for('routes.warehouse_update_settings', stock_id=stock_item.id) }}">
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    
+                    <h6 class="text-muted mb-3">Product Information</h6>
+                    
+                    <div class="mb-3">
+                        <label for="product_name" class="form-label">Product Name</label>
+                        <input type="text" class="form-control" id="product_name" name="product_name" 
+                               value="{{ stock_item.product_name or '' }}" placeholder="Enter product name/description">
+                        <div class="form-text">Product name that will appear in purchase orders</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Product Image</label>
+                        
+                        <!-- Drag and Drop Upload Area -->
+                        <div id="dropZone" class="border border-2 border-dashed rounded p-4 text-center" style="cursor: pointer; background-color: #f8f9fa;">
+                            <i data-feather="upload-cloud" size="48" class="text-muted mb-2"></i>
+                            <p class="mb-2"><strong>Drag & Drop image here</strong></p>
+                            <p class="text-muted small mb-2">or click to browse</p>
+                            <input type="file" id="imageFile" accept="image/*" style="display: none;">
+                            <div class="form-text">Supported formats: PNG, JPG, GIF, WEBP (Max 5MB)</div>
+                        </div>
+                        
+                        <!-- Progress Bar -->
+                        <div id="uploadProgress" class="progress mt-2" style="display: none;">
+                            <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+                        </div>
+                        
+                        <!-- Current Image Preview -->
+                        <div id="imagePreview" class="mt-3">
+                            {% if stock_item.image_url %}
+                            <div class="position-relative d-inline-block">
+                                <img src="{{ stock_item.image_url }}" alt="{{ stock_item.sku }}" class="img-thumbnail" style="max-width: 200px; max-height: 200px;" id="currentImage">
+                                <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-1" onclick="removeImage()" title="Remove image">
+                                    <i data-feather="x" size="14"></i>
+                                </button>
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Hidden URL Input (fallback) -->
+                        <div class="mt-3">
+                            <label for="image_url" class="form-label small text-muted">Or paste image URL:</label>
+                            <input type="url" class="form-control form-control-sm" id="image_url" name="image_url" 
+                                   value="{{ stock_item.image_url or '' }}" placeholder="https://example.com/image.jpg">
+                        </div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    <h6 class="text-muted mb-3">Supplier & Reorder Settings</h6>
+                    
+                    <div class="mb-3">
+                        <label for="supplier_id" class="form-label">Supplier</label>
+                        <select class="form-select" id="supplier_id" name="supplier_id">
+                            <option value="">No supplier</option>
+                            {% for supplier in suppliers %}
+                                <option value="{{ supplier.id }}" {% if stock_item.supplier_id == supplier.id %}selected{% endif %}>
+                                    {{ supplier.name }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Select the default supplier for reordering this item</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="reorder_point" class="form-label">Reorder Point</label>
+                        <input type="number" class="form-control" id="reorder_point" name="reorder_point" 
+                               value="{{ stock_item.reorder_point }}" min="0" required>
+                        <div class="form-text">Trigger reorder notifications when stock falls below this level</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="reorder_quantity" class="form-label">Reorder Quantity</label>
+                        <input type="number" class="form-control" id="reorder_quantity" name="reorder_quantity" 
+                               value="{{ stock_item.reorder_quantity }}" min="0" required>
+                        <div class="form-text">Quantity to order when restocking</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="unit_cost" class="form-label">Unit Cost (£)</label>
+                        <input type="number" step="0.01" class="form-control" id="unit_cost" name="unit_cost" 
+                               value="{{ stock_item.unit_cost }}" min="0" required>
+                        <div class="form-text">Cost per unit from supplier</div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    <h6 class="text-muted mb-3">Financial Tracking</h6>
+                    
+                    <div class="mb-3">
+                        <label for="commission_rate" class="form-label">Commission Rate (%)</label>
+                        <input type="number" step="0.1" class="form-control" id="commission_rate" name="commission_rate" 
+                               value="{{ stock_item.commission_rate or 0 }}" min="0" max="100">
+                        <div class="form-text">Marketplace commission percentage (e.g., 15 for 15%)</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="operating_cost_per_unit" class="form-label">Operating Cost Per Unit (£)</label>
+                        <input type="number" step="0.01" class="form-control" id="operating_cost_per_unit" name="operating_cost_per_unit" 
+                               value="{{ stock_item.operating_cost_per_unit or 0 }}" min="0">
+                        <div class="form-text">Fixed operating cost per unit (handling, packaging, etc.)</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="product_weight_kg" class="form-label">Product Weight (kg)</label>
+                        <input type="number" step="0.001" class="form-control" id="product_weight_kg" name="product_weight_kg" 
+                               value="{{ stock_item.product_weight_kg or 0 }}" min="0">
+                        <div class="form-text">Product weight in kilograms</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="shipping_cost_per_kg" class="form-label">Shipping Cost Per Kg (£)</label>
+                        <input type="number" step="0.01" class="form-control" id="shipping_cost_per_kg" name="shipping_cost_per_kg" 
+                               value="{{ stock_item.shipping_cost_per_kg or 0 }}" min="0">
+                        <div class="form-text">Shipping rate per kilogram</div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <div class="mb-3">
+                        <label for="location" class="form-label">Warehouse Location</label>
+                        <input type="text" class="form-control" id="location" name="location" 
+                               value="{{ stock_item.location or '' }}" placeholder="e.g., Aisle A, Bin 12">
+                        <div class="form-text">Physical location in warehouse</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <i data-feather="save" class="me-1"></i>
+                        Save Settings
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Edit Import Costing Modal -->
+<div class="modal fade" id="editCostingModal" tabindex="-1" aria-labelledby="editCostingModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-warning text-dark">
+                <h5 class="modal-title" id="editCostingModalLabel">
+                    <i data-feather="dollar-sign" class="me-2"></i>
+                    Edit Import Costing: {{ stock_item.sku }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <form method="POST" action="{{ url_for('routes.warehouse_update_settings', stock_id=stock_item.id) }}">
+                <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-muted mb-3">Product Cost (India)</h6>
+                            
+                            <div class="mb-3">
+                                <label for="mrp_inr" class="form-label">MRP (INR)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">₹</span>
+                                    <input type="number" step="0.01" class="form-control" id="mrp_inr" name="mrp_inr" 
+                                           value="{{ stock_item.mrp_inr or '' }}" min="0">
+                                </div>
+                                <div class="form-text">Maximum Retail Price in Indian Rupees</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="purchase_cost_inr" class="form-label">Purchase Cost (INR)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">₹</span>
+                                    <input type="number" step="0.01" class="form-control" id="purchase_cost_inr" name="purchase_cost_inr" 
+                                           value="{{ stock_item.purchase_cost_inr or '' }}" min="0">
+                                </div>
+                                <div class="form-text">Actual purchase cost with discount</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="std_pack_size" class="form-label">Standard Pack Size</label>
+                                <input type="number" class="form-control" id="std_pack_size" name="std_pack_size" 
+                                       value="{{ stock_item.std_pack_size or 1 }}" min="1">
+                                <div class="form-text">Number of units per pack</div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h6 class="text-muted mb-3">Shipping Cost</h6>
+                            
+                            <div class="mb-3">
+                                <label for="costing_weight_kg" class="form-label">Product Weight (kg)</label>
+                                <div class="input-group">
+                                    <input type="number" step="0.001" class="form-control" id="costing_weight_kg" name="product_weight_kg" 
+                                           value="{{ stock_item.product_weight_kg or '' }}" min="0">
+                                    <span class="input-group-text">kg</span>
+                                </div>
+                                <div class="form-text">Weight per unit in kilograms</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="costing_shipping_rate" class="form-label">Shipping Rate (INR/kg)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">₹</span>
+                                    <input type="number" step="1" class="form-control" id="costing_shipping_rate" name="shipping_cost_per_kg" 
+                                           value="{{ stock_item.shipping_cost_per_kg or 450 }}" min="0">
+                                    <span class="input-group-text">/kg</span>
+                                </div>
+                                <div class="form-text">Shipping rate per kg from India (default: 450)</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Freight Cost (Calculated)</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">₹</span>
+                                    <input type="text" class="form-control" id="calc_freight_cost" readonly
+                                           value="{{ "%.2f"|format((stock_item.product_weight_kg or 0) * (stock_item.shipping_cost_per_kg or 450)) }}">
+                                </div>
+                                <div class="form-text">Weight × Rate (auto-calculated)</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-3">
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6 class="text-muted mb-3">Agent Commission</h6>
+                            
+                            <div class="mb-3">
+                                <label for="agent_name" class="form-label">Agent Name</label>
+                                <input type="text" class="form-control" id="agent_name" name="agent_name" 
+                                       value="{{ stock_item.agent_name or '' }}" placeholder="e.g., Arpit">
+                                <div class="form-text">Sourcing agent name</div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label for="agent_commission_pct" class="form-label">Commission Rate (%)</label>
+                                <div class="input-group">
+                                    <input type="number" step="0.1" class="form-control" id="agent_commission_pct" name="agent_commission_pct" 
+                                           value="{{ stock_item.agent_commission_pct or '' }}" min="0" max="100">
+                                    <span class="input-group-text">%</span>
+                                </div>
+                                <div class="form-text">Agent commission percentage</div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h6 class="text-muted mb-3">Currency & Exchange</h6>
+                            
+                            <div class="mb-3">
+                                <label for="inr_to_gbp_rate" class="form-label">INR to GBP Rate</label>
+                                <div class="input-group">
+                                    <input type="number" step="0.01" class="form-control" id="inr_to_gbp_rate" name="inr_to_gbp_rate" 
+                                           value="{{ stock_item.inr_to_gbp_rate or '' }}" min="0">
+                                    <span class="input-group-text">INR/£</span>
+                                </div>
+                                <div class="form-text">Exchange rate (e.g., 105 = ₹105 per £1)</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <hr class="my-3">
+                    
+                    <div class="alert alert-info">
+                        <strong>Calculation Summary:</strong><br>
+                        <small>
+                            Total Landed Cost = Purchase Cost + (Weight × Shipping Rate) + (Commission % × Purchase Cost)
+                        </small>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-warning">
+                        <i data-feather="save" class="me-1"></i>
+                        Save Costing
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Initialize Feather icons
+    if (typeof feather !== 'undefined') {
+        feather.replace();
+    }
+    
+    // Drag and Drop Image Upload
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('imageFile');
+    const imagePreview = document.getElementById('imagePreview');
+    const uploadProgress = document.getElementById('uploadProgress');
+    const imageUrlInput = document.getElementById('image_url');
+    const stockId = {{ stock_item.id }};
+    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    
+    // Click to upload
+    if (dropZone) {
+        dropZone.addEventListener('click', () => fileInput.click());
+    }
+    
+    // File input change
+    if (fileInput) {
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) uploadImage(file);
+        });
+    }
+    
+    // Drag and drop events
+    if (dropZone) {
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => {
+                dropZone.classList.add('border-primary', 'bg-light');
+            });
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, () => {
+                dropZone.classList.remove('border-primary', 'bg-light');
+            });
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                uploadImage(files[0]);
+            }
+        });
+    }
+    
+    // Upload image function
+    function uploadImage(file) {
+        // Validate file size (5MB max)
+        if (file.size > 5 * 1024 * 1024) {
+            alert('File is too large! Maximum size is 5MB.');
+            return;
+        }
+        
+        // Validate file type
+        if (!file.type.startsWith('image/')) {
+            alert('Please upload an image file.');
+            return;
+        }
+        
+        const formData = new FormData();
+        formData.append('image', file);
+        formData.append('csrf_token', csrfToken);
+        
+        // Show progress bar
+        uploadProgress.style.display = 'block';
+        const progressBar = uploadProgress.querySelector('.progress-bar');
+        progressBar.style.width = '0%';
+        
+        // Simulate progress
+        let progress = 0;
+        const progressInterval = setInterval(() => {
+            progress += 10;
+            if (progress <= 90) {
+                progressBar.style.width = progress + '%';
+            }
+        }, 100);
+        
+        // Upload file
+        fetch(`/warehouse/upload-image/${stockId}`, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-Token': csrfToken
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            clearInterval(progressInterval);
+            progressBar.style.width = '100%';
+            
+            if (data.success) {
+                // Update image preview
+                imagePreview.innerHTML = `
+                    <div class="position-relative d-inline-block">
+                        <img src="${data.image_url}" alt="Product" class="img-thumbnail" style="max-width: 200px; max-height: 200px;" id="currentImage">
+                        <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-1" onclick="removeImage()" title="Remove image">
+                            <i data-feather="x" size="14"></i>
+                        </button>
+                    </div>
+                `;
+                
+                // Update URL input
+                imageUrlInput.value = data.image_url;
+                
+                // Re-initialize feather icons
+                if (typeof feather !== 'undefined') {
+                    feather.replace();
+                }
+                
+                // Hide progress bar after a moment
+                setTimeout(() => {
+                    uploadProgress.style.display = 'none';
+                    progressBar.style.width = '0%';
+                }, 1000);
+                
+                // Show success message
+                alert(data.message || 'Image uploaded successfully!');
+            } else {
+                throw new Error(data.error || 'Upload failed');
+            }
+        })
+        .catch(error => {
+            clearInterval(progressInterval);
+            uploadProgress.style.display = 'none';
+            progressBar.style.width = '0%';
+            alert('Error uploading image: ' + error.message);
+        });
+    }
+});
+
+// Remove image function (global)
+function removeImage() {
+    if (confirm('Are you sure you want to remove this image?')) {
+        document.getElementById('imagePreview').innerHTML = '';
+        document.getElementById('image_url').value = '';
+    }
+}
+
+// Adjust & Push - GROUP LEVEL push to ALL linked FBM listings (legacy)
+async function adjustAndPush(stockId, sku) {
+    if (!confirm(`Push ${sku} to ALL linked marketplaces?\n\nThis will update quantity on Amazon FBM and eBay to match warehouse.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/push_stock/' + stockId, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            const count = data.listings_count || data.jobs_enqueued || 1;
+            const marketplaces = data.marketplaces ? data.marketplaces.join(', ') : 'marketplaces';
+            alert(`Queued ${count} push(es) for ${sku} to ${marketplaces}`);
+        } else {
+            alert('Error: ' + (data.error || 'Push failed'));
+        }
+    } catch (error) {
+        alert('Error pushing: ' + error.message);
+    }
+}
+
+// GROUP CONTEXT: Adjust & Push using /api/group-push (parallel push to all linked marketplaces)
+function showGroupAdjustPush() {
+    const stockId = {{ stock_item.id }};
+    const sku = '{{ stock_item.sku|e }}';
+    const currentQty = {{ stock_item.available_quantity }};
+    const linkedCount = {{ group_context.linked_count if group_context else 0 }};
+    
+    if (linkedCount === 0) {
+        alert('No linked listings to push to. Link listings in GroupView first.');
+        return;
+    }
+    
+    const newQty = prompt(
+        `Adjust & Push to ${linkedCount} linked marketplace(s)\n\n` +
+        `SKU: ${sku}\n` +
+        `Current Quantity: ${currentQty}\n\n` +
+        `Enter new quantity (or leave same to just push):`,
+        currentQty
+    );
+    
+    if (newQty === null) return;
+    
+    const qty = parseInt(newQty, 10);
+    if (isNaN(qty) || qty < 0) {
+        alert('Please enter a valid quantity (0 or greater)');
+        return;
+    }
+    
+    executeGroupPush(stockId, sku, qty);
+}
+
+async function executeGroupPush(stockId, sku, quantity) {
+    const btn = document.getElementById('groupAdjustPushBtn');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Pushing...';
+    }
+    
+    try {
+        const csrfToken = '{{ csrf_token }}';
+        const response = await fetch('/api/group-push', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
+            body: JSON.stringify({
+                warehouse_stock_id: stockId,
+                new_quantity: quantity
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert(
+                `Group Push Started!\n\n` +
+                `SKU: ${sku}\n` +
+                `Quantity: ${quantity}\n` +
+                `Jobs Queued: ${data.jobs_queued || 0}\n` +
+                `Platforms: ${(data.platforms || []).join(', ') || 'None'}\n\n` +
+                `Push ID: ${data.group_push_id || 'N/A'}`
+            );
+            location.reload();
+        } else {
+            alert('Push Error: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i data-feather="sliders" class="me-1"></i>Adjust & Push';
+            if (typeof feather !== 'undefined') feather.replace();
+        }
+    }
+}
+</script>
+{% endblock %}

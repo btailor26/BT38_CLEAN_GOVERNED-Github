@@ -1,0 +1,247 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>BT38 Control Center - Full Preview</title>
+  <style>
+    body{font-family:Arial,sans-serif;background:#f5f6f8;margin:0;padding:18px;color:#111}
+    .top{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:14px}
+    h1{margin:0;font-size:26px}
+    p{margin:4px 0;color:#666}
+    .badge{display:inline-block;background:#111;color:#fff;border-radius:18px;padding:4px 9px;font-size:12px}
+    .btn{border:1px solid #ccc;background:#fff;border-radius:8px;padding:8px 11px;margin-left:5px}
+    .danger{background:#111;color:#fff}
+    .tabs{display:flex;gap:7px;flex-wrap:wrap;margin:14px 0}
+    .tab{background:#fff;border:1px solid #ddd;border-radius:18px;padding:8px 13px;font-size:13px}
+    .tab.active{background:#111;color:#fff}
+    .grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:14px}
+    .card{background:#fff;border:1px solid #ddd;border-radius:12px;padding:12px}
+    .card h4{margin:0 0 5px;font-size:12px;color:#666}
+    .card strong{font-size:19px}
+    .section{background:#fff;border:1px solid #ddd;border-radius:12px;margin-bottom:14px;overflow:hidden}
+    .section h3{margin:0;padding:12px 14px;background:#fafafa;border-bottom:1px solid #eee;font-size:16px}
+    table{width:100%;border-collapse:collapse}
+    th,td{padding:10px 12px;border-bottom:1px solid #eee;text-align:left;font-size:13px;vertical-align:middle}
+    th{background:#fafafa;color:#555}
+    .switch{display:inline-block;width:42px;height:22px;background:#111;border-radius:20px}
+    .off{background:#bbb}
+    .readonly{background:#e9ecef;color:#333;border-radius:8px;padding:5px 8px}
+    .ok{background:#e9f7ef;color:#146c43;border-radius:8px;padding:5px 8px}
+    .warn{background:#fff3cd;color:#664d03;border-radius:8px;padding:5px 8px}
+    .bad{background:#f8d7da;color:#842029;border-radius:8px;padding:5px 8px}
+    @media(max-width:900px){.grid{grid-template-columns:repeat(2,1fr)}.top{display:block}.btn{margin-top:8px}}
+  </style>
+</head>
+<body>
+
+<div class="top">
+  <div>
+    <h1>BT38 Control Center <span class="badge">Admin Runtime</span></h1>
+    <p>All backend controls visible in one compact settings page. Locked truth rules are display-only.</p>
+  </div>
+  <div>
+    <button class="btn" type="submit" form="settingsForm">Save Settings</button>
+    <button class="btn">Export Settings</button>
+    <button class="btn danger">Emergency Freeze</button>
+  </div>
+</div>
+
+<div class="tabs">
+  <div class="tab active">Master</div>
+  <div class="tab">Marketplaces</div>
+  <div class="tab">Stores</div>
+  <div class="tab">Workers</div>
+  <div class="tab">Safety</div>
+  <div class="tab">Logs</div>
+</div>
+
+<div class="grid">
+  <div class="card"><h4>Runtime</h4><strong>Live</strong></div>
+  <div class="card"><h4>Global Push</h4><strong>{% if global_settings.global_push_enabled %}On{% else %}Off{% endif %}</strong></div>
+  <div class="card"><h4>Auto Sync</h4><strong>Dry Run</strong></div>
+  <div class="card"><h4>Queue</h4><strong>Active</strong></div>
+  <div class="card"><h4>Failures 24h</h4><strong>{{ stats.failed_syncs }}</strong></div>
+  <div class="card"><h4>Success Rate</h4><strong>{{ stats.success_rate }}%</strong></div>
+</div>
+
+<form method="POST" id="settingsForm">
+<div class="section">
+  <h3>Master Runtime Control</h3>
+  <table>
+    <tr><th>Control</th><th>Current State</th><th>Backend Field / API</th><th>Purpose</th></tr>
+    <tr><td>Global Push</td><td><input type="checkbox" name="global_push_enabled" {% if global_settings.global_push_enabled %}checked{% endif %}></td><td>global_push_enabled</td><td>Master switch for automatic pushing</td></tr>
+    <tr><td>Default Push Frequency</td><td><input type="number" name="default_push_frequency_minutes" value="{{ global_settings.default_push_frequency_minutes }}" min="1" max="60"> minutes</td><td>default_push_frequency_minutes</td><td>Minimum time between pushes</td></tr>
+    <tr><td>Default Batch Size</td><td><input type="number" name="default_batch_size" value="{{ global_settings.default_batch_size }}" min="1" max="100"></td><td>default_batch_size</td><td>Items processed in one batch</td></tr>
+    <tr><td>Default Retry Attempts</td><td><input type="number" name="default_retry_attempts" value="{{ global_settings.default_retry_attempts }}" min="0" max="10"></td><td>default_retry_attempts</td><td>Retries before failed status</td></tr>
+    <tr><td>Auto-Sync Engine</td><td><span class="switch off"></span></td><td>/api/auto-sync/toggle</td><td>Stock change queue engine</td></tr>
+    <tr><td>Dry Run Logs</td><td><span class="ok">Visible</span></td><td>/api/auto-sync/dry-run-logs</td><td>Shows what would run before live execution</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>Scheduling & Timing</h3>
+  <table>
+    <tr><th>Control</th><th>State</th><th>Backend Field</th><th>Purpose</th></tr>
+    <tr><td>Batch Scheduling</td><td><input type="checkbox" name="enable_batch_scheduling" {% if global_settings.enable_batch_scheduling %}checked{% endif %}></td><td>enable_batch_scheduling</td><td>Group pushes into batches</td></tr>
+    <tr><td>Batch Interval</td><td><input type="number" name="batch_schedule_minutes" value="{{ global_settings.batch_schedule_minutes }}" min="5" max="120"> minutes</td><td>batch_schedule_minutes</td><td>Batch timing</td></tr>
+    <tr><td>Off-Hours Only</td><td><input type="checkbox" name="off_hours_only" {% if global_settings.off_hours_only %}checked{% endif %}></td><td>off_hours_only</td><td>Restrict push timing</td></tr>
+    <tr><td>Off-Hours Start</td><td><input type="number" name="off_hours_start" value="{{ global_settings.off_hours_start }}" min="0" max="23">:00</td><td>off_hours_start</td><td>Start window</td></tr>
+    <tr><td>Off-Hours End</td><td><input type="number" name="off_hours_end" value="{{ global_settings.off_hours_end }}" min="0" max="23">:00</td><td>off_hours_end</td><td>End window</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>Marketplace Control</h3>
+  <table>
+    <tr><th>Store</th><th>Platform</th><th>Active</th><th>FBA Import</th><th>FBM Push</th><th>Auto Push</th><th>Status</th><th>Last Sync</th></tr>
+    {% for store in stores %}
+    <tr>
+      <td>{{ store.name }}</td>
+      <td>{{ store.platform }}</td>
+      <td><input type="checkbox" {% if store.is_active %}checked{% endif %} onchange="updateStoreControl({{ store.id }}, 'is_active', this.checked)"></td>
+      <td>
+        {% if store.platform and 'amazon' in store.platform|lower %}
+          <input type="checkbox" {% if store.fba_import_enabled %}checked{% endif %} onchange="updateStoreControl({{ store.id }}, 'fba_import_enabled', this.checked)">
+        {% else %}
+          <span class="readonly">N/A</span>
+        {% endif %}
+      </td>
+      <td>
+        {% if store.platform and 'amazon' in store.platform|lower %}
+          <input type="checkbox" {% if store.fbm_sync_enabled %}checked{% endif %} onchange="updateStoreControl({{ store.id }}, 'fbm_sync_enabled', this.checked)">
+        {% else %}
+          <span class="readonly">N/A</span>
+        {% endif %}
+      </td>
+      <td><input type="checkbox" {% if store.auto_push_enabled %}checked{% endif %} onchange="updateStoreControl({{ store.id }}, 'auto_push_enabled', this.checked)"></td>
+      <td>
+        {% if store.sync_status %}<span class="readonly">{{ store.sync_status }}</span>{% else %}<span class="readonly">Unknown</span>{% endif %}
+      </td>
+      <td>{{ store.last_sync or 'Never' }}</td>
+    </tr>
+    {% else %}
+    <tr><td colspan="8"><span class="readonly">No stores configured</span></td></tr>
+    {% endfor %}
+  </table>
+</div>
+
+<script>
+function updateStoreControl(storeId, field, value) {
+  fetch(`/api/store-push-settings/${storeId}`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({[field]: value})
+  })
+  .then(response => response.json())
+  .then(data => {
+    if (!data.success) {
+      alert('Setting update failed: ' + (data.error || 'Unknown error'));
+      window.location.reload();
+    }
+  })
+  .catch(error => {
+    alert('Setting update failed: ' + error.message);
+    window.location.reload();
+  });
+}
+</script>
+
+<div class="section">
+  <h3>Store Control</h3>
+  <table>
+    <tr><th>Store</th><th>Active</th><th>Auto Push</th><th>Priority</th><th>Frequency</th><th>Triggers</th><th>Safety</th><th>Action</th></tr>
+    <tr><td>Amazon Store</td><td><span class="switch"></span></td><td><span class="switch"></span></td><td>10</td><td>1 min</td><td>Qty / Price / Item</td><td>Retry 3 / Freeze 5</td><td>Configure / Test</td></tr>
+    <tr><td>eBay Store</td><td><span class="switch"></span></td><td><span class="switch"></span></td><td>9</td><td>1 min</td><td>Qty / Price / Item</td><td>Retry 3 / Freeze 5</td><td>Configure / Test</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>Store Trigger Settings</h3>
+  <table>
+    <tr><th>Setting</th><th>Backend Field</th><th>Editable</th><th>Purpose</th></tr>
+    <tr><td>Quantity Change Push</td><td>push_on_quantity_change</td><td>Yes</td><td>Push when stock changes</td></tr>
+    <tr><td>Price Change Push</td><td>push_on_price_change</td><td>Yes</td><td>Push when price changes</td></tr>
+    <tr><td>New Item Push</td><td>push_on_item_create</td><td>Yes</td><td>Push when new item created</td></tr>
+    <tr><td>Item Update Push</td><td>push_on_item_update</td><td>Yes</td><td>Push when item updated</td></tr>
+    <tr><td>Immediate Push</td><td>immediate_push</td><td>Yes</td><td>Immediate or batched execution</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>Workers & Queues</h3>
+  <table>
+    <tr><th>Worker / Queue</th><th>Status</th><th>Mode</th><th>Control</th><th>Notes</th></tr>
+    <tr><td>Import Worker</td><td><span class="switch"></span></td><td>Controlled</td><td>On / Off</td><td>Listings, orders, sales records</td></tr>
+    <tr><td>Push Worker</td><td><span class="switch"></span></td><td>Controlled</td><td>On / Off</td><td>Marketplace updates</td></tr>
+    <tr><td>Notification Worker</td><td><span class="switch"></span></td><td>Immediate</td><td>On / Off</td><td>Sales/orders should trigger fast queue</td></tr>
+    <tr><td>Document / Email Worker</td><td><span class="switch off"></span></td><td>Background</td><td>On / Off</td><td>Invoices, emails, reports</td></tr>
+    <tr><td>Reorder Worker</td><td><span class="switch off"></span></td><td>Rules</td><td>On / Off</td><td>Low stock and reorder alerts</td></tr>
+    <tr><td>Queue Processing</td><td><span class="switch"></span></td><td>Locked</td><td>Controlled</td><td>Traffic-light orchestration</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>Safety & Governance</h3>
+  <table>
+    <tr><th>Rule / Control</th><th>Status</th><th>Backend Field</th><th>Editable</th></tr>
+    <tr><td>Warehouse Source of Truth</td><td><span class="ok">Active</span></td><td>Core Rule</td><td><span class="readonly">Locked</span></td></tr>
+    <tr><td>Marketplace Overwrite Warehouse</td><td><span class="bad">Disabled</span></td><td>sync_priority_policy=warehouse</td><td><span class="readonly">Locked</span></td></tr>
+    <tr><td>FBA Read Only</td><td><span class="ok">Active</span></td><td>fba_import_enabled</td><td><span class="readonly">Locked Push</span></td></tr>
+    <tr><td>Reverse Sync</td><td><span class="warn">Disabled Default</span></td><td>reverse_sync_enabled</td><td>Admin only</td></tr>
+    <tr><td>Large Change Confirmation</td><td><span class="switch"></span></td><td>large_change_confirmation</td><td>Yes</td></tr>
+    <tr><td>Large Change Threshold</td><td>50</td><td>large_change_threshold / require_confirmation_threshold</td><td>Yes</td></tr>
+    <tr><td>Auto Pause on Errors</td><td><span class="switch"></span></td><td>auto_pause_on_errors</td><td>Yes</td></tr>
+    <tr><td>Error Rate Threshold</td><td>30%</td><td>error_rate_threshold</td><td>Yes</td></tr>
+    <tr><td>API Rate Limit Buffer</td><td>80%</td><td>api_rate_limit_buffer</td><td>Yes</td></tr>
+    <tr><td>Concurrent Store Pushes</td><td>1 recommended</td><td>concurrent_store_pushes</td><td>Yes, safety-limited</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>Logs & Diagnostics</h3>
+  <table>
+    <tr><th>Log / Tool</th><th>Source</th><th>Status</th><th>Action</th></tr>
+    <tr><td>System Logs</td><td>settings page log viewer</td><td><span class="ok">Visible</span></td><td>Refresh</td></tr>
+    <tr><td>Push Activity</td><td>push activity panel</td><td><span class="warn">Currently placeholder/disabled</span></td><td>Review</td></tr>
+    <tr><td>Dry Run Logs</td><td>/api/auto-sync/dry-run-logs</td><td><span class="ok">Visible</span></td><td>View</td></tr>
+    <tr><td>Amazon Health</td><td>/api/diagnostics/amazon/health</td><td><span class="ok">Available</span></td><td>Test</td></tr>
+    <tr><td>Push Settings JSON</td><td>/api/push-settings</td><td><span class="ok">Available</span></td><td>Export</td></tr>
+  </table>
+</div>
+
+
+<div class="section">
+  <h3>BT38 Command Center</h3>
+  <table>
+    <tr><th>Plain English Command</th><th>Meaning</th><th>Status</th></tr>
+    <tr><td>Freeze all sync</td><td>Turns off automatic push/import/sync controls safely</td><td><span class="readonly">Not wired yet</span></td></tr>
+    <tr><td>Enable eBay only</td><td>Keeps eBay active and pauses other marketplace execution</td><td><span class="readonly">Not wired yet</span></td></tr>
+    <tr><td>Run health check</td><td>Checks routes, API keys, tokens, queue, workers, and failed jobs</td><td><span class="readonly">Not wired yet</span></td></tr>
+    <tr><td>Retry failed queue</td><td>Retries only approved failed jobs through the queue</td><td><span class="readonly">Not wired yet</span></td></tr>
+    <tr><td>Export settings snapshot</td><td>Saves current settings state for audit/rollback/GitHub proof</td><td><span class="readonly">Not wired yet</span></td></tr>
+    <tr><td>Rollback last settings change</td><td>Restores previous approved settings snapshot</td><td><span class="readonly">Not wired yet</span></td></tr>
+  </table>
+
+  <div style="padding:14px;">
+    <label><strong>Enter command</strong></label><br>
+    <input type="text" id="bt38CommandInput" placeholder="Example: Freeze all sync" style="width:70%;max-width:720px;padding:10px;border:1px solid #ccc;border-radius:8px;">
+    <button type="button" class="btn" disabled>Preview Command</button>
+    <button type="button" class="btn danger" disabled>Run Approved Command</button>
+    <p class="small" style="color:#666;margin-top:8px;">
+      Commands are visual only at this stage. Execution will be wired later through one approved command engine.
+    </p>
+  </div>
+
+  <table>
+    <tr><th>Layer</th><th>Required Path</th><th>Status</th></tr>
+    <tr><td>Input</td><td>Plain English command</td><td><span class="ok">Designed</span></td></tr>
+    <tr><td>Guard</td><td>Settings permission check before action</td><td><span class="readonly">Pending</span></td></tr>
+    <tr><td>Queue</td><td>Commands must queue safely, not direct push</td><td><span class="readonly">Pending</span></td></tr>
+    <tr><td>Log</td><td>Every command records before/after and result</td><td><span class="readonly">Pending</span></td></tr>
+    <tr><td>GitHub proof</td><td>Optional settings snapshot/export evidence</td><td><span class="readonly">Pending</span></td></tr>
+  </table>
+</div>
+
+</form>
+</body>
+</html>

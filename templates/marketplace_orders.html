@@ -1,0 +1,135 @@
+{% extends 'base.html' %}
+
+{% block title %}Marketplace Orders - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-1">Marketplace Orders</h1>
+            <p class="text-muted mb-0">Orders synced from Amazon and eBay (read-only)</p>
+        </div>
+    </div>
+    
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+    
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">Store</label>
+                    <select name="store_id" class="form-select" onchange="this.form.submit()">
+                        <option value="">All Stores</option>
+                        {% for store in stores %}
+                        <option value="{{ store.id }}" {% if store_id == store.id %}selected{% endif %}>{{ store.name }} ({{ store.platform }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Status</label>
+                    <select name="status" class="form-select" onchange="this.form.submit()">
+                        <option value="">All Statuses</option>
+                        <option value="processed" {% if status_filter == 'processed' %}selected{% endif %}>Processed</option>
+                        <option value="failed" {% if status_filter == 'failed' %}selected{% endif %}>Failed</option>
+                    </select>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <div class="card">
+        <div class="card-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <span><i data-feather="package" class="me-2"></i>Marketplace Orders</span>
+                <span class="badge bg-primary">{{ orders|length }} orders</span>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            {% if orders %}
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Order ID</th>
+                            <th>SKU</th>
+                            <th class="text-center">Qty</th>
+                            <th>Status</th>
+                            <th>Store</th>
+                            <th>Created</th>
+                            <th>Fulfillment</th>
+                            <th>Error</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for order in orders %}
+                        <tr>
+                            <td>
+                                <code>{{ order.marketplace_order_id }}</code>
+                            </td>
+                            <td>
+                                <strong>{{ order.sku }}</strong>
+                            </td>
+                            <td class="text-center">{{ order.quantity }}</td>
+                            <td>
+                                {% if order.status == 'processed' %}
+                                <span class="badge bg-success">Processed</span>
+                                {% elif order.status == 'failed' %}
+                                <span class="badge bg-danger">Failed</span>
+                                {% else %}
+                                <span class="badge bg-secondary">{{ order.status }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if order.store %}
+                                {{ order.store.name }}
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if order.created_at %}
+                                {{ order.created_at.strftime('%Y-%m-%d %H:%M') }}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if order.fulfillment_type == 'FBA' %}
+                                <span class="badge bg-info">FBA</span>
+                                {% else %}
+                                <span class="badge bg-secondary">FBM</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if order.error_message %}
+                                <span class="text-danger" title="{{ order.error_message }}">
+                                    {{ order.error_message[:50] }}{% if order.error_message|length > 50 %}...{% endif %}
+                                </span>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="text-center py-5">
+                <i data-feather="inbox" style="width: 48px; height: 48px;" class="text-muted mb-3"></i>
+                <p class="text-muted">No marketplace orders found</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

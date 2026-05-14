@@ -1,0 +1,136 @@
+{% extends 'base.html' %}
+
+{% block title %}Bulk Import Carton Mappings - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="d-flex align-items-center mb-4">
+                <a href="{{ url_for('routes.settings') }}" class="btn btn-outline-secondary me-3">
+                    <i data-feather="arrow-left"></i>
+                </a>
+                <div>
+                    <h1 class="h3 mb-0">Bulk Import Carton Mappings</h1>
+                    <p class="text-muted mb-0">Upload a CSV file to import multiple carton mappings at once</p>
+                </div>
+            </div>
+            
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            
+            <div class="card mb-4">
+                <div class="card-header">
+                    <i data-feather="upload" class="me-2"></i>Upload CSV File
+                </div>
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        
+                        <div class="mb-3">
+                            <label for="file" class="form-label">CSV File</label>
+                            <input type="file" class="form-control" id="file" name="file" accept=".csv" required>
+                            <div class="form-text">Select a CSV file with carton mapping data</div>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary">
+                            <i data-feather="upload" class="me-1"></i>Import Cartons
+                        </button>
+                    </form>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <i data-feather="info" class="me-2"></i>CSV Format Requirements
+                </div>
+                <div class="card-body">
+                    <p>Your CSV file must have headers in the first row. Required and optional columns:</p>
+                    
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Column Name</th>
+                                <th>Required</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>single_sku</code></td>
+                                <td><span class="badge bg-danger">Yes</span></td>
+                                <td>SKU of the individual product</td>
+                            </tr>
+                            <tr>
+                                <td><code>units_per_carton</code></td>
+                                <td><span class="badge bg-warning">Recommended</span></td>
+                                <td>Number of units in each carton (default: 1)</td>
+                            </tr>
+                            <tr>
+                                <td><code>single_barcode</code></td>
+                                <td><span class="badge bg-secondary">Optional</span></td>
+                                <td>Barcode of individual product</td>
+                            </tr>
+                            <tr>
+                                <td><code>master_barcode</code></td>
+                                <td><span class="badge bg-secondary">Optional</span></td>
+                                <td>Barcode on the master carton</td>
+                            </tr>
+                            <tr>
+                                <td><code>carton_weight_kg</code></td>
+                                <td><span class="badge bg-secondary">Optional</span></td>
+                                <td>Weight of full carton in kg</td>
+                            </tr>
+                            <tr>
+                                <td><code>carton_length_cm</code></td>
+                                <td><span class="badge bg-secondary">Optional</span></td>
+                                <td>Carton length in cm</td>
+                            </tr>
+                            <tr>
+                                <td><code>carton_width_cm</code></td>
+                                <td><span class="badge bg-secondary">Optional</span></td>
+                                <td>Carton width in cm</td>
+                            </tr>
+                            <tr>
+                                <td><code>carton_height_cm</code></td>
+                                <td><span class="badge bg-secondary">Optional</span></td>
+                                <td>Carton height in cm</td>
+                            </tr>
+                            <tr>
+                                <td><code>notes</code></td>
+                                <td><span class="badge bg-secondary">Optional</span></td>
+                                <td>Any notes about the carton</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    
+                    <h6 class="mt-4">Example CSV:</h6>
+                    <pre class="bg-dark text-light p-3 rounded"><code>single_sku,units_per_carton,master_barcode,carton_weight_kg
+SKU-001,12,CTN-001-12,5.5
+SKU-002,24,CTN-002-24,8.2
+SKU-003,6,CTN-003-06,2.1</code></pre>
+                    
+                    <div class="alert alert-info mt-3">
+                        <i data-feather="info" class="me-2"></i>
+                        <strong>Note:</strong> If a mapping for a SKU already exists, it will be updated with the new values from the CSV.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    feather.replace();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+
+{% block title %}{{ warehouse.name }} - Stock - Inventory Management{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                <i data-feather="package" class="me-2"></i>
+                {{ warehouse.name }} - Stock
+            </h1>
+            <div>
+                <a href="{{ url_for('routes.warehouses') }}" class="btn btn-secondary">
+                    <i data-feather="arrow-left" class="me-1"></i>
+                    Back to Warehouses
+                </a>
+            </div>
+        </div>
+        
+        <div class="card mb-3">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <h6 class="text-muted">Location</h6>
+                        <p>{{ warehouse.location or 'Not specified' }}</p>
+                    </div>
+                    <div class="col-md-4">
+                        <h6 class="text-muted">Status</h6>
+                        <p>
+                            <span class="badge {% if warehouse.is_active %}bg-success{% else %}bg-secondary{% endif %}">
+                                {% if warehouse.is_active %}Active{% else %}Inactive{% endif %}
+                            </span>
+                            {% if warehouse.is_default %}
+                                <span class="badge bg-primary ms-1">Default</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="col-md-4">
+                        <h6 class="text-muted">Total Stock Items</h6>
+                        <p><strong>{{ stock_items|length }}</strong></p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if stock_items %}
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>SKU</th>
+                            <th>Available</th>
+                            <th>Reserved</th>
+                            <th>Allocated</th>
+                            <th>Pending Receipt</th>
+                            <th>Quarantined</th>
+                            <th>Sellable</th>
+                            <th>Location</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for stock in stock_items %}
+                        <tr>
+                            <td><strong>{{ stock.sku }}</strong></td>
+                            <td>{{ stock.available_quantity }}</td>
+                            <td>{{ stock.reserved_quantity }}</td>
+                            <td>{{ stock.allocated_quantity }}</td>
+                            <td>{{ stock.pending_receipt_qty }}</td>
+                            <td>{{ stock.quarantined_quantity }}</td>
+                            <td><strong class="text-success">{{ stock.sellable_quantity }}</strong></td>
+                            <td class="text-muted">{{ stock.location or '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+{% else %}
+    <div class="alert alert-info">
+        <i data-feather="info" class="me-2"></i>
+        No stock items in this warehouse yet.
+    </div>
+{% endif %}
+
+<script>
+feather.replace();
+</script>
+{% endblock %}
