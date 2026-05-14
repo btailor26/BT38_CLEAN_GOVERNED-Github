@@ -1,0 +1,104 @@
+  5472	@bp.route('/push_stock_all', methods=['POST'])
+  5473	def push_stock_all():
+  5474	    """Push stock for all items to all connected stores"""
+  5475	    try:
+  5476	        # Get all inventory items
+  5477	        items = db.session.query(InventoryItem).all()
+  5478	        if not items:
+  5479	            return jsonify({'success': False, 'error': 'No inventory items found'})
+  5480	        
+  5481	        # Get all active stores
+  5482	        active_stores = db.session.query(Store).filter(Store.is_active == True).all()
+  5483	        if not active_stores:
+  5484	            return jsonify({'success': False, 'error': 'No active stores configured'})
+  5485	        
+  5486	        # Import sync_item_to_store function
+  5487	        from sync_service import sync_item_to_store
+  5488	        
+  5489	        results = []
+  5490	        overall_success = True
+  5491	        total_synced = 0
+  5492	        
+  5493	        # Process in batches to avoid timeout
+  5494	        batch_size = 50
+  5495	        for i in range(0, len(items), batch_size):
+  5496	            batch_items = items[i:i + batch_size]
+  5497	            
+  5498	            for item in batch_items:
+  5499	                item_results = []
+  5500	                item_success = True
+  5501	                
+  5502	                # CRITICAL FIX: Get warehouse stock for this SKU, then find stores with listings
+  5503	                warehouse_stock = db.session.query(WarehouseStock).filter_by(sku=item.sku).first()
+  5504	                if not warehouse_stock:
+  5505	                    logging.warning(f"No warehouse stock for SKU {item.sku} - skipping")
+  5506	                    continue
+  5507	                
+  5508	                item_stores = db.session.query(Store).join(
+  5509	                    MarketplaceListing, Store.id == MarketplaceListing.store_id
+  5510	                ).filter(
+  5511	                    Store.is_active == True,
+  5512	                    MarketplaceListing.warehouse_stock_id == warehouse_stock.id
+  5513	                ).distinct().all()
+  5514	                
+  5515	                for store in item_stores:
+  5516	                    try:
+  5517	                        # Skip stores without proper credentials
+  5518	                        if not store.api_key:
+  5519	                            item_results.append({
+  5520	                                'store': store.name,
+  5521	                                'platform': store.platform,
+  5522	                                'success': False,
+  5523	                                'message': 'No API credentials configured'
+  5524	                            })
+  5525	                            item_success = False
+  5526	                            continue
+  5527	                        
+  5528	                        # Attempt to push stock to this store
+  5529	                        success, message = sync_item_to_store(store, item)
+  5530	                        
+  5531	                        item_results.append({
+  5532	                            'store': store.name,
+  5533	                            'platform': store.platform,
+  5534	                            'success': success,
+  5535	                            'message': message
+  5536	                        })
+  5537	                        
+  5538	                        if not success:
+  5539	                            item_success = False
+  5540	                            
+  5541	                    except Exception as store_error:
+  5542	                        logging.error(f"Error pushing item {item.sku} to store {store.name}: {str(store_error)}")
+  5543	                        item_results.append({
+  5544	                            'store': store.name,
+  5545	                            'platform': store.platform,
+  5546	                            'success': False,
+  5547	                            'message': f'Error: {str(store_error)}'
+  5548	                        })
+  5549	                        item_success = False
+  5550	                
+  5551	                results.append({
+  5552	                    'item_id': item.id,
+  5553	                    'item_sku': item.sku,
+  5554	                    'item_name': item.name,
+  5555	                    'success': item_success,
+  5556	                    'store_results': item_results
+  5557	                })
+  5558	                
+  5559	                if item_success:
+  5560	                    total_synced += 1
+  5561	                else:
+  5562	                    overall_success = False
+  5563	        
+  5564	        return jsonify({
+  5565	            'success': overall_success,
+  5566	            'total_items': len(items),
+  5567	            'total_synced': total_synced,
+  5568	            'total_failed': len(items) - total_synced,
+  5569	            'results': results,
+  5570	            'message': f'Push all completed: {total_synced}/{len(items)} items synced successfully'
+  5571	        })
+  5572	        
+  5573	    except Exception as e:
+  5574	        logging.error(f"Error in push all stock: {str(e)}")
+  5575	        return jsonify({'success': False, 'error': str(e)})

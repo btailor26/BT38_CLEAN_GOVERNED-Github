@@ -5471,50 +5471,60 @@ def push_stock_bulk():
 
 @bp.route('/push_stock_all', methods=['POST'])
 def push_stock_all():
-    """Push stock for all items to all connected stores"""
+    """Push stock for all items to all connected stores, gated by Settings."""
     try:
-        # Get all inventory items
         items = db.session.query(InventoryItem).all()
         if not items:
             return jsonify({'success': False, 'error': 'No inventory items found'})
-        
-        # Get all active stores
+
         active_stores = db.session.query(Store).filter(Store.is_active == True).all()
         if not active_stores:
             return jsonify({'success': False, 'error': 'No active stores configured'})
-        
-        # Import sync_item_to_store function
+
         from sync_service import sync_item_to_store
-        
+
         results = []
         overall_success = True
         total_synced = 0
-        
-        # Process in batches to avoid timeout
         batch_size = 50
+
         for i in range(0, len(items), batch_size):
             batch_items = items[i:i + batch_size]
-            
+
             for item in batch_items:
                 item_results = []
                 item_success = True
-                
-                # CRITICAL FIX: Get warehouse stock for this SKU, then find stores with listings
+
                 warehouse_stock = db.session.query(WarehouseStock).filter_by(sku=item.sku).first()
                 if not warehouse_stock:
                     logging.warning(f"No warehouse stock for SKU {item.sku} - skipping")
                     continue
-                
+
                 item_stores = db.session.query(Store).join(
                     MarketplaceListing, Store.id == MarketplaceListing.store_id
                 ).filter(
                     Store.is_active == True,
                     MarketplaceListing.warehouse_stock_id == warehouse_stock.id
                 ).distinct().all()
-                
+
                 for store in item_stores:
                     try:
-                        # Skip stores without proper credentials
+                        allowed, reason = is_runtime_action_allowed(
+                            store=store,
+                            action_type="push",
+                            manual=True
+                        )
+
+                        if not allowed:
+                            item_results.append({
+                                'store': store.name,
+                                'platform': store.platform,
+                                'success': False,
+                                'message': reason
+                            })
+                            item_success = False
+                            continue
+
                         if not store.api_key:
                             item_results.append({
                                 'store': store.name,
@@ -5524,20 +5534,19 @@ def push_stock_all():
                             })
                             item_success = False
                             continue
-                        
-                        # Attempt to push stock to this store
+
                         success, message = sync_item_to_store(store, item)
-                        
+
                         item_results.append({
                             'store': store.name,
                             'platform': store.platform,
                             'success': success,
                             'message': message
                         })
-                        
+
                         if not success:
                             item_success = False
-                            
+
                     except Exception as store_error:
                         logging.error(f"Error pushing item {item.sku} to store {store.name}: {str(store_error)}")
                         item_results.append({
@@ -5547,7 +5556,7 @@ def push_stock_all():
                             'message': f'Error: {str(store_error)}'
                         })
                         item_success = False
-                
+
                 results.append({
                     'item_id': item.id,
                     'item_sku': item.sku,
@@ -5555,12 +5564,12 @@ def push_stock_all():
                     'success': item_success,
                     'store_results': item_results
                 })
-                
+
                 if item_success:
                     total_synced += 1
                 else:
                     overall_success = False
-        
+
         return jsonify({
             'success': overall_success,
             'total_items': len(items),
@@ -5569,11 +5578,10 @@ def push_stock_all():
             'results': results,
             'message': f'Push all completed: {total_synced}/{len(items)} items synced successfully'
         })
-        
+
     except Exception as e:
         logging.error(f"Error in push all stock: {str(e)}")
         return jsonify({'success': False, 'error': str(e)})
-
 
 
 
