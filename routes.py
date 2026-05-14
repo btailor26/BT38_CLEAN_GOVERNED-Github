@@ -2913,39 +2913,36 @@ def edit_group(group_id):
 
 @bp.route('/groups/<int:group_id>/push', methods=['POST'])
 def push_group_stock(group_id):
-    """Push stock for all items in a product group to all marketplaces"""
+    """Push stock for all items in a product group to all marketplaces, gated by Settings."""
     from sync_service import sync_item_to_store
-    
+
     try:
         group = db.session.get(ProductGroup, group_id)
         if not group:
             return jsonify({'success': False, 'message': 'Group not found'}), 404
-        
+
         if not group.items:
             return jsonify({'success': False, 'message': 'Group has no items'}), 400
-        
-        # Get all active stores (excluding those with auth errors)
+
         stores = Store.query.filter_by(is_active=True).all()
         if not stores:
             return jsonify({'success': False, 'message': 'No active stores configured'}), 400
-        
-        # Filter out stores with authentication errors
+
         valid_stores = [s for s in stores if s.sync_status != 'error']
         auth_error_stores = [s for s in stores if s.sync_status == 'error']
-        
+
         if not valid_stores and auth_error_stores:
             auth_store_names = ', '.join([s.name for s in auth_error_stores])
             return jsonify({
-                'success': False, 
+                'success': False,
                 'message': f'Cannot push: All stores have authentication errors ({auth_store_names}). Please reconnect your stores first.'
             }), 400
-        
+
         successful_pushes = 0
         failed_pushes = 0
         skipped_pushes = 0
         results = []
-        
-        # Skip stores with auth errors
+
         for store in auth_error_stores:
             for item in group.items:
                 skipped_pushes += 1
@@ -2956,11 +2953,27 @@ def push_group_stock(group_id):
                     'status': 'skipped',
                     'message': f'Store has authentication error - please reconnect {store.name}'
                 })
-        
-        # Push each item in the group to valid stores only
+
         for item in group.items:
             for store in valid_stores:
                 try:
+                    allowed, reason = is_runtime_action_allowed(
+                        store=store,
+                        action_type="push",
+                        manual=True
+                    )
+
+                    if not allowed:
+                        skipped_pushes += 1
+                        results.append({
+                            'sku': item.sku,
+                            'store': store.name,
+                            'platform': store.platform,
+                            'status': 'skipped',
+                            'message': reason
+                        })
+                        continue
+
                     success, message = sync_item_to_store(store, item)
                     if success:
                         successful_pushes += 1
@@ -2989,8 +3002,7 @@ def push_group_stock(group_id):
                         'status': 'error',
                         'message': str(e)
                     })
-        
-        # Log the push operation
+
         sync_log = SyncLog(
             store_id=None,
             operation='group_push',
@@ -3000,11 +3012,11 @@ def push_group_stock(group_id):
         )
         db.session.add(sync_log)
         db.session.commit()
-        
-        message = f'Stock pushed to marketplaces'
+
+        message = 'Stock pushed to marketplaces'
         if auth_error_stores:
             message += f' (skipped {len(auth_error_stores)} stores with auth errors)'
-        
+
         return jsonify({
             'success': True,
             'message': message,
@@ -3015,11 +3027,12 @@ def push_group_stock(group_id):
                 'details': results
             }
         })
-    
+
     except Exception as e:
         db.session.rollback()
-        logging.error(f'Error pushing group stock: {str(e)}', exc_info=True)
-        return jsonify({'success': False, 'message': f'Error: {str(e)}'}), 500
+        logging.error(f"Error pushing group stock: {str(e)}")
+        return jsonify({'success': False, 'message': f'Error pushing group stock: {str(e)}'}), 500
+
 
 @bp.route('/groups/<int:group_id>/update-stock', methods=['POST'])
 def update_group_stock(group_id):
