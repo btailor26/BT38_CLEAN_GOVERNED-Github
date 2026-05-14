@@ -5575,6 +5575,31 @@ def push_stock_all():
         return jsonify({'success': False, 'error': str(e)})
 
 
+
+def command_center_governance_guard(command_key, plan, confirmed=False):
+    """Central guard for future Command Center execution. Preview-safe only."""
+    risk_level = (plan or {}).get('risk_level', 'unknown')
+    requires_confirmation = bool((plan or {}).get('requires_confirmation', True))
+
+    guard_result = {
+        'allowed': False,
+        'preview_safe': True,
+        'execution_blocked': True,
+        'risk_level': risk_level,
+        'requires_confirmation': requires_confirmation,
+        'confirmed': bool(confirmed),
+        'checks': [
+            {'name': 'command_known', 'passed': bool(command_key)},
+            {'name': 'preview_mode_only', 'passed': True},
+            {'name': 'live_execution_disabled', 'passed': True},
+            {'name': 'confirmation_required_if_high_risk', 'passed': not (risk_level == 'high' and not confirmed)},
+        ],
+        'message': 'Preview allowed. Live execution remains disabled.'
+    }
+
+    return guard_result
+
+
 # =================== BT38 COMMAND CENTER ROUTES ===================
 
 @bp.route('/api/command-center/preview', methods=['POST'])
@@ -5676,12 +5701,23 @@ def command_center_preview():
             db.session.rollback()
             logging.warning(f"Command preview logging failed: {str(log_error)}")
 
+        guard_result = command_center_governance_guard(
+            plan.get('command_key'),
+            plan,
+            confirmed=False
+        )
+
         return jsonify({
             'success': True,
             'mode': 'preview_only',
             'recognized': True,
             'command_entered': raw_command,
             'plan': plan,
+            'guard': guard_result,
+            'risk_level': plan.get('risk_level'),
+            'affected_systems': plan.get('affected_systems'),
+            'execution_plan': plan.get('execution_plan'),
+            'requires_confirmation': plan.get('requires_confirmation'),
             'execution_blocked': True,
             'message': 'Preview created. No live action executed.'
         })
