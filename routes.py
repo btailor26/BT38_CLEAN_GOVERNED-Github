@@ -14,7 +14,7 @@ import hashlib
 
 # Import db from extensions (not app) to avoid circular import
 from extensions import db
-from models import InventoryItem, Store, SyncLog, SyncJob, ProductGroup, GroupExternalRef, PushSettings, WarehouseStock, StockLedgerEntry, MarketplaceListing, SystemConfig, Supplier, ReorderNotification, PurchaseOrder, PurchaseOrderItem, ReceivingInspection, ReceivingInspectionItem, Warehouse
+from models import InventoryItem, Store, SyncLog, SyncJob, ProductGroup, GroupExternalRef, PushSettings, WarehouseStock, StockLedgerEntry, MarketplaceListing, SystemConfig, SystemSetting, SystemEvent, Supplier, ReorderNotification, PurchaseOrder, PurchaseOrderItem, ReceivingInspection, ReceivingInspectionItem, Warehouse
 from amazon_service import AmazonAPIService
 from ebay_service import eBayAPIService
 from smart_push_service import smart_push_service
@@ -5784,41 +5784,123 @@ def command_center_preview():
 @bp.route('/settings')
 def settings():
     """Main settings page for push configuration"""
-    # Get or create global settings
     global_settings = PushSettings.get_or_create_settings()
-    
-    # Get all stores for per-store settings overview
     stores = db.session.query(Store).order_by(Store.name).all()
-    
-    # Get recent push activity stats
+
     from datetime import datetime, timedelta
-    
-    # Statistics for the last 24 hours
+
     yesterday = datetime.utcnow() - timedelta(days=1)
+
     recent_syncs = db.session.query(SyncLog).filter(
         SyncLog.created_at >= yesterday
     ).count()
-    
+
     failed_syncs = db.session.query(SyncLog).filter(
         SyncLog.created_at >= yesterday,
         SyncLog.status == 'failed'
     ).count()
-    
+
     stats = {
         'recent_syncs': recent_syncs,
         'failed_syncs': failed_syncs,
         'success_rate': round(((recent_syncs - failed_syncs) / recent_syncs * 100) if recent_syncs > 0 else 100, 1)
     }
-    
-    # Get SendGrid sender email from database
+
     sendgrid_email_config = SystemConfig.query.filter_by(key='sendgrid_from_email').first()
     sendgrid_from_email = sendgrid_email_config.value if sendgrid_email_config else ''
-    
-    return render_template('settings.html', 
-                         global_settings=global_settings, 
-                         stores=stores, 
-                         stats=stats,
-                         sendgrid_from_email=sendgrid_from_email)
+
+    webhook_platforms = ['amazon', 'ebay', 'tiktok', 'shopify']
+    webhook_settings = {
+        'worker_enabled': SystemSetting.get_value('webhook_worker_enabled', False),
+        'platforms': {}
+    }
+
+    for platform in webhook_platforms:
+        enabled = SystemSetting.get_value(f'webhook_{platform}_enabled', False)
+
+        last_event = db.session.query(SystemEvent).filter(
+            SystemEvent.category == 'marketplace_webhook',
+            SystemEvent.details_json.contains({'platform': platform})
+        ).order_by(SystemEvent.timestamp.desc()).first()
+
+        received_24h = db.session.query(SystemEvent).filter(
+            SystemEvent.category == 'marketplace_webhook',
+            SystemEvent.timestamp >= yesterday,
+            SystemEvent.details_json.contains({'platform': platform})
+        ).count()
+
+        failed_24h = db.session.query(SystemEvent).filter(
+            SystemEvent.category == 'marketplace_webhook_failed',
+            SystemEvent.timestamp >= yesterday,
+            SystemEvent.details_json.contains({'platform': platform})
+        ).count()
+
+        webhook_settings['platforms'][platform] = {
+            'enabled': enabled,
+            'last_received': last_event.timestamp if last_event else None,
+            'received_24h': received_24h,
+            'failed_24h': failed_24h
+        }
+
+    return render_template(
+        'settings.html',
+        global_settings=global_settings,
+        stores=stores,
+        stats=stats,
+        sendgrid_from_email=sendgrid_from_email,
+        webhook_settings=webhook_settings
+    )
+
+
+
+@bp.route('/api/webhook-settings', methods=['POST'])
+def update_webhook_settings():
+    """Update webhook visibility/runtime flags."""
+    try:
+        data = request.get_json() or {}
+
+        allowed_keys = {
+            'webhook_worker_enabled',
+            'webhook_amazon_enabled',
+            'webhook_ebay_enabled',
+            'webhook_tiktok_enabled',
+            'webhook_shopify_enabled'
+        }
+
+        updated = {}
+
+        for key, value in data.items():
+            if key not in allowed_keys:
+                continue
+
+            bool_value = bool(value)
+
+            SystemSetting.set_value(
+                key,
+                bool_value,
+                description='Marketplace webhook runtime setting',
+                value_type='bool'
+            )
+
+            updated[key] = bool_value
+
+        db.session.add(SystemEvent(
+            actor='admin',
+            category='config_change',
+            entity_type='webhook_settings',
+            description='Webhook runtime settings updated',
+            details_json=updated
+        ))
+
+        db.session.commit()
+
+        return jsonify({'success': True, 'updated': updated})
+
+    except Exception as e:
+        db.session.rollback()
+        logging.error(f"Error updating webhook settings: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @bp.route('/settings', methods=['POST'])
 def update_settings():
