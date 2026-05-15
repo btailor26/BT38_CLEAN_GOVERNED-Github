@@ -4483,7 +4483,15 @@ def edit_store(store_id):
             
             # Advanced push settings
             store.push_priority = int(request.form.get('push_priority', 5))
-            store.push_frequency_minutes = int(request.form.get('push_frequency_minutes', 1))
+
+            try:
+                submitted_frequency = int(request.form.get('push_frequency_minutes', 15))
+                if submitted_frequency <= 0:
+                    submitted_frequency = 15
+            except (TypeError, ValueError):
+                submitted_frequency = 15
+
+            store.push_frequency_minutes = submitted_frequency
             store.push_batch_size = int(request.form.get('push_batch_size', 10))
             
             # Push trigger conditions
@@ -5965,7 +5973,15 @@ def update_settings():
         
         # Update global settings from form
         global_settings.global_push_enabled = request.form.get('global_push_enabled') == 'on'
-        global_settings.default_push_frequency_minutes = int(request.form.get('default_push_frequency_minutes', 1))
+
+        try:
+            submitted_frequency = int(request.form.get('default_push_frequency_minutes', 15))
+            if submitted_frequency <= 0:
+                submitted_frequency = 15
+        except (TypeError, ValueError):
+            submitted_frequency = 15
+
+        global_settings.default_push_frequency_minutes = submitted_frequency
         global_settings.default_batch_size = int(request.form.get('default_batch_size', 10))
         global_settings.default_retry_attempts = int(request.form.get('default_retry_attempts', 3))
         
@@ -6063,7 +6079,14 @@ def update_store_push_settings(store_id):
             store.push_priority = int(data['push_priority'])
 
         if 'push_frequency_minutes' in data:
-            store.push_frequency_minutes = int(data['push_frequency_minutes'])
+            try:
+                submitted_frequency = int(data['push_frequency_minutes'])
+                if submitted_frequency <= 0:
+                    submitted_frequency = 15
+            except (TypeError, ValueError):
+                submitted_frequency = 15
+
+            store.push_frequency_minutes = submitted_frequency
 
         if 'push_batch_size' in data:
             store.push_batch_size = int(data['push_batch_size'])
