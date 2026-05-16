@@ -685,28 +685,22 @@ def terms():
 
 @bp.route('/api/push-sku', methods=['POST'])
 def api_push_sku():
-    """API endpoint for immediate SKU push to all connected stores"""
-    try:
-        data = request.get_json()
-        sku = data.get('sku')
-        store_name = data.get('store_name')  # Optional - push to specific store
-        
-        if not sku:
-            return jsonify({'error': 'SKU is required'}), 400
-            
-        # Use smart push service for immediate push
-        results = smart_push_service.push_specific_sku(sku, store_name)
-        
-        return jsonify({
-            'success': True,
-            'sku': sku,
-            'results': results
-        })
-        
-    except Exception as e:
-        logging.error(f"Error in immediate push API: {str(e)}")
-        return jsonify({'error': str(e)}), 500
-        
+    """Retired direct SKU push API.
+
+    Marketplace execution must go through governed dispatcher flow only.
+    This route must not call smart_push_service.push_specific_sku directly.
+    """
+    data = request.get_json(silent=True) or {}
+    sku = data.get("sku") or request.form.get("sku") or request.args.get("sku")
+
+    return jsonify({
+        "success": False,
+        "error": "Direct SKU push route is retired. Use governed dispatcher execution path.",
+        "execution_blocked": True,
+        "route_retired": True,
+        "sku": sku
+    }), 410
+
 @bp.route('/api/classify-listings', methods=['POST'])
 def api_classify_listings():
     """API endpoint to classify and update listing types"""
@@ -6571,65 +6565,19 @@ def amazon_sku_precheck(sku):
 # ===============================
 @bp.post("/api/admin/amazon/set-price-and-push/<sku>")
 def admin_set_price_and_push_amazon(sku):
-    import os
-    from flask import jsonify, request
-    from extensions import db
-    from models import Store, MarketplaceListing, WarehouseStock
-    from amazon_service import AmazonAPIService
+    """Retired direct admin price-and-push route.
 
-    if request.headers.get("X-Task-Key") != os.getenv("TASK_API_KEY"):
-        return jsonify({"error": "unauthorized"}), 401
+    Price updates and marketplace pushes must be separated. This route must not
+    update price and trigger marketplace push in one request.
+    """
+    return jsonify({
+        "success": False,
+        "error": "Direct price-and-push route is retired. Use governed pricing update and approved dispatcher execution path.",
+        "execution_blocked": True,
+        "route_retired": True,
+        "sku": sku
+    }), 410
 
-    try:
-        new_price = request.args.get("price", type=float)
-        if not new_price or new_price <= 0:
-            return jsonify({"ok": False, "error": "price must be > 0"}), 400
-
-        store = Store.query.filter_by(platform="Amazon", is_active=True).first()
-        if not store:
-            return jsonify({"ok": False, "error": "No active Amazon store"}), 404
-
-        from sqlalchemy import or_
-
-        conds = [MarketplaceListing.external_sku == sku]
-        if hasattr(MarketplaceListing, "sku"):
-            conds.append(MarketplaceListing.sku == sku)
-
-        listing = (
-            db.session.query(MarketplaceListing)
-            .filter(MarketplaceListing.store_id == store.id)
-            .filter(or_(*conds))
-            .first()
-        )
-        if not listing:
-            return jsonify({"ok": False, "error": f"Listing not found for SKU {sku}"}), 404
-
-        old_price = listing.price
-        listing.price = new_price
-        if getattr(listing, "push_state", None) in ("blocked", "error", None):
-            listing.push_state = "active"
-        db.session.commit()
-
-        # Push to Amazon using smart_push_service
-        from smart_push_service import SmartPushService
-        push_service = SmartPushService()
-        push_result = push_service.push_specific_sku(sku, store.name)
-
-        return jsonify({
-            "ok": True,
-            "sku": sku,
-            "old_price": old_price,
-            "new_price": new_price,
-            "push_result": push_result
-        })
-
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({"ok": False, "error": str(e)}), 500
-
-# ===========================================
-# ADMIN DIAGNOSTIC: Get Latest Amazon Feed Status
-# ===========================================
 @bp.get("/api/diagnostics/amazon/feed/last")
 def get_latest_amazon_feed_status():
     import os
