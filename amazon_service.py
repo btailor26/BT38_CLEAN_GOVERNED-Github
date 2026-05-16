@@ -1293,35 +1293,17 @@ class AmazonAPIService:
             is_fba_item = warehouse_stock and warehouse_stock.location and 'FBA' in warehouse_stock.location
             is_fbm_item = warehouse_stock and warehouse_stock.location and 'FBM' in warehouse_stock.location
             
-            # For FBA items, verify they exist in Amazon FBA inventory before pushing
-            # For FBM items, skip this check since FBA API won't find them
+            # Governed fulfillment guard:
+            # FBA/AFN inventory is read-only/import-only and must never enter Amazon feed/update execution.
             if is_fba_item:
-                try:
-                    self.logger.info(f"Verifying FBA product exists on Amazon for SKU: {item.sku}")
-                    inventory_response = inventory_client.get_inventory_summary_marketplace(
-                        granularityType='Marketplace',
-                        granularityId=self.marketplace.marketplace_id,
-                        marketplaceIds=marketplace_ids,
-                        sellerSkus=[item.sku]
-                    )
-                    
-                    if not (inventory_response.payload and 'inventorySummaries' in inventory_response.payload):
-                        return False, "Unable to retrieve inventory from Amazon FBA"
-                        
-                    summaries = inventory_response.payload['inventorySummaries']
-                    if not summaries:
-                        return False, f"FBA product {item.sku} not found in Amazon FBA inventory. Cannot update quantity for non-existent product."
-                        
-                    # Product exists, proceed with inventory update
-                    self.logger.info(f"Found existing FBA product on Amazon for SKU: {item.sku}")
-                except Exception as fba_check_error:
-                    self.logger.error(f"Error verifying FBA product {item.sku}: {str(fba_check_error)}")
-                    return False, f"FBA verification error: {str(fba_check_error)}"
-            elif is_fbm_item:
-                self.logger.info(f"Skipping FBA verification for FBM item: {item.sku} - proceeding with feed update")
+                self.logger.info(f"Blocked FBA/AFN push for SKU: {item.sku} - FBA stock is read-only/import-only")
+                return False, f"FBA/AFN SKU {item.sku} is read-only/import-only. Quantity push blocked."
+
+            if is_fbm_item:
+                self.logger.info(f"FBM/MFN item allowed for Amazon feed update: {item.sku}")
             else:
                 self.logger.warning(f"Unknown fulfillment type for SKU: {item.sku} (location: {warehouse_stock.location if warehouse_stock else 'None'}) - attempting feed update")
-            
+
             # Proceed with inventory feed update
             try:
                 
