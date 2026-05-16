@@ -2222,19 +2222,12 @@ class AmazonAPIService:
             creds = json.loads(store.api_key)
             marketplace_id = creds.get('marketplace_id', 'A1F83G8C2ARO7P')  # Default to UK
             
-            # Get LWA access token
-            token_result = get_lwa_access_token(
-                client_id=creds.get('lwa_app_id'),
-                client_secret=creds.get('lwa_client_secret'),
-                refresh_token=creds.get('refresh_token')
-            )
-            
-            if 'error' in token_result:
-                return {"success": False, "orders": [], "error": f"Auth error: {token_result['error']}"}
-            
-            access_token = token_result.get('access_token')
-            if not access_token:
-                return {"success": False, "orders": [], "error": "No access token in response"}
+            # Governed Amazon auth path: all SP-API access tokens must come from amazon_auth.py
+            try:
+                from amazon_auth import ensure_access_token, AmazonAuthError
+                access_token = ensure_access_token(store)
+            except AmazonAuthError as auth_error:
+                return {"success": False, "orders": [], "error": f"Auth error: {auth_error.message}"}
             
             # Default to last 24 hours if no created_after specified
             if not created_after:
