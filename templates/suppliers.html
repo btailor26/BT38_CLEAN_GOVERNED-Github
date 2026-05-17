@@ -50,11 +50,11 @@
                             <span class="badge bg-secondary">{{ supplier.warehouse_items | length }}</span>
                         </td>
                         <td>
-                            <a href="{{ url_for('routes.edit_supplier', supplier_id=supplier.id) }}" 
+                            <a href="{{ url_for('routes.edit_supplier', supplier_id=supplier.id) }}"
                                class="btn btn-sm btn-outline-primary" title="Edit">
                                 <i data-feather="edit-2"></i>
                             </a>
-                            <form method="POST" action="{{ url_for('routes.delete_supplier', supplier_id=supplier.id) }}" 
+                            <form method="POST" action="{{ url_for('routes.delete_supplier', supplier_id=supplier.id) }}"
                                   class="d-inline" onsubmit="return confirm('Delete {{ supplier.name }}?');">
                                 <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
                                     <i data-feather="trash-2"></i>

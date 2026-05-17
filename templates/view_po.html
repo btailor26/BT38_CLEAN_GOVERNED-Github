@@ -7,7 +7,7 @@
     <h2><i data-feather="file-text"></i> Purchase Order {{ po.po_number }}</h2>
     <div>
         {% if po.supplier and po.supplier.email and po.status in ['draft', 'sent'] %}
-        <a href="{{ url_for('routes.send_po_to_supplier', po_id=po.id) }}" class="btn btn-primary me-2" 
+        <a href="{{ url_for('routes.send_po_to_supplier', po_id=po.id) }}" class="btn btn-primary me-2"
            onclick="return confirm('Send this purchase order to {{ po.supplier.name }} at {{ po.supplier.email }}?')">
             <i data-feather="mail"></i> Send to Supplier
         </a>
@@ -64,7 +64,7 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="card">
             <div class="card-header">
                 <h5>Line Items</h5>
@@ -90,7 +90,7 @@
                             <tr>
                                 <td>
                                     {% if item_data.image_url %}
-                                        <img src="{{ item_data.image_url }}" alt="{{ item_data.item.sku }}" 
+                                        <img src="{{ item_data.image_url }}" alt="{{ item_data.item.sku }}"
                                              class="img-thumbnail" style="max-width: 60px; max-height: 60px; object-fit: cover;">
                                     {% else %}
                                         <div class="text-center text-muted" style="width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; border: 1px dashed #ccc; border-radius: 4px;">
@@ -114,7 +114,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-4">
         <div class="card mb-3">
             <div class="card-header">
@@ -135,7 +135,7 @@
                 </div>
             </div>
         </div>
-        
+
         {% if po.supplier %}
         <div class="card">
             <div class="card-header">
@@ -167,17 +167,17 @@
             </div>
         </div>
         {% endif %}
-        
+
         <div class="card mt-3">
             <div class="card-header bg-primary text-white">
                 <h5><i data-feather="camera"></i> Invoice OCR Scanner</h5>
             </div>
             <div class="card-body">
                 <p class="text-muted small">Upload a photo of your supplier invoice to automatically extract details</p>
-                
+
                 <form id="ocrForm" enctype="multipart/form-data">
                     <div class="mb-3">
-                        <input type="file" class="form-control" id="invoice_image" name="invoice_image" 
+                        <input type="file" class="form-control" id="invoice_image" name="invoice_image"
                                accept="image/*,application/pdf" required>
                         <div class="form-text">Supported: JPG, PNG, PDF</div>
                     </div>
@@ -185,30 +185,30 @@
                         <i data-feather="upload"></i> Scan Invoice
                     </button>
                 </form>
-                
+
                 <div id="ocrResults" class="mt-3" style="display:none;">
                     <div class="alert alert-success">
                         <strong><i data-feather="check-circle"></i> Invoice Scanned!</strong>
                     </div>
-                    
+
                     <form method="POST" action="{{ url_for('routes.update_po_invoice', po_id=po.id) }}" id="invoiceDataForm">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                        
+
                         <div class="mb-2">
                             <label class="form-label small"><strong>Invoice Number:</strong></label>
                             <input type="text" class="form-control form-control-sm" name="invoice_number" id="ocr_invoice_number">
                         </div>
-                        
+
                         <div class="mb-2">
                             <label class="form-label small"><strong>Invoice Date:</strong></label>
                             <input type="date" class="form-control form-control-sm" name="invoice_date" id="ocr_invoice_date">
                         </div>
-                        
+
                         <div class="mb-2">
                             <label class="form-label small"><strong>Total Amount:</strong></label>
                             <input type="number" class="form-control form-control-sm" name="payment_amount" id="ocr_payment_amount" step="0.01">
                         </div>
-                        
+
                         <div class="mb-2">
                             <label class="form-label small"><strong>Payment Status:</strong></label>
                             <select class="form-select form-select-sm" name="payment_status" id="ocr_payment_status">
@@ -217,13 +217,13 @@
                                 <option value="partial">Partial</option>
                             </select>
                         </div>
-                        
+
                         <button type="submit" class="btn btn-success btn-sm w-100 mt-2">
                             <i data-feather="save"></i> Save Invoice Details
                         </button>
                     </form>
                 </div>
-                
+
                 <div id="ocrError" class="alert alert-danger mt-3" style="display:none;"></div>
                 <div id="ocrLoading" class="text-center mt-3" style="display:none;">
                     <div class="spinner-border spinner-border-sm" role="status">
@@ -238,37 +238,37 @@
 
 <script>
     feather.replace();
-    
+
     // OCR Form Handler
     document.getElementById('ocrForm').addEventListener('submit', async function(e) {
         e.preventDefault();
-        
+
         const fileInput = document.getElementById('invoice_image');
         const file = fileInput.files[0];
-        
+
         if (!file) {
             alert('Please select a file');
             return;
         }
-        
+
         // Show loading, hide results/errors
         document.getElementById('ocrLoading').style.display = 'block';
         document.getElementById('ocrResults').style.display = 'none';
         document.getElementById('ocrError').style.display = 'none';
-        
+
         try {
             const formData = new FormData();
             formData.append('invoice_image', file);
-            
+
             const response = await fetch('/api/ocr/invoice', {
                 method: 'POST',
                 body: formData
             });
-            
+
             const data = await response.json();
-            
+
             document.getElementById('ocrLoading').style.display = 'none';
-            
+
             if (data.success) {
                 // Fill form with extracted data
                 if (data.invoice_number) {
@@ -280,7 +280,7 @@
                 if (data.total_amount) {
                     document.getElementById('ocr_payment_amount').value = data.total_amount;
                 }
-                
+
                 document.getElementById('ocrResults').style.display = 'block';
                 feather.replace();
             } else {

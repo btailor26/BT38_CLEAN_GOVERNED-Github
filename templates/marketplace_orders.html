@@ -10,7 +10,7 @@
             <p class="text-muted mb-0">Orders synced from Amazon and eBay (read-only)</p>
         </div>
     </div>
-    
+
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             {% for category, message in messages %}
@@ -21,7 +21,7 @@
             {% endfor %}
         {% endif %}
     {% endwith %}
-    
+
     <div class="card mb-4">
         <div class="card-body">
             <form method="GET" class="row g-3 align-items-end">
@@ -45,7 +45,7 @@
             </form>
         </div>
     </div>
-    
+
     <div class="card">
         <div class="card-header">
             <div class="d-flex justify-content-between align-items-center">

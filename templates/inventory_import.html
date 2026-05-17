@@ -12,7 +12,7 @@
                     <li class="breadcrumb-item active">Import Inventory</li>
                 </ol>
             </nav>
-            
+
             <h2 class="mb-0">
                 <i data-feather="upload" class="me-2"></i>
                 Import Inventory from Amazon
@@ -23,7 +23,7 @@
             </p>
         </div>
     </div>
-    
+
     <!-- Flash Messages -->
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
@@ -35,7 +35,7 @@
             {% endfor %}
         {% endif %}
     {% endwith %}
-    
+
     <div class="row">
         <!-- Upload Form -->
         <div class="col-lg-6 mb-4">
@@ -58,14 +58,14 @@
                                 <li>Upload the file here</li>
                             </ol>
                         </div>
-                        
+
                         <div class="mb-4">
                             <label for="import_file" class="form-label">Select Export File</label>
-                            <input type="file" class="form-control bg-dark text-light border-secondary" 
+                            <input type="file" class="form-control bg-dark text-light border-secondary"
                                    id="import_file" name="import_file" accept=".txt,.csv" required>
                             <div class="form-text">Accepts .txt or .csv files from Amazon Seller Central</div>
                         </div>
-                        
+
                         <div class="d-grid">
                             <button type="submit" class="btn btn-primary btn-lg">
                                 <i data-feather="upload" class="me-2"></i>
@@ -76,7 +76,7 @@
                 </div>
             </div>
         </div>
-        
+
         <!-- Info Panel -->
         <div class="col-lg-6 mb-4">
             <div class="card bg-dark border-secondary">
@@ -89,10 +89,10 @@
                 <div class="card-body">
                     <h6>Why Manual Import?</h6>
                     <p class="text-muted">
-                        When Amazon API authorization is unavailable (OAuth issues, pending approvals), 
+                        When Amazon API authorization is unavailable (OAuth issues, pending approvals),
                         you can manually sync inventory using Seller Central exports.
                     </p>
-                    
+
                     <h6>How It Works</h6>
                     <ul class="text-muted">
                         <li>Parse your Amazon export file to extract SKUs and quantities</li>
@@ -100,7 +100,7 @@
                         <li>Review mismatches before applying changes</li>
                         <li>Choose to apply all or selected updates</li>
                     </ul>
-                    
+
                     <h6>Data Extracted</h6>
                     <ul class="text-muted">
                         <li>SKU and ASIN</li>
@@ -108,17 +108,17 @@
                         <li>Available quantity (FBA/FBM)</li>
                         <li>Price and listing status</li>
                     </ul>
-                    
+
                     <div class="alert alert-warning mt-3">
                         <i data-feather="alert-triangle" class="me-2"></i>
-                        <strong>Note:</strong> This updates the warehouse stock to match Amazon. 
+                        <strong>Note:</strong> This updates the warehouse stock to match Amazon.
                         Review carefully before applying changes.
                     </div>
                 </div>
             </div>
         </div>
     </div>
-    
+
     <!-- Pending Batches -->
     {% if pending_batches %}
     <div class="row">
@@ -156,12 +156,12 @@
                                     </td>
                                     <td>{{ batch.created_at.strftime('%d %b %Y %H:%M') if batch.created_at else 'Unknown' }}</td>
                                     <td>
-                                        <a href="{{ url_for('routes.inventory_import_review', batch_id=batch.import_batch_id) }}" 
+                                        <a href="{{ url_for('routes.inventory_import_review', batch_id=batch.import_batch_id) }}"
                                            class="btn btn-sm btn-primary">
                                             <i data-feather="eye" class="me-1"></i>
                                             Review
                                         </a>
-                                        <form method="POST" action="{{ url_for('routes.inventory_import_reject', batch_id=batch.import_batch_id) }}" 
+                                        <form method="POST" action="{{ url_for('routes.inventory_import_reject', batch_id=batch.import_batch_id) }}"
                                               class="d-inline" onsubmit="return confirm('Reject this import batch?');">
                                             <button type="submit" class="btn btn-sm btn-outline-danger">
                                                 <i data-feather="x" class="me-1"></i>

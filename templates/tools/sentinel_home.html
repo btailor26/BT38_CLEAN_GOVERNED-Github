@@ -15,7 +15,7 @@
                     </h4>
                     <span class="badge bg-danger">EXECUTION DISABLED</span>
                 </div>
-                
+
                 <div class="card-body">
                     <div class="alert alert-danger border-danger mb-4" style="font-family: monospace; font-size: 0.85rem;">
                         <div class="text-center">
@@ -24,7 +24,7 @@
                             <small>This is a LOCKED, READ-ONLY governance layer. No commands will be executed.</small>
                         </div>
                     </div>
-                    
+
                     <div class="card bg-dark border-{% if observation.status == 'STABLE' %}success{% elif observation.status == 'DEGRADED' %}warning{% else %}danger{% endif %} mb-4">
                         <div class="card-header bg-dark border-{% if observation.status == 'STABLE' %}success{% elif observation.status == 'DEGRADED' %}warning{% else %}danger{% endif %}">
                             <h6 class="mb-0 text-{% if observation.status == 'STABLE' %}success{% elif observation.status == 'DEGRADED' %}warning{% else %}danger{% endif %}">
@@ -63,8 +63,8 @@
                             <div class="row mb-2">
                                 <div class="col-md-3"><strong class="text-white">BY TYPE:</strong></div>
                                 <div class="col-md-9 text-info">
-                                    CSV: {{ observation.files_detected.by_type.CSV }}, 
-                                    PDF: {{ observation.files_detected.by_type.PDF }}, 
+                                    CSV: {{ observation.files_detected.by_type.CSV }},
+                                    PDF: {{ observation.files_detected.by_type.PDF }},
                                     OTHER: {{ observation.files_detected.by_type.OTHER }}
                                 </div>
                             </div>
@@ -83,8 +83,8 @@
                             <div class="row">
                                 <div class="col-md-3"><strong class="text-white">CONFIRMATIONS:</strong></div>
                                 <div class="col-md-9 text-success">
-                                    DB_WRITES: {{ observation.confirmations.db_writes }} | 
-                                    NETWORK_CALLS: {{ observation.confirmations.network_calls }} | 
+                                    DB_WRITES: {{ observation.confirmations.db_writes }} |
+                                    NETWORK_CALLS: {{ observation.confirmations.network_calls }} |
                                     STATE_CHANGES: {{ observation.confirmations.state_changes }}
                                 </div>
                             </div>
@@ -94,7 +94,7 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="alert alert-dark border-secondary mb-4" style="font-family: monospace; font-size: 0.85rem;">
                         <div class="row">
                             <div class="col-md-4">
@@ -108,19 +108,19 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="command-input" class="form-label text-white">Command Input <span id="input-status-badge" class="badge bg-secondary">Loading...</span></label>
-                        <textarea 
-                            class="form-control bg-dark text-white border-secondary" 
-                            id="command-input" 
-                            rows="4" 
+                        <textarea
+                            class="form-control bg-dark text-white border-secondary"
+                            id="command-input"
+                            rows="4"
                             placeholder="Loading status..."
                             style="font-family: monospace;"
                         ></textarea>
                         <small id="input-status-text" class="text-muted">Checking server status...</small>
                     </div>
-                    
+
                     <div class="mb-3">
                         <button type="button" class="btn btn-outline-info" id="load-template-btn">
                             <i data-feather="file-text" class="me-1" style="width: 16px; height: 16px;"></i>
@@ -131,15 +131,15 @@
                             Refresh Observation
                         </button>
                     </div>
-                    
+
                     <hr class="border-secondary my-4">
-                    
+
                     <div class="mb-2 d-flex justify-content-between align-items-center">
                         <label class="form-label text-white mb-0">Output Panel</label>
                         <span id="output-status-badge" class="badge bg-secondary">Loading...</span>
                     </div>
-                    <div 
-                        id="output-panel" 
+                    <div
+                        id="output-panel"
                         class="bg-black text-success p-3 rounded border border-secondary"
                         style="font-family: 'Courier New', monospace; font-size: 0.85rem; min-height: 400px; max-height: 600px; overflow-y: auto; white-space: pre-wrap;"
                     >SENTINEL CONSOLE
@@ -147,9 +147,9 @@
 Loading status from server...
 
 Click "Task Box v1 Template" to load the template format.</div>
-                    
+
                     <hr class="border-secondary my-4">
-                    
+
                     {% if is_admin and is_staging %}
                     <div class="card bg-dark border-info mb-4" id="architect-controls-panel">
                         <div class="card-header bg-dark border-info">
@@ -183,7 +183,7 @@ Click "Task Box v1 Template" to load the template format.</div>
                         </div>
                     </div>
                     {% endif %}
-                    
+
                     {% if is_admin %}
                     <div class="card bg-dark border-primary mb-4" id="workspace-panel">
                         <div class="card-header bg-dark border-primary">
@@ -216,7 +216,7 @@ Click "Task Box v1 Template" to load the template format.</div>
                         </div>
                     </div>
                     {% endif %}
-                    
+
                     <div class="card bg-dark border-warning">
                         <div class="card-header bg-dark border-warning">
                             <h6 class="mb-0 text-warning">
@@ -245,7 +245,7 @@ document.addEventListener('DOMContentLoaded', function() {
     if (typeof feather !== 'undefined') {
         feather.replace();
     }
-    
+
     function apiFetch(url, options = {}) {
         const isFormData = options.body instanceof FormData;
         const headers = isFormData ? {} : { 'Content-Type': 'application/json', ...(options.headers || {}) };
@@ -256,16 +256,16 @@ document.addEventListener('DOMContentLoaded', function() {
             ...options
         });
     }
-    
+
     function showDebugBanner(endpoint, status, responseSnippet) {
         const existing = document.getElementById('sentinel-debug-banner');
         if (existing) existing.remove();
-        
+
         const banner = document.createElement('div');
         banner.id = 'sentinel-debug-banner';
         banner.className = 'alert alert-danger';
         banner.style.cssText = 'position:fixed;top:10px;left:10px;right:10px;z-index:9999;font-family:monospace;font-size:12px;max-height:200px;overflow:auto;';
-        
+
         let msg = '';
         if (status === 401) {
             msg = '<strong>401 — Not logged in (session cookie missing or invalid)</strong>';
@@ -274,15 +274,15 @@ document.addEventListener('DOMContentLoaded', function() {
         } else {
             msg = `<strong>HTTP ${status}</strong>`;
         }
-        
+
         banner.innerHTML = `${msg}<br><b>Endpoint:</b> ${endpoint}<br><b>Response:</b> <pre style="margin:5px 0;white-space:pre-wrap;">${responseSnippet.substring(0, 200)}</pre><button class="btn btn-sm btn-outline-light" onclick="this.parentElement.remove()">Dismiss</button>`;
         document.body.prepend(banner);
     }
-    
+
     function showAuthError(status) {
         showDebugBanner('(auth check)', status, status === 401 ? 'Session not authenticated' : 'Insufficient permissions');
     }
-    
+
     const loadTemplateBtn = document.getElementById('load-template-btn');
     const refreshBtn = document.getElementById('refresh-observation-btn');
     const outputPanel = document.getElementById('output-panel');
@@ -290,14 +290,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const inputStatusBadge = document.getElementById('input-status-badge');
     const inputStatusText = document.getElementById('input-status-text');
     const outputStatusBadge = document.getElementById('output-status-badge');
-    
+
     // Fetch server status and update UI accordingly
     async function loadSentinelStatus() {
         try {
             const response = await apiFetch('/api/sentinel/status');
             if (!response.ok) throw new Error('Status fetch failed');
             const data = await response.json();
-            
+
             // Update command input based on server truth
             if (data.command_input_enabled) {
                 commandInput.disabled = false;
@@ -318,7 +318,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 inputStatusText.textContent = 'Command input disabled by Architect.';
                 inputStatusText.className = 'text-warning';
             }
-            
+
             // Update output panel based on server truth
             if (data.command_output_enabled) {
                 outputStatusBadge.textContent = 'ENABLED';
@@ -327,14 +327,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 outputStatusBadge.textContent = 'DISABLED';
                 outputStatusBadge.className = 'badge bg-secondary';
             }
-            
+
             // Update execution badge in header
             const execBadge = document.querySelector('.card-header .badge');
             if (execBadge && data.execution_enabled) {
                 execBadge.textContent = 'EXECUTION ENABLED';
                 execBadge.className = 'badge bg-warning';
             }
-            
+
             // Update output panel with status
             outputPanel.textContent = `SENTINEL CONSOLE
 ================================
@@ -344,7 +344,7 @@ Command Output: ${data.command_output_enabled ? 'ENABLED' : 'DISABLED'}
 Execution: ${data.execution_enabled ? 'ENABLED' : 'DISABLED'}
 
 Click "Task Box v1 Template" to load the template format.`;
-            
+
         } catch (error) {
             console.error('Failed to load sentinel status:', error);
             inputStatusBadge.textContent = 'ERROR';
@@ -353,16 +353,16 @@ Click "Task Box v1 Template" to load the template format.`;
             inputStatusText.className = 'text-danger';
         }
     }
-    
+
     // Load status on page load
     loadSentinelStatus();
-    
+
     // Architect Controls wiring (only if panel exists)
     const toggleInput = document.getElementById('toggle-input');
     const toggleOutput = document.getElementById('toggle-output');
     const toggleExecution = document.getElementById('toggle-execution');
     const controlStatusText = document.getElementById('control-status-text');
-    
+
     if (toggleInput && toggleOutput && toggleExecution) {
         async function loadControlSwitches() {
             try {
@@ -372,17 +372,17 @@ Click "Task Box v1 Template" to load the template format.`;
                     throw new Error('Status fetch failed');
                 }
                 const data = await response.json();
-                
+
                 const switches = {
                     command_input_enabled: data.command_input_enabled || false,
                     command_output_enabled: data.command_output_enabled || false,
                     execution_enabled: data.execution_enabled || false
                 };
-                
+
                 toggleInput.checked = switches.command_input_enabled;
                 toggleOutput.checked = switches.command_output_enabled;
                 toggleExecution.checked = switches.execution_enabled;
-                
+
                 if (data.is_admin === true) {
                     toggleInput.disabled = false;
                     toggleOutput.disabled = false;
@@ -402,16 +402,16 @@ Click "Task Box v1 Template" to load the template format.`;
                     controlStatusText.textContent = 'View only (admin required to toggle).';
                     controlStatusText.className = 'text-warning';
                 }
-                
+
                 applyControlState(switches);
-                
+
             } catch (error) {
                 console.error('Failed to load control switches:', error);
                 controlStatusText.textContent = 'Failed to load: ' + error.message;
                 controlStatusText.className = 'text-danger';
             }
         }
-        
+
         // Apply control state to UI elements
         function applyControlState(switches) {
             // Input control
@@ -434,7 +434,7 @@ Click "Task Box v1 Template" to load the template format.`;
                 inputStatusText.textContent = 'Locked by Architect.';
                 inputStatusText.className = 'text-warning';
             }
-            
+
             // Output control
             if (switches.command_output_enabled) {
                 outputPanel.style.display = 'block';
@@ -445,7 +445,7 @@ Click "Task Box v1 Template" to load the template format.`;
                 outputStatusBadge.textContent = 'HIDDEN';
                 outputStatusBadge.className = 'badge bg-secondary';
             }
-            
+
             // Execution badge in header
             const execBadge = document.querySelector('.card-header .badge');
             if (execBadge) {
@@ -458,24 +458,24 @@ Click "Task Box v1 Template" to load the template format.`;
                 }
             }
         }
-        
+
         // Update control on server
         async function updateControl(field, value) {
             try {
                 const payload = {};
                 payload[field] = value;
-                
+
                 const response = await apiFetch('/api/sentinel/control', {
                     method: 'POST',
                     body: JSON.stringify(payload)
                 });
-                
+
                 if (!response.ok) {
                     if (response.status === 401 || response.status === 403) showAuthError(response.status);
                     throw new Error('Update failed');
                 }
                 const data = await response.json();
-                
+
                 if (data.success && data.switches) {
                     applyControlState(data.switches);
                     controlStatusText.textContent = 'Control updated: ' + field + ' = ' + value;
@@ -490,24 +490,24 @@ Click "Task Box v1 Template" to load the template format.`;
                 controlStatusText.className = 'text-danger';
             }
         }
-        
+
         // Wire up toggle events
         toggleInput.addEventListener('change', function() {
             updateControl('command_input_enabled', this.checked);
         });
-        
+
         toggleOutput.addEventListener('change', function() {
             updateControl('command_output_enabled', this.checked);
         });
-        
+
         toggleExecution.addEventListener('change', function() {
             updateControl('execution_enabled', this.checked);
         });
-        
+
         // Load controls on page load
         loadControlSwitches();
     }
-    
+
     const taskBoxTemplate = `╔══════════════════════════════════════════════════════════════════╗
 ║                    TASK PROPOSAL BOX (v1)                        ║
 ╠══════════════════════════════════════════════════════════════════╣
@@ -556,15 +556,15 @@ Click "Task Box v1 Template" to load the template format.`;
 ╠══════════════════════════════════════════════════════════════════╣
 ║ EXECUTION STATUS: ⛔ DISABLED                                    ║
 ╚══════════════════════════════════════════════════════════════════╝`;
-    
+
     loadTemplateBtn.addEventListener('click', function() {
         outputPanel.textContent = taskBoxTemplate;
     });
-    
+
     refreshBtn.addEventListener('click', function() {
         window.location.reload();
     });
-    
+
     // ==========================================================================
     // WORKSPACE (GUIDANCE MODE) functionality
     // ==========================================================================
@@ -575,9 +575,9 @@ Click "Task Box v1 Template" to load the template format.`;
     const workspaceFileInput = document.getElementById('workspace-file-input');
     const workspaceStatus = document.getElementById('workspace-status');
     const workspaceCharCounter = document.getElementById('workspace-char-counter');
-    
+
     const MAX_MESSAGE_CHARS = 64000;
-    
+
     if (workspaceThread && workspaceInput && workspaceSendBtn) {
         // Character counter
         function updateCharCounter() {
@@ -596,9 +596,9 @@ Click "Task Box v1 Template" to load the template format.`;
                 }
             }
         }
-        
+
         workspaceInput.addEventListener('input', updateCharCounter);
-        
+
         // Load thread
         async function loadWorkspaceThread() {
             try {
@@ -618,7 +618,7 @@ Click "Task Box v1 Template" to load the template format.`;
                     return;
                 }
                 const data = await response.json();
-                
+
                 if (data.ok && data.messages) {
                     if (data.messages.length === 0) {
                         workspaceThread.innerHTML = '<span class="text-muted">No messages yet. Start the conversation.</span>';
@@ -641,7 +641,7 @@ Click "Task Box v1 Template" to load the template format.`;
                 workspaceThread.innerHTML = '<span class="text-danger">Error loading thread</span>';
             }
         }
-        
+
         // Parse error response
         function parseErrorResponse(data, status) {
             if (data.error === 'MESSAGE_TOO_LARGE') {
@@ -660,28 +660,28 @@ Click "Task Box v1 Template" to load the template format.`;
                 return data.message || data.error || `HTTP ${status} error`;
             }
         }
-        
+
         // Send message
         async function sendWorkspaceMessage() {
             const text = workspaceInput.value.trim();
             if (!text) return;
-            
+
             if (text.length > MAX_MESSAGE_CHARS) {
                 workspaceStatus.textContent = `Message too long (${text.length} chars). Max: ${MAX_MESSAGE_CHARS}. Split into parts.`;
                 workspaceStatus.className = 'text-danger';
                 return;
             }
-            
+
             workspaceSendBtn.disabled = true;
             workspaceStatus.textContent = 'Sending...';
             workspaceStatus.className = 'text-info';
-            
+
             try {
                 const response = await apiFetch('/api/sentinel/workspace/message', {
                     method: 'POST',
                     body: JSON.stringify({ text: text })
                 });
-                
+
                 let data;
                 const contentType = response.headers.get('content-type') || '';
                 if (contentType.includes('application/json')) {
@@ -690,7 +690,7 @@ Click "Task Box v1 Template" to load the template format.`;
                     const rawText = await response.text();
                     data = { ok: false, error: 'NON_JSON_RESPONSE', message: rawText.substring(0, 200) };
                 }
-                
+
                 if (response.ok && data.ok) {
                     workspaceInput.value = '';
                     updateCharCounter();
@@ -713,22 +713,22 @@ Click "Task Box v1 Template" to load the template format.`;
                 updateCharCounter();
             }
         }
-        
+
         // Upload file
         async function uploadWorkspaceFile(file) {
             workspaceStatus.textContent = 'Uploading...';
             workspaceStatus.className = 'text-info';
-            
+
             const formData = new FormData();
             formData.append('file', file);
-            
+
             try {
                 const response = await apiFetch('/api/sentinel/workspace/upload', {
                     method: 'POST',
                     body: formData
                 });
                 const data = await response.json();
-                
+
                 if (data.ok) {
                     workspaceStatus.textContent = 'File saved: ' + data.filename;
                     workspaceStatus.className = 'text-success';
@@ -742,28 +742,28 @@ Click "Task Box v1 Template" to load the template format.`;
                 workspaceStatus.className = 'text-danger';
             }
         }
-        
+
         // Event listeners
         workspaceSendBtn.addEventListener('click', sendWorkspaceMessage);
-        
+
         workspaceInput.addEventListener('keydown', function(e) {
             if (e.ctrlKey && e.key === 'Enter') {
                 e.preventDefault();
                 sendWorkspaceMessage();
             }
         });
-        
+
         workspaceUploadBtn.addEventListener('click', function() {
             workspaceFileInput.click();
         });
-        
+
         workspaceFileInput.addEventListener('change', function() {
             if (this.files && this.files[0]) {
                 uploadWorkspaceFile(this.files[0]);
                 this.value = '';
             }
         });
-        
+
         // Load thread on page load
         loadWorkspaceThread();
         updateCharCounter();

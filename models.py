@@ -1658,30 +1658,15 @@ class MarketplaceListing(db.Model):
     
     @property
     def normalized_amazon_fulfillment_channel(self):
-        """Normalized Amazon fulfillment channel.
-
-        Fail-closed rule:
-        - Explicit AFN/FBA stays AFN.
-        - Explicit MFN/FBM/MERCHANT stays MFN.
-        - Missing/unknown Amazon fulfillment returns None.
-        - Unknown must not default to MFN.
         """
-        if not getattr(self, "store", None):
-            return self.amazon_fulfillment_channel
+        Normalize the raw Amazon fulfillment channel without guessing.
 
-        platform = (getattr(self.store, "platform", "") or "").lower()
-        if "amazon" not in platform:
-            return self.amazon_fulfillment_channel
-
+        Blank/unknown Amazon channels must remain unclassified so the central
+        marketplace push guard can fail closed. Only explicit MFN/FBM values are
+        pushable; FBA/AFN-style values are read-only.
+        """
         ch = (self.amazon_fulfillment_channel or "").strip().upper()
-
-        if ch in ("AFN", "FBA", "AMAZON_NA", "AMAZON_EU", "AMAZON_FE", "DEFAULT"):
-            return "AFN"
-
-        if ch in ("MFN", "FBM", "MERCHANT"):
-            return "MFN"
-
-        return None
+        return ch or None
     
     @property
     def is_pushable(self):
@@ -1692,8 +1677,9 @@ class MarketplaceListing(db.Model):
         - Only FBM listings ('MFN') or non-Amazon listings can be pushed
         - Uses normalized channel so NULL/empty does not become "unknown"
         """
+        platform = (self.store.platform or "").strip().lower() if self.store else ""
         ch = self.normalized_amazon_fulfillment_channel
-        if (ch or "").upper() == "AFN":
+        if "amazon" in platform and (ch or "").upper() not in ("MFN", "FBM", "MERCHANT"):
             return False
         
         return self.push_state in ['active'] and self.consecutive_failures < 5

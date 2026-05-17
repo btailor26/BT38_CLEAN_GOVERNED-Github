@@ -1,41 +1,37 @@
-"""
-BT38 marketplace worker startup disabled.
+"""BT38 marketplace worker startup disabled.
 
-This module intentionally keeps the old sync_dispatcher import surface alive
-while preventing any background dispatcher thread, store worker thread, or
-order-import scheduler from starting.
-
-Reason:
-- BT38 must have one clean execution path only.
-- Legacy/background workers must be disabled first before the new path is added.
-- App imports should continue to load safely while execution is fail-closed.
-
-No marketplace sync, push, import, scheduler, polling loop, or worker thread
-is started from this module.
+This compatibility shell keeps the old import surface available while preventing
+any background marketplace worker, poller, or scheduled import loop from
+starting during the shutdown proof phase.
 """
 
 import logging
 
+from old_path_shutdown import (
+    GOVERNED_PATH_REQUIRED,
+    MARKETPLACE_EXECUTION_DISABLED,
+    OLD_SYNC_DISABLED,
+    disabled_response,
+)
+
+WORKERS_DISABLED = True
 _app_instance = None
 
 
 class WorkerStartupDisabled:
-    """No-op compatibility object for retired worker/scheduler interfaces."""
+    """Compatibility object for retired worker/scheduler interfaces."""
 
     running = False
+    OLD_SYNC_DISABLED = OLD_SYNC_DISABLED
+    MARKETPLACE_EXECUTION_DISABLED = MARKETPLACE_EXECUTION_DISABLED
+    GOVERNED_PATH_REQUIRED = GOVERNED_PATH_REQUIRED
 
     def start(self):
-        logging.warning(
-            "[WORKERS_DISABLED] Marketplace dispatcher/scheduler startup is disabled. "
-            "No background worker thread was started."
-        )
-        return None
+        return disabled_response("worker_start")
 
     def stop(self):
-        logging.warning(
-            "[WORKERS_DISABLED] Marketplace dispatcher/scheduler is already disabled."
-        )
-        return None
+        logging.warning("[WORKERS_DISABLED] Marketplace dispatcher/scheduler is already disabled.")
+        return disabled_response("worker_stop")
 
 
 def set_app_instance(app):
@@ -46,7 +42,7 @@ def set_app_instance(app):
         "[WORKERS_DISABLED] Flask app instance stored for compatibility only; "
         "worker execution remains disabled."
     )
-    return None
+    return disabled_response("set_app_instance")
 
 
 def get_dispatcher():
@@ -55,18 +51,14 @@ def get_dispatcher():
 
 
 def start_dispatcher():
-    """Do not start any marketplace dispatcher thread."""
-    logging.warning(
-        "[WORKERS_DISABLED] start_dispatcher() blocked. "
-        "No dispatcher loop, store queue worker, import, sync, or push worker was started."
-    )
-    return None
+    """Do not start any marketplace dispatcher work."""
+    logging.warning("[WORKERS_DISABLED] start_dispatcher() blocked")
+    return disabled_response("start_dispatcher")
 
 
 def stop_dispatcher():
     """Compatibility no-op for disabled dispatcher."""
-    logging.warning("[WORKERS_DISABLED] stop_dispatcher() no-op; dispatcher is disabled.")
-    return None
+    return disabled_response("stop_dispatcher")
 
 
 def get_order_import_scheduler():
@@ -75,17 +67,11 @@ def get_order_import_scheduler():
 
 
 def start_order_import_scheduler():
-    """Do not start any scheduled marketplace order import loop."""
-    logging.warning(
-        "[WORKERS_DISABLED] start_order_import_scheduler() blocked. "
-        "No scheduled order import loop was started."
-    )
-    return None
+    """Do not start any scheduled marketplace order import work."""
+    logging.warning("[WORKERS_DISABLED] start_order_import_scheduler() blocked")
+    return disabled_response("start_order_import_scheduler")
 
 
 def stop_order_import_scheduler():
     """Compatibility no-op for disabled order scheduler."""
-    logging.warning(
-        "[WORKERS_DISABLED] stop_order_import_scheduler() no-op; scheduler is disabled."
-    )
-    return None
+    return disabled_response("stop_order_import_scheduler")

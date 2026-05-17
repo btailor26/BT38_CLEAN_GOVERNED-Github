@@ -17,7 +17,7 @@
                         <p class="mb-0 text-muted">Connect your Amazon Seller Central account for inventory synchronization</p>
                     </div>
                     <div class="card-body">
-                        
+
                         <!-- Flash Messages -->
                         {% with messages = get_flashed_messages(with_categories=true) %}
                         {% if messages %}
@@ -37,7 +37,7 @@
                                 <i data-feather="info" class="me-2"></i>
                                 <strong>Prerequisites:</strong> You need valid Amazon LWA (Login with Amazon) credentials configured in environment variables.
                             </div>
-                            
+
                             <div class="d-grid gap-2">
                                 <a href="/auth/amazon/start" class="btn btn-warning btn-lg">
                                     <i data-feather="external-link" class="me-2"></i>
@@ -52,11 +52,11 @@
                             <div class="alert alert-info">
                                 <strong>For Expired Tokens:</strong> If your store shows 403 permission errors, manually renew your refresh token.
                             </div>
-                            
+
                             <form id="manualRefreshForm">
                                 <div class="mb-3">
                                     <label for="auth_code" class="form-label">Amazon Authorization Code</label>
-                                    <input type="text" class="form-control" id="auth_code" name="auth_code" 
+                                    <input type="text" class="form-control" id="auth_code" name="auth_code"
                                            placeholder="Enter spapi_oauth_code from Amazon" required>
                                     <div class="form-text">
                                         <strong>How to get this:</strong><br>
@@ -81,7 +81,7 @@
                                 <div class="row">
                                     <div class="col-md-6 mb-3">
                                         <label for="seller_id" class="form-label">Amazon Seller ID</label>
-                                        <input type="text" class="form-control" id="seller_id" name="seller_id" 
+                                        <input type="text" class="form-control" id="seller_id" name="seller_id"
                                                placeholder="A2WUN0OF9UHU23" required>
                                         <div class="form-text">Find this in Seller Central → Settings → Account Info</div>
                                     </div>
@@ -166,15 +166,15 @@
         // Manual refresh form submission
         document.getElementById('manualRefreshForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            
+
             const btn = document.getElementById('manualRefreshBtn');
             const originalText = btn.innerHTML;
             btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generating...';
             btn.disabled = true;
-            
+
             const formData = new FormData(this);
             const authCode = formData.get('auth_code');
-            
+
             fetch('/auth/amazon/manual-refresh', {
                 method: 'POST',
                 headers: {
@@ -187,14 +187,14 @@
                 if (data.success) {
                     alert('✅ New refresh token generated successfully!');
                     console.log('New refresh token:', data.refresh_token);
-                    
+
                     // Show instructions for updating BT38 store
                     const instruction = `
 ✅ SUCCESS! Your new refresh token is ready.
 
 NEXT STEPS:
 1. Go to /stores page
-2. Edit your BT38 store  
+2. Edit your BT38 store
 3. Replace the "refresh_token" value in the API credentials with:
    ${data.refresh_token}
 4. Save the store
@@ -218,14 +218,14 @@ Your BT38 store should then start syncing successfully!
         // Auto-fill form submission
         document.getElementById('autoFillForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            
+
             const btn = document.getElementById('autoFillBtn');
             const originalText = btn.innerHTML;
             btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generating...';
             btn.disabled = true;
-            
+
             const formData = new FormData(this);
-            
+
             fetch('/auth/amazon/auto-fill', {
                 method: 'POST',
                 body: formData
@@ -271,7 +271,7 @@ Your BT38 store should then start syncing successfully!
                     stores.forEach(store => {
                         const statusClass = store.sync_status === 'success' ? 'success' : 'danger';
                         const statusIcon = store.sync_status === 'success' ? 'check-circle' : 'x-circle';
-                        
+
                         html += `
                             <div class="col-md-6 mb-3">
                                 <div class="card">
@@ -305,7 +305,7 @@ Your BT38 store should then start syncing successfully!
                 }
             })
             .catch(error => {
-                document.getElementById('amazonStores').innerHTML = 
+                document.getElementById('amazonStores').innerHTML =
                     '<div class="alert alert-danger">Error loading stores: ' + error + '</div>';
             });
         }

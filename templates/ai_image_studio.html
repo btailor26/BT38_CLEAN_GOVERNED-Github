@@ -71,7 +71,7 @@
                                     Enhance Naturally
                                 </button>
                             </form>
-                            
+
                             <div id="enhancePreview" class="mt-3" style="display:none;">
                                 <h6>Original Image</h6>
                                 <img id="enhanceOriginal" class="img-fluid border rounded mb-3" style="max-height: 300px;">
@@ -124,7 +124,7 @@
                                     Remove Background
                                 </button>
                             </form>
-                            
+
                             <div id="backgroundPreview" class="mt-3" style="display:none;">
                                 <h6>Original Image</h6>
                                 <img id="backgroundOriginal" class="img-fluid border rounded mb-3" style="max-height: 300px;">
@@ -172,11 +172,11 @@
                                     <input type="file" class="form-control" id="referenceImage" accept="image/*">
                                     <small class="text-muted">Upload a photo of your product - AI will create a lifestyle scene around it</small>
                                 </div>
-                                
+
                                 <div id="generatePreview" class="mt-2 mb-3" style="display:none;">
                                     <img id="generateReference" class="img-fluid border rounded" style="max-height: 200px;">
                                 </div>
-                                
+
                                 <div class="mb-3">
                                     <label class="form-label">Product Name</label>
                                     <input type="text" class="form-control" id="productName" placeholder="e.g., Organic Threading Thread" required>
@@ -256,7 +256,7 @@
                                     Check Compliance
                                 </button>
                             </form>
-                            
+
                             <div id="compliancePreview" class="mt-3" style="display:none;">
                                 <h6>Image Preview</h6>
                                 <img id="complianceOriginal" class="img-fluid border rounded mb-3" style="max-height: 300px;">
@@ -272,16 +272,16 @@
                         <div class="card-body">
                             <div id="complianceResult" style="display:none;">
                                 <div id="complianceStatus" class="alert mb-3"></div>
-                                
+
                                 <h6>Image Details</h6>
                                 <p id="complianceDimensions"></p>
                                 <p id="complianceFormat"></p>
-                                
+
                                 <div id="complianceIssuesSection" style="display:none;">
                                     <h6 class="text-danger">Issues Found</h6>
                                     <ul id="complianceIssues" class="text-danger"></ul>
                                 </div>
-                                
+
                                 <div id="complianceWarningsSection" style="display:none;">
                                     <h6 class="text-warning">Warnings</h6>
                                     <ul id="complianceWarnings" class="text-warning"></ul>
@@ -308,10 +308,10 @@
     // Enhance Image Form
     document.getElementById('enhanceForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-        
+
         const fileInput = document.getElementById('enhanceImage');
         const file = fileInput.files[0];
-        
+
         // Show preview
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -319,22 +319,22 @@
             document.getElementById('enhancePreview').style.display = 'block';
         };
         reader.readAsDataURL(file);
-        
+
         // Show loading
         document.getElementById('enhanceResult').style.display = 'none';
         document.getElementById('enhanceLoading').style.display = 'block';
-        
+
         const formData = new FormData();
         formData.append('image', file);
-        
+
         try {
             const response = await fetch('/api/ai-image/enhance', {
                 method: 'POST',
                 body: formData
             });
-            
+
             const result = await response.json();
-            
+
             if (result.success) {
                 document.getElementById('enhanceOutput').src = 'data:image/png;base64,' + result.image_base64;
                 document.getElementById('enhanceDownload').href = 'data:image/png;base64,' + result.image_base64;
@@ -352,10 +352,10 @@
     // Remove Background Form
     document.getElementById('backgroundForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-        
+
         const fileInput = document.getElementById('backgroundImage');
         const file = fileInput.files[0];
-        
+
         // Show preview
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -363,22 +363,22 @@
             document.getElementById('backgroundPreview').style.display = 'block';
         };
         reader.readAsDataURL(file);
-        
+
         // Show loading
         document.getElementById('backgroundResult').style.display = 'none';
         document.getElementById('backgroundLoading').style.display = 'block';
-        
+
         const formData = new FormData();
         formData.append('image', file);
-        
+
         try {
             const response = await fetch('/api/ai-image/remove-background', {
                 method: 'POST',
                 body: formData
             });
-            
+
             const result = await response.json();
-            
+
             if (result.success) {
                 document.getElementById('backgroundOutput').src = 'data:image/png;base64,' + result.image_base64;
                 document.getElementById('backgroundDownload').href = 'data:image/png;base64,' + result.image_base64;
@@ -411,16 +411,16 @@
     // Generate Lifestyle Image Form
     document.getElementById('generateForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-        
+
         const productName = document.getElementById('productName').value;
         const productDescription = document.getElementById('productDescription').value;
         const style = document.getElementById('imageStyle').value;
         const referenceFile = document.getElementById('referenceImage').files[0];
-        
+
         // Show loading
         document.getElementById('generateResult').style.display = 'none';
         document.getElementById('generateLoading').style.display = 'block';
-        
+
         // Use FormData to support image upload
         const formData = new FormData();
         formData.append('product_name', productName);
@@ -429,15 +429,15 @@
         if (referenceFile) {
             formData.append('reference_image', referenceFile);
         }
-        
+
         try {
             const response = await fetch('/api/ai-image/generate', {
                 method: 'POST',
                 body: formData
             });
-            
+
             const result = await response.json();
-            
+
             if (result.success) {
                 document.getElementById('generateOutput').src = result.image_url;
                 document.getElementById('generateDownload').href = result.image_url;
@@ -456,10 +456,10 @@
     // Compliance Check Form
     document.getElementById('complianceForm').addEventListener('submit', async (e) => {
         e.preventDefault();
-        
+
         const fileInput = document.getElementById('complianceImage');
         const file = fileInput.files[0];
-        
+
         // Show preview
         const reader = new FileReader();
         reader.onload = (e) => {
@@ -467,22 +467,22 @@
             document.getElementById('compliancePreview').style.display = 'block';
         };
         reader.readAsDataURL(file);
-        
+
         // Show loading
         document.getElementById('complianceResult').style.display = 'none';
         document.getElementById('complianceLoading').style.display = 'block';
-        
+
         const formData = new FormData();
         formData.append('image', file);
-        
+
         try {
             const response = await fetch('/api/ai-image/check-compliance', {
                 method: 'POST',
                 body: formData
             });
-            
+
             const result = await response.json();
-            
+
             if (result.success) {
                 // Set status alert
                 const statusDiv = document.getElementById('complianceStatus');
@@ -493,11 +493,11 @@
                     statusDiv.className = 'alert alert-danger mb-3';
                     statusDiv.innerHTML = '<i data-feather="x-circle"></i> Image has compliance issues';
                 }
-                
+
                 // Set dimensions and format
                 document.getElementById('complianceDimensions').innerHTML = '<strong>Dimensions:</strong> ' + result.dimensions;
                 document.getElementById('complianceFormat').innerHTML = '<strong>Format:</strong> ' + result.format;
-                
+
                 // Show issues
                 if (result.issues && result.issues.length > 0) {
                     const issuesList = document.getElementById('complianceIssues');
@@ -506,7 +506,7 @@
                 } else {
                     document.getElementById('complianceIssuesSection').style.display = 'none';
                 }
-                
+
                 // Show warnings
                 if (result.warnings && result.warnings.length > 0) {
                     const warningsList = document.getElementById('complianceWarnings');
@@ -515,7 +515,7 @@
                 } else {
                     document.getElementById('complianceWarningsSection').style.display = 'none';
                 }
-                
+
                 document.getElementById('complianceResult').style.display = 'block';
                 feather.replace();
             } else {

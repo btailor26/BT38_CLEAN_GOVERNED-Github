@@ -24,19 +24,19 @@
             <div class="card-body">
                 <form method="POST" action="{{ url_for('routes.create_listing') }}" id="createListingForm">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                    
+
                     <!-- Product Selection -->
                     <h5 class="mb-3">
                         <i data-feather="box" class="me-2"></i>
                         Select Product
                     </h5>
-                    
+
                     <div class="mb-3">
                         <label for="warehouse_stock_id" class="form-label">Warehouse Stock <span class="text-danger">*</span></label>
                         <select class="form-select" id="warehouse_stock_id" name="warehouse_stock_id" required onchange="updateProductInfo()">
                             <option value="">Choose a product...</option>
                             {% for item in warehouse_items %}
-                                <option value="{{ item.id }}" 
+                                <option value="{{ item.id }}"
                                         data-sku="{{ item.sku }}"
                                         data-quantity="{{ item.sellable_quantity }}"
                                         data-name="{{ item.product_name or '' }}">
@@ -46,7 +46,7 @@
                         </select>
                         <div class="form-text">Select the warehouse stock item to create listings for</div>
                     </div>
-                    
+
                     <!-- Product Info Display -->
                     <div id="productInfo" class="alert alert-info d-none mb-4">
                         <h6 class="mb-2">Selected Product:</h6>
@@ -54,15 +54,15 @@
                         <div><strong>Available Quantity:</strong> <span id="selectedQuantity"></span></div>
                         <div><strong>Product Name:</strong> <span id="selectedName"></span></div>
                     </div>
-                    
+
                     <hr class="my-4">
-                    
+
                     <!-- Marketplace Selection -->
                     <h5 class="mb-3">
                         <i data-feather="shopping-bag" class="me-2"></i>
                         Select Marketplaces
                     </h5>
-                    
+
                     <div class="mb-3">
                         <label class="form-label">Marketplaces <span class="text-danger">*</span></label>
                         {% if stores %}
@@ -82,27 +82,27 @@
                         {% endif %}
                         <div class="form-text">Select one or more marketplaces to create listings on</div>
                     </div>
-                    
+
                     <hr class="my-4">
-                    
+
                     <!-- Listing Details -->
                     <h5 class="mb-3">
                         <i data-feather="edit" class="me-2"></i>
                         Listing Details
                     </h5>
-                    
+
                     <div class="mb-3">
                         <label for="title" class="form-label">Title <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="title" name="title" required maxlength="500">
                         <div class="form-text">Product title as it will appear on marketplaces</div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="description" class="form-label">Description</label>
                         <textarea class="form-control" id="description" name="description" rows="4"></textarea>
                         <div class="form-text">Detailed product description</div>
                     </div>
-                    
+
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
@@ -121,15 +121,15 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <hr class="my-4">
-                    
+
                     <!-- Sync Settings -->
                     <h5 class="mb-3">
                         <i data-feather="settings" class="me-2"></i>
                         Synchronization Settings
                     </h5>
-                    
+
                     <div class="mb-3">
                         <div class="form-check form-switch">
                             <input class="form-check-input" type="checkbox" id="sync_quantity" name="sync_quantity" checked>
@@ -139,7 +139,7 @@
                             </label>
                         </div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <div class="form-check form-switch">
                             <input class="form-check-input" type="checkbox" id="sync_price" name="sync_price">
@@ -149,7 +149,7 @@
                             </label>
                         </div>
                     </div>
-                    
+
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
@@ -166,9 +166,9 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <hr class="my-4">
-                    
+
                     <!-- Submit Buttons -->
                     <div class="d-flex justify-content-end gap-2">
                         <a href="{{ url_for('routes.listings') }}" class="btn btn-secondary">Cancel</a>
@@ -181,7 +181,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Help Sidebar -->
     <div class="col-md-4">
         <div class="card">
@@ -200,18 +200,18 @@
                     <li>Configure sync settings</li>
                     <li>Click "Create Listing(s)"</li>
                 </ol>
-                
+
                 <hr>
-                
+
                 <h6>Sync Settings</h6>
                 <div class="small">
                     <p><strong>Sync Quantity:</strong> Keeps marketplace stock in sync with your warehouse automatically.</p>
                     <p><strong>Quantity Buffer:</strong> Reduces the visible quantity on marketplaces to maintain safety stock.</p>
                     <p><strong>Maximum Quantity:</strong> Prevents showing too much stock on marketplaces (useful for high-volume items).</p>
                 </div>
-                
+
                 <hr>
-                
+
                 <div class="alert alert-info small mb-0">
                     <i data-feather="info" class="me-2"></i>
                     <strong>Note:</strong> Listings are created in "pending" status. Use the "Push" function to publish them to actual marketplaces.
@@ -226,13 +226,13 @@ function updateProductInfo() {
     const select = document.getElementById('warehouse_stock_id');
     const option = select.options[select.selectedIndex];
     const productInfo = document.getElementById('productInfo');
-    
+
     if (option.value) {
         document.getElementById('selectedSku').textContent = option.dataset.sku;
         document.getElementById('selectedQuantity').textContent = option.dataset.quantity;
         document.getElementById('selectedName').textContent = option.dataset.name || 'N/A';
         productInfo.classList.remove('d-none');
-        
+
         // Auto-populate title if empty
         const titleInput = document.getElementById('title');
         if (!titleInput.value && option.dataset.name) {

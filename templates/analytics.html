@@ -7,7 +7,7 @@
     .analytics-container {
         padding: 20px;
     }
-    
+
     .metric-card {
         background: white;
         border-radius: 8px;
@@ -15,65 +15,65 @@
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         margin-bottom: 20px;
     }
-    
+
     .metric-card h3 {
         font-size: 16px;
         color: #666;
         margin: 0 0 10px 0;
         font-weight: 500;
     }
-    
+
     .metric-value {
         font-size: 32px;
         font-weight: 700;
         margin: 0;
     }
-    
+
     .metric-value.positive {
         color: #28a745;
     }
-    
+
     .metric-value.negative {
         color: #dc3545;
     }
-    
+
     .metric-value.neutral {
         color: #333;
     }
-    
+
     .metric-subtitle {
         font-size: 14px;
         color: #999;
         margin-top: 5px;
     }
-    
+
     .location-breakdown {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
         gap: 15px;
         margin-top: 20px;
     }
-    
+
     .location-card {
         background: #f8f9fa;
         padding: 15px;
         border-radius: 6px;
         border-left: 4px solid #0d6efd;
     }
-    
+
     .location-card h4 {
         font-size: 14px;
         margin: 0 0 10px 0;
         color: #333;
     }
-    
+
     .location-stat {
         display: flex;
         justify-content: space-between;
         margin: 5px 0;
         font-size: 13px;
     }
-    
+
     .data-table {
         width: 100%;
         background: white;
@@ -81,7 +81,7 @@
         overflow: hidden;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
-    
+
     .data-table th {
         background: #f8f9fa;
         padding: 12px;
@@ -91,17 +91,17 @@
         color: #666;
         border-bottom: 2px solid #dee2e6;
     }
-    
+
     .data-table td {
         padding: 12px;
         border-bottom: 1px solid #f0f0f0;
         font-size: 13px;
     }
-    
+
     .data-table tr:hover {
         background: #f8f9fa;
     }
-    
+
     .badge-profit {
         background: #d4edda;
         color: #155724;
@@ -110,7 +110,7 @@
         font-size: 12px;
         font-weight: 600;
     }
-    
+
     .badge-loss {
         background: #f8d7da;
         color: #721c24;
@@ -119,7 +119,7 @@
         font-size: 12px;
         font-weight: 600;
     }
-    
+
     .alert-card {
         background: #fff3cd;
         border-left: 4px solid #ffc107;
@@ -127,20 +127,20 @@
         margin-bottom: 15px;
         border-radius: 4px;
     }
-    
+
     .section-header {
         display: flex;
         justify-content: space-between;
         align-items: center;
         margin-bottom: 20px;
     }
-    
+
     .section-header h2 {
         font-size: 24px;
         font-weight: 600;
         margin: 0;
     }
-    
+
     .metric-grid {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -212,7 +212,7 @@
     <div class="metric-card" style="border-left: 4px solid #28a745;">
         <h3>🛒 Marketplace Sales (Canonical Source)</h3>
         <p class="metric-subtitle" style="margin-bottom: 15px;">Based on processed marketplace orders - the authoritative sales data</p>
-        
+
         <div class="metric-grid" style="margin-bottom: 0;">
             <div style="background: #f8f9fa; padding: 15px; border-radius: 6px;">
                 <h4 style="margin: 0 0 5px 0; font-size: 14px; color: #666;">Total Orders</h4>
@@ -231,7 +231,7 @@
                 <p style="margin: 0; font-size: 24px; font-weight: 700; color: {% if canonical_sales.total_profit >= 0 %}#28a745{% else %}#dc3545{% endif %};">£{{ "%.2f"|format(canonical_sales.total_profit) }}</p>
             </div>
         </div>
-        
+
         {% if canonical_sales.by_store %}
         <div style="margin-top: 20px;">
             <h4 style="font-size: 14px; color: #666; margin-bottom: 10px;">Sales by Store</h4>
@@ -261,7 +261,7 @@
             </table>
         </div>
         {% endif %}
-        
+
         {% if canonical_sales.last_sale_at %}
         <p style="color: #666; font-size: 12px; margin-top: 15px;">Last sale: {{ canonical_sales.last_sale_at.strftime('%d %b %Y %H:%M') }}</p>
         {% endif %}

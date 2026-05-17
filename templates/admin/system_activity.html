@@ -465,7 +465,7 @@ document.addEventListener('DOMContentLoaded', function() {
     feather.replace();
     loadDashboardStats();
     loadSyncJobs();
-    
+
     document.querySelectorAll('button[data-bs-toggle="tab"]').forEach(tab => {
         tab.addEventListener('shown.bs.tab', function(e) {
             const target = e.target.getAttribute('data-bs-target');
@@ -480,7 +480,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 function runBackfill() {
     if (!confirm('This will import historical data from all tables into the unified System Events log. Continue?')) return;
-    
+
     fetch('/admin/api/backfill', {method: 'POST'})
         .then(r => r.json())
         .then(data => {
@@ -514,7 +514,7 @@ function loadDashboardStats() {
             document.getElementById('stat-failed-jobs').textContent = data.sync_failed_24h || 0;
             document.getElementById('stat-api-errors').textContent = data.api_errors_24h || 0;
             document.getElementById('stat-config-changes').textContent = data.config_changes_7d || 0;
-            
+
             storesData = data.stores || [];
             const storeSelect = document.getElementById('filter-sync-store');
             storeSelect.innerHTML = '<option value="">All Stores</option>';
@@ -583,31 +583,31 @@ function loadSyncJobs(page = 1) {
     const storeId = document.getElementById('filter-sync-store').value;
     const status = document.getElementById('filter-sync-status').value;
     const jobType = document.getElementById('filter-sync-type').value;
-    
+
     let url = `/admin/api/sync-jobs?page=${page}`;
     if (dateFrom) url += `&date_from=${dateFrom}`;
     if (dateTo) url += `&date_to=${dateTo}`;
     if (storeId) url += `&store_id=${storeId}`;
     if (status) url += `&status=${status}`;
     if (jobType) url += `&job_type=${jobType}`;
-    
+
     fetch(url)
         .then(r => r.json())
         .then(data => {
             const tbody = document.getElementById('sync-jobs-body');
             document.getElementById('sync-jobs-count').textContent = `${data.total || 0} records found`;
-            
+
             if (dateFrom || dateTo) {
                 document.getElementById('sync-jobs-date-range').textContent = `Showing: ${dateFrom || 'start'} to ${dateTo || 'now'}`;
             } else {
                 document.getElementById('sync-jobs-date-range').textContent = 'Showing: Last 24 hours (default)';
             }
-            
+
             if (!data.items || data.items.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">No sync jobs found. Try adjusting filters or run Backfill to import historical data.</td></tr>';
                 return;
             }
-            
+
             tbody.innerHTML = data.items.map(item => `
                 <tr>
                     <td><small>${formatDate(item.started_at)}</small></td>
@@ -621,7 +621,7 @@ function loadSyncJobs(page = 1) {
                     <td><small class="text-muted">${(item.message || '').substring(0, 50)}</small></td>
                 </tr>
             `).join('');
-            
+
             renderPagination('sync-jobs-pagination', data, loadSyncJobs);
         })
         .catch(e => {
@@ -634,30 +634,30 @@ function loadAPIErrors(page = 1) {
     const dateTo = document.getElementById('filter-error-date-to').value;
     const provider = document.getElementById('filter-error-provider').value;
     const errorCode = document.getElementById('filter-error-code').value;
-    
+
     let url = `/admin/api/api-errors?page=${page}`;
     if (dateFrom) url += `&date_from=${dateFrom}`;
     if (dateTo) url += `&date_to=${dateTo}`;
     if (provider) url += `&provider=${provider}`;
     if (errorCode) url += `&error_code=${encodeURIComponent(errorCode)}`;
-    
+
     fetch(url)
         .then(r => r.json())
         .then(data => {
             const tbody = document.getElementById('api-errors-body');
             document.getElementById('api-errors-count').textContent = `${data.total || 0} records found`;
-            
+
             if (dateFrom || dateTo) {
                 document.getElementById('api-errors-date-range').textContent = `Showing: ${dateFrom || 'start'} to ${dateTo || 'now'}`;
             } else {
                 document.getElementById('api-errors-date-range').textContent = 'Showing: Last 24 hours (default)';
             }
-            
+
             if (!data.items || data.items.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">No API errors found</td></tr>';
                 return;
             }
-            
+
             tbody.innerHTML = data.items.map(item => `
                 <tr onclick="showDetail('API Error', ${JSON.stringify(item).replace(/"/g, '&quot;')})" style="cursor:pointer">
                     <td><small>${formatDate(item.created_at)}</small></td>
@@ -669,7 +669,7 @@ function loadAPIErrors(page = 1) {
                     <td><small class="text-muted">${(item.message || '').substring(0, 50)}</small></td>
                 </tr>
             `).join('');
-            
+
             renderPagination('api-errors-pagination', data, loadAPIErrors);
         })
         .catch(e => {
@@ -682,30 +682,30 @@ function loadConfigChanges(page = 1) {
     const dateTo = document.getElementById('filter-config-date-to').value;
     const entityType = document.getElementById('filter-config-entity').value;
     const actorType = document.getElementById('filter-config-actor').value;
-    
+
     let url = `/admin/api/config-changes?page=${page}`;
     if (dateFrom) url += `&date_from=${dateFrom}`;
     if (dateTo) url += `&date_to=${dateTo}`;
     if (entityType) url += `&entity_type=${entityType}`;
     if (actorType) url += `&actor_type=${actorType}`;
-    
+
     fetch(url)
         .then(r => r.json())
         .then(data => {
             const tbody = document.getElementById('config-changes-body');
             document.getElementById('config-changes-count').textContent = `${data.total || 0} records found`;
-            
+
             if (dateFrom || dateTo) {
                 document.getElementById('config-changes-date-range').textContent = `Showing: ${dateFrom || 'start'} to ${dateTo || 'now'}`;
             } else {
                 document.getElementById('config-changes-date-range').textContent = 'Showing: Last 7 days (default)';
             }
-            
+
             if (!data.items || data.items.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No config changes found</td></tr>';
                 return;
             }
-            
+
             tbody.innerHTML = data.items.map(item => `
                 <tr>
                     <td><small>${formatDate(item.changed_at)}</small></td>
@@ -719,7 +719,7 @@ function loadConfigChanges(page = 1) {
                     </td>
                 </tr>
             `).join('');
-            
+
             feather.replace();
             renderPagination('config-changes-pagination', data, loadConfigChanges);
         })
@@ -733,30 +733,30 @@ function loadAgentRuns(page = 1) {
     const dateTo = document.getElementById('filter-agent-date-to').value;
     const status = document.getElementById('filter-agent-status').value;
     const agent = document.getElementById('filter-agent-name').value;
-    
+
     let url = `/admin/api/agent-runs?page=${page}`;
     if (dateFrom) url += `&date_from=${dateFrom}`;
     if (dateTo) url += `&date_to=${dateTo}`;
     if (status) url += `&status=${status}`;
     if (agent) url += `&agent=${encodeURIComponent(agent)}`;
-    
+
     fetch(url)
         .then(r => r.json())
         .then(data => {
             const tbody = document.getElementById('agent-runs-body');
             document.getElementById('agent-runs-count').textContent = `${data.total || 0} records found`;
-            
+
             if (dateFrom || dateTo) {
                 document.getElementById('agent-runs-date-range').textContent = `Showing: ${dateFrom || 'start'} to ${dateTo || 'now'}`;
             } else {
                 document.getElementById('agent-runs-date-range').textContent = 'Showing: Last 7 days (default)';
             }
-            
+
             if (!data.items || data.items.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No agent runs found</td></tr>';
                 return;
             }
-            
+
             tbody.innerHTML = data.items.map(item => `
                 <tr>
                     <td><small>${formatDate(item.started_at)}</small></td>
@@ -771,7 +771,7 @@ function loadAgentRuns(page = 1) {
                     </td>
                 </tr>
             `).join('');
-            
+
             feather.replace();
             renderPagination('agent-runs-pagination', data, loadAgentRuns);
         })
@@ -811,31 +811,31 @@ function loadSystemEvents(page = 1) {
     const category = document.getElementById('filter-events-category').value;
     const actor = document.getElementById('filter-events-actor').value;
     const entityType = document.getElementById('filter-events-entity').value;
-    
+
     let url = `/admin/api/system-events?page=${page}`;
     if (dateFrom) url += `&date_from=${dateFrom}`;
     if (dateTo) url += `&date_to=${dateTo}`;
     if (category) url += `&category=${category}`;
     if (actor) url += `&actor=${actor}`;
     if (entityType) url += `&entity_type=${entityType}`;
-    
+
     fetch(url)
         .then(r => r.json())
         .then(data => {
             const tbody = document.getElementById('system-events-body');
             document.getElementById('system-events-count').textContent = `${data.total || 0} records found`;
-            
+
             if (dateFrom || dateTo) {
                 document.getElementById('system-events-date-range').textContent = `Showing: ${dateFrom || 'start'} to ${dateTo || 'now'}`;
             } else {
                 document.getElementById('system-events-date-range').textContent = 'Showing: Last 24 hours (default)';
             }
-            
+
             if (!data.items || data.items.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="6" class="text-center text-muted">No events found. Click "Backfill Historical Data" to import existing logs.</td></tr>';
                 return;
             }
-            
+
             tbody.innerHTML = data.items.map(item => `
                 <tr onclick="showDetail('System Event', ${JSON.stringify(item).replace(/"/g, '&quot;')})" style="cursor:pointer">
                     <td><small>${formatDate(item.timestamp)}</small></td>
@@ -850,7 +850,7 @@ function loadSystemEvents(page = 1) {
                     </td>
                 </tr>
             `).join('');
-            
+
             feather.replace();
             renderPagination('system-events-pagination', data, loadSystemEvents);
         })
@@ -865,26 +865,26 @@ function renderPagination(containerId, data, loadFunc) {
         container.innerHTML = '';
         return;
     }
-    
+
     let html = '<ul class="pagination pagination-sm mb-0">';
     const maxPages = 10;
     const startPage = Math.max(1, data.page - Math.floor(maxPages / 2));
     const endPage = Math.min(data.pages, startPage + maxPages - 1);
-    
+
     if (data.page > 1) {
         html += `<li class="page-item"><a class="page-link" href="#" onclick="${loadFunc.name}(${data.page - 1}); return false;">&laquo;</a></li>`;
     }
-    
+
     for (let i = startPage; i <= endPage; i++) {
         html += `<li class="page-item ${i === data.page ? 'active' : ''}">
             <a class="page-link" href="#" onclick="${loadFunc.name}(${i}); return false;">${i}</a>
         </li>`;
     }
-    
+
     if (data.page < data.pages) {
         html += `<li class="page-item"><a class="page-link" href="#" onclick="${loadFunc.name}(${data.page + 1}); return false;">&raquo;</a></li>`;
     }
-    
+
     html += '</ul>';
     container.innerHTML = html;
 }
@@ -899,7 +899,7 @@ function showDiff(item) {
     let content = `SUMMARY: ${item.summary}\n\n`;
     content += `BEFORE:\n${JSON.stringify(item.before_json, null, 2)}\n\n`;
     content += `AFTER:\n${JSON.stringify(item.after_json, null, 2)}`;
-    
+
     document.getElementById('detailModalTitle').textContent = 'Config Change Diff';
     document.getElementById('detailModalContent').textContent = content;
     new bootstrap.Modal(document.getElementById('detailModal')).show();
@@ -907,7 +907,7 @@ function showDiff(item) {
 
 function exportLogs(logType, format) {
     let url = `/admin/api/export/${logType}?format=${format}`;
-    
+
     if (logType === 'sync_jobs') {
         const dateFrom = document.getElementById('filter-sync-date-from').value;
         const dateTo = document.getElementById('filter-sync-date-to').value;
@@ -958,7 +958,7 @@ function exportLogs(logType, format) {
         if (actor) url += `&actor=${actor}`;
         if (entityType) url += `&entity_type=${entityType}`;
     }
-    
+
     window.location.href = url;
 }
 </script>

@@ -22,7 +22,7 @@
                 </div>
                 <div class="col-md-4 mb-3">
                     <label for="order_date" class="form-label">Order Date *</label>
-                    <input type="date" class="form-control" id="order_date" name="order_date" 
+                    <input type="date" class="form-control" id="order_date" name="order_date"
                            value="{{ today }}" required>
                 </div>
                 <div class="col-md-4 mb-3">
@@ -30,14 +30,14 @@
                     <input type="date" class="form-control" id="expected_date" name="expected_date">
                 </div>
             </div>
-            
+
             <div class="mb-3">
                 <label for="notes" class="form-label">Notes</label>
                 <textarea class="form-control" id="notes" name="notes" rows="2"></textarea>
             </div>
-            
+
             <hr>
-            
+
             <h4 class="mb-3">Line Items</h4>
             <div id="lineItems">
                 <div class="row mb-2 line-item">
@@ -64,11 +64,11 @@
                     </div>
                 </div>
             </div>
-            
+
             <button type="button" class="btn btn-secondary btn-sm mb-3" id="addItem">
                 <i data-feather="plus"></i> Add Item
             </button>
-            
+
             <div class="row">
                 <div class="col-md-8"></div>
                 <div class="col-md-4">
@@ -79,9 +79,9 @@
                     </div>
                 </div>
             </div>
-            
+
             <hr>
-            
+
             <div class="d-flex justify-content-between">
                 <a href="{{ url_for('routes.purchase_orders') }}" class="btn btn-secondary">
                     <i data-feather="x"></i> Cancel
@@ -97,10 +97,10 @@
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         feather.replace();
-        
+
         const lineItemsContainer = document.getElementById('lineItems');
         const addItemBtn = document.getElementById('addItem');
-        
+
         function updateTotal() {
             let total = 0;
             document.querySelectorAll('.line-item').forEach(item => {
@@ -110,7 +110,7 @@
             });
             document.getElementById('totalAmount').textContent = total.toFixed(2);
         }
-        
+
         function updateRemoveButtons() {
             const items = document.querySelectorAll('.line-item');
             items.forEach((item, index) => {
@@ -118,7 +118,7 @@
                 removeBtn.disabled = items.length === 1;
             });
         }
-        
+
         addItemBtn.addEventListener('click', function() {
             const newItem = lineItemsContainer.firstElementChild.cloneNode(true);
             newItem.querySelectorAll('input').forEach(input => input.value = '');
@@ -126,7 +126,7 @@
             feather.replace();
             updateRemoveButtons();
         });
-        
+
         lineItemsContainer.addEventListener('click', function(e) {
             if (e.target.closest('.remove-item')) {
                 e.target.closest('.line-item').remove();
@@ -135,13 +135,13 @@
                 feather.replace();
             }
         });
-        
+
         lineItemsContainer.addEventListener('input', function(e) {
             if (e.target.classList.contains('qty-input') || e.target.classList.contains('cost-input')) {
                 updateTotal();
             }
         });
-        
+
         updateTotal();
         updateRemoveButtons();
     });

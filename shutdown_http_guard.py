@@ -15,6 +15,7 @@ SHUTDOWN_HTTP_GUARD_ENABLED = True
 BLOCKED_EXACT_PATHS = {
     "/api/push-sku",
     "/api/classify-listings",
+    "/push_stock",
     "/api/diagnostics/ebay/health",
     "/api/diagnostics/ebay/policies",
     "/api/diagnostics/ebay/raw-import",
@@ -34,6 +35,10 @@ BLOCKED_PREFIXES = (
     "/api/test/ebay-push/",
     "/api/sync/amazon/sku/",
     "/api/sync/ebay/sku/",
+    "/stores/sync/",
+    "/groups/",
+    "/push_stock/",
+    "/api/push/",
 )
 
 
@@ -53,14 +58,9 @@ def install_shutdown_http_guard() -> bool:
 
     try:
         from flask import Flask, jsonify, request
-    except Exception as exc:  # pragma: no cover - Flask is absent in lightweight CI
-        HTTP_GUARD_INSTALLED = True
-        logging.warning(
-            "[SHUTDOWN_HTTP_GUARD] Flask/request unavailable; "
-            "no HTTP server can run in this interpreter: %s",
-            exc,
-        )
-        return True
+    except Exception as exc:  # pragma: no cover - dependency install failure
+        logging.error("[SHUTDOWN_HTTP_GUARD] Flask/request unavailable; guard not installed: %s", exc)
+        return False
 
     original_preprocess_request = Flask.preprocess_request
 
