@@ -24,7 +24,7 @@
             <div class="card-body">
                 <form method="POST" action="{{ url_for('routes.edit_listing', listing_id=listing.id) }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                    
+
                     <!-- Listing Info -->
                     <div class="alert alert-info mb-4">
                         <h6 class="mb-2">Listing Information:</h6>
@@ -33,7 +33,7 @@
                         <div><strong>External ID:</strong> {{ listing.external_listing_id }}</div>
                         {% if listing.warehouse_stock %}
                         <div class="mt-2 p-2 bg-light rounded">
-                            <strong>Warehouse Quantity:</strong> 
+                            <strong>Warehouse Quantity:</strong>
                             <span class="badge bg-primary fs-6">{{ listing.warehouse_stock.sellable_quantity }}</span>
                             <span class="badge bg-secondary ms-2">
                                 <i data-feather="lock" style="width: 12px; height: 12px;"></i> Managed by Product Linking
@@ -46,23 +46,23 @@
                         </div>
                         {% endif %}
                     </div>
-                    
+
                     <!-- Listing Details -->
                     <h5 class="mb-3">
                         <i data-feather="edit" class="me-2"></i>
                         Listing Details
                     </h5>
-                    
+
                     <div class="mb-3">
                         <label for="title" class="form-label">Title <span class="text-danger">*</span></label>
                         <input type="text" class="form-control" id="title" name="title" value="{{ listing.title }}" required maxlength="500">
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="description" class="form-label">Description</label>
                         <textarea class="form-control" id="description" name="description" rows="4">{{ listing.description or '' }}</textarea>
                     </div>
-                    
+
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
@@ -81,15 +81,15 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <hr class="my-4">
-                    
+
                     <!-- Sync Settings -->
                     <h5 class="mb-3">
                         <i data-feather="settings" class="me-2"></i>
                         Synchronization Settings
                     </h5>
-                    
+
                     <div class="mb-3">
                         <div class="form-check form-switch">
                             <input class="form-check-input" type="checkbox" id="sync_quantity" name="sync_quantity" {% if listing.sync_quantity %}checked{% endif %}>
@@ -99,7 +99,7 @@
                             </label>
                         </div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <div class="form-check form-switch">
                             <input class="form-check-input" type="checkbox" id="sync_price" name="sync_price" {% if listing.sync_price %}checked{% endif %}>
@@ -109,7 +109,7 @@
                             </label>
                         </div>
                     </div>
-                    
+
                     <div class="row">
                         <div class="col-md-6">
                             <div class="mb-3">
@@ -126,15 +126,15 @@
                             </div>
                         </div>
                     </div>
-                    
+
                     <hr class="my-4">
-                    
+
                     <!-- Status Settings -->
                     <h5 class="mb-3">
                         <i data-feather="activity" class="me-2"></i>
                         Status Settings
                     </h5>
-                    
+
                     <div class="mb-3">
                         <div class="form-check form-switch">
                             <input class="form-check-input" type="checkbox" id="is_active" name="is_active" {% if listing.is_active %}checked{% endif %}>
@@ -144,7 +144,7 @@
                             </label>
                         </div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <label for="push_state" class="form-label">Push State</label>
                         <select class="form-select" id="push_state" name="push_state">
@@ -155,15 +155,15 @@
                         </select>
                         <div class="form-text">Control whether this listing can be pushed to marketplace</div>
                     </div>
-                    
+
                     <hr class="my-4">
-                    
+
                     <!-- Push Status (Read-only) -->
                     {% if listing.last_push_at %}
                     <div class="alert alert-secondary">
                         <h6 class="mb-2">Last Push Information:</h6>
                         <div><strong>Date:</strong> {{ listing.last_push_at.strftime('%Y-%m-%d %H:%M:%S') }}</div>
-                        <div><strong>Status:</strong> 
+                        <div><strong>Status:</strong>
                             {% if listing.last_push_status == 'success' %}
                                 <span class="badge bg-success">Success</span>
                             {% elif listing.last_push_status == 'error' %}
@@ -178,7 +178,7 @@
                         {% endif %}
                     </div>
                     {% endif %}
-                    
+
                     <!-- Submit Buttons -->
                     <div class="d-flex justify-content-end gap-2">
                         <a href="{{ url_for('routes.listings') }}" class="btn btn-secondary">Cancel</a>
@@ -191,7 +191,7 @@
             </div>
         </div>
     </div>
-    
+
     <!-- Info Sidebar -->
     <div class="col-md-4">
         <div class="card mb-3">
@@ -209,9 +209,9 @@
                 <div class="small text-muted">
                     This is the quantity that will be shown on the marketplace, calculated from warehouse stock minus buffer and applying any limits.
                 </div>
-                
+
                 <hr>
-                
+
                 <div class="mb-2">
                     <strong>Needs Push:</strong>
                     {% if listing.needs_push %}
@@ -225,7 +225,7 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="card">
             <div class="card-header">
                 <h5 class="mb-0">

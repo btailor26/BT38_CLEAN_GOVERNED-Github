@@ -27,24 +27,24 @@
             <div class="card-body">
                 <form method="POST" action="{{ url_for('routes.warehouse_bulk_adjust') }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                    
+
                     <div class="mb-4">
                         <label for="reason" class="form-label">Adjustment Reason</label>
-                        <input type="text" 
-                               class="form-control" 
-                               id="reason" 
-                               name="reason" 
+                        <input type="text"
+                               class="form-control"
+                               id="reason"
+                               name="reason"
                                placeholder="e.g., Annual stock take, Cycle count, Damaged goods write-off"
                                required>
                         <div class="form-text">This reason will be applied to all adjustments in this batch</div>
                     </div>
-                    
+
                     <div class="mb-4">
                         <label for="adjustments_data" class="form-label">Adjustment Data</label>
-                        <textarea class="form-control font-monospace" 
-                                  id="adjustments_data" 
-                                  name="adjustments_data" 
-                                  rows="15" 
+                        <textarea class="form-control font-monospace"
+                                  id="adjustments_data"
+                                  name="adjustments_data"
+                                  rows="15"
                                   placeholder="SKU1, 50, set&#10;SKU2, 10, increase&#10;SKU3, 5, decrease"
                                   required></textarea>
                         <div class="form-text">
@@ -53,7 +53,7 @@
                             Valid types: <code>set</code>, <code>increase</code>, <code>decrease</code>
                         </div>
                     </div>
-                    
+
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-warning">
                             <i data-feather="save" class="me-1"></i>
@@ -72,7 +72,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-4">
         <div class="card mb-4">
             <div class="card-header">
@@ -85,25 +85,25 @@
                 <h6>Format</h6>
                 <p class="small mb-3">Enter each adjustment on a new line using the format:<br>
                 <code>SKU, Quantity, Type</code></p>
-                
+
                 <h6>Adjustment Types</h6>
                 <ul class="small mb-3">
                     <li><code>set</code> - Set to exact quantity</li>
                     <li><code>increase</code> - Add to current stock</li>
                     <li><code>decrease</code> - Remove from current stock</li>
                 </ul>
-                
+
                 <h6>Examples</h6>
                 <pre class="small bg-light p-2 rounded"><code>ABC123, 100, set
 DEF456, 25, increase
 GHI789, 10, decrease</code></pre>
-                
+
                 <div class="alert alert-warning small mt-3">
                     <strong>Warning:</strong> Bulk adjustments cannot be undone. Please verify your data before processing.
                 </div>
             </div>
         </div>
-        
+
         <div class="card">
             <div class="card-header">
                 <h5 class="mb-0">
@@ -153,21 +153,21 @@ GHI789, 10, decrease</code></pre>
 function validateData() {
     const data = document.getElementById('adjustments_data').value;
     const lines = data.trim().split('\n');
-    
+
     let results = {
         valid: [],
         invalid: [],
         warnings: []
     };
-    
+
     lines.forEach((line, index) => {
         const lineNum = index + 1;
         const trimmedLine = line.trim();
-        
+
         if (trimmedLine === '') return;
-        
+
         const parts = trimmedLine.split(',').map(p => p.trim());
-        
+
         if (parts.length < 3) {
             results.invalid.push({
                 line: lineNum,
@@ -176,9 +176,9 @@ function validateData() {
             });
             return;
         }
-        
+
         const [sku, quantity, type] = parts;
-        
+
         // Validate SKU
         if (!sku || sku.length === 0) {
             results.invalid.push({
@@ -188,7 +188,7 @@ function validateData() {
             });
             return;
         }
-        
+
         // Validate quantity
         const qty = parseInt(quantity);
         if (isNaN(qty) || qty < 0) {
@@ -199,7 +199,7 @@ function validateData() {
             });
             return;
         }
-        
+
         // Validate type
         const validTypes = ['set', 'increase', 'decrease'];
         if (!validTypes.includes(type.toLowerCase())) {
@@ -210,7 +210,7 @@ function validateData() {
             });
             return;
         }
-        
+
         // Check for warnings
         if (qty > 1000) {
             results.warnings.push({
@@ -219,7 +219,7 @@ function validateData() {
                 warning: `Large quantity (${qty}) - please verify`
             });
         }
-        
+
         results.valid.push({
             line: lineNum,
             sku: sku,
@@ -227,61 +227,61 @@ function validateData() {
             type: type.toLowerCase()
         });
     });
-    
+
     displayValidationResults(results);
 }
 
 function displayValidationResults(results) {
     const container = document.getElementById('validationResults');
     let html = '';
-    
+
     if (results.valid.length > 0) {
         html += `<div class="alert alert-success">
             <h6><i data-feather="check-circle" size="16"></i> Valid Entries (${results.valid.length})</h6>
             <div class="small">`;
-        
+
         results.valid.forEach(item => {
             html += `<div>Line ${item.line}: ${item.sku} → ${item.type} ${item.quantity}</div>`;
         });
-        
+
         html += '</div></div>';
     }
-    
+
     if (results.warnings.length > 0) {
         html += `<div class="alert alert-warning">
             <h6><i data-feather="alert-triangle" size="16"></i> Warnings (${results.warnings.length})</h6>
             <div class="small">`;
-        
+
         results.warnings.forEach(item => {
             html += `<div>Line ${item.line}: ${item.warning}<br><code>${item.content}</code></div>`;
         });
-        
+
         html += '</div></div>';
     }
-    
+
     if (results.invalid.length > 0) {
         html += `<div class="alert alert-danger">
             <h6><i data-feather="x-circle" size="16"></i> Invalid Entries (${results.invalid.length})</h6>
             <div class="small">`;
-        
+
         results.invalid.forEach(item => {
             html += `<div>Line ${item.line}: ${item.error}<br><code>${item.content}</code></div>`;
         });
-        
+
         html += '</div></div>';
     }
-    
+
     if (results.valid.length === 0 && results.invalid.length === 0) {
         html = '<div class="alert alert-info">No data to validate. Please enter adjustment data first.</div>';
     }
-    
+
     container.innerHTML = html;
-    
+
     // Update feather icons
     if (typeof feather !== 'undefined') {
         feather.replace();
     }
-    
+
     // Show modal
     const modal = new bootstrap.Modal(document.getElementById('validationModal'));
     modal.show();
@@ -290,7 +290,7 @@ function displayValidationResults(results) {
 function loadTemplate(templateType) {
     let template = '';
     let reason = '';
-    
+
     switch (templateType) {
         case 'stocktake':
             template = `# Stock Take Adjustments - Replace with actual SKUs and quantities
@@ -300,16 +300,16 @@ EXAMPLE-SKU-002, 0, set
 EXAMPLE-SKU-003, 123, set`;
             reason = 'Annual stock take adjustment';
             break;
-            
+
         case 'restock':
             template = `# Restock Adjustments - Replace with actual SKUs and quantities
-# Format: SKU, Quantity, increase  
+# Format: SKU, Quantity, increase
 EXAMPLE-SKU-001, 50, increase
 EXAMPLE-SKU-002, 25, increase
 EXAMPLE-SKU-003, 100, increase`;
             reason = 'Inventory restock delivery';
             break;
-            
+
         case 'writeoff':
             template = `# Write-off Adjustments - Replace with actual SKUs and quantities
 # Format: SKU, Quantity, decrease
@@ -319,7 +319,7 @@ EXAMPLE-SKU-003, 1, decrease`;
             reason = 'Damaged goods write-off';
             break;
     }
-    
+
     document.getElementById('adjustments_data').value = template;
     document.getElementById('reason').value = reason;
 }

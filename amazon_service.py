@@ -1,98 +1,99 @@
-"""
-BT38 Amazon marketplace service disabled.
+"""BT38 Amazon legacy marketplace service disabled during shutdown proof."""
 
-Temporary fail-closed compatibility shell for shutdown phase.
-Amazon FBA, Amazon FBM, Amazon order import, Amazon listing import, Amazon feed
-updates, and every direct Amazon marketplace call are blocked here.
+from typing import Any, Dict
 
-New governed execution may only be added after shutdown tests pass.
-"""
+from old_path_shutdown import (
+    GOVERNED_PATH_REQUIRED,
+    MARKETPLACE_EXECUTION_DISABLED,
+    OLD_SYNC_DISABLED,
+    DisabledMarketplaceService,
+    disabled_response,
+)
 
-import logging
-from typing import Any, Dict, Tuple
-
-MARKETPLACE_EXECUTION_DISABLED = True
-AMAZON_MARKETPLACE_DISABLED = True
-
-MARKETPLACE_REGION = {
-    "A1F83G8C2ARO7P": "EU",
-    "A1PA6795UKMFR9": "EU",
-    "A13V1IB3VIYZZH": "EU",
-    "A1RKKUPIHCS9HS": "EU",
-    "APJ6JRA9NG5V4": "EU",
-    "ATVPDKIKX0DER": "NA",
-    "A2EUQ1WTGCTBG2": "NA",
-    "A1AM78C64UM0Y8": "NA",
-}
-
-REGION_HOST = {
-    "EU": "sellingpartnerapi-eu.amazon.com",
-    "NA": "sellingpartnerapi-na.amazon.com",
-    "FE": "sellingpartnerapi-fe.amazon.com",
-}
+AMAZON_SERVICE_DISABLED = True
+LEGACY_AMAZON_MARKETPLACE_DISABLED = True
 
 
-def resolve_region_host(marketplace_id: str):
-    region = MARKETPLACE_REGION.get(marketplace_id, "EU")
-    return region, REGION_HOST.get(region, REGION_HOST["EU"])
+class AmazonAPIService(DisabledMarketplaceService):
+    """Compatibility shell for retired Amazon API service methods."""
+
+    AMAZON_SERVICE_DISABLED = AMAZON_SERVICE_DISABLED
+    LEGACY_AMAZON_MARKETPLACE_DISABLED = LEGACY_AMAZON_MARKETPLACE_DISABLED
+
+    def update_fbm_inventory_quantity_governed(
+        self,
+        *,
+        store,
+        listing,
+        sku: str,
+        quantity: int,
+        marketplace_id: str = None,
+        fulfillment_channel: str = "MFN",
+        command_id: str = None,
+        approval_id: str = None,
+    ) -> Dict[str, Any]:
+        """Single governed Amazon FBM quantity update method.
+
+        This method is callable only from the governed Amazon FBM adapter. It
+        validates FBM/MFN again, then delegates to a concrete Listings patch
+        implementation if one is present. In this shutdown branch the inherited
+        compatibility fallback remains disabled, so tests monkeypatch this method
+        rather than making live marketplace calls.
+        """
+        channel = (fulfillment_channel or "").strip().upper()
+        if str(sku or "").upper().startswith("FBA-") or channel in {"AFN", "FBA"}:
+            return _blocked(
+                "update_fbm_inventory_quantity_governed",
+                sku=sku,
+                quantity=quantity,
+                reason="FBA/AFN is read-only",
+            )
+        if channel not in {"MFN", "FBM"}:
+            return _blocked(
+                "update_fbm_inventory_quantity_governed",
+                sku=sku,
+                quantity=quantity,
+                reason="Unknown Amazon fulfillment",
+            )
+
+        patch_method = getattr(self, "update_listing_quantity_patch")
+        result = patch_method(
+            store=store,
+            sku=sku,
+            quantity=quantity,
+            marketplace_id=marketplace_id,
+            amazon_fulfillment_channel=channel,
+        )
+        return {
+            "success": bool(_result_success(result)),
+            "ok": bool(_result_success(result)),
+            "method": "update_fbm_inventory_quantity_governed",
+            "delegated_method": "update_listing_quantity_patch",
+            "sku": sku,
+            "quantity": quantity,
+            "marketplace_id": marketplace_id,
+            "command_id": command_id,
+            "approval_id": approval_id,
+            "raw_result": result,
+        }
 
 
-def _disabled_response(action: str) -> Dict[str, Any]:
-    return {
-        "success": False,
-        "ok": False,
-        "execution_blocked": True,
-        "marketplace_disabled": True,
-        "platform": "amazon",
-        "action": action,
-        "error": "Amazon marketplace execution is disabled during governed-path rebuild.",
-    }
+def _result_success(result: Any) -> bool:
+    if isinstance(result, tuple) and result:
+        return bool(result[0])
+    if isinstance(result, dict):
+        return bool(result.get("success") or result.get("ok"))
+    return bool(result)
 
 
-class AmazonAPIService:
-    execution_disabled = True
-    marketplace_disabled = True
-    platform = "amazon"
+def _blocked(action: str, **context: Any) -> Dict[str, Any]:
+    result = disabled_response(action, **context)
+    result["amazon_service_disabled"] = True
+    return result
 
-    def __init__(self, *args, **kwargs):
-        self.logger = logging.getLogger(__name__)
-        self.store = args[0] if args else kwargs.get("store")
-        self.logger.warning("[MARKETPLACE_DISABLED] AmazonAPIService disabled compatibility shell initialized.")
 
-    def _blocked_tuple(self, action: str) -> Tuple[bool, str]:
-        logging.warning("[MARKETPLACE_DISABLED] Amazon action blocked: %s", action)
-        return False, _disabled_response(action)["error"]
+def __getattr__(name: str):
+    def disabled_callable(*args, **kwargs):
+        return _blocked(name, args=args, kwargs=kwargs)
 
-    def _blocked_dict(self, action: str) -> Dict[str, Any]:
-        logging.warning("[MARKETPLACE_DISABLED] Amazon action blocked: %s", action)
-        return _disabled_response(action)
-
-    def authenticate_store(self, *args, **kwargs) -> bool:
-        logging.warning("[MARKETPLACE_DISABLED] Amazon authenticate_store blocked.")
-        return False
-
-    def validate_credentials_format(self, *args, **kwargs):
-        return False, "Amazon marketplace service disabled"
-
-    def sync_inventory_to_amazon(self, *args, **kwargs) -> Tuple[bool, str]:
-        return self._blocked_tuple("sync_inventory_to_amazon")
-
-    def sync_fba_inventory(self, *args, **kwargs) -> Tuple[bool, str]:
-        return self._blocked_tuple("sync_fba_inventory")
-
-    def import_inventory_from_amazon(self, *args, **kwargs):
-        return False, [], "Amazon marketplace service disabled"
-
-    def get_mfn_orders(self, *args, **kwargs) -> Dict[str, Any]:
-        return self._blocked_dict("get_mfn_orders")
-
-    def check_feeds_scope(self, *args, **kwargs) -> Dict[str, Any]:
-        return self._blocked_dict("check_feeds_scope")
-
-    def get_auth_diagnostics(self, *args, **kwargs) -> Dict[str, Any]:
-        return self._blocked_dict("get_auth_diagnostics")
-
-    def __getattr__(self, name: str):
-        def blocked(*args, **kwargs):
-            return self._blocked_dict(name)
-        return blocked
+    return disabled_callable

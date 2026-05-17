@@ -13,15 +13,15 @@
             <i data-feather="arrow-left"></i> Back to Dashboard
         </a>
     </div>
-    
+
     <!-- Search Bar -->
     <div class="row mb-3">
         <div class="col-md-6">
             <form method="GET" action="{{ url_for('routes.low_stock_items') }}" class="input-group">
-                <input type="text" 
-                       class="form-control" 
-                       name="search" 
-                       placeholder="Search by SKU or Location..." 
+                <input type="text"
+                       class="form-control"
+                       name="search"
+                       placeholder="Search by SKU or Location..."
                        value="{{ search_query or '' }}">
                 <button class="btn btn-primary" type="submit">
                     <i data-feather="search"></i> Search
@@ -53,10 +53,10 @@
                         </small>
                     </div>
                     <div>
-                        <input type="checkbox" class="form-check-input me-2" id="selectSupplier{{ supplier_id }}" 
+                        <input type="checkbox" class="form-check-input me-2" id="selectSupplier{{ supplier_id }}"
                                onchange="toggleSupplierItems({{ supplier_id }}, this.checked)">
                         <label for="selectSupplier{{ supplier_id }}">Select All</label>
-                        <button type="submit" name="supplier_id" value="{{ supplier_id }}" 
+                        <button type="submit" name="supplier_id" value="{{ supplier_id }}"
                                 class="btn btn-sm btn-primary ms-3">
                             <i data-feather="shopping-cart"></i> Create PO
                         </button>
@@ -69,7 +69,7 @@
                         <thead>
                             <tr>
                                 <th width="40">
-                                    <input type="checkbox" class="form-check-input" id="selectAllSupplier{{ supplier_id }}" 
+                                    <input type="checkbox" class="form-check-input" id="selectAllSupplier{{ supplier_id }}"
                                            onchange="toggleSupplierItems({{ supplier_id }}, this.checked)">
                                 </th>
                                 <th>SKU</th>
@@ -86,9 +86,9 @@
                             {% for item in data.stock_items %}
                             <tr class="{% if item.available_quantity == 0 %}table-danger{% else %}table-warning{% endif %}">
                                 <td>
-                                    <input type="checkbox" class="form-check-input supplier-{{ supplier_id }}-item" 
-                                           name="selected_items[]" value="{{ item.id }}" 
-                                           data-sku="{{ item.sku }}" 
+                                    <input type="checkbox" class="form-check-input supplier-{{ supplier_id }}-item"
+                                           name="selected_items[]" value="{{ item.id }}"
+                                           data-sku="{{ item.sku }}"
                                            data-qty="{{ item.reorder_quantity if item.reorder_quantity > 0 else 10 }}"
                                            data-cost="{{ item.unit_cost }}">
                                 </td>
@@ -110,10 +110,10 @@
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <input type="number" class="form-control form-control-sm" 
-                                           style="width: 80px;" 
-                                           name="qty_{{ item.id }}" 
-                                           value="{{ item.reorder_quantity if item.reorder_quantity > 0 else 10 }}" 
+                                    <input type="number" class="form-control form-control-sm"
+                                           style="width: 80px;"
+                                           name="qty_{{ item.id }}"
+                                           value="{{ item.reorder_quantity if item.reorder_quantity > 0 else 10 }}"
                                            min="1">
                                     <input type="hidden" name="sku_{{ item.id }}" value="{{ item.sku }}">
                                     <input type="hidden" name="cost_{{ item.id }}" value="{{ item.unit_cost }}">
@@ -143,7 +143,7 @@
                         <small class="text-muted">Assign suppliers to these items to enable purchase orders</small>
                     </div>
                     <div>
-                        <input type="checkbox" class="form-check-input me-2" id="selectAllNoSupplier" 
+                        <input type="checkbox" class="form-check-input me-2" id="selectAllNoSupplier"
                                onchange="toggleNoSupplierItems(this.checked)">
                         <label for="selectAllNoSupplier">Select All</label>
                     </div>
@@ -176,7 +176,7 @@
                             <thead>
                                 <tr>
                                     <th width="40">
-                                        <input type="checkbox" class="form-check-input" id="selectAllNoSupplierHeader" 
+                                        <input type="checkbox" class="form-check-input" id="selectAllNoSupplierHeader"
                                                onchange="toggleNoSupplierItems(this.checked)">
                                     </th>
                                     <th>SKU</th>
@@ -192,7 +192,7 @@
                                 {% for item in no_supplier_items %}
                                 <tr class="{% if item.available_quantity == 0 %}table-danger{% else %}table-warning{% endif %}">
                                     <td>
-                                        <input type="checkbox" class="form-check-input no-supplier-item" 
+                                        <input type="checkbox" class="form-check-input no-supplier-item"
                                                name="no_supplier_items[]" value="{{ item.id }}">
                                     </td>
                                 <td><code>{{ item.sku }}</code></td>
@@ -214,7 +214,7 @@
                                 </td>
                                 <td>£{{ "%.2f"|format(item.unit_cost) }}</td>
                                 <td>
-                                    <a href="{{ url_for('routes.warehouse_detail', stock_id=item.id) }}" 
+                                    <a href="{{ url_for('routes.warehouse_detail', stock_id=item.id) }}"
                                        class="btn btn-sm btn-outline-primary">
                                         <i data-feather="edit"></i> Assign Supplier
                                     </a>
@@ -271,17 +271,17 @@ function toggleNoSupplierItems(checked) {
 function validateBulkAssign() {
     const selectedItems = document.querySelectorAll('.no-supplier-item:checked');
     const supplier = document.getElementById('bulkSupplierSelect').value;
-    
+
     if (selectedItems.length === 0) {
         alert('Please select at least one item to assign a supplier.');
         return false;
     }
-    
+
     if (!supplier) {
         alert('Please select a supplier from the dropdown.');
         return false;
     }
-    
+
     return true;
 }
 

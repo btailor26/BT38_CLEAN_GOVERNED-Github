@@ -40,15 +40,15 @@
                     <span class="input-group-text bg-dark border-secondary">
                         <i data-feather="search"></i>
                     </span>
-                    <input type="text" class="form-control bg-dark text-white border-secondary" 
-                           id="faqSearch" placeholder="Search FAQs..." 
+                    <input type="text" class="form-control bg-dark text-white border-secondary"
+                           id="faqSearch" placeholder="Search FAQs..."
                            onkeyup="filterFAQs(this.value)">
                 </div>
             </div>
 
             <!-- FAQ Accordion -->
             <div class="accordion" id="faqAccordion">
-                
+
                 <!-- Section: Getting Started -->
                 <div class="card bg-dark mb-3">
                     <div class="card-header">
@@ -732,7 +732,7 @@ let currentLang = 'en';
 // Function to switch language
 function switchLanguage(lang) {
     currentLang = lang;
-    
+
     // Update all translatable elements
     document.querySelectorAll('[data-translate]').forEach(element => {
         const key = element.getAttribute('data-translate');
@@ -740,7 +740,7 @@ function switchLanguage(lang) {
             element.textContent = translations[lang][key];
         }
     });
-    
+
     // Update active button
     document.querySelectorAll('.lang-btn').forEach(btn => {
         btn.classList.remove('active');
@@ -748,17 +748,17 @@ function switchLanguage(lang) {
             btn.classList.add('active');
         }
     });
-    
+
     // Update HTML lang attribute
     document.documentElement.lang = lang;
-    
+
     // Set text direction for RTL languages
     if (lang === 'ur') {
         document.body.style.direction = 'rtl';
     } else {
         document.body.style.direction = 'ltr';
     }
-    
+
     // Save preference
     localStorage.setItem('faq_language', lang);
 }
@@ -768,21 +768,21 @@ function filterFAQs(searchText) {
     const search = searchText.toLowerCase().trim();
     const accordionItems = document.querySelectorAll('.accordion-item');
     const sectionHeaders = document.querySelectorAll('.card.bg-dark.mb-3');
-    
+
     if (search === '') {
         // Show all items when search is empty
         accordionItems.forEach(item => item.style.display = '');
         sectionHeaders.forEach(header => header.style.display = '');
         return;
     }
-    
+
     accordionItems.forEach(item => {
         const questionBtn = item.querySelector('.accordion-button span');
         const answerBody = item.querySelector('.accordion-body span');
-        
+
         const questionText = questionBtn ? questionBtn.textContent.toLowerCase() : '';
         const answerText = answerBody ? answerBody.textContent.toLowerCase() : '';
-        
+
         if (questionText.includes(search) || answerText.includes(search)) {
             item.style.display = '';
             // Expand matching items
@@ -794,13 +794,13 @@ function filterFAQs(searchText) {
             item.style.display = 'none';
         }
     });
-    
+
     // Hide section headers if all their items are hidden
     sectionHeaders.forEach(header => {
         const nextElement = header.nextElementSibling;
         let hasVisibleItems = false;
         let current = nextElement;
-        
+
         while (current && !current.classList.contains('card')) {
             if (current.classList.contains('accordion-item') && current.style.display !== 'none') {
                 hasVisibleItems = true;
@@ -808,7 +808,7 @@ function filterFAQs(searchText) {
             }
             current = current.nextElementSibling;
         }
-        
+
         header.style.display = hasVisibleItems ? '' : 'none';
     });
 }
@@ -820,14 +820,14 @@ document.addEventListener('DOMContentLoaded', function() {
     if (savedLang && translations[savedLang]) {
         switchLanguage(savedLang);
     }
-    
+
     // Add click handlers to language buttons
     document.querySelectorAll('.lang-btn').forEach(btn => {
         btn.addEventListener('click', function() {
             switchLanguage(this.getAttribute('data-lang'));
         });
     });
-    
+
     // Initialize Feather icons
     if (typeof feather !== 'undefined') {
         feather.replace();

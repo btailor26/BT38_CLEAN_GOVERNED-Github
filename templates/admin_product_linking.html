@@ -267,7 +267,7 @@
                                 {% for product in products %}
                                 <tr class="product-row" data-ws-id="{{ product.id }}">
                                     <td>
-                                        <input type="checkbox" class="form-check-input product-checkbox" 
+                                        <input type="checkbox" class="form-check-input product-checkbox"
                                                value="{{ product.id }}" onchange="updateBulkActionsBar()">
                                     </td>
                                     <td>
@@ -277,7 +277,7 @@
                                         {% endif %}
                                     </td>
                                     <td>
-                                        <span class="text-truncate d-inline-block" style="max-width: 180px;" 
+                                        <span class="text-truncate d-inline-block" style="max-width: 180px;"
                                               title="{{ product.name }}">{{ product.name or '-' }}</span>
                                     </td>
                                     <td>
@@ -303,7 +303,7 @@
                                         <span class="badge bg-danger"><i data-feather="lock" class="feather-sm me-1"></i>Blocked</span>
                                         {% endif %}
                                         {% if product.blocked_reasons %}
-                                        <button class="btn btn-link btn-sm p-0 text-danger" 
+                                        <button class="btn btn-link btn-sm p-0 text-danger"
                                                 onclick="showBlockedReasons({{ product.blocked_reasons|tojson|e }})"
                                                 title="View blocked reasons">
                                             <i data-feather="info" class="feather-sm"></i>
@@ -313,7 +313,7 @@
                                     <td>
                                         {% if product.mappings %}
                                             {% for mapping in product.mappings %}
-                                            <div class="d-inline-flex align-items-center me-2 mb-1 p-1 border rounded 
+                                            <div class="d-inline-flex align-items-center me-2 mb-1 p-1 border rounded
                                                         {% if mapping.status == 'error' %}border-danger bg-danger bg-opacity-10{% elif mapping.status == 'blocked' %}border-warning bg-warning bg-opacity-10{% else %}bg-light{% endif %}">
                                                 {% if mapping.platform == 'AmazonFBA' %}
                                                 <span class="badge bg-info me-1">FBA</span>
@@ -333,10 +333,10 @@
                                                 <span class="badge bg-dark ms-1" style="font-size: 0.6rem;">{{ mapping.fulfillment }}</span>
                                                 {% endif %}
                                                 {% if mapping.status == 'error' or mapping.status == 'blocked' %}
-                                                <i data-feather="alert-circle" class="text-danger ms-1 feather-sm" 
+                                                <i data-feather="alert-circle" class="text-danger ms-1 feather-sm"
                                                    title="{{ mapping.blocked_reason or mapping.error or 'Error' }}"></i>
                                                 {% endif %}
-                                                <button class="btn btn-link btn-sm p-0 ms-1 text-danger" 
+                                                <button class="btn btn-link btn-sm p-0 ms-1 text-danger"
                                                         onclick="unlinkMapping({{ mapping.id }}, '{{ mapping.platform }}')"
                                                         title="Unlink">
                                                     <i data-feather="x" class="feather-sm"></i>
@@ -375,7 +375,7 @@
                             </tbody>
                         </table>
                     </div>
-                    
+
                     <!-- Pagination -->
                     {% if total_pages > 1 %}
                     <nav class="mt-3" aria-label="Product linking pagination">
@@ -396,13 +396,13 @@
                                     </a>
                                 </li>
                                 {% endif %}
-                                
+
                                 {% for p in range([1, current_page-2]|max, [total_pages, current_page+2]|min + 1) %}
                                 <li class="page-item {{ 'active' if p == current_page else '' }}">
                                     <a class="page-link" href="{{ url_for('routes.product_linking', search=current_search, platform=current_platform, status=current_status, store=current_store, page=p) }}">{{ p }}</a>
                                 </li>
                                 {% endfor %}
-                                
+
                                 {% if current_page < total_pages %}
                                 <li class="page-item">
                                     <a class="page-link" href="{{ url_for('routes.product_linking', search=current_search, platform=current_platform, status=current_status, store=current_store, page=current_page+1) }}">
@@ -419,7 +419,7 @@
                         </div>
                     </nav>
                     {% endif %}
-                    
+
                     {% else %}
                     <div class="text-center py-5">
                         <i data-feather="package" class="mb-3" style="width: 48px; height: 48px;"></i>
@@ -444,7 +444,7 @@
             <div class="modal-body">
                 <p>Link <strong id="linkSkuLabel"></strong> to a marketplace:</p>
                 <input type="hidden" id="linkWarehouseId">
-                
+
                 <ul class="nav nav-tabs mb-3" role="tablist">
                     <li class="nav-item">
                         <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#amazonFbmTab">
@@ -462,7 +462,7 @@
                         </button>
                     </li>
                 </ul>
-                
+
                 <div class="tab-content">
                     <div class="tab-pane fade show active" id="amazonFbmTab">
                         <div class="alert alert-primary mb-3">
@@ -489,7 +489,7 @@
                             <i data-feather="save" class="me-1"></i>Save FBM Link
                         </button>
                     </div>
-                    
+
                     <div class="tab-pane fade" id="amazonFbaTab">
                         <div class="alert alert-info mb-3">
                             <i data-feather="info" class="me-1"></i>
@@ -515,7 +515,7 @@
                             <i data-feather="save" class="me-1"></i>Save FBA Link
                         </button>
                     </div>
-                    
+
                     <div class="tab-pane fade" id="ebayTab">
                         <div class="mb-3">
                             <label class="form-label">eBay Store</label>
@@ -666,14 +666,14 @@
             </div>
             <div class="modal-body">
                 <p>Merge selected products into one. All marketplace listings will be reassigned to the target product.</p>
-                
+
                 <div class="mb-3">
                     <label class="form-label">Target Product (keep this one)</label>
                     <select class="form-select" id="mergeTargetSelect">
                         <!-- Populated by JS -->
                     </select>
                 </div>
-                
+
                 <div class="mb-3">
                     <label class="form-label">Merge Mode</label>
                     <select class="form-select" id="mergeModeSelect">
@@ -681,7 +681,7 @@
                         <option value="combine_quantity">Combine Quantity (merge stock into target, deactivate others)</option>
                     </select>
                 </div>
-                
+
                 <div class="alert alert-warning small">
                     <strong>Warning:</strong> This action will reassign all marketplace listings from source products to the target product.
                 </div>
@@ -706,21 +706,21 @@
             </div>
             <div class="modal-body">
                 <p>Move marketplace listings from one product to another.</p>
-                
+
                 <div class="mb-3">
                     <label class="form-label">Source Product (move FROM)</label>
                     <select class="form-select" id="reassignSourceSelect">
                         <!-- Populated by JS -->
                     </select>
                 </div>
-                
+
                 <div class="mb-3">
                     <label class="form-label">Target Product (move TO)</label>
                     <select class="form-select" id="reassignTargetSelect">
                         <!-- Populated by JS -->
                     </select>
                 </div>
-                
+
                 <div class="alert alert-info small">
                     All marketplace listings from the source product will be moved to the target product.
                 </div>
@@ -757,10 +757,10 @@ function updateBulkActionsBar() {
     const bar = document.getElementById('bulkActionsBar');
     const selectAllBtn = document.getElementById('selectAllPagesBtn');
     const allPagesSpan = document.getElementById('allPagesSelected');
-    
+
     document.getElementById('selectedCount').textContent = selectAllPagesMode ? totalCount : count;
     bar.style.display = count > 0 ? 'block' : 'none';
-    
+
     // Show "Select all X items" button only when all visible items are selected and there are more pages
     if (count === allCheckboxes.length && count === visibleCount && totalCount > visibleCount && !selectAllPagesMode) {
         selectAllBtn.style.display = 'inline-block';
@@ -772,7 +772,7 @@ function updateBulkActionsBar() {
         selectAllBtn.style.display = 'none';
         allPagesSpan.style.display = 'none';
     }
-    
+
     feather.replace();
 }
 
@@ -808,7 +808,7 @@ function showBlockedReasons(reasons) {
 // Ungroup product
 async function ungroupProduct(warehouseId, sku) {
     if (!confirm(`Remove SKU "${sku}" from its product group?\n\nThis will treat it as a separate product with its own inventory.`)) return;
-    
+
     try {
         const resp = await fetch('/api/product-linking/ungroup', {
             method: 'POST',
@@ -830,9 +830,9 @@ async function ungroupProduct(warehouseId, sku) {
 // Mark not same product
 async function markNotSameProduct(warehouseId, sku) {
     const newSku = prompt(`The current SKU is "${sku}".\n\nIf this SKU is incorrectly linked to the wrong marketplace listing, you can:\n\n1. Enter a NEW SKU to create a separate product\n2. Click Cancel to keep the current SKU\n\nEnter new SKU (leave empty to just unlink all mappings):`);
-    
+
     if (newSku === null) return; // Cancelled
-    
+
     try {
         const resp = await fetch('/api/product-linking/not-same-product', {
             method: 'POST',
@@ -875,17 +875,17 @@ async function saveAmazonFbmLink() {
     const storeId = document.getElementById('amazonFbmStore').value;
     const sellerSku = document.getElementById('amazonFbmSku').value.trim();
     const asin = document.getElementById('amazonFbmAsin').value.trim();
-    
+
     if (!sellerSku) {
         alert('Seller SKU is required');
         return;
     }
-    
+
     if (asin && asin.length !== 10) {
         alert('ASIN must be exactly 10 characters');
         return;
     }
-    
+
     try {
         const resp = await fetch('/api/product-linking/link', {
             method: 'POST',
@@ -916,17 +916,17 @@ async function saveAmazonFbaLink() {
     const storeId = document.getElementById('amazonFbaStore').value;
     const fnsku = document.getElementById('amazonFbaFnsku').value.trim();
     const asin = document.getElementById('amazonFbaAsin').value.trim();
-    
+
     if (!fnsku && !asin) {
         alert('FNSKU or ASIN is required');
         return;
     }
-    
+
     if (asin && asin.length !== 10) {
         alert('ASIN must be exactly 10 characters');
         return;
     }
-    
+
     try {
         const resp = await fetch('/api/product-linking/link', {
             method: 'POST',
@@ -956,12 +956,12 @@ async function saveEbayLink() {
     const warehouseId = document.getElementById('linkWarehouseId').value;
     const storeId = document.getElementById('ebayStore').value;
     const itemId = document.getElementById('ebayItemId').value.trim();
-    
+
     if (!itemId) {
         alert('eBay Item ID is required');
         return;
     }
-    
+
     try {
         const resp = await fetch('/api/product-linking/link', {
             method: 'POST',
@@ -987,7 +987,7 @@ async function saveEbayLink() {
 
 async function unlinkMapping(listingId, platform) {
     if (!confirm(`Unlink this ${platform} mapping?`)) return;
-    
+
     try {
         const resp = await fetch('/api/unlink_listing', {
             method: 'POST',
@@ -1010,15 +1010,15 @@ async function showDiagnostics(warehouseId, sku) {
     document.getElementById('diagSkuLabel').textContent = sku;
     document.getElementById('diagLoading').style.display = 'block';
     document.getElementById('diagContent').style.display = 'none';
-    
+
     new bootstrap.Modal(document.getElementById('diagnosticsModal')).show();
-    
+
     try {
         const resp = await fetch(`/api/product-linking/diagnostics/${warehouseId}`);
         const data = await resp.json();
-        
+
         let html = '';
-        
+
         // Warehouse section
         html += `<div class="card mb-3 bg-secondary">
             <div class="card-header"><i data-feather="package" class="me-2"></i>Warehouse Stock</div>
@@ -1030,7 +1030,7 @@ async function showDiagnostics(warehouseId, sku) {
                 </div>
             </div>
         </div>`;
-        
+
         // Mappings section
         if (data.mappings && data.mappings.length > 0) {
             html += `<div class="card mb-3 bg-secondary">
@@ -1039,7 +1039,7 @@ async function showDiagnostics(warehouseId, sku) {
                     <table class="table table-sm mb-0">
                         <thead><tr><th>Platform</th><th>External ID</th><th>Sync Qty</th><th>Last Push</th><th>Status</th></tr></thead>
                         <tbody>`;
-            
+
             for (const m of data.mappings) {
                 const statusBadge = m.last_push_status === 'success' ? 'bg-success' : (m.last_push_status === 'error' ? 'bg-danger' : 'bg-warning');
                 html += `<tr>
@@ -1055,7 +1055,7 @@ async function showDiagnostics(warehouseId, sku) {
             }
             html += '</tbody></table></div></div>';
         }
-        
+
         // Issues section
         if (data.issues && data.issues.length > 0) {
             html += `<div class="alert alert-warning">
@@ -1066,7 +1066,7 @@ async function showDiagnostics(warehouseId, sku) {
             }
             html += '</ul></div>';
         }
-        
+
         // Mismatches section
         if (data.mismatches && data.mismatches.length > 0) {
             html += `<div class="alert alert-danger">
@@ -1077,16 +1077,16 @@ async function showDiagnostics(warehouseId, sku) {
             }
             html += '</ul></div>';
         }
-        
+
         if (!data.issues?.length && !data.mismatches?.length) {
             html += '<div class="alert alert-success"><i data-feather="check-circle" class="me-2"></i>All checks passed - no issues found!</div>';
         }
-        
+
         document.getElementById('diagContent').innerHTML = html;
         document.getElementById('diagLoading').style.display = 'none';
         document.getElementById('diagContent').style.display = 'block';
         feather.replace();
-        
+
     } catch (e) {
         document.getElementById('diagContent').innerHTML = `<div class="alert alert-danger">Error: ${e.message}</div>`;
         document.getElementById('diagLoading').style.display = 'none';
@@ -1099,15 +1099,15 @@ async function repairLinks(warehouseId, sku) {
     document.getElementById('repairSkuLabel').textContent = sku;
     document.getElementById('repairLoading').style.display = 'block';
     document.getElementById('repairContent').style.display = 'none';
-    
+
     new bootstrap.Modal(document.getElementById('repairModal')).show();
-    
+
     try {
         const resp = await fetch(`/api/product-linking/repair/${warehouseId}`, {method: 'POST'});
         const data = await resp.json();
-        
+
         let html = '';
-        
+
         if (data.success) {
             html += '<div class="alert alert-success"><i data-feather="check-circle" class="me-2"></i>Repair completed!</div>';
             if (data.fixes && data.fixes.length > 0) {
@@ -1127,14 +1127,14 @@ async function repairLinks(warehouseId, sku) {
                 html += '</ul>';
             }
         }
-        
+
         html += '<button class="btn btn-primary mt-3" onclick="location.reload()">Refresh Page</button>';
-        
+
         document.getElementById('repairContent').innerHTML = html;
         document.getElementById('repairLoading').style.display = 'none';
         document.getElementById('repairContent').style.display = 'block';
         feather.replace();
-        
+
     } catch (e) {
         document.getElementById('repairContent').innerHTML = `<div class="alert alert-danger">Error: ${e.message}</div>`;
         document.getElementById('repairLoading').style.display = 'none';
@@ -1157,14 +1157,14 @@ async function bulkDiagnostics() {
     const ids = getSelectedIds();
     const count = selectAllPagesMode ? totalCount : (Array.isArray(ids) ? ids.length : 0);
     if (count === 0) return;
-    
+
     if (!confirm(`Run diagnostics on ${count} products? This will create a background job.`)) return;
-    
+
     try {
-        const payload = selectAllPagesMode 
+        const payload = selectAllPagesMode
             ? { select_all: true, filters: getCurrentFilters() }
             : { warehouse_stock_ids: ids };
-        
+
         const resp = await fetch('/api/product-linking/bulk/diagnostics', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -1186,14 +1186,14 @@ async function bulkRepairLinks() {
     const ids = getSelectedIds();
     const count = selectAllPagesMode ? totalCount : (Array.isArray(ids) ? ids.length : 0);
     if (count === 0) return;
-    
+
     if (!confirm(`Repair links for ${count} products? This will attempt to fix broken/blocked mappings.`)) return;
-    
+
     try {
-        const payload = selectAllPagesMode 
+        const payload = selectAllPagesMode
             ? { select_all: true, filters: getCurrentFilters() }
             : { warehouse_stock_ids: ids };
-        
+
         const resp = await fetch('/api/product-linking/bulk/repair', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -1215,14 +1215,14 @@ async function bulkPushSelected() {
     const ids = getSelectedIds();
     const count = selectAllPagesMode ? totalCount : (Array.isArray(ids) ? ids.length : 0);
     if (count === 0) return;
-    
+
     if (!confirm(`Push ${count} products to their linked marketplaces?`)) return;
-    
+
     try {
-        const payload = selectAllPagesMode 
+        const payload = selectAllPagesMode
             ? { select_all: true, filters: getCurrentFilters() }
             : { warehouse_stock_ids: ids };
-        
+
         const resp = await fetch('/api/product-linking/bulk/push', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -1244,16 +1244,16 @@ async function bulkPushSelected() {
 async function showJobsTab() {
     document.getElementById('jobsLoading').style.display = 'block';
     document.getElementById('jobsList').style.display = 'none';
-    
+
     new bootstrap.Modal(document.getElementById('jobsModal')).show();
-    
+
     try {
         const resp = await fetch('/api/listings/bulk/jobs');
         const data = await resp.json();
-        
+
         const tbody = document.getElementById('jobsTableBody');
         tbody.innerHTML = '';
-        
+
         if (data.jobs && data.jobs.length > 0) {
             for (const job of data.jobs) {
                 const statusBadge = {
@@ -1263,9 +1263,9 @@ async function showJobsTab() {
                     'partial': 'bg-warning',
                     'failed': 'bg-danger'
                 }[job.status] || 'bg-secondary';
-                
+
                 const progress = job.total_items > 0 ? Math.round((job.processed_items / job.total_items) * 100) : 0;
-                
+
                 tbody.innerHTML += `<tr>
                     <td>${job.id}</td>
                     <td>${job.job_type}</td>
@@ -1286,11 +1286,11 @@ async function showJobsTab() {
         } else {
             document.getElementById('noJobs').style.display = 'block';
         }
-        
+
         document.getElementById('jobsLoading').style.display = 'none';
         document.getElementById('jobsList').style.display = 'block';
         feather.replace();
-        
+
     } catch (e) {
         document.getElementById('jobsTableBody').innerHTML = `<tr><td colspan="6" class="text-danger">Error: ${e.message}</td></tr>`;
         document.getElementById('jobsLoading').style.display = 'none';
@@ -1306,23 +1306,23 @@ function showEbayBulkModal() {
 
 document.getElementById('ebayBulkForm').addEventListener('submit', async function(e) {
     e.preventDefault();
-    
+
     const btn = document.getElementById('ebayBulkSubmit');
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Processing...';
-    
+
     const formData = new FormData(this);
-    
+
     try {
         const resp = await fetch('/api/product-linking/ebay/bulk', {
             method: 'POST',
             body: formData
         });
         const data = await resp.json();
-        
+
         const results = document.getElementById('ebayBulkResults');
         results.style.display = 'block';
-        
+
         if (data.success) {
             results.innerHTML = `
                 <div class="alert alert-success">
@@ -1349,10 +1349,10 @@ document.getElementById('ebayBulkForm').addEventListener('submit', async functio
 async function repairResetFailures() {
     const ids = getSelectedIds();
     const count = ids === 'all' ? totalCount : (Array.isArray(ids) ? ids.length : 0);
-    
+
     if (count === 0) return;
     if (!confirm(`Reset failure counts for ${count} product(s)? This will unblock listings that were blocked due to errors.`)) return;
-    
+
     try {
         const resp = await fetch('/api/product-linking/repair/reset-failures', {
             method: 'POST',
@@ -1360,7 +1360,7 @@ async function repairResetFailures() {
             body: JSON.stringify({ warehouse_stock_ids: ids === 'all' ? [] : ids })
         });
         const data = await resp.json();
-        
+
         if (data.success) {
             alert(data.message);
             location.reload();
@@ -1374,7 +1374,7 @@ async function repairResetFailures() {
 
 async function repairRebuildLinks() {
     if (!confirm('Rebuild links for orphaned marketplace listings?\n\nThis will try to match orphaned listings back to warehouse products by SKU.')) return;
-    
+
     try {
         const resp = await fetch('/api/product-linking/repair/rebuild-link', {
             method: 'POST',
@@ -1382,7 +1382,7 @@ async function repairRebuildLinks() {
             body: JSON.stringify({ listing_ids: [] })
         });
         const data = await resp.json();
-        
+
         if (data.success) {
             alert(data.message + (data.remaining_orphans > 0 ? ` ${data.remaining_orphans} still orphaned (no matching SKU).` : ''));
             location.reload();
@@ -1396,7 +1396,7 @@ async function repairRebuildLinks() {
 
 async function repairCreateMissingSKUs() {
     if (!confirm('Create warehouse stock entries for orphaned listings?\n\nThis will create new Master Stock entries for listings that have no matching warehouse SKU.')) return;
-    
+
     try {
         const resp = await fetch('/api/product-linking/repair/create-missing-sku', {
             method: 'POST',
@@ -1404,7 +1404,7 @@ async function repairCreateMissingSKUs() {
             body: JSON.stringify({ listing_ids: [] })
         });
         const data = await resp.json();
-        
+
         if (data.success) {
             alert(data.message);
             location.reload();
@@ -1419,10 +1419,10 @@ async function repairCreateMissingSKUs() {
 async function repairSyncNow() {
     const ids = getSelectedIds();
     const count = ids === 'all' ? totalCount : (Array.isArray(ids) ? ids.length : 0);
-    
+
     if (count === 0) return;
     if (!confirm(`Queue ${count} product(s) for immediate sync?\n\nThis will push the current warehouse quantities to all linked marketplaces.`)) return;
-    
+
     try {
         const resp = await fetch('/api/product-linking/repair/sync-now', {
             method: 'POST',
@@ -1430,7 +1430,7 @@ async function repairSyncNow() {
             body: JSON.stringify({ warehouse_stock_ids: ids === 'all' ? [] : ids })
         });
         const data = await resp.json();
-        
+
         if (data.success) {
             alert(data.message);
             location.reload();
@@ -1450,11 +1450,11 @@ function showMergeModal() {
         alert('Select at least 2 products to merge');
         return;
     }
-    
+
     // Get selected product details
     const select = document.getElementById('mergeTargetSelect');
     select.innerHTML = '';
-    
+
     ids.forEach(id => {
         const row = document.querySelector(`.product-row[data-ws-id="${id}"]`);
         if (row) {
@@ -1463,7 +1463,7 @@ function showMergeModal() {
             select.innerHTML += `<option value="${id}">${sku} - ${name.substring(0, 30)}</option>`;
         }
     });
-    
+
     new bootstrap.Modal(document.getElementById('mergeModal')).show();
     feather.replace();
 }
@@ -1472,14 +1472,14 @@ async function executeMerge() {
     const ids = getSelectedIds();
     const targetId = parseInt(document.getElementById('mergeTargetSelect').value);
     const mergeMode = document.getElementById('mergeModeSelect').value;
-    
+
     if (!targetId) {
         alert('Please select a target product');
         return;
     }
-    
+
     if (!confirm(`Merge ${ids.length} products into the selected target?\n\nMode: ${mergeMode === 'group' ? 'Create Group' : 'Combine Quantity'}`)) return;
-    
+
     try {
         const resp = await fetch('/api/product-linking/bulk/merge', {
             method: 'POST',
@@ -1491,7 +1491,7 @@ async function executeMerge() {
             })
         });
         const data = await resp.json();
-        
+
         if (data.success) {
             alert(data.message);
             bootstrap.Modal.getInstance(document.getElementById('mergeModal')).hide();
@@ -1510,12 +1510,12 @@ function showReassignModal() {
         alert('Select at least 2 products (source and target)');
         return;
     }
-    
+
     const sourceSelect = document.getElementById('reassignSourceSelect');
     const targetSelect = document.getElementById('reassignTargetSelect');
     sourceSelect.innerHTML = '';
     targetSelect.innerHTML = '';
-    
+
     ids.forEach(id => {
         const row = document.querySelector(`.product-row[data-ws-id="${id}"]`);
         if (row) {
@@ -1526,12 +1526,12 @@ function showReassignModal() {
             targetSelect.innerHTML += option;
         }
     });
-    
+
     // Pre-select different items for source and target
     if (targetSelect.options.length > 1) {
         targetSelect.selectedIndex = 1;
     }
-    
+
     new bootstrap.Modal(document.getElementById('reassignModal')).show();
     feather.replace();
 }
@@ -1539,19 +1539,19 @@ function showReassignModal() {
 async function executeReassign() {
     const sourceId = parseInt(document.getElementById('reassignSourceSelect').value);
     const targetId = parseInt(document.getElementById('reassignTargetSelect').value);
-    
+
     if (!sourceId || !targetId) {
         alert('Please select source and target products');
         return;
     }
-    
+
     if (sourceId === targetId) {
         alert('Source and target must be different products');
         return;
     }
-    
+
     if (!confirm('Move all marketplace listings from source to target?')) return;
-    
+
     try {
         const resp = await fetch('/api/product-linking/bulk/reassign', {
             method: 'POST',
@@ -1562,7 +1562,7 @@ async function executeReassign() {
             })
         });
         const data = await resp.json();
-        
+
         if (data.success) {
             alert(data.message);
             bootstrap.Modal.getInstance(document.getElementById('reassignModal')).hide();
@@ -1578,10 +1578,10 @@ async function executeReassign() {
 async function bulkUngroup() {
     const ids = getSelectedIds();
     const count = ids === 'all' ? totalCount : (Array.isArray(ids) ? ids.length : 0);
-    
+
     if (count === 0) return;
     if (!confirm(`Ungroup ${count} selected product(s)? They will no longer be part of any product group.`)) return;
-    
+
     try {
         const resp = await fetch('/api/product-linking/bulk/ungroup', {
             method: 'POST',
@@ -1591,7 +1591,7 @@ async function bulkUngroup() {
             })
         });
         const data = await resp.json();
-        
+
         if (data.success) {
             alert(data.message);
             location.reload();
@@ -1608,7 +1608,7 @@ async function bulkUngroup() {
 function toggleAutoFixMode() {
     const isEnabled = document.getElementById('autoFixMode').checked;
     document.getElementById('autoFixStats').style.display = isEnabled ? 'flex' : 'none';
-    
+
     // Highlight broken/blocked rows when Auto-Fix is enabled
     document.querySelectorAll('.product-row').forEach(row => {
         const statusBadge = row.querySelector('.badge.bg-danger');
@@ -1624,33 +1624,33 @@ function toggleAutoFixMode() {
 
 async function fixAllIssues() {
     if (!confirm('This will attempt to fix all broken and blocked items by:\n\n• Resetting failure counters\n• Unblocking items with valid stock/price\n• Triggering a sync push\n\nProceed?')) return;
-    
+
     const fixBtn = document.querySelector('#autoFixStats button');
     const originalText = fixBtn.innerHTML;
     fixBtn.disabled = true;
     fixBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Fixing...';
-    
+
     try {
         // Get all broken/blocked items from the current page
         const brokenRows = Array.from(document.querySelectorAll('.product-row')).filter(row => {
             const statusBadge = row.querySelector('.badge.bg-danger');
             return statusBadge && (statusBadge.textContent.includes('Broken') || statusBadge.textContent.includes('Blocked'));
         });
-        
+
         const ids = brokenRows.map(row => parseInt(row.dataset.wsId));
-        
+
         if (ids.length === 0) {
             alert('No broken or blocked items found on this page.');
             return;
         }
-        
+
         const resp = await fetch('/api/product-linking/bulk/repair', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ warehouse_stock_ids: ids })
         });
         const data = await resp.json();
-        
+
         if (data.success) {
             alert(`Fix job started (ID: ${data.job_id}).\n\n${ids.length} items queued for repair.\n\nRefresh the page in a few seconds to see results.`);
             setTimeout(() => location.reload(), 3000);
@@ -1669,14 +1669,14 @@ async function fixAllIssues() {
 async function quickFix(warehouseStockId, sku) {
     const row = document.querySelector(`.product-row[data-ws-id="${warehouseStockId}"]`);
     if (row) row.classList.add('table-warning');
-    
+
     try {
         const resp = await fetch(`/api/product-linking/repair/${warehouseStockId}`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'}
         });
         const data = await resp.json();
-        
+
         if (data.success) {
             if (data.fixes && data.fixes.length > 0) {
                 alert(`Fixed: ${data.fixes.join(', ')}`);

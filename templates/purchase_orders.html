@@ -50,18 +50,18 @@
                         <td><span class="badge bg-secondary">{{ po.items | length }}</span></td>
                         <td>{{ po.currency }} {{ '%.2f' | format(po.total_amount) }}</td>
                         <td>
-                            <a href="{{ url_for('routes.view_purchase_order', po_id=po.id) }}" 
+                            <a href="{{ url_for('routes.view_purchase_order', po_id=po.id) }}"
                                class="btn btn-sm btn-outline-primary" title="View">
                                 <i data-feather="eye"></i>
                             </a>
                             {% if po.supplier and po.supplier.email and po.status in ['draft', 'sent'] %}
-                            <a href="{{ url_for('routes.send_po_to_supplier', po_id=po.id) }}" 
+                            <a href="{{ url_for('routes.send_po_to_supplier', po_id=po.id) }}"
                                class="btn btn-sm btn-outline-info" title="Send to Supplier">
                                 <i data-feather="mail"></i>
                             </a>
                             {% endif %}
                             {% if po.status in ['draft', 'sent', 'partially_received'] %}
-                            <a href="{{ url_for('routes.receive_purchase_order', po_id=po.id) }}" 
+                            <a href="{{ url_for('routes.receive_purchase_order', po_id=po.id) }}"
                                class="btn btn-sm btn-outline-success" title="Receive">
                                 <i data-feather="check-circle"></i>
                             </a>

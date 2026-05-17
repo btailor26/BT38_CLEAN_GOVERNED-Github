@@ -50,7 +50,7 @@
                                         {% endfor %}
                                     </select>
                                 </div>
-                                
+
                                 <div class="mb-3">
                                     <label for="csvFile" class="form-label">CSV File</label>
                                     <input type="file" class="form-control" id="csvFile" name="file" accept=".csv" required>
@@ -59,7 +59,7 @@
                                         Optional column: <code>fulfillment_type</code> (MFN or FBA, defaults to MFN)
                                     </div>
                                 </div>
-                                
+
                                 <button type="submit" class="btn btn-primary" id="submitBtn">
                                     <i data-feather="upload-cloud" class="me-1"></i>Upload & Process
                                 </button>
@@ -102,10 +102,10 @@ AMZ-PROD-003,B03EXAMPLE3,MFN</pre>
                             <dl class="mb-0">
                                 <dt>sku</dt>
                                 <dd>Your internal warehouse SKU (must exist in warehouse_stock)</dd>
-                                
+
                                 <dt>asin</dt>
                                 <dd>Amazon Standard Identification Number (10 characters)</dd>
-                                
+
                                 <dt>fulfillment_type</dt>
                                 <dd>MFN (Merchant Fulfilled) or FBA (Fulfilled by Amazon)</dd>
                             </dl>
@@ -158,7 +158,7 @@ AMZ-PROD-003,B03EXAMPLE3,MFN</pre>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     feather.replace();
-    
+
     document.getElementById('downloadTemplate').addEventListener('click', function(e) {
         e.preventDefault();
         const csvContent = 'sku,asin,fulfillment_type\nAMZ-PROD-001,B01EXAMPLE1,MFN\nAMZ-PROD-002,B02EXAMPLE2,FBA\n';
@@ -170,29 +170,29 @@ document.addEventListener('DOMContentLoaded', function() {
         a.click();
         window.URL.revokeObjectURL(url);
     });
-    
+
     document.getElementById('bulkLinkForm').addEventListener('submit', async function(e) {
         e.preventDefault();
-        
+
         const submitBtn = document.getElementById('submitBtn');
         const resultsCard = document.getElementById('resultsCard');
         const resultsContent = document.getElementById('resultsContent');
-        
+
         submitBtn.disabled = true;
         submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Processing...';
-        
+
         const formData = new FormData(this);
-        
+
         try {
             const response = await fetch('/api/bulk_link_products', {
                 method: 'POST',
                 body: formData
             });
-            
+
             const data = await response.json();
-            
+
             resultsCard.style.display = 'block';
-            
+
             if (data.success) {
                 const r = data.results;
                 let html = `
@@ -214,7 +214,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         </div>
                     </div>
                 `;
-                
+
                 if (r.error_log_path) {
                     html += `
                         <a href="${r.error_log_path}" class="btn btn-outline-warning">
@@ -222,7 +222,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         </a>
                     `;
                 }
-                
+
                 resultsContent.innerHTML = html;
                 feather.replace();
             } else {

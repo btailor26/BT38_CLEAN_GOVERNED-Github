@@ -32,50 +32,50 @@
                             {% endif %}
                         </h5>
                         <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" 
+                            <input class="form-check-input" type="checkbox"
                                    {% if warehouse.is_active %}checked{% endif %}
                                    onchange="toggleWarehouse({{ warehouse.id }}, this.checked)">
                         </div>
                     </div>
-                    
+
                     <div class="mb-3">
                         <span class="badge {% if warehouse.is_active %}bg-success{% else %}bg-secondary{% endif %}">
                             {% if warehouse.is_active %}Active{% else %}Inactive{% endif %}
                         </span>
                         <span class="badge bg-info ms-1">Priority: {{ warehouse.priority }}</span>
                     </div>
-                    
+
                     {% if warehouse.location %}
                     <p class="text-muted small mb-2">
                         <i data-feather="map-pin" class="me-1"></i>
                         {{ warehouse.location }}
                     </p>
                     {% endif %}
-                    
+
                     <p class="text-muted small mb-3">
                         <i data-feather="package" class="me-1"></i>
                         Stock items: {{ warehouse.stock_count }}
                     </p>
-                    
+
                     {% if warehouse.notes %}
                     <p class="text-muted small mb-3">{{ warehouse.notes[:100] }}{% if warehouse.notes|length > 100 %}...{% endif %}</p>
                     {% endif %}
                 </div>
-                
+
                 <div class="card-footer bg-transparent">
                     <div class="btn-group w-100" role="group">
-                        <a href="{{ url_for('routes.warehouse_stock', warehouse_id=warehouse.id) }}" 
+                        <a href="{{ url_for('routes.warehouse_stock', warehouse_id=warehouse.id) }}"
                            class="btn btn-sm btn-outline-info">
                             <i data-feather="list" class="me-1"></i>
                             View Stock
                         </a>
-                        <a href="{{ url_for('routes.edit_warehouse', warehouse_id=warehouse.id) }}" 
+                        <a href="{{ url_for('routes.edit_warehouse', warehouse_id=warehouse.id) }}"
                            class="btn btn-sm btn-outline-primary">
                             <i data-feather="edit-2" class="me-1"></i>
                             Edit
                         </a>
                         {% if not warehouse.is_default %}
-                        <button type="button" 
+                        <button type="button"
                                 class="btn btn-sm btn-outline-danger"
                                 onclick="confirmDelete({{ warehouse.id }}, '{{ warehouse.name }}')">
                             <i data-feather="trash-2" class="me-1"></i>

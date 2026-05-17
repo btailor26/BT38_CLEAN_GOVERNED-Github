@@ -11,15 +11,15 @@
         </a>
     </div>
     <p class="text-muted">Items below reorder point, grouped by supplier</p>
-    
+
     <!-- Search Bar -->
     <div class="row mb-3">
         <div class="col-md-6">
             <form method="GET" action="{{ url_for('routes.suggested_orders') }}" class="input-group">
-                <input type="text" 
-                       class="form-control" 
-                       name="search" 
-                       placeholder="Search by SKU or Location..." 
+                <input type="text"
+                       class="form-control"
+                       name="search"
+                       placeholder="Search by SKU or Location..."
                        value="{{ search_query or '' }}">
                 <button class="btn btn-primary" type="submit">
                     <i data-feather="search"></i> Search
@@ -51,10 +51,10 @@
                         </small>
                     </div>
                     <div>
-                        <input type="checkbox" class="form-check-input me-2" id="selectSupplier{{ supplier_id }}" 
+                        <input type="checkbox" class="form-check-input me-2" id="selectSupplier{{ supplier_id }}"
                                onchange="toggleSupplierItems({{ supplier_id }}, this.checked)">
                         <label for="selectSupplier{{ supplier_id }}">Select All</label>
-                        <button type="submit" name="supplier_id" value="{{ supplier_id }}" 
+                        <button type="submit" name="supplier_id" value="{{ supplier_id }}"
                                 class="btn btn-sm btn-primary ms-3">
                             <i data-feather="shopping-cart"></i> Create PO for this Supplier
                         </button>
@@ -81,7 +81,7 @@
                             {% for item in data.items %}
                             <tr class="table-danger">
                                 <td>
-                                    <input type="checkbox" class="form-check-input supplier-{{ supplier_id }}-item" 
+                                    <input type="checkbox" class="form-check-input supplier-{{ supplier_id }}-item"
                                            name="selected_items[]" value="{{ item.id }}">
                                 </td>
                                 <td><code>{{ item.sku }}</code></td>
@@ -147,7 +147,7 @@
                                 <td>{{ item.reorder_point }}</td>
                                 <td>{{ item.reorder_quantity }}</td>
                                 <td>
-                                    <a href="{{ url_for('routes.warehouse_detail', sku=item.sku) }}" 
+                                    <a href="{{ url_for('routes.warehouse_detail', sku=item.sku) }}"
                                        class="btn btn-sm btn-outline-primary">
                                         <i data-feather="edit"></i> Assign Supplier
                                     </a>

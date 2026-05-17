@@ -13,7 +13,7 @@
             <i data-feather="user-plus" class="me-1"></i>Add Customer
         </a>
     </div>
-    
+
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
             {% for category, message in messages %}
@@ -24,7 +24,7 @@
             {% endfor %}
         {% endif %}
     {% endwith %}
-    
+
     <div class="card">
         <div class="card-header">
             <div class="d-flex justify-content-between align-items-center">
@@ -74,11 +74,11 @@
                             </td>
                             <td class="text-center">
                                 <div class="btn-group btn-group-sm">
-                                    <a href="{{ url_for('routes.customer_detail', customer_id=customer.id) }}" 
+                                    <a href="{{ url_for('routes.customer_detail', customer_id=customer.id) }}"
                                        class="btn btn-outline-primary" title="View">
                                         <i data-feather="eye"></i>
                                     </a>
-                                    <a href="{{ url_for('routes.customer_edit', customer_id=customer.id) }}" 
+                                    <a href="{{ url_for('routes.customer_edit', customer_id=customer.id) }}"
                                        class="btn btn-outline-secondary" title="Edit">
                                         <i data-feather="edit-2"></i>
                                     </a>

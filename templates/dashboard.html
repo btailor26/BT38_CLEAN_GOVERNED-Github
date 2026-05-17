@@ -27,7 +27,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-3 mb-3">
         <div class="card bg-success text-white">
             <div class="card-body">
@@ -41,7 +41,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-3 mb-3">
         <div class="card bg-info text-white">
             <div class="card-body">
@@ -55,7 +55,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="col-md-3 mb-3">
         <a href="{{ url_for('routes.low_stock_items') }}" class="text-decoration-none">
             <div class="card {% if stats.low_stock_items > 0 %}bg-warning{% else %}bg-secondary{% endif %} text-white">
@@ -255,7 +255,7 @@
     setInterval(function() {
         refreshSyncStatus();
     }, 30000);
-    
+
     function refreshSyncStatus() {
         fetch('/api/sync-status')
             .then(response => response.json())
@@ -266,16 +266,16 @@
                 console.error('Error fetching sync status:', error);
             });
     }
-    
+
     function updateSyncStatusDisplay(stores) {
         const statusElement = document.getElementById('sync-status');
         if (stores && stores.length > 0) {
             const syncingStores = stores.filter(store => store.sync_status === 'syncing').length;
             const errorStores = stores.filter(store => store.sync_status === 'error').length;
-            
+
             let statusText = '';
             let badgeClass = '';
-            
+
             if (syncingStores > 0) {
                 statusText = `${syncingStores} Syncing`;
                 badgeClass = 'bg-warning';
@@ -286,11 +286,11 @@
                 statusText = 'All Synced';
                 badgeClass = 'bg-success';
             }
-            
+
             statusElement.innerHTML = `Sync Status: <span class="badge ${badgeClass}">${statusText}</span>`;
         }
     }
-    
+
     // Initial sync status check
     refreshSyncStatus();
 </script>

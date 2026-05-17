@@ -41,7 +41,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="card">
         <div class="card-header">
             <h5>Inspection Checklist</h5>
@@ -69,21 +69,21 @@
                             <td>{{ item.ordered_quantity }}</td>
                             <td><span class="badge bg-warning">{{ item.pending_quantity }}</span></td>
                             <td>
-                                <input type="number" class="form-control form-control-sm qty-received" 
-                                       name="qty_received_{{ item.id }}" 
-                                       min="0" max="{{ item.pending_quantity }}" 
-                                       value="{{ item.pending_quantity }}" 
+                                <input type="number" class="form-control form-control-sm qty-received"
+                                       name="qty_received_{{ item.id }}"
+                                       min="0" max="{{ item.pending_quantity }}"
+                                       value="{{ item.pending_quantity }}"
                                        data-item-id="{{ item.id }}" required>
                             </td>
                             <td>
-                                <input type="number" class="form-control form-control-sm qty-damaged" 
-                                       name="qty_damaged_{{ item.id }}" 
-                                       min="0" value="0" 
+                                <input type="number" class="form-control form-control-sm qty-damaged"
+                                       name="qty_damaged_{{ item.id }}"
+                                       min="0" value="0"
                                        data-item-id="{{ item.id }}">
                             </td>
                             <td>
-                                <select class="form-select form-select-sm damage-type" 
-                                        name="damage_type_{{ item.id }}" 
+                                <select class="form-select form-select-sm damage-type"
+                                        name="damage_type_{{ item.id }}"
                                         data-item-id="{{ item.id }}" disabled>
                                     <option value="">None</option>
                                     <option value="broken">Broken</option>
@@ -95,9 +95,9 @@
                                 </select>
                             </td>
                             <td>
-                                <input type="text" class="form-control form-control-sm damage-notes" 
-                                       name="damage_notes_{{ item.id }}" 
-                                       placeholder="Describe damage..." 
+                                <input type="text" class="form-control form-control-sm damage-notes"
+                                       name="damage_notes_{{ item.id }}"
+                                       placeholder="Describe damage..."
                                        data-item-id="{{ item.id }}" disabled>
                             </td>
                         </tr>
@@ -107,7 +107,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="row mt-4">
         <div class="col-md-8">
             <div class="card bg-light">
@@ -127,7 +127,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="d-flex justify-content-between mt-4">
         <a href="{{ url_for('routes.purchase_orders') }}" class="btn btn-secondary">
             <i data-feather="x"></i> Cancel
@@ -141,29 +141,29 @@
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         feather.replace();
-        
+
         function updateTotals() {
             let totalReceived = 0;
             let totalDamaged = 0;
-            
+
             document.querySelectorAll('.qty-received').forEach(input => {
                 totalReceived += parseInt(input.value) || 0;
             });
-            
+
             document.querySelectorAll('.qty-damaged').forEach(input => {
                 totalDamaged += parseInt(input.value) || 0;
             });
-            
+
             document.getElementById('totalReceived').textContent = totalReceived;
             document.getElementById('totalDamaged').textContent = totalDamaged;
             document.getElementById('totalAccepted').textContent = totalReceived - totalDamaged;
         }
-        
+
         function updateDamageFields(itemId) {
             const damagedQty = parseInt(document.querySelector(`[name="qty_damaged_${itemId}"]`).value) || 0;
             const damageType = document.querySelector(`[name="damage_type_${itemId}"]`);
             const damageNotes = document.querySelector(`[name="damage_notes_${itemId}"]`);
-            
+
             if (damagedQty > 0) {
                 damageType.disabled = false;
                 damageNotes.disabled = false;
@@ -176,35 +176,35 @@
                 damageNotes.value = '';
             }
         }
-        
+
         // Listen for quantity changes
         document.querySelectorAll('.qty-received, .qty-damaged').forEach(input => {
             input.addEventListener('input', function() {
                 const itemId = this.dataset.itemId;
                 const receivedInput = document.querySelector(`[name="qty_received_${itemId}"]`);
                 const damagedInput = document.querySelector(`[name="qty_damaged_${itemId}"]`);
-                
+
                 const received = parseInt(receivedInput.value) || 0;
                 const damaged = parseInt(damagedInput.value) || 0;
-                
+
                 // Ensure damaged doesn't exceed received
                 if (damaged > received) {
                     damagedInput.value = received;
                 }
-                
+
                 updateDamageFields(itemId);
                 updateTotals();
             });
         });
-        
+
         // Form validation
         document.getElementById('receiveForm').addEventListener('submit', function(e) {
             let isValid = true;
-            
+
             document.querySelectorAll('.qty-damaged').forEach(input => {
                 const itemId = input.dataset.itemId;
                 const damagedQty = parseInt(input.value) || 0;
-                
+
                 if (damagedQty > 0) {
                     const damageType = document.querySelector(`[name="damage_type_${itemId}"]`);
                     if (!damageType.value) {
@@ -215,12 +215,12 @@
                     }
                 }
             });
-            
+
             if (!isValid) {
                 e.preventDefault();
             }
         });
-        
+
         // Initialize
         updateTotals();
     });

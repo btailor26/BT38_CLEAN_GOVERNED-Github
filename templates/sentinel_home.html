@@ -23,7 +23,7 @@
         .env-staging { background: linear-gradient(135deg, #fd7e14, #dc6a00); }
         .env-dev { background: linear-gradient(135deg, #198754, #146c43); }
         .env-unknown { background: linear-gradient(135deg, #6c757d, #495057); }
-        
+
         .mode-badge {
             font-size: 1.5rem;
             padding: 0.5rem 1.5rem;
@@ -34,7 +34,7 @@
         .mode-locked { background: linear-gradient(135deg, #dc3545, #b02a37); }
         .mode-observe { background: linear-gradient(135deg, #0dcaf0, #0aa2c0); }
         .mode-plan { background: linear-gradient(135deg, #ffc107, #d9a406); color: #000; }
-        
+
         .exec-badge {
             font-size: 2rem;
             padding: 0.75rem 2rem;
@@ -44,7 +44,7 @@
         .exec-disabled { background: linear-gradient(135deg, #dc3545, #b02a37); }
         .exec-enabled { background: linear-gradient(135deg, #198754, #146c43); }
         .exec-readonly { background: linear-gradient(135deg, #fd7e14, #dc6a00); }
-        
+
         .fingerprint-table {
             background: #16213e;
             border-radius: 0.5rem;
@@ -122,7 +122,7 @@
             <h1 class="mb-2">SENTINEL-1</h1>
             <h4 class="text-muted mb-4">SYSTEM CONTROL</h4>
         </div>
-        
+
         <div class="row justify-content-center mb-3">
             <div class="col-auto">
                 <div id="env-badge" class="env-badge env-unknown">
@@ -130,7 +130,7 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="row justify-content-center mb-3">
             <div class="col-auto">
                 <div id="mode-badge" class="mode-badge mode-locked">
@@ -138,7 +138,7 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="row justify-content-center mb-4">
             <div class="col-auto">
                 <div id="exec-badge" class="exec-badge exec-disabled">
@@ -146,7 +146,7 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="row justify-content-center mb-4">
             <div class="col-auto">
                 <div class="text-center">
@@ -155,7 +155,7 @@
                 </div>
             </div>
         </div>
-        
+
         <div class="row">
             <div class="col-lg-10 mx-auto">
                 <div class="section-card p-4 mb-4">
@@ -168,7 +168,7 @@
                         </tbody>
                     </table>
                 </div>
-                
+
                 {% if is_staging and is_admin %}
                 <div id="architect-controls" class="section-card p-4 mb-4" style="border: 2px solid #ffc107;">
                     <h4 class="mb-3 text-warning">ARCHITECT CONTROLS (Admin Only)</h4>
@@ -177,7 +177,7 @@
                     <h4 class="mb-3 text-warning">ARCHITECT CONTROLS (Admin Only)</h4>
                 {% endif %}
                     <p class="text-danger mb-3"><strong>WARNING:</strong> Execution remains OFF unless explicitly enabled with confirmation.</p>
-                    
+
                     <div class="row">
                         <div class="col-md-4 mb-3">
                             <div class="form-check form-switch">
@@ -210,17 +210,17 @@
                             </button>
                         </div>
                     </div>
-                    
+
                     <div class="mt-3 p-2 bg-dark rounded">
                         <small class="text-muted">Last modified: <span id="control-last-modified">Never</span></small>
                     </div>
                 </div>
-                
+
                 <div id="command-panel" class="section-card p-4 mb-4">
                     <h4 class="mb-3">Command Validation (PLAN MODE)</h4>
                     <p class="text-warning mb-3">Commands are validated but NEVER executed. This is a planning tool only.</p>
                     <div class="mb-3">
-                        <textarea id="command-input" class="form-control command-input" rows="3" 
+                        <textarea id="command-input" class="form-control command-input" rows="3"
                             placeholder="Enter command to validate (will NOT be executed)..."></textarea>
                     </div>
                     <button id="validate-btn" class="btn btn-warning mb-3" onclick="validateCommand()">
@@ -228,27 +228,27 @@
                     </button>
                     <div id="command-result" class="command-result" style="display: none;"></div>
                 </div>
-                
+
                 <div id="vault-panel" class="section-card p-4 mb-4" style="display: none;">
                     <h4 class="mb-3">Knowledge Vault</h4>
                     <p class="text-muted mb-3">Read-only document storage. No auto-processing or execution.</p>
-                    
+
                     <div id="upload-panel" style="display: none;">
                         <div class="mb-3">
                             <label class="form-label">Upload Document (PDF, CSV, TXT, MD - max 10MB)</label>
-                            <input type="file" id="vault-file" class="form-control bg-dark text-light" 
+                            <input type="file" id="vault-file" class="form-control bg-dark text-light"
                                 accept=".pdf,.csv,.txt,.md">
                         </div>
                         <button class="btn btn-outline-info btn-sm mb-3" onclick="uploadFile()">
                             Upload to Vault
                         </button>
                     </div>
-                    
+
                     <div id="vault-files">
                         <p class="text-muted">Loading vault contents...</p>
                     </div>
                 </div>
-                
+
                 <div class="row">
                     <div class="col-md-6">
                         <div class="section-card p-4 mb-4">
@@ -275,7 +275,7 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="safety-box">
                     <h5 class="text-danger mb-3">SAFETY CONFIRMATION</h5>
                     <ul class="list-unstyled mb-0">
@@ -285,21 +285,21 @@
                         <li>&#128274; <strong>STATE_CHANGES = NONE</strong> - No system state changes</li>
                     </ul>
                 </div>
-                
+
                 <div class="section-card p-4 mt-4">
                     <h5 class="mb-3">Raw JSON Response</h5>
                     <pre id="raw-json" class="bg-dark p-3 rounded text-light" style="max-height: 300px; overflow: auto;">Loading...</pre>
                 </div>
             </div>
         </div>
-        
+
         <div class="text-center mt-5">
             <small class="text-muted">
                 SENTINEL-1 v2.0 | BT38 Inventory System | Read-Only Control Panel
             </small>
         </div>
     </div>
-    
+
     <script>
         let currentMode = 'LOCKED';
         let currentEnv = '{{ app_env | default("unknown") }}';
@@ -310,7 +310,7 @@
             command_output_enabled: false,
             execution_enabled: false
         }{% endif %};
-        
+
         async function loadControlSwitches() {
             try {
                 const response = await fetch('/api/sentinel/control');
@@ -326,16 +326,16 @@
                 console.log('Control switches not available:', error.message);
             }
         }
-        
+
         function updateSwitchUI() {
             document.getElementById('switch-input').checked = controlSwitches.command_input_enabled || false;
             document.getElementById('switch-output').checked = controlSwitches.command_output_enabled || false;
             document.getElementById('switch-execution').checked = controlSwitches.execution_enabled || false;
-            
-            const lastMod = controlSwitches.last_modified_at ? 
+
+            const lastMod = controlSwitches.last_modified_at ?
                 `${controlSwitches.last_modified_at} by ${controlSwitches.last_modified_by || 'unknown'}` : 'Never';
             document.getElementById('control-last-modified').textContent = lastMod;
-            
+
             // Show/hide command panel based on input switch ONLY (not staging)
             if (controlSwitches.command_input_enabled) {
                 document.getElementById('command-panel').style.display = 'block';
@@ -349,10 +349,10 @@
                 document.getElementById('command-panel').querySelector('h4').textContent = 'Command Input (Locked by Architect)';
             }
         }
-        
+
         async function toggleSwitch(switchType) {
             const payload = {};
-            
+
             if (switchType === 'input') {
                 payload.command_input_enabled = document.getElementById('switch-input').checked;
             } else if (switchType === 'output') {
@@ -370,16 +370,16 @@
                     payload.execution_enabled = false;
                 }
             }
-            
+
             try {
                 const response = await fetch('/api/sentinel/control', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     controlSwitches = data.switches;
                     updateSwitchUI();
@@ -393,19 +393,19 @@
                 loadControlSwitches();
             }
         }
-        
+
         function unlockExecutionToggle() {
             if (confirm('WARNING: This will unlock the EXECUTION toggle. Only proceed if you understand the consequences.')) {
                 document.getElementById('switch-execution').disabled = false;
                 document.getElementById('switch-execution').parentElement.classList.add('border', 'border-danger', 'p-2', 'rounded');
             }
         }
-        
+
         async function loadFingerprint() {
             try {
                 const response = await fetch('/api/system/fingerprint');
                 const data = await response.json();
-                
+
                 const envBadge = document.getElementById('env-badge');
                 const env = data.app_env || 'unknown';
                 currentEnv = env;
@@ -415,16 +415,16 @@
                     env === 'staging' ? 'staging' :
                     env === 'dev' || env === 'development' ? 'dev' : 'unknown'
                 );
-                
+
                 const modeBadge = document.getElementById('mode-badge');
                 currentMode = data.sentinel_mode || 'LOCKED';
                 modeBadge.textContent = 'SENTINEL: ' + currentMode;
                 modeBadge.className = 'mode-badge mode-' + currentMode.toLowerCase();
-                
+
                 // Load control switches (will show admin panel if authorized)
                 // Note: updateSwitchUI() handles command panel visibility
                 loadControlSwitches();
-                
+
                 if (currentMode === 'OBSERVE' || currentMode === 'PLAN') {
                     document.getElementById('vault-panel').style.display = 'block';
                     document.getElementById('upload-panel').style.display = 'block';
@@ -432,7 +432,7 @@
                 } else {
                     document.getElementById('vault-panel').style.display = 'none';
                 }
-                
+
                 const execBadge = document.getElementById('exec-badge');
                 const mode = data.execution_mode || 'disabled';
                 execBadge.textContent = 'EXECUTION: ' + mode.toUpperCase();
@@ -440,13 +440,13 @@
                     mode === 'enabled' ? 'enabled' :
                     mode === 'read-only' ? 'readonly' : 'disabled'
                 );
-                
-                document.getElementById('db-fingerprint').textContent = 
+
+                document.getElementById('db-fingerprint').textContent =
                     data.database?.fingerprint || 'unknown';
-                
+
                 const tbody = document.getElementById('fingerprint-body');
                 tbody.innerHTML = '';
-                
+
                 const rows = [
                     ['App Environment', data.app_env],
                     ['Flask Environment', data.flask_env || '(not set)'],
@@ -466,43 +466,43 @@
                     ['DB Fingerprint', data.database?.fingerprint],
                     ['Timestamp', data.timestamp]
                 ];
-                
+
                 rows.forEach(([label, value]) => {
                     const tr = document.createElement('tr');
                     tr.innerHTML = `<th>${label}</th><td>${value}</td>`;
                     tbody.appendChild(tr);
                 });
-                
-                document.getElementById('raw-json').textContent = 
+
+                document.getElementById('raw-json').textContent =
                     JSON.stringify(data, null, 2);
-                    
+
             } catch (error) {
                 console.error('Failed to load fingerprint:', error);
-                document.getElementById('fingerprint-body').innerHTML = 
+                document.getElementById('fingerprint-body').innerHTML =
                     '<tr><td colspan="2" class="text-danger">Error loading fingerprint: ' + error.message + '</td></tr>';
             }
         }
-        
+
         async function validateCommand() {
             const command = document.getElementById('command-input').value;
             const resultDiv = document.getElementById('command-result');
-            
+
             if (!command.trim()) {
                 resultDiv.style.display = 'block';
                 resultDiv.innerHTML = '<span class="text-warning">Please enter a command to validate</span>';
                 return;
             }
-            
+
             try {
                 const response = await fetch('/api/sentinel/validate-command', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ command })
                 });
-                
+
                 const data = await response.json();
                 resultDiv.style.display = 'block';
-                
+
                 if (data.valid) {
                     resultDiv.innerHTML = `
                         <span class="text-success">&#10004; ${data.status}</span><br>
@@ -526,19 +526,19 @@
                 resultDiv.innerHTML = `<span class="text-danger">Error: ${error.message}</span>`;
             }
         }
-        
+
         async function loadVaultFiles() {
             try {
                 const response = await fetch('/api/sentinel/knowledge');
                 const data = await response.json();
-                
+
                 const container = document.getElementById('vault-files');
-                
+
                 if (!data.files || data.files.length === 0) {
                     container.innerHTML = '<p class="text-muted">Knowledge Vault is empty. Ready for uploads.</p>';
                     return;
                 }
-                
+
                 let html = `<p class="text-info mb-2">${data.count} file(s) in vault</p>`;
                 data.files.forEach(file => {
                     html += `
@@ -555,29 +555,29 @@
                 });
                 container.innerHTML = html;
             } catch (error) {
-                document.getElementById('vault-files').innerHTML = 
+                document.getElementById('vault-files').innerHTML =
                     `<p class="text-danger">Error loading vault: ${error.message}</p>`;
             }
         }
-        
+
         async function uploadFile() {
             const fileInput = document.getElementById('vault-file');
             if (!fileInput.files || fileInput.files.length === 0) {
                 alert('Please select a file to upload');
                 return;
             }
-            
+
             const formData = new FormData();
             formData.append('file', fileInput.files[0]);
-            
+
             try {
                 const response = await fetch('/api/sentinel/knowledge/upload', {
                     method: 'POST',
                     body: formData
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (data.success) {
                     alert('File uploaded successfully: ' + data.filename);
                     fileInput.value = '';
@@ -589,12 +589,12 @@
                 alert('Upload error: ' + error.message);
             }
         }
-        
+
         // Initialize switch UI with server-side data if available
         if (isAdmin && isStaging) {
             updateSwitchUI();
         }
-        
+
         loadFingerprint();
         setInterval(loadFingerprint, 30000);
     </script>
