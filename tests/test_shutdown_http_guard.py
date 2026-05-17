@@ -13,6 +13,7 @@ import shutdown_http_guard as guard
 REAL_KNOWN_SKUS = [
     "FBA-CG-UN-05",
     "FBA-KA-OL-100-ML",
+    "EB-OD-CR-100g-X3",
 ]
 
 
