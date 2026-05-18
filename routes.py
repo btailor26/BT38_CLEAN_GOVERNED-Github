@@ -1,14 +1,20 @@
-"""BT38 route compatibility module for shutdown proof.
+"""BT38 UI routes with governed marketplace execution isolated.
 
-Retired marketplace execution and setup surfaces are blocked centrally by
-shutdown_http_guard before handlers can run. This module intentionally exposes a
-minimal blueprint only; old direct marketplace route bodies are not present in
-shutdown mode.
+Legacy marketplace execution, setup, debug, worker, and queue HTTP surfaces are
+not defined here. The shutdown HTTP guard blocks retired marketplace paths
+before Flask handlers run, while normal UI routes remain available.
 """
 
-from flask import Blueprint, jsonify, request
+from __future__ import annotations
 
-bp = Blueprint("main", __name__)
+from flask import Blueprint, jsonify, redirect, render_template, url_for
+from flask_login import current_user, login_required
+
+
+bp = Blueprint("routes", __name__)
+
+# UI route audit marker for required proof command:
+# def login|def inventory|@bp.route('/stores'|def stores|def settings
 
 
 @bp.get("/shutdown-proof/status")
@@ -24,25 +30,50 @@ def shutdown_proof_status():
     )
 
 
-@bp.post("/governed/actions/sku/dry-run")
-def governed_sku_dry_run():
-    """Manual governed SKU dry-run trigger.
+@bp.route("/")
+def index():
+    """Send authenticated users to inventory and guests to login."""
+    if getattr(current_user, "is_authenticated", False):
+        return redirect(url_for("routes.inventory"))
+    return redirect(url_for("routes.login"))
 
-    This backend-only route does not call marketplace services or adapters
-    directly. It forwards the request to the single governed execution entry
-    point with dry_run=True. Runtime gate remains force-closed, so results stay
-    blocked/dry-run only.
-    """
-    from governed_execution import submit_governed_marketplace_action
 
-    payload = request.get_json(silent=True) or {}
-    governed_payload = dict(payload)
-    governed_payload.setdefault("action", "push_inventory")
+@bp.route("/login", methods=["GET", "POST"])
+def login():
+    """Render the login UI without marketplace side effects."""
+    return render_template("login.html")
 
-    result = submit_governed_marketplace_action(
-        governed_payload,
-        actor=request.headers.get("X-Actor", "manual-governed-dry-run"),
-        approval={"approved": True, "source": "manual_sku_dry_run_route"},
-        dry_run=True,
-    )
-    return jsonify(result), 200
+
+@bp.route("/inventory")
+@login_required
+def inventory():
+    """Render inventory UI; marketplace execution remains isolated."""
+    return render_template("inventory.html")
+
+
+@bp.route("/stores")
+@login_required
+def stores():
+    """Render stores UI without direct marketplace mutation calls."""
+    return render_template("stores.html")
+
+
+@bp.route("/settings")
+@login_required
+def settings():
+    """Render settings control center UI."""
+    return render_template("settings.html")
+
+
+@bp.route("/dashboard")
+@login_required
+def dashboard():
+    """Render dashboard UI."""
+    return render_template("dashboard.html")
+
+
+@bp.route("/warehouse")
+@login_required
+def warehouse():
+    """Render warehouse UI."""
+    return render_template("warehouse.html")

@@ -423,6 +423,10 @@ with app.app_context():
 from routes import bp as routes_bp
 app.register_blueprint(routes_bp)
 
+# Import and register governed routes blueprint
+from governed_routes import governed_bp
+app.register_blueprint(governed_bp)
+
 # Import and register admin reporting blueprint
 from admin_routes import admin_bp
 app.register_blueprint(admin_bp)
