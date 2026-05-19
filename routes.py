@@ -2708,34 +2708,134 @@ def search_groups():
 @bp.route('/warehouse')
 # @login_required  # Temporarily disabled for access
 def warehouse():
-    """Warehouse stock management dashboard"""
-    # Get search and filter parameters
+    """Warehouse stock management dashboard with marketplace listing enrichment."""
+    from types import SimpleNamespace
+
     search_query = request.args.get('search', '').strip()
     low_stock = request.args.get('low_stock', '')
     page = int(request.args.get('page', 1))
     per_page = 50
 
-    # Build base query
-    query = db.session.query(WarehouseStock)
+    query = db.session.query(WarehouseStock).options(
+        joinedload(WarehouseStock.marketplace_listings).joinedload(MarketplaceListing.store)
+    ).filter(
+        WarehouseStock.is_active == True,
+        WarehouseStock.is_deleted == False
+    )
 
-    # Apply filters
     if search_query:
         query = query.filter(WarehouseStock.sku.ilike(f'%{search_query}%'))
 
     if low_stock == 'true':
         query = query.filter(WarehouseStock.available_quantity <= WarehouseStock.reorder_point)
 
-    # Order by SKU and paginate
-    query = query.order_by(WarehouseStock.sku)
-    warehouse_items = query.paginate(page=page, per_page=per_page, error_out=False)
+    raw_page = query.order_by(WarehouseStock.sku).paginate(
+        page=page,
+        per_page=per_page,
+        error_out=False
+    )
 
-    # Get summary statistics
-    total_skus = db.session.query(WarehouseStock).filter(WarehouseStock.is_active == True).count()
+    enriched_items = []
+
+    for stock in raw_page.items:
+        active_listings = [
+            listing for listing in (stock.marketplace_listings or [])
+            if getattr(listing, 'is_active', False)
+        ]
+
+        amazon_fbm = [
+            listing for listing in active_listings
+            if listing.store
+            and 'amazon' in (listing.store.platform or '').lower()
+            and (listing.normalized_amazon_fulfillment_channel or '').upper() in ('MFN', 'FBM', 'MERCHANT')
+        ]
+
+        amazon_fba = [
+            listing for listing in active_listings
+            if listing.store
+            and 'amazon' in (listing.store.platform or '').lower()
+            and (listing.normalized_amazon_fulfillment_channel or '').upper() in ('AFN', 'FBA')
+        ]
+
+        ebay_rows = [
+            listing for listing in active_listings
+            if listing.store
+            and 'ebay' in (listing.store.platform or '').lower()
+        ]
+
+        if amazon_fbm:
+            primary_listing = amazon_fbm[0]
+        elif ebay_rows:
+            primary_listing = ebay_rows[0]
+        elif amazon_fba:
+            primary_listing = amazon_fba[0]
+        elif active_listings:
+            primary_listing = active_listings[0]
+        else:
+            primary_listing = None
+
+        platform = primary_listing.store.platform if primary_listing and primary_listing.store else None
+        store_name = primary_listing.store.name if primary_listing and primary_listing.store else None
+        channel = primary_listing.normalized_amazon_fulfillment_channel if primary_listing else None
+
+        if platform and 'amazon' in platform.lower() and channel in ('AFN', 'FBA'):
+            location = 'Amazon FBA'
+        elif platform and 'amazon' in platform.lower():
+            location = 'Amazon FBM'
+        elif platform and 'ebay' in platform.lower():
+            location = 'eBay'
+        else:
+            location = stock.location or 'Warehouse'
+
+        enriched_items.append(SimpleNamespace(
+            id=stock.id,
+            inventory_item_id=getattr(stock, 'inventory_item_id', None),
+            item_id=getattr(stock, 'item_id', None),
+            marketplace_listing_id=primary_listing.id if primary_listing else None,
+            sku=stock.sku,
+            barcode=stock.barcode,
+            product_name=stock.product_name,
+            title=primary_listing.title if primary_listing else None,
+            group_title=stock.group_title,
+            image_url=stock.image_url,
+            available_quantity=stock.available_quantity,
+            price=primary_listing.price if primary_listing else stock.unit_cost,
+            store_name=store_name,
+            location=location,
+            amazon_fulfillment_channel=channel,
+            master_product_group_id=stock.master_product_group_id,
+            is_group_controlled=stock.is_group_controlled,
+            mcf_group_source=False,
+            linked_listing_count=len(active_listings),
+        ))
+
+    warehouse_items = SimpleNamespace(
+        items=enriched_items,
+        total=raw_page.total,
+        page=raw_page.page,
+        per_page=raw_page.per_page,
+        pages=raw_page.pages,
+        has_next=raw_page.has_next,
+        has_prev=raw_page.has_prev,
+        next_num=raw_page.next_num,
+        prev_num=raw_page.prev_num,
+    )
+
+    total_skus = db.session.query(WarehouseStock).filter(
+        WarehouseStock.is_active == True,
+        WarehouseStock.is_deleted == False
+    ).count()
+
     low_stock_count = db.session.query(WarehouseStock).filter(
         WarehouseStock.available_quantity <= WarehouseStock.reorder_point,
-        WarehouseStock.is_active == True
+        WarehouseStock.is_active == True,
+        WarehouseStock.is_deleted == False
     ).count()
-    total_available = db.session.query(db.func.sum(WarehouseStock.available_quantity)).scalar() or 0
+
+    total_available = db.session.query(db.func.sum(WarehouseStock.available_quantity)).filter(
+        WarehouseStock.is_active == True,
+        WarehouseStock.is_deleted == False
+    ).scalar() or 0
 
     stats = {
         'total_skus': total_skus,
@@ -2743,11 +2843,13 @@ def warehouse():
         'total_available': total_available
     }
 
-    return render_template('warehouse.html',
-                         warehouse_items=warehouse_items,
-                         stats=stats,
-                         current_search=search_query,
-                         low_stock_filter=low_stock)
+    return render_template(
+        'warehouse.html',
+        warehouse_items=warehouse_items,
+        stats=stats,
+        current_search=search_query,
+        low_stock_filter=low_stock
+    )
 
 @bp.route('/warehouse/<int:stock_id>')
 # @login_required  # Temporarily disabled for access
