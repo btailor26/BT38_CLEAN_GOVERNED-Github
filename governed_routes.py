@@ -3,7 +3,10 @@ from __future__ import annotations
 from datetime import datetime
 
 from flask import Blueprint, jsonify, request
-from flask_login import current_user
+try:
+    from flask_login import current_user
+except ModuleNotFoundError:
+    current_user = None
 
 governed_bp = Blueprint("governed", __name__)
 
@@ -20,7 +23,6 @@ def shutdown_proof_status():
 
 @governed_bp.post("/governed/actions/sku/dry-run")
 def governed_sku_dry_run():
-    """Manual governed SKU dry-run trigger; never performs live execution."""
     from governed_execution import submit_governed_marketplace_action
 
     governed_payload = dict(request.get_json(silent=True) or {})
@@ -37,18 +39,10 @@ def governed_sku_dry_run():
 
 @governed_bp.post("/governed/actions/listings/<int:listing_id>/push")
 def governed_listing_push(listing_id: int):
-    """UI-safe governed single listing push trigger.
-
-    This endpoint does not touch old sync workers, queues, schedulers, or legacy
-    marketplace execution. It resolves the listing, builds an exact approval
-    scope, temporarily opens only the governed Amazon runtime gate for the one
-    command, then closes the gate before returning.
-    """
     body = dict(request.get_json(silent=True) or {})
-    quantity = body.get("quantity")
     result = _push_one_listing(
         listing_id=listing_id,
-        quantity=quantity,
+        quantity=body.get("quantity"),
         actor=_actor(),
         source="ui_listing_button",
     )
@@ -57,13 +51,6 @@ def governed_listing_push(listing_id: int):
 
 @governed_bp.post("/governed/actions/groups/<int:group_id>/push")
 def governed_group_push(group_id: int):
-    """UI-safe governed group push trigger.
-
-    Group push is deliberately serial and explicit. Each linked marketplace
-    listing is run through the same single governed entry point used by the
-    proven Amazon live test. eBay currently returns the governed blocked result
-    until its live adapter is built.
-    """
     from extensions import db
     from models import MarketplaceListing
 
@@ -75,17 +62,15 @@ def governed_group_push(group_id: int):
         .order_by(MarketplaceListing.id)
         .all()
     )
-    results = []
-    for listing in listings:
-        results.append(
-            _push_one_listing(
-                listing_id=listing.id,
-                quantity=body.get("quantity"),
-                actor=_actor(),
-                source="ui_group_button",
-            )
+    results = [
+        _push_one_listing(
+            listing_id=listing.id,
+            quantity=body.get("quantity"),
+            actor=_actor(),
+            source="ui_group_button",
         )
-
+        for listing in listings
+    ]
     ok_count = sum(1 for item in results if item.get("ok"))
     return jsonify({
         "success": ok_count == len(results) and bool(results),
@@ -100,7 +85,6 @@ def governed_group_push(group_id: int):
 
 @governed_bp.get("/governed/actions/history")
 def governed_action_history():
-    """Small governed audit/history endpoint for UI panels."""
     from extensions import db
     from models import SyncLog
 
