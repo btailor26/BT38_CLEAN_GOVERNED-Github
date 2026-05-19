@@ -5,7 +5,7 @@ from datetime import datetime
 from flask import Blueprint, jsonify, request
 try:
     from flask_login import current_user
-except ModuleNotFoundError:
+except Exception:
     current_user = None
 
 governed_bp = Blueprint("governed", __name__)
@@ -89,7 +89,9 @@ def governed_action_history():
     from models import SyncLog
 
     limit = min(int(request.args.get("limit", 50)), 200)
-    query = db.session.query(SyncLog).filter(SyncLog.log_type == "governed_push")
+    query = db.session.query(SyncLog).filter(
+        SyncLog.message.contains("governed_push")
+    )
     listing_id = request.args.get("listing_id")
     if listing_id:
         query = query.filter(SyncLog.message.contains(f"listing_id={listing_id}"))
@@ -103,7 +105,7 @@ def governed_action_history():
                 "store_id": row.store_id,
                 "status": row.status,
                 "message": row.message,
-                "items_pushed": row.items_pushed,
+                "items_synced": row.items_synced,
                 "created_at": row.created_at.isoformat() if row.created_at else None,
             }
             for row in rows
@@ -127,7 +129,10 @@ def _push_one_listing(*, listing_id: int, quantity, actor: str, source: str) -> 
 
     platform = (listing.store.platform or "").strip().lower()
     marketplace = "amazon" if "amazon" in platform else "ebay" if "ebay" in platform else platform
-    push_quantity = listing.effective_quantity if quantity is None else int(quantity)
+    try:
+        push_quantity = listing.effective_quantity if quantity is None else int(quantity)
+    except (TypeError, ValueError):
+        return _blocked("Quantity must be an integer.", listing_id=listing_id, quantity=quantity)
     sku = (listing.external_sku or listing.warehouse_stock.sku or "").strip()
 
     payload = {
@@ -180,14 +185,12 @@ def _push_one_listing(*, listing_id: int, quantity, actor: str, source: str) -> 
 
     db.session.add(SyncLog(
         store_id=listing.store_id,
-        log_type="governed_push",
         status="success" if ok else "error",
         message=(
             f"governed_push listing_id={listing.id} sku={sku} "
             f"marketplace={marketplace} source={source} ok={ok}"
         )[:500],
-        items_imported=0,
-        items_pushed=1 if ok else 0,
+        items_synced=1 if ok else 0,
         created_at=datetime.utcnow(),
     ))
     db.session.commit()
