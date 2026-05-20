@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from types import SimpleNamespace
+import json
 
 from flask import Blueprint, jsonify, render_template, request
 try:
@@ -170,13 +171,14 @@ def governed_warehouse_page():
     )
     warehouse_items = SimpleNamespace(items=rows, total=len(rows))
 
-    return render_template(
+    html = render_template(
         "warehouse.html",
         warehouse_items=warehouse_items,
         stats=stats,
         search_query=q,
         active_view=view,
     )
+    return _patch_warehouse_phase1_ui(html, stats, q, view)
 
 
 @governed_bp.post("/governed/actions/sku/dry-run")
@@ -371,6 +373,108 @@ def _blocked(reason: str, **extra) -> dict:
     }
     result.update(extra)
     return result
+
+
+def _patch_warehouse_phase1_ui(html: str, stats, search_query: str, active_view: str) -> str:
+    """Safely wire existing warehouse.html without replacing the finished template.
+
+    This keeps the approved layout intact and adds only runtime behavior:
+    search, KPI filters, tab filters, and real dynamic KPI values.
+    """
+    listing_count = f"{int(getattr(stats, 'listing_count', 0) or 0):,}"
+    inventory_value = f"£{float(getattr(stats, 'inventory_value', 0) or 0):,.0f}"
+    html = html.replace("<strong>1,156</strong>", f"<strong>{listing_count}</strong>")
+    html = html.replace("<strong>£183k</strong>", f"<strong>{inventory_value}</strong>")
+
+    payload = {
+        "searchQuery": search_query or "",
+        "activeView": active_view or "all",
+    }
+    script = f"""
+<script id="bt38Phase1WarehouseWiring">
+(function() {{
+  const state = {json.dumps(payload)};
+
+  function go(view, extra) {{
+    const url = new URL(window.location.href);
+    if (view && view !== 'all') url.searchParams.set('view', view);
+    else url.searchParams.delete('view');
+    if (extra && Object.prototype.hasOwnProperty.call(extra, 'q')) {{
+      const q = String(extra.q || '').trim();
+      if (q) url.searchParams.set('q', q);
+      else url.searchParams.delete('q');
+    }}
+    window.location.href = url.pathname + (url.search ? url.search : '');
+  }}
+
+  function wireSearch() {{
+    const input = document.querySelector('.bt38-search-wrap input');
+    if (!input) return;
+    input.value = state.searchQuery || '';
+    input.setAttribute('name', 'q');
+    input.setAttribute('aria-label', 'Search SKU, product, ASIN, FNSKU or barcode');
+    input.addEventListener('keydown', function(e) {{
+      if (e.key === 'Enter') go(state.activeView || 'all', {{ q: input.value }});
+    }});
+  }}
+
+  function makeClickable(el, title, fn) {{
+    if (!el) return;
+    el.setAttribute('role', 'button');
+    el.setAttribute('tabindex', '0');
+    el.style.cursor = 'pointer';
+    if (title) el.setAttribute('title', title);
+    el.addEventListener('click', fn);
+    el.addEventListener('keydown', function(e) {{
+      if (e.key === 'Enter' || e.key === ' ') {{ e.preventDefault(); fn(); }}
+    }});
+  }}
+
+  function wireKpis() {{
+    const cards = Array.from(document.querySelectorAll('.bt38-kpi-card'));
+    makeClickable(cards[0], 'Show all SKUs', () => go('all'));
+    makeClickable(cards[1], 'Show available stock', () => go('available'));
+    makeClickable(cards[2], 'Show low stock', () => go('low-stock'));
+    makeClickable(cards[3], 'Open system activity', () => {{ window.location.href = '/admin/system-activity'; }});
+    makeClickable(cards[4], 'Show marketplace listings', () => go('listings'));
+    makeClickable(cards[5], 'Show available stock value', () => go('available'));
+  }}
+
+  function wireTabs() {{
+    const buttons = Array.from(document.querySelectorAll('.bt38-operational-tabs button'));
+    const map = {{
+      'Master Stock': () => go('all'),
+      'FBA Read Only': () => go('fba'),
+      'Group View': () => go('groups'),
+      'Listings': () => go('listings'),
+      'Orders': () => alert('Orders view will be wired after Master Stock runtime is proven.'),
+      'Stock Transfer': () => alert('Stock Transfer will be wired after quantity and grouping are proven.')
+    }};
+    buttons.forEach(btn => {{
+      const text = (btn.textContent || '').trim();
+      if (map[text]) makeClickable(btn, text, map[text]);
+      btn.classList.remove('active');
+      if ((state.activeView === 'all' && text === 'Master Stock') ||
+          (state.activeView === 'fba' && text === 'FBA Read Only') ||
+          (state.activeView === 'groups' && text === 'Group View') ||
+          (state.activeView === 'listings' && text === 'Listings')) {{
+        btn.classList.add('active');
+      }}
+    }});
+  }}
+
+  document.addEventListener('DOMContentLoaded', function() {{
+    wireSearch();
+    wireKpis();
+    wireTabs();
+  }});
+}})();
+</script>
+<style id="bt38Phase1WarehouseWiringStyle">
+.bt38-kpi-card:hover{{box-shadow:0 0 0 2px rgba(37,99,235,.10);}}
+</style>
+"""
+    return html + script
 
 
 @governed_bp.post("/amazon-inventory-hydration/manual-run")
