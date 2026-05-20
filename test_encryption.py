@@ -1,35 +1,43 @@
 #!/usr/bin/env python3
+"""Manual Amazon feed encryption check.
+
+This file is intentionally not a pytest test. It must not execute marketplace or
+legacy Amazon code during pytest collection. Run manually only when explicitly
+needed.
 """
-Standalone test to verify Amazon feed encryption works correctly
-"""
+
+from __future__ import annotations
+
 import os
-from amazon_service import AmazonService
 
-# Create service instance
-service = AmazonService(
-    store_id=27,
-    refresh_token=os.environ.get('AMAZON_REFRESH_TOKEN'),
-    client_id=os.environ.get('AMAZON_LWA_CLIENT_ID'),
-    client_secret=os.environ.get('AMAZON_LWA_CLIENT_SECRET'),
-    seller_id=os.environ.get('AMAZON_SELLER_ID'),
-    marketplace_id='A1F83G8C2ARO7P'  # UK marketplace
-)
+__test__ = False
 
-# Create a simple test feed
-test_sku = 'FBA-CR-RV-URU-200ml'
-test_quantity = 19
 
-print(f"Testing Amazon feed encryption...")
-print(f"SKU: {test_sku}, Quantity: {test_quantity}")
-print("=" * 60)
+def main() -> int:
+    from amazon_service import AmazonService
 
-# Push quantity update
-success, message = service.push_quantity_update(test_sku, test_quantity)
+    service = AmazonService(
+        store_id=27,
+        refresh_token=os.environ.get("AMAZON_REFRESH_TOKEN"),
+        client_id=os.environ.get("AMAZON_LWA_CLIENT_ID"),
+        client_secret=os.environ.get("AMAZON_LWA_CLIENT_SECRET"),
+        seller_id=os.environ.get("AMAZON_SELLER_ID"),
+        marketplace_id="A1F83G8C2ARO7P",
+    )
 
-print(f"\nResult: {'SUCCESS' if success else 'FAILED'}")
-print(f"Message: {message}")
+    test_sku = "FBA-CR-RV-URU-200ml"
+    test_quantity = 19
 
-if success:
-    print("\n✅ Encryption fix is WORKING!")
-else:
-    print("\n❌ Encryption fix FAILED!")
+    print("Testing Amazon feed encryption...")
+    print(f"SKU: {test_sku}, Quantity: {test_quantity}")
+    print("=" * 60)
+
+    success, message = service.push_quantity_update(test_sku, test_quantity)
+
+    print(f"\nResult: {'SUCCESS' if success else 'FAILED'}")
+    print(f"Message: {message}")
+    return 0 if success else 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
