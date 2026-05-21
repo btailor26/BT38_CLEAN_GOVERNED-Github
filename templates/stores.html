@@ -246,7 +246,7 @@
         btn.disabled = true;
         btn.innerHTML = '<i data-feather="loader" class="me-1"></i>Syncing...';
         
-        fetch(`/mock-disabled-action/${storeId}`, {
+        fetch(`/governed/stores/${storeId}/toggle`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -307,7 +307,7 @@
         btn.innerHTML = '<i data-feather="loader" class="me-1"></i>Reconnecting...';
         feather.replace();
         
-        fetch(`/api/reconnect-amazon/${storeId}`, {
+        fetch(`/governed/stores/${storeId}/sync-preview`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         })
@@ -358,7 +358,7 @@
 
     function confirmDelete(storeId, storeName, platform) {
         document.getElementById('deleteStoreName').textContent = storeName;
-        document.getElementById('deleteForm').action = `/stores/delete/${storeId}`;
+        document.getElementById('deleteForm').action = `/governed/stores/${storeId}/delete-preview`;
         
         // Build platform badges
         const badgesContainer = document.getElementById('deletePlatformBadges');
@@ -401,7 +401,7 @@
     function executeTriggerSync() {
         if (!currentStoreId) return;
         
-        fetch(`/mock-disabled-action/${currentStoreId}`, {
+        fetch(`/governed/stores/${currentStoreId}/delete-preview`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -452,7 +452,7 @@
     function submitAmazonSetupUnified(displayName, fbaEnabled, fbmEnabled) {
         const form = document.createElement('form');
         form.method = 'GET';
-        form.action = '/amazon-credentials-setup';
+        form.action = '/governed/stores/amazon/setup-preview';
         
         const storeNameInput = document.createElement('input');
         storeNameInput.type = 'hidden';
