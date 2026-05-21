@@ -1996,3 +1996,66 @@ document.addEventListener('DOMContentLoaded', function() {
 })();
 </script>
 
+
+
+<script id="bt38GovernedBlockedActionCleaner">
+(function(){
+  const blockedUrlParts = [
+    "/governed/product-linking/repair",
+    "/governed/product-linking/bulk-action",
+    "/governed/warehouse/"
+  ];
+
+  function isBlockedActionUrl(url){
+    url = String(url || "");
+    if (url.includes("/governed/warehouse/") && url.includes("/upload-image")) return true;
+    return blockedUrlParts.some(part => url.includes(part));
+  }
+
+  document.addEventListener("click", function(e){
+    const el = e.target && e.target.closest ? e.target.closest("button,a,input[type='submit']") : null;
+    if (!el) return;
+
+    const text = (el.innerText || el.value || el.title || "").toLowerCase();
+    const riskyText = [
+      "repair",
+      "reset",
+      "rebuild",
+      "create missing",
+      "sync now",
+      "bulk push",
+      "bulk repair",
+      "bulk merge",
+      "bulk reassign",
+      "bulk ungroup",
+      "upload image"
+    ];
+
+    if (riskyText.some(t => text.includes(t))) {
+      e.preventDefault();
+      e.stopPropagation();
+      alert("This action is disabled until the governed workflow is fully approved.");
+      return false;
+    }
+  }, true);
+
+  const originalFetch = window.fetch;
+  window.fetch = function(input, init){
+    const url = typeof input === "string" ? input : (input && input.url);
+    if (isBlockedActionUrl(url)) {
+      return Promise.resolve(new Response(JSON.stringify({
+        success:false,
+        ok:false,
+        governed:true,
+        blocked:true,
+        message:"This governed action is disabled until the workflow is approved."
+      }), {
+        status:409,
+        headers:{"Content-Type":"application/json"}
+      }));
+    }
+    return originalFetch.apply(this, arguments);
+  };
+})();
+</script>
+
