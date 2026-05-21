@@ -107,7 +107,21 @@ def governed_settings_page():
 
 @governed_bp.get("/listings")
 def governed_listings_page():
-    return render_template("listings.html", listings=[], groups=[], stats={})
+    return render_template(
+        "listings.html",
+        listings=[],
+        groups=[],
+        stats={},
+        filtered_count=0,
+        total_listings=0,
+        active_listings=0,
+        blocked_listings=0,
+        current_search="",
+        current_platform_filter="",
+        current_store_filter="",
+        current_status_filter="",
+        all_stores=[]
+    )
 
 
 @governed_bp.get("/groups")
@@ -117,7 +131,18 @@ def governed_groups_page():
 
 @governed_bp.get("/product-linking")
 def governed_product_linking_page():
-    return render_template("product_linking.html", products=[], listings=[], groups=[])
+    return render_template(
+        "product_linking.html",
+        warehouse_products=[],
+        unlinked_listings=[],
+        unlinked_by_platform={},
+        all_marketplace_listings=[],
+        all_stores=[],
+        current_search="",
+        current_platform="all",
+        current_store="all",
+        current_show_linked="all"
+    )
 
 
 @governed_bp.get("/inventory")
