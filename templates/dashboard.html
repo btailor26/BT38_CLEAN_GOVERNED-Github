@@ -257,7 +257,7 @@
     }, 30000);
 
     function refreshSyncStatus() {
-        fetch('/mock-disabled-action-status')
+        // removed dead mock polling
             .then(response => response.json())
             .then(data => {
                 updateSyncStatusDisplay(data);
