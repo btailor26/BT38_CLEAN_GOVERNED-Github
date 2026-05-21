@@ -12,6 +12,11 @@ except Exception:
 
 governed_bp = Blueprint("governed", __name__)
 
+@governed_bp.get("/")
+def governed_root_page():
+    return redirect("/dashboard")
+
+
 
 @governed_bp.get("/dashboard")
 def governed_dashboard_page():
@@ -20,17 +25,21 @@ def governed_dashboard_page():
         total_items = 0
         total_groups = 0
         total_marketplaces = 0
+        total_stores = 0
         low_stock_count = 0
         low_stock_items = 0
         out_of_stock_count = 0
         failed_syncs = 0
         successful_syncs = 0
         pending_syncs = 0
+        success_rate = 100
         total_value = 0
 
     return render_template(
         "dashboard.html",
-        stats=MockStats()
+        stats=MockStats(),
+        recent_items=[],
+        recent_syncs=[]
     )
 
 
@@ -66,19 +75,27 @@ def governed_settings_page():
         successful_syncs = 0
         pending_syncs = 0
 
+    class MockStats:
+        failed_syncs = 0
+        successful_syncs = 0
+        pending_syncs = 0
+        failed_24h = 0
+        success_rate = 100
+
+    class MockWebhookSettings:
+        worker_enabled = False
+        platforms = {
+            "amazon": {"enabled": False, "failed_24h": 0, "success_24h": 0},
+            "ebay": {"enabled": False, "failed_24h": 0, "success_24h": 0},
+            "shopify": {"enabled": False, "failed_24h": 0, "success_24h": 0},
+            "tiktok": {"enabled": False, "failed_24h": 0, "success_24h": 0},
+        }
+
     return render_template(
         "settings.html",
         global_settings=MockSettings(),
         stats=MockStats(),
-        webhook_settings={
-            "worker_enabled": False,
-            "platforms": {
-                "amazon": {"enabled": False},
-                "ebay": {"enabled": False},
-                "shopify": {"enabled": False},
-                "tiktok": {"enabled": False},
-            }
-        },
+        webhook_settings=MockWebhookSettings(),
         stores=[]
     )
 
@@ -154,7 +171,6 @@ def shutdown_proof_status():
     })
 
 
-@governed_bp.get("/")
 @governed_bp.get("/warehouse")
 def governed_warehouse_page():
     """Governed Master Stock UI.

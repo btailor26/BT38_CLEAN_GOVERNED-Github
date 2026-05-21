@@ -6,11 +6,11 @@
             Inventory
         </a>
         <a href="/warehouse"
-           class="btn btn-sm py-1 px-2 {% if request.endpoint == 'routes.warehouse' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+           class="btn btn-sm py-1 px-2 {% if request.path == '/warehouse' %}btn-primary{% else %}btn-outline-primary{% endif %}">
             Master Stock
         </a>
-        <a href="{{ url_for('routes.product_linking') }}"
-           class="btn btn-sm py-1 px-2 {% if request.endpoint == 'routes.product_linking' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+        <a href="/product-linking"
+           class="btn btn-sm py-1 px-2 {% if request.path == '/product-linking' %}btn-primary{% else %}btn-outline-primary{% endif %}">
             GroupView
         </a>
         <a href="{{ url_for('routes.listings') }}"
