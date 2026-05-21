@@ -1034,7 +1034,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 100);
         
         // Upload file
-        fetch(`/warehouse/upload-image/${stockId}`, {
+        fetch(`/governed/warehouse/${stockId}/upload-image`, {
             method: 'POST',
             headers: {
                 'X-CSRF-Token': csrfToken
@@ -1201,3 +1201,46 @@ async function executeGroupPush(stockId, sku, quantity) {
 }
 </script>
 {% endblock %}
+
+<script id="bt38GovernedLegacyTemplateQuarantine">
+(function(){
+  function disabled(name){
+    if (window.bt38GovernedDisabledAction) {
+      return window.bt38GovernedDisabledAction(name);
+    }
+    alert((name || "This legacy action") + " is disabled until wired to a governed route.");
+    return false;
+  }
+
+  const blockedFunctions = [
+    "executeGroupPush",
+    "linkListingToWarehouse",
+    "unlinkListing",
+    "saveNewLink",
+    "saveAmazonFbmLink",
+    "saveAmazonFbaLink",
+    "saveEbayLink",
+    "bulkPushSelected",
+    "bulkDiagnostics",
+    "bulkRepairLinks",
+    "bulkUngroup",
+    "executeMerge",
+    "executeReassign",
+    "repairResetFailures",
+    "repairRebuildLinks",
+    "repairCreateMissingSKUs",
+    "repairSyncNow",
+    "fixAllIssues",
+    "ungroupProduct",
+    "markNotSameProduct",
+    "repairLinks"
+  ];
+
+  blockedFunctions.forEach(function(name){
+    window[name] = function(){
+      return disabled(name);
+    };
+  });
+})();
+</script>
+

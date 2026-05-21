@@ -807,7 +807,7 @@ async function loadProductLinkingData() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000);
         
-        const response = await fetch(`/api/product_linking/data?${params.toString()}`, {
+        const response = await fetch(`/governed/product-linking/data?${params.toString()}`, {
             signal: controller.signal
         });
         clearTimeout(timeoutId);
@@ -1131,7 +1131,7 @@ function filterFlatListings() {
             const container = document.getElementById('unlinkedListingsList');
             container.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm" role="status"></div> Searching...</div>';
             
-            const response = await fetch(`/api/product_linking/search_all_listings?search=${encodeURIComponent(searchText)}&exclude_warehouse=${currentWarehouseId}&limit=100`);
+            const response = await fetch(`/governed/product-linking/search-all-listings?search=${encodeURIComponent(searchText)}&exclude_warehouse=${currentWarehouseId}&limit=100`);
             const data = await response.json();
             
             if (data.success && data.listings) {
@@ -1483,7 +1483,7 @@ async function searchWarehouseForLinking() {
     }
     
     try {
-        const response = await fetch(`/api/product_linking/search_warehouse?search=${encodeURIComponent(search)}&limit=50`);
+        const response = await fetch(`/governed/product-linking/search-warehouse?search=${encodeURIComponent(search)}&limit=50`);
         const data = await response.json();
         
         if (data.success && data.warehouse_products) {
@@ -1753,7 +1753,7 @@ async function showDiagnosticsModal(warehouseId, warehouseSku) {
     feather.replace();
     
     try {
-        const response = await fetch(`/api/product-linking/diagnostics/${warehouseId}`);
+        const response = await fetch(`/governed/product-linking/diagnostics/${warehouseId}`);
         const data = await response.json();
         
         if (data.success) {
@@ -1876,7 +1876,7 @@ async function runRepair(warehouseId, warehouseSku) {
     }
     
     try {
-        const response = await fetch(`/api/product-linking/repair/${warehouseId}`, {
+        const response = await fetch(`/governed/product-linking/repair/${warehouseId}`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'}
         });
@@ -1952,3 +1952,47 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 </style>
 {% endblock %}
+
+
+<script id="bt38GovernedLegacyTemplateQuarantine">
+(function(){
+  function disabled(name){
+    if (window.bt38GovernedDisabledAction) {
+      return window.bt38GovernedDisabledAction(name);
+    }
+    alert((name || "This legacy action") + " is disabled until wired to a governed route.");
+    return false;
+  }
+
+  const blockedFunctions = [
+    "executeGroupPush",
+    "linkListingToWarehouse",
+    "unlinkListing",
+    "saveNewLink",
+    "saveAmazonFbmLink",
+    "saveAmazonFbaLink",
+    "saveEbayLink",
+    "bulkPushSelected",
+    "bulkDiagnostics",
+    "bulkRepairLinks",
+    "bulkUngroup",
+    "executeMerge",
+    "executeReassign",
+    "repairResetFailures",
+    "repairRebuildLinks",
+    "repairCreateMissingSKUs",
+    "repairSyncNow",
+    "fixAllIssues",
+    "ungroupProduct",
+    "markNotSameProduct",
+    "repairLinks"
+  ];
+
+  blockedFunctions.forEach(function(name){
+    window[name] = function(){
+      return disabled(name);
+    };
+  });
+})();
+</script>
+

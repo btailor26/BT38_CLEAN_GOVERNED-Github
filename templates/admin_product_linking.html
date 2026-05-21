@@ -1014,7 +1014,7 @@ async function showDiagnostics(warehouseId, sku) {
     new bootstrap.Modal(document.getElementById('diagnosticsModal')).show();
 
     try {
-        const resp = await fetch(`/api/product-linking/diagnostics/${warehouseId}`);
+        const resp = await fetch(`/governed/product-linking/diagnostics/${warehouseId}`);
         const data = await resp.json();
 
         let html = '';
@@ -1103,7 +1103,7 @@ async function repairLinks(warehouseId, sku) {
     new bootstrap.Modal(document.getElementById('repairModal')).show();
 
     try {
-        const resp = await fetch(`/api/product-linking/repair/${warehouseId}`, {method: 'POST'});
+        const resp = await fetch(`/governed/product-linking/repair/${warehouseId}`, {method: 'POST'});
         const data = await resp.json();
 
         let html = '';
@@ -1354,7 +1354,7 @@ async function repairResetFailures() {
     if (!confirm(`Reset failure counts for ${count} product(s)? This will unblock listings that were blocked due to errors.`)) return;
 
     try {
-        const resp = await fetch('/api/product-linking/repair/reset-failures', {
+        const resp = await fetch('/governed/product-linking/repair/reset-failures', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ warehouse_stock_ids: ids === 'all' ? [] : ids })
@@ -1376,7 +1376,7 @@ async function repairRebuildLinks() {
     if (!confirm('Rebuild links for orphaned marketplace listings?\n\nThis will try to match orphaned listings back to warehouse products by SKU.')) return;
 
     try {
-        const resp = await fetch('/api/product-linking/repair/rebuild-link', {
+        const resp = await fetch('/governed/product-linking/repair/rebuild-link', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ listing_ids: [] })
@@ -1398,7 +1398,7 @@ async function repairCreateMissingSKUs() {
     if (!confirm('Create warehouse stock entries for orphaned listings?\n\nThis will create new Master Stock entries for listings that have no matching warehouse SKU.')) return;
 
     try {
-        const resp = await fetch('/api/product-linking/repair/create-missing-sku', {
+        const resp = await fetch('/governed/product-linking/repair/create-missing-sku', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ listing_ids: [] })
@@ -1424,7 +1424,7 @@ async function repairSyncNow() {
     if (!confirm(`Queue ${count} product(s) for immediate sync?\n\nThis will push the current warehouse quantities to all linked marketplaces.`)) return;
 
     try {
-        const resp = await fetch('/api/product-linking/repair/sync-now', {
+        const resp = await fetch('/governed/product-linking/repair/sync-now', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ warehouse_stock_ids: ids === 'all' ? [] : ids })
@@ -1671,7 +1671,7 @@ async function quickFix(warehouseStockId, sku) {
     if (row) row.classList.add('table-warning');
 
     try {
-        const resp = await fetch(`/api/product-linking/repair/${warehouseStockId}`, {
+        const resp = await fetch(`/governed/product-linking/repair/${warehouseStockId}`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'}
         });
@@ -1701,3 +1701,47 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% endblock %}
+
+
+<script id="bt38GovernedLegacyTemplateQuarantine">
+(function(){
+  function disabled(name){
+    if (window.bt38GovernedDisabledAction) {
+      return window.bt38GovernedDisabledAction(name);
+    }
+    alert((name || "This legacy action") + " is disabled until wired to a governed route.");
+    return false;
+  }
+
+  const blockedFunctions = [
+    "executeGroupPush",
+    "linkListingToWarehouse",
+    "unlinkListing",
+    "saveNewLink",
+    "saveAmazonFbmLink",
+    "saveAmazonFbaLink",
+    "saveEbayLink",
+    "bulkPushSelected",
+    "bulkDiagnostics",
+    "bulkRepairLinks",
+    "bulkUngroup",
+    "executeMerge",
+    "executeReassign",
+    "repairResetFailures",
+    "repairRebuildLinks",
+    "repairCreateMissingSKUs",
+    "repairSyncNow",
+    "fixAllIssues",
+    "ungroupProduct",
+    "markNotSameProduct",
+    "repairLinks"
+  ];
+
+  blockedFunctions.forEach(function(name){
+    window[name] = function(){
+      return disabled(name);
+    };
+  });
+})();
+</script>
+

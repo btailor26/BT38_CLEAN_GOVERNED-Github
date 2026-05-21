@@ -417,7 +417,7 @@
             try {
                 // Search both groups and items in parallel
                 const [groupsResponse, itemsResponse] = await Promise.all([
-                    fetch(`/groups/search?q=${encodeURIComponent(query)}`),
+                    fetch(`/governed/groups/search?q=${encodeURIComponent(query)}`),
                     fetch(`/items/search?q=${encodeURIComponent(query)}&require_group=true`)
                 ]);
 
