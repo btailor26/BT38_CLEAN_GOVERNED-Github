@@ -34,7 +34,7 @@
                 <i data-feather="menu"></i>
             </button>
 
-            <a class="navbar-brand fw-bold mb-0" href="{{ url_for('governed.governed_warehouse_page') }}">
+            <a class="navbar-brand fw-bold mb-0" href="/dashboard">
                 <i data-feather="package" class="me-2"></i>BT38 Inventory
             </a>
 
@@ -56,6 +56,9 @@
 
         <div class="offcanvas-body p-0">
             <div class="list-group list-group-flush">
+                <a class="list-group-item list-group-item-action bg-dark text-light border-secondary" href="/dashboard">
+                    <i data-feather="home" class="me-2"></i>Dashboard
+                </a>
                 <a class="list-group-item list-group-item-action bg-dark text-light border-secondary" href="{{ url_for('governed.governed_warehouse_page') }}">
                     <i data-feather="box" class="me-2"></i>Master Stock
                 </a>
