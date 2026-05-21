@@ -25,7 +25,30 @@ def governed_stores_page():
 
 @governed_bp.get("/settings")
 def governed_settings_page():
-    return render_template("settings.html")
+
+    class MockSettings:
+        global_push_enabled = False
+        enable_batch_scheduling = False
+        default_push_frequency_minutes = 15
+        default_batch_size = 25
+        default_retry_attempts = 3
+        batch_schedule_minutes = 15
+        off_hours_only = False
+        off_hours_start = 0
+        off_hours_end = 6
+        require_confirmation_threshold = 25
+        auto_pause_on_errors = True
+        error_rate_threshold = 0.30
+        notify_on_large_pushes = False
+        notify_on_failures = True
+        daily_summary_enabled = False
+        concurrent_store_pushes = 2
+        api_rate_limit_buffer = 0.80
+
+    return render_template(
+        "settings.html",
+        global_settings=MockSettings()
+    )
 
 
 @governed_bp.get("/listings")
