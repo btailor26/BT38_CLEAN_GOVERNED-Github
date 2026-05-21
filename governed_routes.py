@@ -95,12 +95,35 @@ def governed_settings_page():
         "settings.html",
         global_settings=MockSettings(),
         stats=MockStats(),
-        webhook_settings={
-            "amazon": type("Obj", (), {"enabled": False, "failed_24h": 0, "success_24h": 0})(),
-            "ebay": type("Obj", (), {"enabled": False, "failed_24h": 0, "success_24h": 0})(),
-            "shopify": type("Obj", (), {"enabled": False, "failed_24h": 0, "success_24h": 0})(),
-            "tiktok": type("Obj", (), {"enabled": False, "failed_24h": 0, "success_24h": 0})(),
-        },
+        webhook_settings=type("WebhookSettings", (), {
+            "worker_enabled": False,
+            "platforms": {
+                "amazon": type("Obj", (), {
+                    "enabled": False,
+                    "last_received": None,
+                    "received_24h": 0,
+                    "failed_24h": 0
+                })(),
+                "ebay": type("Obj", (), {
+                    "enabled": False,
+                    "last_received": None,
+                    "received_24h": 0,
+                    "failed_24h": 0
+                })(),
+                "shopify": type("Obj", (), {
+                    "enabled": False,
+                    "last_received": None,
+                    "received_24h": 0,
+                    "failed_24h": 0
+                })(),
+                "tiktok": type("Obj", (), {
+                    "enabled": False,
+                    "last_received": None,
+                    "received_24h": 0,
+                    "failed_24h": 0
+                })(),
+            }
+        })(),
         stores=[]
     )
 
