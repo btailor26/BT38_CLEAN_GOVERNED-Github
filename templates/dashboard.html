@@ -57,7 +57,7 @@
     </div>
 
     <div class="col-md-3 mb-3">
-        <a href="{{ url_for('routes.low_stock_items') }}" class="text-decoration-none">
+        <a href="{{ '#' }}" class="text-decoration-none">
             <div class="card {% if stats.low_stock_items > 0 %}bg-warning{% else %}bg-secondary{% endif %} text-white">
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-center">
@@ -87,19 +87,19 @@
             <div class="card-body">
                 <div class="row">
                     <div class="col-md-4 mb-3">
-                        <a href="{{ url_for('routes.inventory') }}" class="btn btn-info btn-lg w-100">
+                        <a href="{{ '/inventory' }}" class="btn btn-info btn-lg w-100">
                             <i data-feather="package" class="me-2"></i>
                             View Products
                         </a>
                     </div>
                     <div class="col-md-4 mb-3">
-                        <a href="{{ url_for('routes.add_item') }}" class="btn btn-primary btn-lg w-100">
+                        <a href="{{ '#' }}" class="btn btn-primary btn-lg w-100">
                             <i data-feather="plus" class="me-2"></i>
                             Add New Item
                         </a>
                     </div>
                     <div class="col-md-4 mb-3">
-                        <a href="{{ url_for('routes.add_store') }}" class="btn btn-success btn-lg w-100">
+                        <a href="{{ '#' }}" class="btn btn-success btn-lg w-100">
                             <i data-feather="plus-circle" class="me-2"></i>
                             Add New Store
                         </a>
@@ -119,7 +119,7 @@
                     <i data-feather="package" class="me-2"></i>
                     Recent Products
                 </h5>
-                <a href="{{ url_for('routes.inventory') }}" class="btn btn-sm btn-outline-primary">
+                <a href="{{ '/inventory' }}" class="btn btn-sm btn-outline-primary">
                     View All
                 </a>
             </div>
@@ -257,7 +257,7 @@
     }, 30000);
 
     function refreshSyncStatus() {
-        fetch('/api/sync-status')
+        fetch('/mock-disabled-action-status')
             .then(response => response.json())
             .then(data => {
                 updateSyncStatusDisplay(data);

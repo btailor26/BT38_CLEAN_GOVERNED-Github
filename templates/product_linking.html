@@ -36,7 +36,7 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-body py-3">
-                    <form method="GET" action="{{ url_for('routes.product_linking') }}" class="row g-3 align-items-end">
+                    <form method="GET" action="{{ '/product-linking' }}" class="row g-3 align-items-end">
                         <!-- Search Box -->
                         <div class="col-md-3">
                             <label class="form-label small text-muted mb-1">Search Groups</label>
@@ -85,7 +85,7 @@
                             <button type="submit" class="btn btn-primary me-1">
                                 <i data-feather="search" class="feather-sm"></i> Search
                             </button>
-                            <a href="{{ url_for('routes.product_linking') }}" class="btn btn-outline-secondary">
+                            <a href="{{ '/product-linking' }}" class="btn btn-outline-secondary">
                                 <i data-feather="x" class="feather-sm"></i> Clear
                             </a>
                         </div>
@@ -334,7 +334,7 @@
                                         {% if product.listings %}
                                             {% for listing in product.listings %}
                                             <div class="d-inline-flex align-items-center me-2 mb-1 p-1 border rounded {% if listing.is_primary %}bg-success bg-opacity-25 border-success{% else %}bg-light{% endif %}">
-                                                <a href="{{ url_for('routes.edit_listing', listing_id=listing.id) }}" 
+                                                <a href="{{ '#' }}" 
                                                    class="badge {% if listing.is_primary %}bg-success{% else %}bg-primary{% endif %} me-1 text-decoration-none"
                                                    title="Edit Listing - Click to edit title, price, sync settings">
                                                     {% if listing.platform == 'Amazon' %}<i data-feather="lock" class="feather-xs me-1"></i>{% endif %}
@@ -366,7 +366,7 @@
                                                 <i data-feather="sliders" class="feather-sm"></i>
                                             </button>
                                             <!-- Stock & Cost Details Button -->
-                                            <a href="{{ url_for('routes.warehouse_detail', stock_id=product.id) }}" 
+                                            <a href="{{ '#' }}" 
                                                class="btn btn-outline-secondary"
                                                data-bs-toggle="tooltip" data-bs-placement="top"
                                                title="Stock & Cost Details - View supplier, costs, reorder point, and history">
@@ -431,7 +431,7 @@
                                                         </td>
                                                         <td>
                                                             <div class="btn-group btn-group-sm">
-                                                                <a href="{{ url_for('routes.edit_listing', listing_id=listing.id) }}" 
+                                                                <a href="{{ '#' }}" 
                                                                    class="btn btn-outline-primary" title="Edit Listing">
                                                                     <i data-feather="edit-2" class="feather-xs"></i>
                                                                 </a>
