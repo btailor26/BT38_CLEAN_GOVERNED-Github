@@ -5,7 +5,7 @@
            class="btn btn-sm py-1 px-2 {% if request.path == '/inventory' %}btn-primary{% else %}btn-outline-primary{% endif %}">
             Inventory
         </a>
-        <a href="{{ url_for('routes.warehouse') }}"
+        <a href="/warehouse"
            class="btn btn-sm py-1 px-2 {% if request.endpoint == 'routes.warehouse' %}btn-primary{% else %}btn-outline-primary{% endif %}">
             Master Stock
         </a>

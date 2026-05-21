@@ -15,7 +15,19 @@ governed_bp = Blueprint("governed", __name__)
 
 @governed_bp.get("/dashboard")
 def governed_dashboard_page():
-    return render_template("dashboard.html")
+
+    class MockStats:
+        total_items = 0
+        total_groups = 0
+        total_marketplaces = 0
+        low_stock_count = 0
+        out_of_stock_count = 0
+        total_value = 0
+
+    return render_template(
+        "dashboard.html",
+        stats=MockStats()
+    )
 
 
 @governed_bp.get("/stores")
@@ -53,7 +65,7 @@ def governed_settings_page():
 
 @governed_bp.get("/listings")
 def governed_listings_page():
-    return render_template("listings.html")
+    return render_template("listings.html", listings=[], groups=[], stats={})
 
 
 @governed_bp.get("/groups")
@@ -63,7 +75,7 @@ def governed_groups_page():
 
 @governed_bp.get("/product-linking")
 def governed_product_linking_page():
-    return render_template("product_linking.html")
+    return render_template("product_linking.html", products=[], listings=[], groups=[])
 
 
 @governed_bp.get("/inventory")
