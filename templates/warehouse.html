@@ -121,7 +121,7 @@ function bt38OpenRowAction(button){
 
   if (button.classList.contains('bt38-warehouse-action')) {
     if (stockId) {
-      window.location.href = `/warehouse/${stockId}`;
+      window.location.href = `/warehouse?q=${encodeURIComponent(sku || stockId)}`;
     }
     return;
   }
@@ -331,7 +331,7 @@ function bt38OpenRowAction(button){
                   </div>
 
                   <div class="bt38-product-title"
-                   ondblclick="window.location.href='/listings/edit/{{ item.marketplace_listing_id if item.marketplace_listing_id else 0 }}'">
+                   ondblclick="window.location.href='/warehouse?q={{ item.sku|urlencode }}'">
                     {{ item.product_name or item.title or item.group_title or item.sku or 'Untitled Product' }}
                   </div>
 
@@ -370,7 +370,7 @@ function bt38OpenRowAction(button){
                 {% elif item.master_product_group_id and not item.is_group_controlled %}
                 <button type="button"
 class="bt38-group-pill master"
-onclick="window.location.href='/groups/{{ item.master_product_group_id }}'">
+onclick="window.location.href='/warehouse?view=groups&q={{ item.sku|urlencode }}'">
 ★ Master SKU
 </button>
               {% elif item.is_group_controlled %}
