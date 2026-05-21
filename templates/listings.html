@@ -727,7 +727,7 @@ function pushListing(listingId) {
         return;
     }
     
-    fetch(`/api/listings/${listingId}/push`, {
+    fetch(`/governed/actions/listings/${listingId}/push`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',

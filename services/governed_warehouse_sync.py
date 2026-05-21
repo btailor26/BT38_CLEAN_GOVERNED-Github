@@ -16,7 +16,7 @@ Rules:
 from datetime import datetime
 
 from app import db
-from models import Store, MarketplaceListing, SyncLog
+from models import Store, MarketplaceListing, SystemLog
 from governed_routes import _push_one_listing
 
 
@@ -73,14 +73,19 @@ def run_governed_warehouse_sync(store_id=None, actor="manual-warehouse-sync"):
             "reason": result.get("reason") or result.get("failure_reason"),
         })
 
-    db.session.add(SyncLog(
-        store_id=store_id,
-        status="success" if pushed else "blocked",
-        message=f"governed_warehouse_sync pushed={pushed} blocked={blocked}",
-        items_synced=pushed,
-        created_at=datetime.utcnow(),
-    ))
-    db.session.commit()
+    try:
+        db.session.add(SystemLog(
+            log_type="governed_warehouse_sync",
+            message=f"governed_warehouse_sync pushed={pushed} blocked={blocked}",
+            details=(
+                f"store_id={store_id} actor={actor} total={len(results)} "
+                f"pushed={pushed} blocked={blocked}"
+            )[:1000],
+            created_at=datetime.utcnow(),
+        ))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
 
     return {
         "success": True,

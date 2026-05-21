@@ -136,5 +136,150 @@
     </script>
     
     {% block scripts %}{% endblock %}
+
+
+<script id="bt38GovernedTemplateGhostBlocker">
+(function(){
+  if (window.bt38GovernedTemplateGhostBlockerInstalled) return;
+  window.bt38GovernedTemplateGhostBlockerInstalled = true;
+
+  const originalFetch = window.fetch.bind(window);
+
+  function asUrl(input){
+    if (typeof input === "string") return input;
+    if (input && input.url) return input.url;
+    return "";
+  }
+
+  function getMethod(init){
+    return String((init && init.method) || "GET").toUpperCase();
+  }
+
+  function governedBlockedPayload(url){
+    return {
+      success:false,
+      ok:false,
+      legacy_route_disabled:true,
+      governed_required:true,
+      url:url,
+      message:"This old action is disabled. Use the governed warehouse, store, listing, or group path."
+    };
+  }
+
+  function blockedResponse(url){
+    const payload = governedBlockedPayload(url);
+    try { alert(payload.message); } catch(e) {}
+    return Promise.resolve(new Response(JSON.stringify(payload), {
+      status:409,
+      headers:{"Content-Type":"application/json"}
+    }));
+  }
+
+  function legacyWriteUrl(url){
+    return (
+      url === "/api/group-push" ||
+      url.startsWith("/api/group-push/") ||
+      url.startsWith("/api/listings/bulk") ||
+      url.startsWith("/api/product-linking") ||
+      url.startsWith("/api/product_linking") ||
+      url.startsWith("/api/link_listing_to_warehouse") ||
+      url.startsWith("/api/unlink_listing") ||
+      url.startsWith("/api/bulk_link_products") ||
+      url.startsWith("/api/warehouse/") ||
+      url.startsWith("/api/stock_transfer/") ||
+      url.startsWith("/api/shelf/") ||
+      url.startsWith("/inventory/delete_bulk") ||
+      url.startsWith("/mock-disabled-action") ||
+      url.startsWith("/search_ungrouped_items") ||
+      url.startsWith("/groups/") ||
+      url.startsWith("/release_from_group/") ||
+      url.startsWith("/add_sku_to_group/") ||
+      url.startsWith("/push_stock/") ||
+      url.startsWith("/push_stock_bulk") ||
+      url.startsWith("/push_stock_all") ||
+      url.startsWith("/warehouse/upload-image/") ||
+      url.startsWith("/auth/amazon") ||
+      url.startsWith("/bt38-setup") ||
+      url.startsWith("/ebay-setup") ||
+      url.startsWith("/admin/api/backfill")
+    );
+  }
+
+  window.fetch = function(input, init){
+    const url = asUrl(input);
+    const method = getMethod(init);
+
+    if (method === "GET") return originalFetch(input, init);
+    if (url.startsWith("/governed/")) return originalFetch(input, init);
+
+    const listingPush = url.match(/^\/api\/listings\/(\d+)\/push$/);
+    if (listingPush) {
+      return originalFetch(`/governed/actions/listings/${listingPush[1]}/push`, init);
+    }
+
+    const groupPush = url.match(/^\/groups\/(\d+)\/push$/);
+    if (groupPush) {
+      return originalFetch(`/governed/actions/groups/${groupPush[1]}/push`, init);
+    }
+
+    const groupQty = url.match(/^\/groups\/(\d+)\/update-stock$/);
+    if (groupQty) {
+      return originalFetch(`/governed/groups/${groupQty[1]}/propagate-quantity`, init);
+    }
+
+    if (legacyWriteUrl(url)) return blockedResponse(url);
+
+    return originalFetch(input, init);
+  };
+
+  window.bt38GovernedDisabledAction = function(label){
+    const message = `${label || "This action"} is disabled until it is wired to a governed route.`;
+    try { alert(message); } catch(e) {}
+    return false;
+  };
+
+  const disabledFunctionNames = [
+    "bulkPush",
+    "bulkUnblock",
+    "bulkSyncFromWarehouse",
+    "bulkActivate",
+    "bulkDeactivate",
+    "submitBulkJob",
+    "deleteListing",
+    "executeGroupPush",
+    "linkListingToWarehouse",
+    "unlinkListing",
+    "saveNewLink",
+    "saveAmazonFbmLink",
+    "saveAmazonFbaLink",
+    "saveEbayLink",
+    "bulkPushSelected",
+    "bulkDiagnostics",
+    "bulkRepairLinks",
+    "bulkUngroup",
+    "executeMerge",
+    "executeReassign",
+    "repairResetFailures",
+    "repairRebuildLinks",
+    "repairCreateMissingSKUs",
+    "repairSyncNow",
+    "fixAllIssues",
+    "ungroupProduct",
+    "markNotSameProduct",
+    "repairLinks"
+  ];
+
+  disabledFunctionNames.forEach(function(name){
+    if (typeof window[name] === "function") {
+      window[name] = function(){
+        return window.bt38GovernedDisabledAction(name);
+      };
+    }
+  });
+})();
+</script>
+
+
+
 </body>
 </html>
