@@ -289,7 +289,7 @@ function updateGroupStock(event, groupId) {
     `;
     
     // Make POST request to update endpoint
-    fetch(`/groups/${groupId}/update-stock`, {
+    fetch(`/governed/groups/${groupId}/propagate-quantity`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -356,7 +356,7 @@ function pushGroupStock(groupId) {
     `;
     
     // Make POST request to push endpoint
-    fetch(`/groups/${groupId}/push`, {
+    fetch(`/governed/actions/groups/${groupId}/push`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',

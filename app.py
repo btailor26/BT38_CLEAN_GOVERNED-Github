@@ -315,6 +315,82 @@ def api_auth_json():
         if request.path not in public_endpoints:
             return jsonify(ok=False, error="unauthorized"), 401
 
+
+# BT38 GOVERNED ROUTE LOCK
+# Legacy operational write routes are disabled.
+# Governed routes remain active.
+LEGACY_OPERATIONAL_ROUTES_ENABLED = False
+GOVERNED_OPERATIONAL_ROUTES_ENABLED = True
+
+@app.before_request
+def bt38_block_legacy_operational_write_routes():
+    from flask import request, jsonify
+
+    if LEGACY_OPERATIONAL_ROUTES_ENABLED:
+        return None
+
+    if request.method not in {"POST", "PUT", "PATCH", "DELETE"}:
+        return None
+
+    path = request.path.rstrip("/") or "/"
+
+    # Governed execution layer is the only allowed operational write path.
+    if path.startswith("/governed/"):
+        return None
+
+    # Admin reporting/export pages stay readable, but old admin write backfill is blocked.
+    legacy_exact = {
+        "/inventory/delete_bulk",
+        "/mock-disabled-action",
+        "/search_ungrouped_items",
+        "/api/group-push",
+        "/api/listings/bulk-action",
+        "/api/test-connection",
+        "/api/test-amazon-connection",
+        "/api/test-ebay-connection",
+        "/test-ebay-connection",
+        "/push_stock_bulk",
+        "/push_stock_all",
+        "/admin/api/backfill",
+    }
+
+    legacy_prefixes = (
+        "/api/group-push/",
+        "/api/listings/bulk",
+        "/api/product-linking",
+        "/api/product_linking",
+        "/api/link_listing_to_warehouse",
+        "/api/unlink_listing",
+        "/api/bulk_link_products",
+        "/api/warehouse/",
+        "/api/stock_transfer/",
+        "/api/shelf/",
+        "/inventory/delete_bulk",
+        "/mock-disabled-action",
+        "/search_ungrouped_items",
+        "/groups/",
+        "/release_from_group/",
+        "/add_sku_to_group/",
+        "/push_stock/",
+        "/warehouse/upload-image/",
+        "/auth/amazon",
+        "/bt38-setup",
+        "/ebay-setup",
+    )
+
+    legacy_listing_push = path.startswith("/api/listings/") and path.endswith("/push")
+
+    if path in legacy_exact or path.startswith(legacy_prefixes) or legacy_listing_push:
+        return jsonify({
+            "success": False,
+            "ok": False,
+            "legacy_route_disabled": True,
+            "governed_required": True,
+            "message": "This legacy operational route is disabled. Use the governed route."
+        }), 409
+
+    return None
+
 # HTTP Exception handler (catches 400, 403, 404, 405, etc.)
 @app.errorhandler(Exception)
 def handle_http_exception(e):
