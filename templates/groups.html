@@ -14,7 +14,7 @@
     <strong>Legacy group push area:</strong> For the newer grouped marketplace push flow, use <strong>GroupView</strong> or <strong>Master Stock</strong>. This page remains active for compatibility.
 </div>
 
-            <a href="{{ url_for('routes.add_group') }}" class="btn btn-primary">
+            <a href="{{ '#' }}" class="btn btn-primary">
                 <i data-feather="plus" class="me-1"></i>
                 Add New Group
             </a>
@@ -110,7 +110,7 @@
                                 onclick="showAddSkuModal({{ group.id }}, '{{ group.name }}')">
                             <i data-feather="plus-circle"></i>
                         </button>
-                        <a href="{{ url_for('routes.edit_group', group_id=group.id) }}" 
+                        <a href="{{ '#' }}" 
                            class="btn btn-outline-primary" title="Edit Group">
                             <i data-feather="edit-2"></i>
                         </a>
@@ -205,7 +205,7 @@
                                         <button type="button" class="btn btn-outline-warning" onclick="releaseFromGroup(this, {{ item.id }}, '{{ item.sku }}')" title="Release from Group">
                                             <i data-feather="arrow-left"></i>
                                         </button>
-                                        <a href="{{ url_for('routes.edit_item', item_id=item.id) }}" class="btn btn-outline-primary">
+                                        <a href="{{ '#' }}" class="btn btn-outline-primary">
                                             <i data-feather="edit-2"></i>
                                         </a>
                                         <button type="button" class="btn btn-outline-danger" onclick="confirmDelete({{ item.id }}, '{{ item.name }}')">
@@ -234,7 +234,7 @@
             <i data-feather="layers" size="64" class="text-muted mb-3"></i>
             <h4 class="text-muted">No product groups yet</h4>
             <p class="text-muted mb-4">Create your first product group to organize related inventory items</p>
-            <a href="{{ url_for('routes.add_group') }}" class="btn btn-primary">
+            <a href="{{ '#' }}" class="btn btn-primary">
                 <i data-feather="plus" class="me-1"></i>
                 Create First Group
             </a>
@@ -805,7 +805,7 @@ function pushIndividualItem(itemId, sku) {
     btn.disabled = true;
     feather.replace();
     
-    fetch(`/push_stock/${itemId}`, {
+    fetch(`/mock-disabled-action/${itemId}`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',

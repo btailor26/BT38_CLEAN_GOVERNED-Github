@@ -36,7 +36,7 @@
                         <small class="text-muted d-block">Read-only FBA import</small>
                     </a></li>
                 </ul>
-                <a href="{{ url_for('routes.add_store') }}" class="btn btn-primary">
+                <a href="{{ '#' }}" class="btn btn-primary">
                     <i data-feather="plus" class="me-1"></i>
                     Add New Store
                 </a>
@@ -133,7 +133,7 @@
                             <i data-feather="refresh-cw" class="me-1"></i>
                             Sync Now
                         </button>
-                        <a href="{{ url_for('routes.edit_store', store_id=store.id) }}" 
+                        <a href="{{ '#' }}" 
                            class="btn btn-sm btn-outline-primary">
                             <i data-feather="edit-2" class="me-1"></i>
                             Edit
@@ -156,7 +156,7 @@
             <i data-feather="shopping-bag" size="64" class="text-muted mb-3"></i>
             <h4 class="text-muted">No stores configured yet</h4>
             <p class="text-muted mb-4">Connect your first store to start syncing inventory</p>
-            <a href="{{ url_for('routes.add_store') }}" class="btn btn-primary">
+            <a href="{{ '#' }}" class="btn btn-primary">
                 <i data-feather="plus" class="me-1"></i>
                 Add Your First Store
             </a>
@@ -246,7 +246,7 @@
         btn.disabled = true;
         btn.innerHTML = '<i data-feather="loader" class="me-1"></i>Syncing...';
         
-        fetch(`/stores/sync/${storeId}`, {
+        fetch(`/mock-disabled-action/${storeId}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
@@ -401,7 +401,7 @@
     function executeTriggerSync() {
         if (!currentStoreId) return;
         
-        fetch(`/stores/sync/${currentStoreId}`, {
+        fetch(`/mock-disabled-action/${currentStoreId}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

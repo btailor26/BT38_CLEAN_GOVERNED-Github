@@ -13,6 +13,42 @@ except Exception:
 governed_bp = Blueprint("governed", __name__)
 
 
+@governed_bp.get("/dashboard")
+def governed_dashboard_page():
+    return render_template("dashboard.html")
+
+
+@governed_bp.get("/stores")
+def governed_stores_page():
+    return render_template("stores.html")
+
+
+@governed_bp.get("/settings")
+def governed_settings_page():
+    return render_template("settings.html")
+
+
+@governed_bp.get("/listings")
+def governed_listings_page():
+    return render_template("listings.html")
+
+
+@governed_bp.get("/groups")
+def governed_groups_page():
+    return render_template("groups.html")
+
+
+@governed_bp.get("/product-linking")
+def governed_product_linking_page():
+    return render_template("product_linking.html")
+
+
+@governed_bp.get("/inventory")
+def governed_inventory_page():
+    return render_template("inventory.html")
+
+
+
 @governed_bp.route("/login", methods=["GET", "POST"])
 def login():
     from datetime import datetime

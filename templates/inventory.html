@@ -27,7 +27,7 @@
                     <i data-feather="refresh-cw" class="me-1"></i>
                     Push All
                 </button>
-                <a href="{{ url_for('routes.add_item') }}" class="btn btn-primary">
+                <a href="{{ '#' }}" class="btn btn-primary">
                     <i data-feather="plus" class="me-1"></i>
                     Add New Item
                 </a>
@@ -71,7 +71,7 @@
                 <div class="row align-items-center">
                     <div class="col-md-4">
                         <div class="btn-group" role="group" aria-label="View Mode">
-                            <a href="{{ url_for('routes.inventory', view='flat', search=current_search, group=current_group_filter, marketplace=current_marketplace_filter) }}" 
+                            <a href="/inventory" 
                                class="btn btn-primary">
                                 <i data-feather="list" class="me-1"></i>
                                 Flat View
@@ -222,14 +222,14 @@
                                 <td>
                                     <div class="btn-group btn-group-sm">
                                         {% if item.warehouse_stock %}
-                                        <a href="{{ url_for('routes.product_linking') }}?search={{ item.sku }}" class="btn btn-primary" title="Adjust & Push via Product Linking">
+                                        <a href="{{ '/product-linking' }}?search={{ item.sku }}" class="btn btn-primary" title="Adjust & Push via Product Linking">
                                             <i data-feather="sliders"></i>
                                         </a>
                                         {% endif %}
                                         <button type="button" class="btn btn-outline-success" onclick="pushIndividualItem({{ item.id }}, '{{ item.sku }}')" title="Push Stock">
                                             <i data-feather="upload"></i>
                                         </button>
-                                        <a href="{{ url_for('routes.edit_item', item_id=item.id) }}" class="btn btn-outline-primary">
+                                        <a href="{{ '#' }}" class="btn btn-outline-primary">
                                             <i data-feather="edit-2"></i>
                                         </a>
                                         <button type="button" class="btn btn-outline-danger" onclick="confirmDelete({{ item.id }}, '{{ item.name }}')">
@@ -294,7 +294,7 @@
                         {% endif %}
                         
                         <div class="btn-group btn-group-sm">
-                            <a href="{{ url_for('routes.edit_group', group_id=group.id) }}" class="btn btn-outline-secondary">
+                            <a href="{{ '#' }}" class="btn btn-outline-secondary">
                                 <i data-feather="edit-2"></i>
                             </a>
                         </div>
@@ -418,7 +418,7 @@
                                     <td>
                                         <div class="btn-group btn-group-sm">
                                             {% if item.warehouse_stock %}
-                                            <a href="{{ url_for('routes.product_linking') }}?search={{ item.sku }}" class="btn btn-primary" title="Adjust & Push via Product Linking">
+                                            <a href="{{ '/product-linking' }}?search={{ item.sku }}" class="btn btn-primary" title="Adjust & Push via Product Linking">
                                                 <i data-feather="sliders"></i>
                                             </a>
                                             {% endif %}
@@ -430,7 +430,7 @@
                                                     <i data-feather="arrow-left"></i>
                                                 </button>
                                             {% endif %}
-                                            <a href="{{ url_for('routes.edit_item', item_id=item.id) }}" class="btn btn-outline-primary">
+                                            <a href="{{ '#' }}" class="btn btn-outline-primary">
                                                 <i data-feather="edit-2"></i>
                                             </a>
                                             <button type="button" class="btn btn-outline-danger" onclick="confirmDelete({{ item.id }}, '{{ item.name }}')">
@@ -454,11 +454,11 @@
                 <i data-feather="layers" size="64" class="text-muted mb-3"></i>
                 <h4 class="text-muted">No items in this view</h4>
                 <p class="text-muted mb-4">Try switching to flat view or adjusting your filter</p>
-                <a href="{{ url_for('routes.inventory', view='flat') }}" class="btn btn-outline-primary me-2">
+                <a href="/inventory" class="btn btn-outline-primary me-2">
                     <i data-feather="list" class="me-1"></i>
                     Switch to Flat View
                 </a>
-                <a href="{{ url_for('routes.add_item') }}" class="btn btn-primary">
+                <a href="{{ '#' }}" class="btn btn-primary">
                     <i data-feather="plus" class="me-1"></i>
                     Add New Item
                 </a>
@@ -508,7 +508,7 @@
                                 </td>
                                 <td>
                                     {% if item.group %}
-                                        <a href="{{ url_for('routes.inventory', view='grouped', group=item.group.id) }}" 
+                                        <a href="/inventory" 
                                            class="badge bg-primary text-decoration-none">
                                             {{ item.group.name }}
                                         </a>
@@ -593,7 +593,7 @@
                                                 <i data-feather="arrow-left"></i>
                                             </button>
                                         {% endif %}
-                                        <a href="{{ url_for('routes.edit_item', item_id=item.id) }}" 
+                                        <a href="{{ '#' }}" 
                                            class="btn btn-outline-primary">
                                             <i data-feather="edit-2"></i>
                                         </a>
@@ -618,7 +618,7 @@
             <i data-feather="inbox" size="64" class="text-muted mb-3"></i>
             <h4 class="text-muted">No inventory items yet</h4>
             <p class="text-muted mb-4">Get started by adding your first inventory item</p>
-            <a href="{{ url_for('routes.add_item') }}" class="btn btn-primary">
+            <a href="{{ '#' }}" class="btn btn-primary">
                 <i data-feather="plus" class="me-1"></i>
                 Add Your First Item
             </a>
@@ -810,7 +810,7 @@ function pushIndividualItem(itemId, itemSku) {
     button.disabled = true;
     feather.replace();
     
-    fetch(`/push_stock/${itemId}`, {
+    fetch(`/mock-disabled-action/${itemId}`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -871,7 +871,7 @@ function pushSelectedItems() {
     button.disabled = true;
     feather.replace();
     
-    fetch('/push_stock_bulk', {
+    fetch('/mock-disabled-action', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -1016,7 +1016,7 @@ function pushAllItems() {
     // Show progress modal
     showProgressModal('Pushing stock to all connected stores...', 'This may take several minutes for large inventories.');
     
-    fetch('/push_stock_all', {
+    fetch('/mock-disabled-action', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
