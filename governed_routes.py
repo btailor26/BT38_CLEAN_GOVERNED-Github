@@ -305,7 +305,7 @@ def governed_warehouse_page():
     q = (request.args.get("q") or "").strip().lower()
     view = (request.args.get("view") or "all").strip().lower()
 
-    row_limit = 120
+    row_limit = 15
 
     listing_query = (
         db.session.query(MarketplaceListing)
@@ -452,12 +452,38 @@ def governed_warehouse_page():
     elif view == "groups":
         rows = [row for row in rows if getattr(row, "master_product_group_id", None) or getattr(row, "is_group_controlled", False)]
 
+    # Real database totals for the top information boxes.
+    # Do not calculate these from the limited visible rows.
+    active_stock_rows = (
+        db.session.query(WarehouseStock)
+        .filter(WarehouseStock.is_active == True)  # noqa: E712
+        .filter(WarehouseStock.is_deleted == False)  # noqa: E712
+        .all()
+    )
+
+    total_skus = len(active_stock_rows)
+    total_available = sum(int(getattr(stock, "sellable_quantity", 0) or 0) for stock in active_stock_rows)
+    low_stock_count = sum(1 for stock in active_stock_rows if int(getattr(stock, "sellable_quantity", 0) or 0) <= 0)
+
+    listing_count = (
+        db.session.query(MarketplaceListing)
+        .filter(MarketplaceListing.is_active == True)  # noqa: E712
+        .count()
+    )
+
+    inventory_value = 0.0
+    for row in rows:
+        try:
+            inventory_value += float(getattr(row, "price", 0) or 0) * int(getattr(row, "available_quantity", 0) or 0)
+        except Exception:
+            pass
+
     stats = SimpleNamespace(
-        total_skus=len(rows),
-        total_available=sum(int(getattr(row, "available_quantity", 0) or 0) for row in rows),
-        low_stock_count=sum(1 for row in rows if int(getattr(row, "available_quantity", 0) or 0) <= 0),
-        listing_count=sum(1 for row in rows if getattr(row, "marketplace_listing_id", None)),
-        inventory_value=sum((float(getattr(row, "price", 0) or 0) * int(getattr(row, "available_quantity", 0) or 0)) for row in rows),
+        total_skus=total_skus,
+        total_available=total_available,
+        low_stock_count=low_stock_count,
+        listing_count=listing_count,
+        inventory_value=round(float(inventory_value), 2),
     )
 
     warehouse_items = SimpleNamespace(items=rows, total=len(rows))
@@ -858,6 +884,189 @@ def governed_amazon_inventory_hydration_manual_run():
         "auto_execution": False,
         "result": result,
     })
+
+
+
+@governed_bp.get("/governed/product-linking/data")
+def governed_product_linking_data_compat():
+    """Governed compatibility endpoint for old product-linking data calls.
+
+    This keeps the frontend inside the governed namespace.
+    It is read-only and does not push, sync, repair, or mutate marketplace state.
+    """
+    from extensions import db
+    from models import WarehouseStock, MarketplaceListing
+    from sqlalchemy import or_
+
+    search = (request.args.get("search") or request.args.get("q") or "").strip()
+    limit_raw = request.args.get("limit") or 50
+
+    try:
+        limit = int(limit_raw)
+    except Exception:
+        limit = 50
+
+    limit = max(1, min(limit, 100))
+
+    stock_query = db.session.query(WarehouseStock).filter(
+        WarehouseStock.is_active == True,  # noqa: E712
+        WarehouseStock.is_deleted == False,  # noqa: E712
+    )
+
+    listing_query = db.session.query(MarketplaceListing).filter(
+        MarketplaceListing.is_active == True  # noqa: E712
+    )
+
+    if search:
+        like = f"%{search}%"
+        stock_query = stock_query.filter(or_(
+            WarehouseStock.sku.ilike(like),
+            WarehouseStock.product_name.ilike(like),
+            WarehouseStock.barcode.ilike(like),
+            WarehouseStock.group_title.ilike(like),
+        ))
+        listing_query = listing_query.filter(or_(
+            MarketplaceListing.external_sku.ilike(like),
+            MarketplaceListing.title.ilike(like),
+            MarketplaceListing.external_listing_id.ilike(like),
+            MarketplaceListing.asin.ilike(like),
+            MarketplaceListing.fnsku.ilike(like),
+            MarketplaceListing.barcode.ilike(like),
+        ))
+
+    stock_rows = stock_query.order_by(WarehouseStock.id.desc()).limit(limit).all()
+    listing_rows = listing_query.order_by(MarketplaceListing.id.desc()).limit(limit).all()
+
+    return jsonify({
+        "success": True,
+        "ok": True,
+        "governed": True,
+        "read_only": True,
+        "warehouse": [
+            {
+                "id": s.id,
+                "sku": s.sku,
+                "product_name": s.product_name,
+                "barcode": s.barcode,
+                "group_title": s.group_title,
+                "master_product_group_id": s.master_product_group_id,
+                "sellable_quantity": getattr(s, "sellable_quantity", 0),
+            }
+            for s in stock_rows
+        ],
+        "listings": [
+            {
+                "id": l.id,
+                "external_sku": l.external_sku,
+                "title": l.title,
+                "external_listing_id": l.external_listing_id,
+                "asin": l.asin,
+                "fnsku": l.fnsku,
+                "warehouse_stock_id": l.warehouse_stock_id,
+                "master_product_group_id": l.master_product_group_id,
+                "store_id": l.store_id,
+            }
+            for l in listing_rows
+        ],
+    })
+
+
+@governed_bp.get("/governed/product-linking/search-all-listings")
+def governed_product_linking_search_all_listings_compat():
+    return governed_product_linking_data_compat()
+
+
+@governed_bp.get("/governed/product-linking/search-warehouse")
+def governed_product_linking_search_warehouse_compat():
+    data_response = governed_product_linking_data_compat()
+    return data_response
+
+
+@governed_bp.get("/governed/product-linking/diagnostics/<int:warehouse_id>")
+def governed_product_linking_diagnostics_compat(warehouse_id: int):
+    """Safe governed diagnostic shell.
+
+    Read-only. No repair, no sync, no push.
+    """
+    from extensions import db
+    from models import WarehouseStock, MarketplaceListing
+
+    stock = db.session.get(WarehouseStock, warehouse_id)
+    linked = (
+        db.session.query(MarketplaceListing)
+        .filter(MarketplaceListing.warehouse_stock_id == warehouse_id)
+        .limit(100)
+        .all()
+    )
+
+    return jsonify({
+        "success": True,
+        "ok": True,
+        "governed": True,
+        "read_only": True,
+        "warehouse_id": warehouse_id,
+        "stock_found": bool(stock),
+        "linked_listing_count": len(linked),
+        "linked_listings": [
+            {
+                "id": l.id,
+                "external_sku": l.external_sku,
+                "title": l.title,
+                "store_id": l.store_id,
+                "master_product_group_id": l.master_product_group_id,
+            }
+            for l in linked
+        ],
+        "message": "Governed diagnostics are read-only. Repair actions are blocked until explicitly governed.",
+    })
+
+
+@governed_bp.post("/governed/product-linking/repair/<int:warehouse_id>")
+def governed_product_linking_repair_compat(warehouse_id: int):
+    """Safe governed repair shell.
+
+    This intentionally blocks repair mutation until the repair rules are governed.
+    """
+    return jsonify({
+        "success": False,
+        "ok": False,
+        "governed": True,
+        "repair_blocked": True,
+        "warehouse_id": warehouse_id,
+        "message": "Governed repair is not enabled yet. This old repair action is safely blocked.",
+    }), 409
+
+
+@governed_bp.post("/governed/product-linking/bulk-action")
+def governed_product_linking_bulk_action_compat():
+    """Safe governed bulk shell.
+
+    Bulk mutation is blocked until the governed bulk model is proven.
+    """
+    return jsonify({
+        "success": False,
+        "ok": False,
+        "governed": True,
+        "bulk_blocked": True,
+        "message": "Governed bulk product-linking action is not enabled yet.",
+    }), 409
+
+
+@governed_bp.post("/governed/warehouse/<int:stock_id>/upload-image")
+def governed_warehouse_upload_image_compat(stock_id: int):
+    """Safe governed upload shell.
+
+    Blocks upload mutation until governed storage policy is approved.
+    """
+    return jsonify({
+        "success": False,
+        "ok": False,
+        "governed": True,
+        "upload_blocked": True,
+        "stock_id": stock_id,
+        "message": "Governed warehouse image upload is not enabled yet.",
+    }), 409
+
 
 
 @governed_bp.post("/governed/warehouse/sync")

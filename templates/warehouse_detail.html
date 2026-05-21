@@ -1034,7 +1034,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }, 100);
         
         // Upload file
-        fetch(`/warehouse/upload-image/${stockId}`, {
+        fetch(`/governed/warehouse/${stockId}/upload-image`, {
             method: 'POST',
             headers: {
                 'X-CSRF-Token': csrfToken
@@ -1201,3 +1201,109 @@ async function executeGroupPush(stockId, sku, quantity) {
 }
 </script>
 {% endblock %}
+
+<script id="bt38GovernedLegacyTemplateQuarantine">
+(function(){
+  function disabled(name){
+    if (window.bt38GovernedDisabledAction) {
+      return window.bt38GovernedDisabledAction(name);
+    }
+    alert((name || "This legacy action") + " is disabled until wired to a governed route.");
+    return false;
+  }
+
+  const blockedFunctions = [
+    "executeGroupPush",
+    "linkListingToWarehouse",
+    "unlinkListing",
+    "saveNewLink",
+    "saveAmazonFbmLink",
+    "saveAmazonFbaLink",
+    "saveEbayLink",
+    "bulkPushSelected",
+    "bulkDiagnostics",
+    "bulkRepairLinks",
+    "bulkUngroup",
+    "executeMerge",
+    "executeReassign",
+    "repairResetFailures",
+    "repairRebuildLinks",
+    "repairCreateMissingSKUs",
+    "repairSyncNow",
+    "fixAllIssues",
+    "ungroupProduct",
+    "markNotSameProduct",
+    "repairLinks"
+  ];
+
+  blockedFunctions.forEach(function(name){
+    window[name] = function(){
+      return disabled(name);
+    };
+  });
+})();
+</script>
+
+
+
+<script id="bt38GovernedBlockedActionCleaner">
+(function(){
+  const blockedUrlParts = [
+    "/governed/product-linking/repair",
+    "/governed/product-linking/bulk-action",
+    "/governed/warehouse/"
+  ];
+
+  function isBlockedActionUrl(url){
+    url = String(url || "");
+    if (url.includes("/governed/warehouse/") && url.includes("/upload-image")) return true;
+    return blockedUrlParts.some(part => url.includes(part));
+  }
+
+  document.addEventListener("click", function(e){
+    const el = e.target && e.target.closest ? e.target.closest("button,a,input[type='submit']") : null;
+    if (!el) return;
+
+    const text = (el.innerText || el.value || el.title || "").toLowerCase();
+    const riskyText = [
+      "repair",
+      "reset",
+      "rebuild",
+      "create missing",
+      "sync now",
+      "bulk push",
+      "bulk repair",
+      "bulk merge",
+      "bulk reassign",
+      "bulk ungroup",
+      "upload image"
+    ];
+
+    if (riskyText.some(t => text.includes(t))) {
+      e.preventDefault();
+      e.stopPropagation();
+      alert("This action is disabled until the governed workflow is fully approved.");
+      return false;
+    }
+  }, true);
+
+  const originalFetch = window.fetch;
+  window.fetch = function(input, init){
+    const url = typeof input === "string" ? input : (input && input.url);
+    if (isBlockedActionUrl(url)) {
+      return Promise.resolve(new Response(JSON.stringify({
+        success:false,
+        ok:false,
+        governed:true,
+        blocked:true,
+        message:"This governed action is disabled until the workflow is approved."
+      }), {
+        status:409,
+        headers:{"Content-Type":"application/json"}
+      }));
+    }
+    return originalFetch.apply(this, arguments);
+  };
+})();
+</script>
+

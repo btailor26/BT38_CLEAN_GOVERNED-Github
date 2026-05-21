@@ -184,12 +184,17 @@ function bt38OpenRowAction(button){
   <!-- FILTER BAR -->
   <div class="bt38-filter-bar">
 
-    <div class="bt38-search-wrap">
+    <form method="get" action="/warehouse" class="bt38-search-wrap" id="bt38WarehouseSearchForm">
       <input
         type="text"
+        name="q"
+        value="{{ search_query or '' }}"
         placeholder="Search by SKU, Product, ASIN, FNSKU..."
+        onkeydown="if(event.key === 'Enter'){ this.form.submit(); }"
       >
-    </div>
+      <input type="hidden" name="view" value="{{ active_view or 'all' }}">
+      <button type="submit" class="bt38-search-btn">Search</button>
+    </form>
 
     <select>
       <option>Marketplace</option>
@@ -477,6 +482,21 @@ onclick="window.location.href='/warehouse?view=groups&q={{ item.sku|urlencode }}
 
     </div>
 
+  </div>
+
+
+  <div id="bt38ResultsPerPageBottom" class="bt38-results-bottom">
+    <form method="get" action="/warehouse" class="bt38-results-form">
+      <input type="hidden" name="q" value="{{ search_query or '' }}">
+      <input type="hidden" name="view" value="{{ active_view or 'all' }}">
+      <label for="bt38ResultsPerPageSelect">Results per page:</label>
+      <select id="bt38ResultsPerPageSelect" name="per_page" onchange="this.form.submit()">
+        <option value="15" {% if (per_page or 15)|int == 15 %}selected{% endif %}>15</option>
+        <option value="25" {% if (per_page or 15)|int == 25 %}selected{% endif %}>25</option>
+        <option value="50" {% if (per_page or 15)|int == 50 %}selected{% endif %}>50</option>
+        <option value="100" {% if (per_page or 15)|int == 100 %}selected{% endif %}>100</option>
+      </select>
+    </form>
   </div>
 
   <!-- AMAZON-STYLE FLOATING ACTION BAR -->
@@ -1169,6 +1189,42 @@ document.addEventListener("DOMContentLoaded", function () {
   border:1px solid #fed7aa;
   font-weight:800;
 }
+
+/* BT38 compact warehouse info boxes and search button */
+.bt38-stat-card{
+  padding:12px 14px !important;
+  min-height:78px !important;
+}
+.bt38-stat-card span{
+  font-size:12px !important;
+}
+.bt38-stat-card strong{
+  font-size:20px !important;
+  line-height:1.1 !important;
+}
+.bt38-search-wrap{
+  display:flex !important;
+  align-items:stretch !important;
+  gap:8px !important;
+}
+.bt38-search-wrap input[type="text"]{
+  flex:1 1 auto !important;
+}
+.bt38-search-btn{
+  border:0;
+  border-radius:10px;
+  padding:0 18px;
+  font-weight:700;
+  background:#111827;
+  color:#fff;
+}
+
+
+/* BT38 warehouse bottom results control */
+.bt38-results-bottom{display:flex;justify-content:flex-end;padding:14px 0 8px;}
+.bt38-results-form{display:flex;align-items:center;gap:8px;font-weight:700;}
+.bt38-results-form select{border:1px solid #d1d5db;border-radius:10px;padding:7px 10px;background:#fff;font-weight:700;}
+
 </style>
 
 
