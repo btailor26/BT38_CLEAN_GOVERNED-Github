@@ -298,14 +298,20 @@ def governed_warehouse_page():
     - limits initial render size
     """
     from extensions import db
-    from models import MarketplaceListing, WarehouseStock
+    from models import MarketplaceListing, WarehouseStock, Store
     from sqlalchemy import or_
     from sqlalchemy.orm import joinedload
 
     q = (request.args.get("q") or "").strip().lower()
     view = (request.args.get("view") or "all").strip().lower()
 
-    row_limit = 15
+    try:
+        row_limit = int(request.args.get("per_page") or 15)
+    except Exception:
+        row_limit = 15
+
+    if row_limit not in (15, 25, 50, 100):
+        row_limit = 15
 
     listing_query = (
         db.session.query(MarketplaceListing)
@@ -328,6 +334,29 @@ def governed_warehouse_page():
                 MarketplaceListing.barcode.ilike(like),
             )
         )
+
+    marketplace_filter = (request.args.get("marketplace") or "").strip().lower()
+    status_filter = (request.args.get("status") or "").strip().lower()
+    group_filter = (request.args.get("group") or "").strip().lower()
+    listing_status_filter = (request.args.get("listing_status") or "").strip().lower()
+
+    if marketplace_filter and marketplace_filter != "all":
+        listing_query = listing_query.join(Store, MarketplaceListing.store_id == Store.id).filter(
+            Store.platform.ilike(f"%{marketplace_filter}%")
+        )
+
+    if status_filter and status_filter != "all":
+        listing_query = listing_query.filter(MarketplaceListing.status.ilike(f"%{status_filter}%"))
+
+    if group_filter == "grouped":
+        listing_query = listing_query.filter(MarketplaceListing.master_product_group_id.isnot(None))
+    elif group_filter == "ungrouped":
+        listing_query = listing_query.filter(MarketplaceListing.master_product_group_id.is_(None))
+
+    if listing_status_filter == "linked":
+        listing_query = listing_query.filter(MarketplaceListing.warehouse_stock_id.isnot(None))
+    elif listing_status_filter == "unlinked":
+        listing_query = listing_query.filter(MarketplaceListing.warehouse_stock_id.is_(None))
 
     listing_rows = (
         listing_query
@@ -1066,6 +1095,117 @@ def governed_warehouse_upload_image_compat(stock_id: int):
         "stock_id": stock_id,
         "message": "Governed warehouse image upload is not enabled yet.",
     }), 409
+
+
+
+
+@governed_bp.post("/governed/actions/listings/<int:listing_id>/quantity")
+def governed_listing_quantity_update(listing_id: int):
+    """Governed local warehouse quantity update.
+
+    This updates warehouse truth only. It does not push to marketplaces.
+    Marketplace push remains a separate explicit governed action.
+    """
+    from extensions import db
+    from models import MarketplaceListing, WarehouseStock
+    from flask import request, jsonify
+
+    listing = db.session.get(MarketplaceListing, listing_id)
+    if not listing:
+        return jsonify(success=False, ok=False, error="listing_not_found"), 404
+
+    stock = listing.warehouse_stock
+    if not stock and listing.warehouse_stock_id:
+        stock = db.session.get(WarehouseStock, listing.warehouse_stock_id)
+
+    if not stock:
+        return jsonify(success=False, ok=False, error="warehouse_stock_not_found"), 404
+
+    payload = request.get_json(silent=True) or {}
+    try:
+        qty = int(payload.get("quantity"))
+    except Exception:
+        return jsonify(success=False, ok=False, error="invalid_quantity"), 400
+
+    if qty < 0:
+        return jsonify(success=False, ok=False, error="negative_quantity_not_allowed"), 400
+
+    writable_columns = [
+        "quantity",
+        "available_quantity",
+        "stock_quantity",
+        "on_hand_quantity",
+        "qty",
+    ]
+
+    updated_column = None
+    stock_columns = set(stock.__table__.columns.keys())
+    for col in writable_columns:
+        if col in stock_columns:
+            setattr(stock, col, qty)
+            updated_column = col
+            break
+
+    if not updated_column:
+        return jsonify(
+            success=False,
+            ok=False,
+            governed=True,
+            error="no_supported_quantity_column",
+            message="No writable warehouse quantity column was found.",
+        ), 409
+
+    db.session.commit()
+
+    return jsonify(
+        success=True,
+        ok=True,
+        governed=True,
+        listing_id=listing.id,
+        warehouse_stock_id=stock.id,
+        quantity=qty,
+        updated_column=updated_column,
+        message="Warehouse quantity saved locally. Use Push to sync marketplace.",
+    )
+
+
+@governed_bp.post("/governed/actions/listings/<int:listing_id>/price")
+def governed_listing_price_update(listing_id: int):
+    """Governed local listing price update.
+
+    This updates local listing price only. It does not push to marketplaces.
+    """
+    from extensions import db
+    from models import MarketplaceListing
+    from flask import request, jsonify
+
+    listing = db.session.get(MarketplaceListing, listing_id)
+    if not listing:
+        return jsonify(success=False, ok=False, error="listing_not_found"), 404
+
+    payload = request.get_json(silent=True) or {}
+    try:
+        price = float(payload.get("price"))
+    except Exception:
+        return jsonify(success=False, ok=False, error="invalid_price"), 400
+
+    if price < 0:
+        return jsonify(success=False, ok=False, error="negative_price_not_allowed"), 400
+
+    if "price" not in set(listing.__table__.columns.keys()):
+        return jsonify(success=False, ok=False, error="price_column_missing"), 409
+
+    listing.price = price
+    db.session.commit()
+
+    return jsonify(
+        success=True,
+        ok=True,
+        governed=True,
+        listing_id=listing.id,
+        price=price,
+        message="Listing price saved locally. Use Push to sync marketplace.",
+    )
 
 
 
