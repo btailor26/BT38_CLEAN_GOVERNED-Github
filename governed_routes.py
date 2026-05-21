@@ -45,7 +45,70 @@ def governed_dashboard_page():
 
 @governed_bp.get("/stores")
 def governed_stores_page():
-    return render_template("stores.html")
+    from models import Store
+
+    stores = Store.query.order_by(Store.id).all()
+    return render_template("stores.html", stores=stores)
+
+
+@governed_bp.post("/governed/stores/<int:store_id>/toggle")
+def governed_store_toggle(store_id):
+    from extensions import db
+    from models import Store
+
+    store = Store.query.get_or_404(store_id)
+    body = request.get_json(silent=True) or {}
+    store.is_active = bool(body.get("is_active"))
+    db.session.commit()
+
+    return jsonify({
+        "ok": True,
+        "success": True,
+        "store_id": store.id,
+        "is_active": store.is_active,
+        "message": "Store active state updated through governed path."
+    })
+
+
+@governed_bp.post("/governed/stores/<int:store_id>/sync-preview")
+def governed_store_sync_preview(store_id):
+    from models import Store
+
+    store = Store.query.get_or_404(store_id)
+    return jsonify({
+        "ok": True,
+        "success": True,
+        "store_id": store.id,
+        "store_name": store.name,
+        "platform": store.platform,
+        "message": "Preview only. No marketplace sync was executed.",
+        "governed": True
+    })
+
+
+@governed_bp.post("/governed/stores/<int:store_id>/delete-preview")
+def governed_store_delete_preview(store_id):
+    from models import Store
+
+    store = Store.query.get_or_404(store_id)
+    return jsonify({
+        "ok": False,
+        "success": False,
+        "store_id": store.id,
+        "store_name": store.name,
+        "message": "Store deletion is disabled in governed mode until delete rules are approved.",
+        "governed": True
+    })
+
+
+@governed_bp.get("/governed/stores/amazon/setup-preview")
+def governed_amazon_setup_preview():
+    return jsonify({
+        "ok": True,
+        "success": True,
+        "message": "Amazon setup preview only. Live credential setup is not wired through old routes.",
+        "governed": True
+    })
 
 
 @governed_bp.get("/settings")
