@@ -182,41 +182,47 @@ function bt38OpenRowAction(button){
   </div>
 
   <!-- FILTER BAR -->
-  <div class="bt38-filter-bar">
-
-    <form method="get" action="/warehouse" class="bt38-search-wrap" id="bt38WarehouseSearchForm">
+  <form method="get" action="/warehouse" class="bt38-filter-bar bt38-filter-bar-governed" id="bt38WarehouseSearchForm">
+    <div class="bt38-search-wrap">
       <input
         type="text"
         name="q"
         value="{{ search_query or '' }}"
         placeholder="Search by SKU, Product, ASIN, FNSKU..."
-        onkeydown="if(event.key === 'Enter'){ this.form.submit(); }"
       >
-      <input type="hidden" name="view" value="{{ active_view or 'all' }}">
       <button type="submit" class="bt38-search-btn">Search</button>
-    </form>
+    </div>
 
-    <select>
-      <option>Marketplace</option>
+    <select name="marketplace" onchange="this.form.submit()">
+      <option value="all" {% if not marketplace_filter or marketplace_filter == 'all' %}selected{% endif %}>Marketplace</option>
+      <option value="amazon" {% if marketplace_filter == 'amazon' %}selected{% endif %}>Amazon</option>
+      <option value="ebay" {% if marketplace_filter == 'ebay' %}selected{% endif %}>eBay</option>
+      <option value="shopify" {% if marketplace_filter == 'shopify' %}selected{% endif %}>Shopify</option>
+      <option value="tiktok" {% if marketplace_filter == 'tiktok' %}selected{% endif %}>TikTok</option>
     </select>
 
-    <select>
-      <option>Status</option>
+    <select name="status" onchange="this.form.submit()">
+      <option value="all" {% if not status_filter or status_filter == 'all' %}selected{% endif %}>Status</option>
+      <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
+      <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Inactive</option>
+      <option value="blocked" {% if status_filter == 'blocked' %}selected{% endif %}>Blocked</option>
     </select>
 
-    <select>
-      <option>Group</option>
+    <select name="group" onchange="this.form.submit()">
+      <option value="all" {% if not group_filter or group_filter == 'all' %}selected{% endif %}>Group</option>
+      <option value="grouped" {% if group_filter == 'grouped' %}selected{% endif %}>Grouped</option>
+      <option value="ungrouped" {% if group_filter == 'ungrouped' %}selected{% endif %}>Ungrouped</option>
     </select>
 
-    <select>
-      <option>Listing Status</option>
+    <select name="listing_status" onchange="this.form.submit()">
+      <option value="all" {% if not listing_status_filter or listing_status_filter == 'all' %}selected{% endif %}>Listing Status</option>
+      <option value="linked" {% if listing_status_filter == 'linked' %}selected{% endif %}>Linked</option>
+      <option value="unlinked" {% if listing_status_filter == 'unlinked' %}selected{% endif %}>Unlinked</option>
     </select>
 
-    <button class="bt38-more-filter-btn">
-      More Filters
-    </button>
-
-  </div>
+    <input type="hidden" name="view" value="{{ active_view or 'all' }}">
+    <input type="hidden" name="per_page" value="{{ per_page or 15 }}">
+  </form>
 
   <!-- KPI ROW -->
   <div class="bt38-kpi-row">
@@ -310,6 +316,9 @@ function bt38OpenRowAction(button){
               data-listing-id="{{ item.marketplace_listing_id if item.marketplace_listing_id else '' }}"
               data-sku="{{ item.sku }}"
               data-group-id="{{ item.master_product_group_id or "" }}"
+              data-platform="{{ item.platform or '' }}"
+              data-channel="{% if item.is_fba %}FBA{% elif item.is_fbm %}FBM{% else %}{{ item.platform or '' }}{% endif %}"
+              data-status="{{ item.listing_status or item.status or '' }}"
               data-marketplace="{{ item.location or "" }}"
             >
 
@@ -527,6 +536,151 @@ onclick="window.location.href='/warehouse?view=groups&q={{ item.sku|urlencode }}
   </div>
 
 </div>
+
+
+<script id="bt38WarehouseGovernedActionWiring">
+(function(){
+  if (window.bt38WarehouseGovernedActionWiringInstalled) return;
+  window.bt38WarehouseGovernedActionWiringInstalled = true;
+
+  async function postJson(url, payload){
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload || {})
+    });
+    let data = {};
+    try { data = await resp.json(); } catch(e) {}
+    if (!resp.ok || data.ok === false || data.success === false) {
+      throw new Error(data.message || data.error || ("Request failed: " + resp.status));
+    }
+    return data;
+  }
+
+  function rowFrom(el){
+    return el && el.closest ? el.closest("tr") : null;
+  }
+
+  function setButtonState(btn, label){
+    if (!btn) return;
+    if (!btn.dataset.originalText) btn.dataset.originalText = btn.textContent.trim();
+    btn.textContent = label;
+  }
+
+  function resetButton(btn){
+    if (btn && btn.dataset.originalText) btn.textContent = btn.dataset.originalText;
+  }
+
+  window.bt38PushGovernedListing = async function(row){
+    row = row || null;
+    if (!row) throw new Error("No row selected");
+
+    const listingId = row.dataset.listingId;
+    if (!listingId) throw new Error("Missing listing id");
+
+    return postJson(`/governed/actions/listings/${encodeURIComponent(listingId)}/push`, {});
+  };
+
+  window.bt38OpenRowAction = async function(button){
+    const row = rowFrom(button);
+    if (!row) return false;
+
+    const listingId = row.dataset.listingId;
+    const sku = row.dataset.sku || "";
+    const stockId = row.dataset.stockId || "";
+
+    try {
+      if (button.classList.contains("bt38-marketplace-control")) {
+        if (!listingId) {
+          alert("This row has no marketplace listing id.");
+          return false;
+        }
+
+        setButtonState(button, "Pushing...");
+        const data = await window.bt38PushGovernedListing(row);
+        setButtonState(button, "Done");
+        setTimeout(() => resetButton(button), 1200);
+        console.log("Governed push result", data);
+        return false;
+      }
+
+      if (button.classList.contains("bt38-qty-action")) {
+        if (!listingId) {
+          alert("This row has no listing id to save quantity.");
+          return false;
+        }
+
+        const currentText = (button.parentElement && button.parentElement.innerText || "").match(/\d+/);
+        const currentQty = currentText ? currentText[0] : "0";
+        const nextQty = prompt("Enter new warehouse quantity for " + sku, currentQty);
+
+        if (nextQty === null) return false;
+
+        setButtonState(button, "Saving...");
+        const data = await postJson(`/governed/actions/listings/${encodeURIComponent(listingId)}/quantity`, {
+          quantity: nextQty
+        });
+        setButtonState(button, "Saved");
+        setTimeout(() => window.location.reload(), 700);
+        console.log("Governed quantity result", data);
+        return false;
+      }
+
+      if (button.classList.contains("bt38-price-action")) {
+        if (!listingId) {
+          alert("This row has no listing id to save price.");
+          return false;
+        }
+
+        const currentText = (button.parentElement && button.parentElement.innerText || "").replace(/[^\d.]/g, "");
+        const currentPrice = currentText || "0.00";
+        const nextPrice = prompt("Enter new local listing price for " + sku, currentPrice);
+
+        if (nextPrice === null) return false;
+
+        setButtonState(button, "Saving...");
+        const data = await postJson(`/governed/actions/listings/${encodeURIComponent(listingId)}/price`, {
+          price: nextPrice
+        });
+        setButtonState(button, "Saved");
+        setTimeout(() => window.location.reload(), 700);
+        console.log("Governed price result", data);
+        return false;
+      }
+
+      if (button.classList.contains("bt38-warehouse-action")) {
+        window.location.href = `/warehouse?q=${encodeURIComponent(sku || stockId)}`;
+        return false;
+      }
+
+      window.location.href = `/warehouse?q=${encodeURIComponent(sku || stockId)}`;
+      return false;
+    } catch (err) {
+      console.error(err);
+      alert(err.message || "Action failed");
+      resetButton(button);
+      return false;
+    }
+  };
+
+  window.runGovernedWarehouseSync = async function(){
+    if (!confirm("Run governed warehouse sync for current linked listings?")) return false;
+
+    const btn = document.querySelector('[data-bt38-sync], .bt38-sync-btn, button[onclick*="runGovernedWarehouseSync"]');
+    try {
+      setButtonState(btn, "Syncing...");
+      const data = await postJson("/governed/warehouse/sync", {});
+      alert(`Governed sync complete. Pushed: ${data.pushed || 0}. Blocked: ${data.blocked || 0}.`);
+      resetButton(btn);
+      return data;
+    } catch (err) {
+      alert(err.message || "Governed sync failed");
+      resetButton(btn);
+      return false;
+    }
+  };
+})();
+</script>
 
 <style>
 
@@ -1224,6 +1378,54 @@ document.addEventListener("DOMContentLoaded", function () {
 .bt38-results-bottom{display:flex;justify-content:flex-end;padding:14px 0 8px;}
 .bt38-results-form{display:flex;align-items:center;gap:8px;font-weight:700;}
 .bt38-results-form select{border:1px solid #d1d5db;border-radius:10px;padding:7px 10px;background:#fff;font-weight:700;}
+
+
+/* BT38 governed compact warehouse control row */
+.bt38-filter-bar-governed{
+  display:grid !important;
+  grid-template-columns:minmax(260px, 1fr) repeat(4, minmax(130px, 150px)) !important;
+  gap:8px !important;
+  align-items:center !important;
+}
+.bt38-filter-bar-governed .bt38-search-wrap{
+  display:flex !important;
+  align-items:stretch !important;
+  gap:8px !important;
+}
+.bt38-filter-bar-governed .bt38-search-wrap input{
+  min-height:38px !important;
+}
+.bt38-filter-bar-governed select,
+.bt38-filter-bar-governed .bt38-search-btn{
+  height:38px !important;
+  min-height:38px !important;
+  border-radius:10px !important;
+  box-sizing:border-box !important;
+}
+.bt38-filter-bar-governed select{
+  width:100% !important;
+}
+.bt38-search-btn{
+  white-space:nowrap !important;
+}
+.bt38-stat-card{
+  min-height:72px !important;
+  padding:10px 12px !important;
+}
+.bt38-stat-card strong{
+  font-size:19px !important;
+}
+.bt38-stat-card span{
+  font-size:12px !important;
+}
+@media (max-width: 900px){
+  .bt38-filter-bar-governed{
+    grid-template-columns:1fr 1fr !important;
+  }
+  .bt38-filter-bar-governed .bt38-search-wrap{
+    grid-column:1 / -1 !important;
+  }
+}
 
 </style>
 
