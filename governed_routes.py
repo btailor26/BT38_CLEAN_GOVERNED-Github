@@ -21,7 +21,11 @@ def governed_dashboard_page():
         total_groups = 0
         total_marketplaces = 0
         low_stock_count = 0
+        low_stock_items = 0
         out_of_stock_count = 0
+        failed_syncs = 0
+        successful_syncs = 0
+        pending_syncs = 0
         total_value = 0
 
     return render_template(
@@ -57,9 +61,25 @@ def governed_settings_page():
         concurrent_store_pushes = 2
         api_rate_limit_buffer = 0.80
 
+    class MockStats:
+        failed_syncs = 0
+        successful_syncs = 0
+        pending_syncs = 0
+
     return render_template(
         "settings.html",
-        global_settings=MockSettings()
+        global_settings=MockSettings(),
+        stats=MockStats(),
+        webhook_settings={
+            "worker_enabled": False,
+            "platforms": {
+                "amazon": {"enabled": False},
+                "ebay": {"enabled": False},
+                "shopify": {"enabled": False},
+                "tiktok": {"enabled": False},
+            }
+        },
+        stores=[]
     )
 
 
