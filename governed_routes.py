@@ -20,7 +20,11 @@ def login():
     from extensions import db
     from models import User
 
-    next_url = request.args.get("next") or request.form.get("next") or url_for("governed.governed_warehouse_page")
+    requested_next = request.args.get("next") or request.form.get("next") or ""
+    if requested_next.startswith("/") and not requested_next.startswith("//") and "\\" not in requested_next:
+        next_url = requested_next
+    else:
+        next_url = url_for("governed.governed_warehouse_page")
 
     if request.method == "POST":
         identity = (request.form.get("identity") or "").strip()
