@@ -17,12 +17,12 @@
            class="btn btn-sm py-1 px-2 {% if request.path == '/listings' %}btn-primary{% else %}btn-outline-primary{% endif %}">
             Listings
         </a>
-        <a href="{{ url_for('routes.orders_list') }}"
-           class="btn btn-sm py-1 px-2 {% if request.endpoint == 'routes.orders_list' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+        <a href="/groups"
+           class="btn btn-sm py-1 px-2 {% if request.path == '/groups' %}btn-primary{% else %}btn-outline-primary{% endif %}">
             Orders
         </a>
-        <a href="{{ url_for('routes.amazon_fba_stock') }}"
-           class="btn btn-sm py-1 px-2 {% if request.endpoint == 'routes.amazon_fba_stock' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+        <a href="/warehouse?view=fba"
+           class="btn btn-sm py-1 px-2 {% if request.path == '/warehouse' %}btn-primary{% else %}btn-outline-primary{% endif %}">
             FBA Read Only
         </a>
     </div>
