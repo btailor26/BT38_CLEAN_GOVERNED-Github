@@ -68,20 +68,48 @@ def shutdown_proof_status():
 def governed_warehouse_page():
     """Governed Master Stock UI.
 
-    Existing UI only. No layout rebuild.
-    This route aligns DB -> governed runtime -> warehouse.html.
+    Speed-safe route:
+    - no marketplace execution
+    - no old routes
+    - eager-loads relationships to avoid N+1 queries
+    - limits initial render size
     """
     from extensions import db
     from models import MarketplaceListing, WarehouseStock
+    from sqlalchemy import or_
+    from sqlalchemy.orm import joinedload
 
     q = (request.args.get("q") or "").strip().lower()
     view = (request.args.get("view") or "all").strip().lower()
 
-    listing_rows = (
+    row_limit = 120
+
+    listing_query = (
         db.session.query(MarketplaceListing)
+        .options(
+            joinedload(MarketplaceListing.store),
+            joinedload(MarketplaceListing.warehouse_stock),
+        )
         .filter(MarketplaceListing.is_active == True)  # noqa: E712
+    )
+
+    if q:
+        like = f"%{q}%"
+        listing_query = listing_query.filter(
+            or_(
+                MarketplaceListing.external_sku.ilike(like),
+                MarketplaceListing.title.ilike(like),
+                MarketplaceListing.external_listing_id.ilike(like),
+                MarketplaceListing.asin.ilike(like),
+                MarketplaceListing.fnsku.ilike(like),
+                MarketplaceListing.barcode.ilike(like),
+            )
+        )
+
+    listing_rows = (
+        listing_query
         .order_by(MarketplaceListing.updated_at.desc(), MarketplaceListing.id.desc())
-        .limit(500)
+        .limit(row_limit)
         .all()
     )
 
@@ -92,6 +120,7 @@ def governed_warehouse_page():
         stock = listing.warehouse_stock
         if stock:
             linked_stock_ids.add(stock.id)
+
         platform = (listing.store.platform if listing.store else "Marketplace") or "Marketplace"
         platform_lower = platform.lower()
         channel = (listing.normalized_amazon_fulfillment_channel or "").upper()
@@ -99,7 +128,8 @@ def governed_warehouse_page():
         is_fbm = is_amazon and channel in ("MFN", "FBM", "MERCHANT")
         is_fba = is_amazon and not is_fbm
         location = f"{platform} {'FBA' if is_fba else 'FBM'}" if is_amazon else platform
-        row = SimpleNamespace(
+
+        rows.append(SimpleNamespace(
             id=stock.id if stock else 0,
             inventory_item_id=None,
             item_id=None,
@@ -124,59 +154,67 @@ def governed_warehouse_page():
             external_sku=listing.external_sku,
             asin=listing.asin,
             fnsku=listing.fnsku,
-        )
-        rows.append(row)
-
-    unlinked_stock = (
-        db.session.query(WarehouseStock)
-        .filter(WarehouseStock.is_active == True)  # noqa: E712
-        .filter(WarehouseStock.is_deleted == False)  # noqa: E712
-        .order_by(WarehouseStock.updated_at.desc(), WarehouseStock.id.desc())
-        .limit(500)
-        .all()
-    )
-    for stock in unlinked_stock:
-        if stock.id in linked_stock_ids:
-            continue
-        rows.append(SimpleNamespace(
-            id=stock.id,
-            inventory_item_id=None,
-            item_id=None,
-            marketplace_listing_id=None,
-            sku=stock.sku,
-            master_product_group_id=stock.master_product_group_id,
-            location="Warehouse",
-            image_url=stock.image_url,
-            product_name=stock.product_name,
-            title=stock.product_name,
-            group_title=stock.group_title,
-            barcode=stock.barcode,
-            mcf_group_source=False,
-            is_fba=False,
-            is_fbm=False,
-            is_group_controlled=bool(stock.is_group_controlled),
-            available_quantity=stock.sellable_quantity,
-            price=0,
-            store_name=stock.warehouse.name if stock.warehouse else "Warehouse",
-            platform="Warehouse",
-            external_listing_id=None,
-            external_sku=None,
-            asin=None,
-            fnsku=None,
         ))
-        if len(rows) >= 500:
-            break
 
-    all_rows = rows
+    if len(rows) < row_limit:
+        stock_query = (
+            db.session.query(WarehouseStock)
+            .options(joinedload(WarehouseStock.warehouse))
+            .filter(WarehouseStock.is_active == True)  # noqa: E712
+            .filter(WarehouseStock.is_deleted == False)  # noqa: E712
+        )
 
-    if q:
-        def _matches(row):
-            haystack = " ".join(str(getattr(row, field, "") or "") for field in (
-                "sku", "external_sku", "asin", "fnsku", "barcode", "product_name", "title",
-                "group_title", "external_listing_id", "store_name", "platform", "master_product_group_id"
-            )).lower()
-            return q in haystack
-        rows = [row for row in rows if _matches(row)]
+        if q:
+            like = f"%{q}%"
+            stock_query = stock_query.filter(
+                or_(
+                    WarehouseStock.sku.ilike(like),
+                    WarehouseStock.product_name.ilike(like),
+                    WarehouseStock.barcode.ilike(like),
+                    WarehouseStock.group_title.ilike(like),
+                )
+            )
+
+        unlinked_stock = (
+            stock_query
+            .order_by(WarehouseStock.updated_at.desc(), WarehouseStock.id.desc())
+            .limit(row_limit)
+            .all()
+        )
+
+        for stock in unlinked_stock:
+            if stock.id in linked_stock_ids:
+                continue
+
+            rows.append(SimpleNamespace(
+                id=stock.id,
+                inventory_item_id=None,
+                item_id=None,
+                marketplace_listing_id=None,
+                sku=stock.sku,
+                master_product_group_id=stock.master_product_group_id,
+                location="Warehouse",
+                image_url=stock.image_url,
+                product_name=stock.product_name,
+                title=stock.product_name,
+                group_title=stock.group_title,
+                barcode=stock.barcode,
+                mcf_group_source=False,
+                is_fba=False,
+                is_fbm=False,
+                is_group_controlled=bool(stock.is_group_controlled),
+                available_quantity=stock.sellable_quantity,
+                price=0,
+                store_name=stock.warehouse.name if stock.warehouse else "Warehouse",
+                platform="Warehouse",
+                external_listing_id=None,
+                external_sku=None,
+                asin=None,
+                fnsku=None,
+            ))
+
+            if len(rows) >= row_limit:
+                break
 
     if view == "available":
         rows = [row for row in rows if int(getattr(row, "available_quantity", 0) or 0) > 0]
@@ -192,15 +230,14 @@ def governed_warehouse_page():
         rows = [row for row in rows if getattr(row, "master_product_group_id", None) or getattr(row, "is_group_controlled", False)]
 
     stats = SimpleNamespace(
-        total_skus=len(all_rows),
-        total_available=sum(int(getattr(row, "available_quantity", 0) or 0) for row in all_rows),
-        low_stock_count=sum(1 for row in all_rows if int(getattr(row, "available_quantity", 0) or 0) <= 0),
-        listing_count=sum(1 for row in all_rows if getattr(row, "marketplace_listing_id", None)),
-        inventory_value=sum((float(getattr(row, "price", 0) or 0) * int(getattr(row, "available_quantity", 0) or 0)) for row in all_rows),
+        total_skus=len(rows),
+        total_available=sum(int(getattr(row, "available_quantity", 0) or 0) for row in rows),
+        low_stock_count=sum(1 for row in rows if int(getattr(row, "available_quantity", 0) or 0) <= 0),
+        listing_count=sum(1 for row in rows if getattr(row, "marketplace_listing_id", None)),
+        inventory_value=sum((float(getattr(row, "price", 0) or 0) * int(getattr(row, "available_quantity", 0) or 0)) for row in rows),
     )
-    warehouse_items = SimpleNamespace(items=rows, total=len(rows))
 
-    from flask import render_template
+    warehouse_items = SimpleNamespace(items=rows, total=len(rows))
 
     html = render_template(
         "warehouse.html",
