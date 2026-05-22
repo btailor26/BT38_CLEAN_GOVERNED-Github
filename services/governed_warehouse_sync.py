@@ -1,86 +1,74 @@
-"""
-BT38 GOVERNED WAREHOUSE SYNC
+"""BT38 governed warehouse sync safe probe.
 
-Single manual warehouse sync path.
-
-Rules:
-- No old queue workers
-- No old auto sync
-- No legacy marketplace orchestration
-- Manual execution only
-- Warehouse is the truth
-- FBA/AFN remains read-only
-- FBM/MFN can be pushed only through governed listing push path
+This manual sync endpoint must not bulk-push all listings or import route helpers.
+It checks the governed fuse path and returns JSON quickly.
 """
 
 from datetime import datetime
 
 from app import db
-from models import Store, MarketplaceListing, SystemLog
-from governed_routes import _push_one_listing
+from models import MarketplaceListing, Store, SystemLog
+from services.runtime_action_guard import is_runtime_action_allowed
 
 
-def run_governed_warehouse_sync(store_id=None, actor="manual-warehouse-sync"):
-    query = db.session.query(MarketplaceListing)
-
+def run_governed_warehouse_sync(store_id=None, actor="manual-warehouse-sync", limit=5):
+    store = None
     if store_id:
-        query = query.filter(MarketplaceListing.store_id == store_id)
+        store = db.session.get(Store, int(store_id))
 
-    listings = query.filter(
+    sync_guard = is_runtime_action_allowed(
+        store=store,
+        action_type="sync",
+        manual=True,
+        context={"source": "governed_warehouse_sync_probe", "store_id": store_id},
+    )
+
+    if not sync_guard.get("allowed"):
+        return {
+            "success": False,
+            "ok": False,
+            "governed": True,
+            "execution_blocked": True,
+            "fuse_box_checked": True,
+            "reason": sync_guard.get("reason"),
+            "mode": "safe_probe",
+            "store_id": store_id,
+        }
+
+    query = db.session.query(MarketplaceListing).filter(
         MarketplaceListing.is_active == True,  # noqa: E712
         MarketplaceListing.warehouse_stock_id.isnot(None),
-    ).order_by(MarketplaceListing.id).all()
+    )
+
+    if store_id:
+        query = query.filter(MarketplaceListing.store_id == int(store_id))
+
+    listings = query.order_by(MarketplaceListing.id).limit(max(1, int(limit or 5))).all()
 
     results = []
-    pushed = 0
-    blocked = 0
-
     for listing in listings:
-        platform = (listing.store.platform or "").strip().lower() if listing.store else ""
-        channel = (listing.normalized_amazon_fulfillment_channel or "").upper()
-
-        if "amazon" in platform and channel not in ("MFN", "FBM", "MERCHANT"):
-            blocked += 1
-            results.append({
-                "listing_id": listing.id,
-                "sku": listing.external_sku,
-                "platform": platform,
-                "channel": channel,
-                "ok": False,
-                "blocked": True,
-                "reason": "FBA/AFN is read-only and cannot be pushed",
-            })
-            continue
-
-        result = _push_one_listing(
-            listing_id=listing.id,
-            quantity=None,
-            actor=actor,
-            source="warehouse_manual_sync_button",
+        push_guard = is_runtime_action_allowed(
+            store=listing.store,
+            action_type="push",
+            manual=True,
+            context={"source": "governed_warehouse_sync_probe_listing", "listing_id": listing.id},
         )
-
-        if result.get("ok") or result.get("success"):
-            pushed += 1
-        else:
-            blocked += 1
 
         results.append({
             "listing_id": listing.id,
             "sku": listing.external_sku,
-            "platform": platform,
-            "channel": channel,
-            "ok": bool(result.get("ok") or result.get("success")),
-            "reason": result.get("reason") or result.get("failure_reason"),
+            "store_id": listing.store_id,
+            "platform": getattr(listing.store, "platform", None),
+            "ok": bool(push_guard.get("allowed")),
+            "execution_blocked": not bool(push_guard.get("allowed")),
+            "reason": push_guard.get("reason") or "Listing eligible by fuse board.",
         })
 
     try:
         db.session.add(SystemLog(
-            log_type="governed_warehouse_sync",
-            message=f"governed_warehouse_sync pushed={pushed} blocked={blocked}",
-            details=(
-                f"store_id={store_id} actor={actor} total={len(results)} "
-                f"pushed={pushed} blocked={blocked}"
-            )[:1000],
+            log_type="governed_warehouse_sync_probe",
+            message=f"governed_warehouse_sync probe checked={len(results)}",
+            details=f"store_id={store_id} actor={actor} limit={limit}"[:1000],
             created_at=datetime.utcnow(),
         ))
         db.session.commit()
@@ -89,11 +77,15 @@ def run_governed_warehouse_sync(store_id=None, actor="manual-warehouse-sync"):
 
     return {
         "success": True,
+        "ok": True,
         "governed": True,
         "manual": True,
+        "mode": "safe_probe",
         "store_id": store_id,
         "total": len(results),
-        "pushed": pushed,
-        "blocked": blocked,
-        "results": results[:100],
+        "checked": len(results),
+        "pushed": 0,
+        "blocked": sum(1 for row in results if row.get("execution_blocked")),
+        "message": "Warehouse sync safe probe completed. No marketplace bulk push executed.",
+        "results": results,
     }
