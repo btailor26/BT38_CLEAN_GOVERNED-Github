@@ -88,6 +88,7 @@ class EbayAdapter(GovernedMarketplaceAdapter):
         headers = {
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
+            "Content-Language": "en-GB",
         }
 
         response = requests.put(
