@@ -1377,7 +1377,20 @@ def governed_settings_config_update():
     if key not in allowed:
         return jsonify(ok=False, success=False, governed=True, error="setting_not_allowed", key=key), 400
 
-    if isinstance(value, bool):
+    numeric_settings = {
+        "default_push_frequency_minutes": int,
+        "default_batch_size": int,
+        "default_retry_attempts": int,
+        "api_rate_limit_buffer": float,
+        "error_rate_threshold": float,
+    }
+
+    if key in numeric_settings:
+        try:
+            value = numeric_settings[key](value)
+        except Exception:
+            return jsonify(ok=False, success=False, governed=True, error="invalid_numeric_value", key=key, value=value), 400
+    elif isinstance(value, bool):
         value = _bt38_settings_bool(value)
 
     _bt38_settings_set_config(key, value)

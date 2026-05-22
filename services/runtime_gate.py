@@ -1,59 +1,124 @@
-"""BT38 governed runtime gate.
+"""
+BT38 runtime gate compatibility wrapper.
 
-Default is force-closed. Stage 5 introduces a second explicit live allow flag
-for the one internal Amazon FBM/MFN single-SKU inventory push contract. Both
-RUNTIME_GATE_FORCE_CLOSED must be False and GOVERNED_AMAZON_FBM_LIVE_ENABLED
-must be True before any live governed command can pass.
+This file no longer owns runtime execution authority.
+
+Authority now lives in:
+services/runtime_action_guard.py
+
+runtime_gate.py only exists to preserve compatibility for:
+- governed_execution.py
+- older governed command paths
+- existing tests/imports
 """
 
-from __future__ import annotations
+from dataclasses import dataclass, field
+from typing import Any, Dict, Optional
 
-import os
+from services.runtime_action_guard import is_runtime_action_allowed
 
-RUNTIME_GATE_FORCE_CLOSED = True
-GOVERNED_AMAZON_FBM_LIVE_ENABLED = os.getenv("GOVERNED_AMAZON_FBM_LIVE_ENABLED", "false").lower() == "true"
-RUNTIME_GATE_MESSAGE = "BT38 marketplace push/sync/import is disabled during governed-path rebuild."
-APPROVED_AMAZON_FBM_PUSH_TYPE = "amazon_fbm_single_sku_inventory_push"
+APPROVED_AMAZON_FBM_PUSH_TYPE = "amazon_fbm_inventory_push"
 
-
-def is_runtime_allowed(command=None, *_args, **_kwargs) -> bool:
-    """Return True only for the approved governed Amazon FBM live command."""
-    if RUNTIME_GATE_FORCE_CLOSED:
-        return False
-    if not GOVERNED_AMAZON_FBM_LIVE_ENABLED:
-        return False
-    if command is None:
-        return False
-
-    payload = dict(getattr(command, "payload", {}) or {})
-    approval = dict(getattr(command, "approval", {}) or {})
-    if getattr(command, "dry_run", True):
-        return False
-    if getattr(command, "marketplace", None) != "amazon":
-        return False
-    if getattr(command, "action", None) != "push_inventory":
-        return False
-    if approval.get("approved") is not True:
-        return False
-    if approval.get("approval_type") != APPROVED_AMAZON_FBM_PUSH_TYPE:
-        return False
-
-    scope = approval.get("scope") or {}
-    required = ("sku", "store_id", "listing_id", "quantity")
-    if set(scope.keys()) != set(required):
-        return False
-    if any(key not in payload for key in required):
-        return False
-    return all(_normalize(scope[key]) == _normalize(payload[key]) for key in required)
+RUNTIME_GATE_MESSAGE = (
+    "BT38 runtime execution is controlled by the settings fuse box."
+)
 
 
-def assert_runtime_allowed(command=None, *_args, **_kwargs) -> None:
-    """Raise when runtime execution is not allowed."""
-    if not is_runtime_allowed(command):
-        raise RuntimeError(RUNTIME_GATE_MESSAGE)
+@dataclass
+class RuntimeCommand:
+    action: str
+    payload: Dict[str, Any] = field(default_factory=dict)
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
-def _normalize(value):
-    if isinstance(value, str):
-        return value.strip()
-    return value
+def _resolve_action_type(command: RuntimeCommand) -> str:
+    action = str(getattr(command, "action", "") or "").strip().lower()
+
+    if "push" in action:
+        return "push"
+
+    if "import" in action:
+        return "import"
+
+    if "sync" in action:
+        return "sync"
+
+    return action
+
+
+def _resolve_store(command: RuntimeCommand):
+    try:
+        from models import Store
+
+        payload = getattr(command, "payload", {}) or {}
+
+        store_id = (
+            payload.get("store_id")
+            or payload.get("store")
+            or payload.get("storeId")
+        )
+
+        if not store_id:
+            return None
+
+        return Store.query.get(int(store_id))
+
+    except Exception:
+        return None
+
+
+def is_runtime_allowed(command: RuntimeCommand):
+    action_type = _resolve_action_type(command)
+    store = _resolve_store(command)
+
+    metadata = getattr(command, "metadata", {}) or {}
+    payload = getattr(command, "payload", {}) or {}
+
+    manual = bool(
+        metadata.get("manual")
+        or metadata.get("manual_trigger")
+        or payload.get("manual")
+        or payload.get("manual_trigger")
+    )
+
+    result = is_runtime_action_allowed(
+        store=store,
+        action_type=action_type,
+        manual=manual,
+        context={
+            "source": "runtime_gate",
+            "command_action": getattr(command, "action", None),
+        },
+    )
+
+    return bool(result.get("allowed", False))
+
+
+def assert_runtime_allowed(command: RuntimeCommand):
+    action_type = _resolve_action_type(command)
+    store = _resolve_store(command)
+
+    metadata = getattr(command, "metadata", {}) or {}
+    payload = getattr(command, "payload", {}) or {}
+
+    manual = bool(
+        metadata.get("manual")
+        or metadata.get("manual_trigger")
+        or payload.get("manual")
+        or payload.get("manual_trigger")
+    )
+
+    result = is_runtime_action_allowed(
+        store=store,
+        action_type=action_type,
+        manual=manual,
+        context={
+            "source": "runtime_gate_assert",
+            "command_action": getattr(command, "action", None),
+        },
+    )
+
+    if not result.get("allowed", False):
+        raise RuntimeError(result.get("reason", RUNTIME_GATE_MESSAGE))
+
+    return result
