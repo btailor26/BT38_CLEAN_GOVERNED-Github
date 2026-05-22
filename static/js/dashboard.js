@@ -1370,7 +1370,7 @@ async function releaseFromGroup(button, itemId, itemSku) {
         
         const csrfToken = getCSRFToken();
         // Call with item_id in the URL path (not body)
-        const data = await api(`/release_from_group/${itemId}`, {
+        const data = await api(`/governed-disabled/release-from-group/${itemId}`, {
             method: 'POST',
             headers: {
                 'X-CSRF-Token': csrfToken

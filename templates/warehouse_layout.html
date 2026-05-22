@@ -185,7 +185,7 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Generating...';
 
         try {
-            const response = await fetch(`/api/warehouse/${warehouseId}/generate-layout`, {
+            const response = await fetch(`/governed-disabled/warehouse-generate-layout/${warehouseId}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -233,7 +233,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (!code) return;
 
         try {
-            const response = await fetch(`/api/warehouse/location/${encodeURIComponent(code)}`);
+            const response = await fetch(`/governed-disabled/warehouse-location/${encodeURIComponent(code)}`);
             const result = await response.json();
             const resultEl = document.getElementById('location-result');
 
@@ -260,7 +260,7 @@ document.addEventListener('DOMContentLoaded', function() {
         container.innerHTML = '<div class="text-center py-3"><span class="spinner-border"></span></div>';
 
         try {
-            const response = await fetch(`/api/warehouse/${warehouseId}/layout`);
+            const response = await fetch(`/governed-disabled/warehouse-layout/${warehouseId}`);
             const result = await response.json();
 
             if (result.ok && result.layout.zones.length > 0) {

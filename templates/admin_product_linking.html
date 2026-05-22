@@ -810,7 +810,7 @@ async function ungroupProduct(warehouseId, sku) {
     if (!confirm(`Remove SKU "${sku}" from its product group?\n\nThis will treat it as a separate product with its own inventory.`)) return;
 
     try {
-        const resp = await fetch('/api/product-linking/ungroup', {
+        const resp = await fetch('/governed-disabled/product-linking-ungroup', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({warehouse_stock_id: warehouseId})
@@ -834,7 +834,7 @@ async function markNotSameProduct(warehouseId, sku) {
     if (newSku === null) return; // Cancelled
 
     try {
-        const resp = await fetch('/api/product-linking/not-same-product', {
+        const resp = await fetch('/governed-disabled/product-linking-not-same-product', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
@@ -887,7 +887,7 @@ async function saveAmazonFbmLink() {
     }
 
     try {
-        const resp = await fetch('/api/product-linking/link', {
+        const resp = await fetch('/governed-disabled/product-linking-link', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
@@ -928,7 +928,7 @@ async function saveAmazonFbaLink() {
     }
 
     try {
-        const resp = await fetch('/api/product-linking/link', {
+        const resp = await fetch('/governed-disabled/product-linking-link', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
@@ -963,7 +963,7 @@ async function saveEbayLink() {
     }
 
     try {
-        const resp = await fetch('/api/product-linking/link', {
+        const resp = await fetch('/governed-disabled/product-linking-link', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
@@ -989,7 +989,7 @@ async function unlinkMapping(listingId, platform) {
     if (!confirm(`Unlink this ${platform} mapping?`)) return;
 
     try {
-        const resp = await fetch('/api/unlink_listing', {
+        const resp = await fetch('/governed-disabled/unlink-listing', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({listing_id: listingId})
@@ -1165,7 +1165,7 @@ async function bulkDiagnostics() {
             ? { select_all: true, filters: getCurrentFilters() }
             : { warehouse_stock_ids: ids };
 
-        const resp = await fetch('/api/product-linking/bulk/diagnostics', {
+        const resp = await fetch('/governed-disabled/product-linking-bulk-diagnostics', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(payload)
@@ -1194,7 +1194,7 @@ async function bulkRepairLinks() {
             ? { select_all: true, filters: getCurrentFilters() }
             : { warehouse_stock_ids: ids };
 
-        const resp = await fetch('/api/product-linking/bulk/repair', {
+        const resp = await fetch('/governed-disabled/product-linking-bulk-repair', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(payload)
@@ -1223,7 +1223,7 @@ async function bulkPushSelected() {
             ? { select_all: true, filters: getCurrentFilters() }
             : { warehouse_stock_ids: ids };
 
-        const resp = await fetch('/api/product-linking/bulk/push', {
+        const resp = await fetch('/governed-disabled/product-linking-bulk-push', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(payload)
@@ -1248,7 +1248,7 @@ async function showJobsTab() {
     new bootstrap.Modal(document.getElementById('jobsModal')).show();
 
     try {
-        const resp = await fetch('/api/listings/bulk/jobs');
+        const resp = await fetch('/governed/actions/history');
         const data = await resp.json();
 
         const tbody = document.getElementById('jobsTableBody');
@@ -1278,7 +1278,7 @@ async function showJobsTab() {
                     </td>
                     <td>${job.created_at || '-'}</td>
                     <td>
-                        ${job.error_count > 0 ? `<a href="/api/listings/bulk/jobs/${job.id}/errors.csv" class="btn btn-sm btn-outline-danger"><i data-feather="download" class="feather-sm"></i></a>` : ''}
+                        ${job.error_count > 0 ? `<a href="/governed/actions/history/${job.id}/errors.csv" class="btn btn-sm btn-outline-danger"><i data-feather="download" class="feather-sm"></i></a>` : ''}
                     </td>
                 </tr>`;
             }
@@ -1314,7 +1314,7 @@ document.getElementById('ebayBulkForm').addEventListener('submit', async functio
     const formData = new FormData(this);
 
     try {
-        const resp = await fetch('/api/product-linking/ebay/bulk', {
+        const resp = await fetch('/governed-disabled/product-linking-ebay-bulk', {
             method: 'POST',
             body: formData
         });
@@ -1481,7 +1481,7 @@ async function executeMerge() {
     if (!confirm(`Merge ${ids.length} products into the selected target?\n\nMode: ${mergeMode === 'group' ? 'Create Group' : 'Combine Quantity'}`)) return;
 
     try {
-        const resp = await fetch('/api/product-linking/bulk/merge', {
+        const resp = await fetch('/governed-disabled/product-linking-bulk-merge', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
@@ -1553,7 +1553,7 @@ async function executeReassign() {
     if (!confirm('Move all marketplace listings from source to target?')) return;
 
     try {
-        const resp = await fetch('/api/product-linking/bulk/reassign', {
+        const resp = await fetch('/governed-disabled/product-linking-bulk-reassign', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
@@ -1583,7 +1583,7 @@ async function bulkUngroup() {
     if (!confirm(`Ungroup ${count} selected product(s)? They will no longer be part of any product group.`)) return;
 
     try {
-        const resp = await fetch('/api/product-linking/bulk/ungroup', {
+        const resp = await fetch('/governed-disabled/product-linking-bulk-ungroup', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
@@ -1644,7 +1644,7 @@ async function fixAllIssues() {
             return;
         }
 
-        const resp = await fetch('/api/product-linking/bulk/repair', {
+        const resp = await fetch('/governed-disabled/product-linking-bulk-repair', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ warehouse_stock_ids: ids })

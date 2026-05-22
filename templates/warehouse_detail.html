@@ -942,263 +942,110 @@
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    // Initialize Feather icons
-    if (typeof feather !== 'undefined') {
-        feather.replace();
-    }
-    
-    // Drag and Drop Image Upload
-    const dropZone = document.getElementById('dropZone');
-    const fileInput = document.getElementById('imageFile');
-    const imagePreview = document.getElementById('imagePreview');
-    const uploadProgress = document.getElementById('uploadProgress');
-    const imageUrlInput = document.getElementById('image_url');
-    const stockId = {{ stock_item.id }};
-    const csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
-    
-    // Click to upload
-    if (dropZone) {
-        dropZone.addEventListener('click', () => fileInput.click());
-    }
-    
-    // File input change
-    if (fileInput) {
-        fileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) uploadImage(file);
-        });
-    }
-    
-    // Drag and drop events
-    if (dropZone) {
-        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, preventDefaults, false);
-        });
-        
-        function preventDefaults(e) {
-            e.preventDefault();
-            e.stopPropagation();
-        }
-        
-        ['dragenter', 'dragover'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => {
-                dropZone.classList.add('border-primary', 'bg-light');
-            });
-        });
-        
-        ['dragleave', 'drop'].forEach(eventName => {
-            dropZone.addEventListener(eventName, () => {
-                dropZone.classList.remove('border-primary', 'bg-light');
-            });
-        });
-        
-        dropZone.addEventListener('drop', (e) => {
-            const files = e.dataTransfer.files;
-            if (files.length > 0) {
-                uploadImage(files[0]);
-            }
-        });
-    }
-    
-    // Upload image function
-    function uploadImage(file) {
-        // Validate file size (5MB max)
-        if (file.size > 5 * 1024 * 1024) {
-            alert('File is too large! Maximum size is 5MB.');
-            return;
-        }
-        
-        // Validate file type
-        if (!file.type.startsWith('image/')) {
-            alert('Please upload an image file.');
-            return;
-        }
-        
-        const formData = new FormData();
-        formData.append('image', file);
-        formData.append('csrf_token', csrfToken);
-        
-        // Show progress bar
-        uploadProgress.style.display = 'block';
-        const progressBar = uploadProgress.querySelector('.progress-bar');
-        progressBar.style.width = '0%';
-        
-        // Simulate progress
-        let progress = 0;
-        const progressInterval = setInterval(() => {
-            progress += 10;
-            if (progress <= 90) {
-                progressBar.style.width = progress + '%';
-            }
-        }, 100);
-        
-        // Upload file
-        fetch(`/governed/warehouse/${stockId}/upload-image`, {
-            method: 'POST',
-            headers: {
-                'X-CSRF-Token': csrfToken
-            },
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            clearInterval(progressInterval);
-            progressBar.style.width = '100%';
-            
-            if (data.success) {
-                // Update image preview
-                imagePreview.innerHTML = `
-                    <div class="position-relative d-inline-block">
-                        <img src="${data.image_url}" alt="Product" class="img-thumbnail" style="max-width: 200px; max-height: 200px;" id="currentImage">
-                        <button type="button" class="btn btn-sm btn-danger position-absolute top-0 end-0 m-1" onclick="removeImage()" title="Remove image">
-                            <i data-feather="x" size="14"></i>
-                        </button>
-                    </div>
-                `;
-                
-                // Update URL input
-                imageUrlInput.value = data.image_url;
-                
-                // Re-initialize feather icons
-                if (typeof feather !== 'undefined') {
-                    feather.replace();
-                }
-                
-                // Hide progress bar after a moment
-                setTimeout(() => {
-                    uploadProgress.style.display = 'none';
-                    progressBar.style.width = '0%';
-                }, 1000);
-                
-                // Show success message
-                alert(data.message || 'Image uploaded successfully!');
-            } else {
-                throw new Error(data.error || 'Upload failed');
-            }
-        })
-        .catch(error => {
-            clearInterval(progressInterval);
-            uploadProgress.style.display = 'none';
-            progressBar.style.width = '0%';
-            alert('Error uploading image: ' + error.message);
-        });
-    }
-});
+(function () {
 
-// Remove image function (global)
-function removeImage() {
-    if (confirm('Are you sure you want to remove this image?')) {
-        document.getElementById('imagePreview').innerHTML = '';
-        document.getElementById('image_url').value = '';
-    }
-}
+  function governedMessage(message) {
+    const text = message || "Governed action did not complete.";
+    try { alert(text); } catch (error) { console.warn(text); }
+  }
 
-// Adjust & Push - GROUP LEVEL push to ALL linked FBM listings (legacy)
-async function adjustAndPush(stockId, sku) {
-    if (!confirm(`Push ${sku} to ALL linked marketplaces?\n\nThis will update quantity on Amazon FBM and eBay to match warehouse.`)) {
-        return;
-    }
-    
+  async function governedPostJson(url, payload) {
+    let response;
+    let data;
+
     try {
-        const response = await fetch('/push_stock/' + stockId, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            const count = data.listings_count || data.jobs_enqueued || 1;
-            const marketplaces = data.marketplaces ? data.marketplaces.join(', ') : 'marketplaces';
-            alert(`Queued ${count} push(es) for ${sku} to ${marketplaces}`);
-        } else {
-            alert('Error: ' + (data.error || 'Push failed'));
-        }
+      response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Actor": "warehouse-detail-governed-ui"
+        },
+        body: JSON.stringify(payload || {})
+      });
     } catch (error) {
-        alert('Error pushing: ' + error.message);
+      governedMessage("Governed request failed before reaching server.");
+      console.error(error);
+      return { ok:false, success:false, error:String(error) };
     }
-}
 
-// GROUP CONTEXT: Adjust & Push using /api/group-push (parallel push to all linked marketplaces)
-function showGroupAdjustPush() {
-    const stockId = {{ stock_item.id }};
-    const sku = '{{ stock_item.sku|e }}';
-    const currentQty = {{ stock_item.available_quantity }};
-    const linkedCount = {{ group_context.linked_count if group_context else 0 }};
-    
-    if (linkedCount === 0) {
-        alert('No linked listings to push to. Link listings in GroupView first.');
-        return;
-    }
-    
-    const newQty = prompt(
-        `Adjust & Push to ${linkedCount} linked marketplace(s)\n\n` +
-        `SKU: ${sku}\n` +
-        `Current Quantity: ${currentQty}\n\n` +
-        `Enter new quantity (or leave same to just push):`,
-        currentQty
-    );
-    
-    if (newQty === null) return;
-    
-    const qty = parseInt(newQty, 10);
-    if (isNaN(qty) || qty < 0) {
-        alert('Please enter a valid quantity (0 or greater)');
-        return;
-    }
-    
-    executeGroupPush(stockId, sku, qty);
-}
-
-async function executeGroupPush(stockId, sku, quantity) {
-    const btn = document.getElementById('groupAdjustPushBtn');
-    if (btn) {
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Pushing...';
-    }
-    
     try {
-        const csrfToken = '{{ csrf_token }}';
-        const response = await fetch('/api/group-push', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-Token': csrfToken
-            },
-            body: JSON.stringify({
-                warehouse_stock_id: stockId,
-                new_quantity: quantity
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.success) {
-            alert(
-                `Group Push Started!\n\n` +
-                `SKU: ${sku}\n` +
-                `Quantity: ${quantity}\n` +
-                `Jobs Queued: ${data.jobs_queued || 0}\n` +
-                `Platforms: ${(data.platforms || []).join(', ') || 'None'}\n\n` +
-                `Push ID: ${data.group_push_id || 'N/A'}`
-            );
-            location.reload();
-        } else {
-            alert('Push Error: ' + (data.error || 'Unknown error'));
-        }
+      data = await response.json();
     } catch (error) {
-        alert('Error: ' + error.message);
-    } finally {
-        if (btn) {
-            btn.disabled = false;
-            btn.innerHTML = '<i data-feather="sliders" class="me-1"></i>Adjust & Push';
-            if (typeof feather !== 'undefined') feather.replace();
-        }
+      data = {
+        ok:false,
+        success:false,
+        message:"Governed route returned non-JSON response.",
+        status:response.status
+      };
     }
-}
+
+    if (data.message) governedMessage(data.message);
+    else if (data.reason) governedMessage(data.reason);
+    else if (!(data.ok || data.success)) governedMessage("Governed action blocked or unavailable.");
+
+    return data;
+  }
+
+  window.removeImage = function removeImage() {
+    governedMessage("Image removal is disabled until governed image workflow is approved.");
+    return false;
+  };
+
+  window.adjustAndPush = function adjustAndPush(stockId, sku) {
+    governedMessage("Direct warehouse-detail push is disabled. Use governed warehouse row actions after route approval.");
+    return false;
+  };
+
+  window.showGroupAdjustPush = function showGroupAdjustPush() {
+    governedMessage("Group adjust and push is disabled until governed group quantity route is approved for this page.");
+    return false;
+  };
+
+  window.executeGroupPush = function executeGroupPush(stockId, sku, quantity) {
+    governedMessage("Legacy group push is disabled. Governed group push requires a group id, not warehouse stock id.");
+    return false;
+  };
+
+  window.uploadWarehouseImage = function uploadWarehouseImage(stockId, fileInput) {
+    if (!stockId || !fileInput || !fileInput.files || !fileInput.files[0]) {
+      governedMessage("Missing stock id or image file.");
+      return false;
+    }
+
+    const formData = new FormData();
+    formData.append("image", fileInput.files[0]);
+
+    fetch("/governed/warehouse/" + encodeURIComponent(stockId) + "/upload-image", {
+      method: "POST",
+      headers: {
+        "X-Actor": "warehouse-detail-governed-ui"
+      },
+      body: formData
+    })
+    .then(function(response) { return response.json(); })
+    .then(function(data) {
+      if (data.message) governedMessage(data.message);
+      else if (data.reason) governedMessage(data.reason);
+      else if (data.ok || data.success) governedMessage("Image uploaded.");
+      else governedMessage("Governed image upload blocked or unavailable.");
+
+      if (data.ok || data.success) {
+        window.location.reload();
+      }
+    })
+    .catch(function(error) {
+      console.error(error);
+      governedMessage("Governed image upload failed before reaching server.");
+    });
+
+    return false;
+  };
+
+  document.addEventListener("DOMContentLoaded", function () {
+    if (window.feather) feather.replace();
+  });
+
+})();
 </script>
 {% endblock %}
 

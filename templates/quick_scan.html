@@ -177,7 +177,7 @@
         try {
             hideAllResults();
             
-            const response = await fetch(`/api/warehouse/lookup/${encodeURIComponent(sku)}`);
+            const response = await fetch(`/governed-disabled/warehouse-lookup/${encodeURIComponent(sku)}`);
             const data = await response.json();
             
             if (data.success && data.product) {
@@ -240,7 +240,7 @@
         const reason = document.getElementById('adjustmentReason').value;
         
         try {
-            const response = await fetch(`/api/warehouse/${stockId}/quick-adjust`, {
+            const response = await fetch(`/governed-disabled/warehouse-quick-adjust/${stockId}`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

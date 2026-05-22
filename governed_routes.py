@@ -1237,3 +1237,71 @@ def governed_amazon_inventory_import():
     )
 
     return jsonify(result), 200
+
+
+@governed_bp.route("/governed-disabled", defaults={"action": ""}, methods=["GET", "POST"])
+@governed_bp.route("/governed-disabled/<path:action>", methods=["GET", "POST"])
+def governed_disabled_action(action: str = ""):
+    from flask import jsonify, request
+    return jsonify({
+        "success": False,
+        "ok": False,
+        "governed": True,
+        "execution_blocked": True,
+        "action": action,
+        "method": request.method,
+        "message": "This legacy action is disabled until the governed route is approved."
+    }), 409
+
+
+@governed_bp.post("/governed/product-linking/repair/reset-failures")
+def governed_product_linking_repair_reset_failures():
+    from flask import jsonify
+    return jsonify({
+        "success": False,
+        "ok": False,
+        "governed": True,
+        "execution_blocked": True,
+        "action": "reset-failures",
+        "message": "This governed repair action is disabled until approved."
+    }), 409
+
+
+@governed_bp.post("/governed/product-linking/repair/rebuild-link")
+def governed_product_linking_repair_rebuild_link():
+    from flask import jsonify
+    return jsonify({
+        "success": False,
+        "ok": False,
+        "governed": True,
+        "execution_blocked": True,
+        "action": "rebuild-link",
+        "message": "This governed repair action is disabled until approved."
+    }), 409
+
+
+@governed_bp.post("/governed/product-linking/repair/create-missing-sku")
+def governed_product_linking_repair_create_missing_sku():
+    from flask import jsonify
+    return jsonify({
+        "success": False,
+        "ok": False,
+        "governed": True,
+        "execution_blocked": True,
+        "action": "create-missing-sku",
+        "message": "This governed repair action is disabled until approved."
+    }), 409
+
+
+@governed_bp.post("/governed/product-linking/repair/sync-now")
+def governed_product_linking_repair_sync_now():
+    from flask import jsonify
+    return jsonify({
+        "success": False,
+        "ok": False,
+        "governed": True,
+        "execution_blocked": True,
+        "action": "sync-now",
+        "message": "This governed repair action is disabled until approved."
+    }), 409
+
