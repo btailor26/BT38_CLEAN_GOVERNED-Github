@@ -72,7 +72,7 @@ def submit_governed_marketplace_action(
     if not gate_allowed and not dry_run:
         return _blocked_result(
             command,
-            reason=runtime_gate.RUNTIME_GATE_MESSAGE,
+            reason=runtime_gate.block_reason(command),
             runtime_gate_checked=True,
             eligibility_checked=False,
             runtime_gate_allowed=False,
@@ -92,7 +92,7 @@ def execute_governed_action(command: GovernedCommand) -> Dict[str, Any]:
     if not gate_allowed and not command.dry_run:
         return _blocked_result(
             command,
-            reason=runtime_gate.RUNTIME_GATE_MESSAGE,
+            reason=runtime_gate.block_reason(command),
             runtime_gate_checked=True,
             eligibility_checked=False,
             runtime_gate_allowed=False,

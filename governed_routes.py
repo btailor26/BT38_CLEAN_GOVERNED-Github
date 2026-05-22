@@ -1210,17 +1210,57 @@ def governed_warehouse_sync_manual_run():
 
 @governed_bp.post("/governed/amazon/inventory/import")
 def governed_amazon_inventory_import():
-    from services.governed_amazon_inventory_import import (
-        run_governed_amazon_inventory_import
-    )
+    from flask import jsonify, request
+    try:
+        from models import Store
+        from services.runtime_action_guard import is_runtime_action_allowed
 
-    body = dict(request.get_json(silent=True) or {})
+        body = request.get_json(silent=True) or {}
+        store_id = body.get("store_id") or request.args.get("store_id")
+        store = None
 
-    result = run_governed_amazon_inventory_import(
-        store_id=body.get("store_id")
-    )
+        if store_id:
+            store = Store.query.get(int(store_id))
+        else:
+            store = (
+                Store.query
+                .filter(Store.platform.ilike("%amazon%"), Store.is_active == True)  # noqa: E712
+                .order_by(Store.id)
+                .first()
+            )
 
-    return jsonify(result), 200
+        guard = is_runtime_action_allowed(
+            store=store,
+            action_type="import",
+            manual=True,
+            context={"source": "governed_amazon_inventory_import"},
+        )
+
+        if not guard.get("allowed"):
+            return jsonify(
+                ok=False,
+                success=False,
+                governed=True,
+                execution_blocked=True,
+                reason=guard.get("reason"),
+                fuse_box_checked=True,
+            ), 400
+
+        from services.governed_amazon_inventory_import import run_governed_amazon_inventory_import
+        result = run_governed_amazon_inventory_import(store_id=getattr(store, "id", None))
+        if isinstance(result, dict):
+            return jsonify(result)
+        return jsonify(ok=True, success=True, governed=True, result=result)
+
+    except Exception as exc:
+        return jsonify(
+            ok=False,
+            success=False,
+            governed=True,
+            error="amazon_import_failed",
+            message=str(exc),
+            instruction="Amazon import failed before completing. Check Amazon SP-API client wiring/credentials.",
+        ), 500
 
 
 @governed_bp.route("/governed-disabled", defaults={"action": ""}, methods=["GET", "POST"])
@@ -1459,3 +1499,35 @@ def governed_settings_emergency_freeze():
         _bt38_settings_set_config(key, value)
 
     return jsonify(ok=True, success=True, governed=True, emergency_freeze=True, updated=freeze)
+
+
+@governed_bp.post("/governed/settings/normalize")
+def governed_settings_normalize():
+    from flask import jsonify
+    from app import db
+    from models import SystemConfig
+
+    defaults = {
+        "default_push_frequency_minutes": "15",
+        "default_batch_size": "25",
+        "default_retry_attempts": "3",
+        "api_rate_limit_buffer": "0.8",
+        "error_rate_threshold": "0.3",
+    }
+
+    updated = {}
+    for key, default in defaults.items():
+        row = SystemConfig.query.filter_by(key=key).first()
+        current = str(row.value).strip().lower() if row else ""
+        bad = current in {"", "false", "true", "none", "null", "off", "on"}
+        if row is None:
+            row = SystemConfig(key=key, value=default)
+            db.session.add(row)
+            updated[key] = default
+        elif bad:
+            row.value = default
+            updated[key] = default
+
+    db.session.commit()
+    return jsonify(ok=True, success=True, governed=True, normalized=updated)
+

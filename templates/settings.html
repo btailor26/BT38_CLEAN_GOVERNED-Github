@@ -176,6 +176,7 @@
     <table class="bt38-table">
       <tbody>
         <tr><td>Runtime State</td><td><button class="bt38-btn light" onclick="bt38GetRuntimeState()">Check</button></td></tr>
+        <tr><td>Normalize Settings</td><td><button class="bt38-btn light" onclick="bt38Post('/governed/settings/normalize', {})">Run</button></td></tr>
         <tr><td>Amazon Import</td><td><button class="bt38-btn light" onclick="bt38Post('/governed/amazon/inventory/import', {})">Run</button></td></tr>
         <tr><td>Warehouse Sync</td><td><button class="bt38-btn light" onclick="bt38Post('/governed/warehouse/sync', {})">Run</button></td></tr>
         <tr><td>Reset Failures</td><td><button class="bt38-btn light" onclick="bt38Post('/governed/product-linking/repair/reset-failures', {})">Run</button></td></tr>
@@ -196,7 +197,19 @@ async function bt38Post(url, payload){
     headers:{"Content-Type":"application/json","X-Actor":"settings-cockpit"},
     body:JSON.stringify(payload || {})
   });
-  const data = await res.json().catch(()=>({ok:false,status:res.status,error:"non_json_response"}));
+  const raw = await res.text();
+  let data;
+  try {
+    data = raw ? JSON.parse(raw) : {};
+  } catch (err) {
+    data = {
+      ok:false,
+      status:res.status,
+      error:"non_json_response",
+      message:"Server returned HTML/text instead of governed JSON. Check logs for this route.",
+      preview: raw.slice(0, 500)
+    };
+  }
   bt38Log(data);
   return data;
 }
