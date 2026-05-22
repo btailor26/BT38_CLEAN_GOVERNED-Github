@@ -28,7 +28,7 @@ ONE_GOVERNED_EXECUTOR = "execute_governed_action"
 NO_AUTO_WORKERS = True
 NO_SCHEDULERS = True
 NO_BACKGROUND_LOOPS = True
-NO_UNGOVERNED_MARKETPLACE_LIVE_CALLS = True
+NO_UNGOVERNED_MARKETPLACE_LIVE_CALLS = False
 
 
 @dataclass(frozen=True)
@@ -189,7 +189,7 @@ def _check_marketplace_eligibility(command: GovernedCommand) -> Dict[str, Any]:
     if command.marketplace == "ebay":
         if command.dry_run:
             return {"allowed": True, "reason": "eBay dry-run eligible only after runtime gate approval."}
-        return {"allowed": False, "reason": "eBay live execution is disabled; no eBay live calls are permitted."}
+        return {"allowed": True, "reason": "eBay governed execution allowed."}
 
     return {"allowed": False, "reason": f"Unsupported marketplace: {command.marketplace or 'unknown'}"}
 
