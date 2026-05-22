@@ -221,6 +221,55 @@ def _check_marketplace_eligibility(command: GovernedCommand) -> Dict[str, Any]:
     return {"allowed": False, "reason": f"Unsupported marketplace: {command.marketplace or 'unknown'}"}
 
 
+
+
+def _check_ebay_live_eligibility(command: GovernedCommand) -> Dict[str, Any]:
+    quantity_ok, quantity_or_reason = _coerce_quantity(command.payload.get("quantity"))
+    if not quantity_ok:
+        return {"allowed": False, "reason": quantity_or_reason}
+
+    store_id = command.payload.get("store_id")
+    listing_id = command.payload.get("listing_id")
+
+    if store_id is None:
+        return {"allowed": False, "reason": "eBay live push blocked: missing store_id."}
+
+    if listing_id is None:
+        return {"allowed": False, "reason": "eBay live push blocked: missing listing_id."}
+
+    store = _resolve_store(store_id)
+
+    if store is None:
+        return {"allowed": False, "reason": "eBay live push blocked: missing store."}
+
+    if "ebay" not in str(getattr(store, "platform", "")).lower():
+        return {"allowed": False, "reason": "eBay live push blocked: store is not eBay."}
+
+    if getattr(store, "is_active", False) is not True:
+        return {"allowed": False, "reason": "eBay live push blocked: store is inactive."}
+
+    if getattr(store, "fbm_sync_enabled", False) is not True:
+        return {"allowed": False, "reason": "eBay live push blocked: FBM sync disabled."}
+
+    if getattr(store, "auto_push_enabled", False) is not True:
+        return {"allowed": False, "reason": "eBay live push blocked: auto push disabled."}
+
+    listing = _resolve_listing(listing_id)
+
+    if listing is None:
+        return {"allowed": False, "reason": "eBay live push blocked: missing marketplace listing."}
+
+    if _normalize_id(getattr(listing, "store_id", None)) != _normalize_id(store_id):
+        return {"allowed": False, "reason": "eBay live push blocked: listing/store mismatch."}
+
+    return {
+        "allowed": True,
+        "store": store,
+        "listing": listing,
+        "marketplace": "ebay",
+    }
+
+
 def _check_amazon_fbm_live_eligibility(command: GovernedCommand, fulfillment: str, sku: str) -> Dict[str, Any]:
     quantity_ok, quantity_or_reason = _coerce_quantity(command.payload.get("quantity"))
     if not quantity_ok:
