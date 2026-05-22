@@ -1554,3 +1554,301 @@ def governed_settings_normalize():
     db.session.commit()
     return jsonify(ok=True, success=True, governed=True, normalized=updated)
 
+
+# ============================================================
+# Governed eBay OAuth settings only
+# Owner-controlled OAuth authorize/callback/token refresh path.
+# Does not perform marketplace push/import/sync.
+# ============================================================
+
+@governed_bp.get("/ebay-oauth/authorize")
+def governed_ebay_oauth_authorize():
+    import os
+    import urllib.parse
+    import secrets
+    from flask import jsonify, redirect, session
+
+    client_id = os.getenv("EBAY_CLIENT_ID")
+    runame = os.getenv("EBAY_RUNAME")
+    scopes = os.getenv("EBAY_SCOPES") or (
+        "https://api.ebay.com/oauth/api_scope "
+        "https://api.ebay.com/oauth/api_scope/sell.inventory "
+        "https://api.ebay.com/oauth/api_scope/sell.fulfillment "
+        "https://api.ebay.com/oauth/api_scope/sell.account"
+    )
+
+    if not client_id or not runame:
+        return jsonify({
+            "ok": False,
+            "success": False,
+            "governed": True,
+            "error": "missing_ebay_oauth_env",
+            "missing": {
+                "EBAY_CLIENT_ID": not bool(client_id),
+                "EBAY_RUNAME": not bool(runame),
+            },
+        }), 200
+
+    state = secrets.token_urlsafe(24)
+    session["governed_ebay_oauth_state"] = state
+
+    params = {
+        "client_id": client_id,
+        "redirect_uri": runame,
+        "response_type": "code",
+        "scope": scopes,
+        "state": state,
+    }
+
+    auth_url = "https://auth.ebay.com/oauth2/authorize?" + urllib.parse.urlencode(params)
+
+    if request.args.get("json") == "1":
+        return jsonify({
+            "ok": True,
+            "success": True,
+            "governed": True,
+            "auth_url": auth_url,
+            "runame": runame,
+            "mode": "production",
+        }), 200
+
+    return redirect(auth_url)
+
+
+@governed_bp.get("/ebay-oauth/callback")
+def governed_ebay_oauth_callback():
+    import os
+    import json
+    import base64
+    import requests
+    from datetime import datetime, timedelta
+    from flask import jsonify, request, session
+    from app import db
+    from models import Store
+
+    code = request.args.get("code")
+    state = request.args.get("state")
+    expected_state = session.get("governed_ebay_oauth_state")
+
+    if not code:
+        return jsonify({
+            "ok": False,
+            "success": False,
+            "governed": True,
+            "error": "missing_code",
+        }), 200
+
+    if expected_state and state and state != expected_state:
+        return jsonify({
+            "ok": False,
+            "success": False,
+            "governed": True,
+            "error": "state_mismatch",
+        }), 200
+
+    client_id = os.getenv("EBAY_CLIENT_ID")
+    client_secret = os.getenv("EBAY_CLIENT_SECRET")
+    runame = os.getenv("EBAY_RUNAME")
+
+    if not client_id or not client_secret or not runame:
+        return jsonify({
+            "ok": False,
+            "success": False,
+            "governed": True,
+            "error": "missing_ebay_oauth_env",
+            "missing": {
+                "EBAY_CLIENT_ID": not bool(client_id),
+                "EBAY_CLIENT_SECRET": not bool(client_secret),
+                "EBAY_RUNAME": not bool(runame),
+            },
+        }), 200
+
+    basic = base64.b64encode(f"{client_id}:{client_secret}".encode("utf-8")).decode("ascii")
+
+    resp = requests.post(
+        "https://api.ebay.com/identity/v1/oauth2/token",
+        headers={
+            "Authorization": f"Basic {basic}",
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+        data={
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": runame,
+        },
+        timeout=30,
+    )
+
+    try:
+        token = resp.json()
+    except Exception:
+        token = {"raw": resp.text}
+
+    if resp.status_code >= 300 or not token.get("access_token"):
+        return jsonify({
+            "ok": False,
+            "success": False,
+            "governed": True,
+            "error": "ebay_token_exchange_failed",
+            "status_code": resp.status_code,
+            "response": token,
+        }), 200
+
+    store = Store.query.filter(Store.platform.ilike("%ebay%")).order_by(Store.id.desc()).first()
+    if not store:
+        return jsonify({
+            "ok": False,
+            "success": False,
+            "governed": True,
+            "error": "no_ebay_store_found",
+        }), 200
+
+    existing = {}
+    if isinstance(store.api_key, str):
+        try:
+            existing = json.loads(store.api_key)
+        except Exception:
+            existing = {}
+    elif isinstance(store.api_key, dict):
+        existing = store.api_key
+
+    now = datetime.utcnow()
+    existing.update({
+        "access_token": token.get("access_token"),
+        "refresh_token": token.get("refresh_token") or existing.get("refresh_token"),
+        "token_type": token.get("token_type"),
+        "access_token_expires_at": (now + timedelta(seconds=int(token.get("expires_in", 7200)))).isoformat(),
+        "refresh_token_expires_at": (
+            (now + timedelta(seconds=int(token.get("refresh_token_expires_in")))).isoformat()
+            if token.get("refresh_token_expires_in") else existing.get("refresh_token_expires_at")
+        ),
+        "app_id": existing.get("app_id") or client_id,
+        "runame": runame,
+        "sandbox": False,
+        "oauth_source": "governed_ebay_oauth_callback",
+        "connected_at": now.isoformat(),
+    })
+
+    store.api_key = json.dumps(existing)
+    store.is_active = True
+    store.store_mode = "live"
+    db.session.commit()
+
+    return jsonify({
+        "ok": True,
+        "success": True,
+        "governed": True,
+        "message": "eBay OAuth tokens saved to live eBay store.",
+        "store_id": store.id,
+        "store_name": store.name,
+        "mode": "production",
+    }), 200
+
+
+@governed_bp.post("/ebay-oauth/token")
+def governed_ebay_oauth_refresh_token():
+    import os
+    import json
+    import base64
+    import requests
+    from datetime import datetime, timedelta
+    from flask import jsonify
+    from app import db
+    from models import Store
+
+    store = Store.query.filter(Store.platform.ilike("%ebay%")).order_by(Store.id.desc()).first()
+    if not store:
+        return jsonify({
+            "ok": False,
+            "success": False,
+            "governed": True,
+            "error": "no_ebay_store_found",
+        }), 200
+
+    creds = {}
+    if isinstance(store.api_key, str):
+        try:
+            creds = json.loads(store.api_key)
+        except Exception:
+            creds = {}
+    elif isinstance(store.api_key, dict):
+        creds = store.api_key
+
+    refresh_token = creds.get("refresh_token")
+    client_id = os.getenv("EBAY_CLIENT_ID") or creds.get("app_id")
+    client_secret = os.getenv("EBAY_CLIENT_SECRET") or creds.get("cert_id")
+
+    if not refresh_token or not client_id or not client_secret:
+        return jsonify({
+            "ok": False,
+            "success": False,
+            "governed": True,
+            "error": "missing_refresh_credentials",
+            "missing": {
+                "refresh_token": not bool(refresh_token),
+                "client_id": not bool(client_id),
+                "client_secret": not bool(client_secret),
+            },
+        }), 200
+
+    basic = base64.b64encode(f"{client_id}:{client_secret}".encode("utf-8")).decode("ascii")
+    scopes = os.getenv("EBAY_SCOPES") or (
+        "https://api.ebay.com/oauth/api_scope "
+        "https://api.ebay.com/oauth/api_scope/sell.inventory "
+        "https://api.ebay.com/oauth/api_scope/sell.fulfillment "
+        "https://api.ebay.com/oauth/api_scope/sell.account"
+    )
+
+    resp = requests.post(
+        "https://api.ebay.com/identity/v1/oauth2/token",
+        headers={
+            "Authorization": f"Basic {basic}",
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+        data={
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+            "scope": scopes,
+        },
+        timeout=30,
+    )
+
+    try:
+        token = resp.json()
+    except Exception:
+        token = {"raw": resp.text}
+
+    if resp.status_code >= 300 or not token.get("access_token"):
+        return jsonify({
+            "ok": False,
+            "success": False,
+            "governed": True,
+            "error": "ebay_refresh_failed",
+            "status_code": resp.status_code,
+            "response": token,
+        }), 200
+
+    now = datetime.utcnow()
+    creds.update({
+        "access_token": token.get("access_token"),
+        "token_type": token.get("token_type"),
+        "access_token_expires_at": (now + timedelta(seconds=int(token.get("expires_in", 7200)))).isoformat(),
+        "oauth_source": "governed_ebay_refresh_token",
+        "refreshed_at": now.isoformat(),
+        "sandbox": False,
+    })
+
+    store.api_key = json.dumps(creds)
+    store.is_active = True
+    store.store_mode = "live"
+    db.session.commit()
+
+    return jsonify({
+        "ok": True,
+        "success": True,
+        "governed": True,
+        "message": "eBay access token refreshed.",
+        "store_id": store.id,
+        "store_name": store.name,
+        "mode": "production",
+    }), 200
