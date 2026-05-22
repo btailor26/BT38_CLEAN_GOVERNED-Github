@@ -1,7 +1,16 @@
-"""Governed runtime action guard for BT38 execution paths.
+"""BT38 runtime fuse-box guard.
 
-This module performs only authorization decisions. It never calls marketplace
-APIs, never enqueues jobs, and never mutates inventory/listing/store state.
+Single rule:
+If the settings cockpit / DB switch is OFF, the action must not run.
+
+Authority order:
+1. Emergency/read-only/queue fuse from SystemConfig
+2. Action fuse from SystemConfig
+3. Store active/mode/settings
+4. Credential/read-only marketplace checks
+
+This module never calls marketplace APIs, never enqueues jobs, and never mutates
+inventory/listing/store state. It only decides allowed/blocked with reasons.
 """
 
 import logging
@@ -17,53 +26,128 @@ def _store_value(store: Any, attr: str, default: Any = None) -> Any:
     return getattr(store, attr, default) if store is not None else default
 
 
+def _truthy(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value is True
+    text = str(value).strip().lower()
+    return text in {"1", "true", "yes", "on", "enabled", "live"}
+
+
+def _falsey(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value is False
+    text = str(value).strip().lower()
+    return text in {"0", "false", "no", "off", "disabled", "none", ""}
+
+
 def _structured_result(store: Any, action_type: str, manual: bool, allowed: bool, reason: str) -> Dict[str, Any]:
     return {
         "allowed": allowed,
         "reason": reason,
         "action_type": action_type,
-        "manual": manual,
+        "manual": bool(manual),
         "store_id": _store_value(store, "id"),
         "store_name": _store_value(store, "name"),
+        "fuse_box_checked": True,
+        "source": "SystemConfig+Store",
     }
 
 
-
-def _flag_disabled(store: Any, attr: str) -> bool:
-    """Return True only when a store setting exists and is explicitly falsey."""
-    if store is None or not hasattr(store, attr):
-        return False
-    value = getattr(store, attr)
-    if isinstance(value, str):
-        return value.strip().lower() in {"0", "false", "no", "off", "disabled"}
-    return value is False
-
-def _system_config_disabled(action_type: str) -> Optional[str]:
-    """Best-effort read of global runtime config without mutating state."""
-    env_execution_mode = os.getenv("EXECUTION_MODE", "").strip().lower()
-    if env_execution_mode in {"read-only", "readonly", "disabled"} and action_type in RUNTIME_ACTIONS:
-        return f"EXECUTION_MODE={env_execution_mode} blocks runtime {action_type}"
-
-    if action_type == "push" and os.getenv("PUSH_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:
-        return "PUSH_ENABLED disables push execution"
-
-    if action_type == "push" and os.getenv("ENABLE_PUSH_JOBS", "true").strip().lower() in {"0", "false", "no", "off"}:
-        return "ENABLE_PUSH_JOBS disables push execution"
-
-    key_candidates = {
-        "push": ("push_enabled", "runtime_push_enabled", "marketplace_push_enabled"),
-        "sync": ("sync_enabled", "runtime_sync_enabled", "marketplace_sync_enabled"),
-        "import": ("import_enabled", "runtime_import_enabled", "marketplace_import_enabled"),
-    }.get(action_type, ())
-
+def _config_value(key: str, default: Any = None) -> Any:
     try:
         from models import SystemConfig
-        for key in key_candidates:
-            config = SystemConfig.query.filter_by(key=key).first()
-            if config and str(config.value).strip().lower() in {"0", "false", "no", "off", "disabled"}:
-                return f"SystemConfig {key} disables {action_type} execution"
+
+        row = SystemConfig.query.filter_by(key=key).first()
+        if row is None:
+            return default
+        return row.value
     except Exception as exc:
-        logging.debug("Runtime action guard skipped SystemConfig lookup: %s", exc)
+        logging.debug("Runtime fuse skipped SystemConfig lookup for %s: %s", key, exc)
+        return default
+
+
+def _config_on(key: str, default: bool = False) -> bool:
+    return _truthy(_config_value(key, "true" if default else "false"))
+
+
+def _config_off(key: str, default: bool = False) -> bool:
+    return _falsey(_config_value(key, "false" if default else "true"))
+
+
+def _store_flag_disabled(store: Any, attr: str) -> bool:
+    if store is None or not hasattr(store, attr):
+        return False
+    return _falsey(getattr(store, attr))
+
+
+def _global_env_block(action_type: str) -> Optional[str]:
+    """Environment can still hard-stop dangerous execution.
+
+    Env must only be an outer circuit breaker, not the normal operator control.
+    Normal owner control comes from SystemConfig settings cockpit.
+    """
+    execution_mode = os.getenv("EXECUTION_MODE", "").strip().lower()
+    if execution_mode in {"read-only", "readonly", "disabled"} and action_type in RUNTIME_ACTIONS:
+        return f"ENV EXECUTION_MODE={execution_mode} blocks {action_type}"
+
+    if action_type == "push" and os.getenv("PUSH_ENABLED", "true").strip().lower() in {"0", "false", "no", "off"}:
+        return "ENV PUSH_ENABLED blocks push"
+
+    return None
+
+
+def _system_fuse_block(action_type: str, manual: bool) -> Optional[str]:
+    """Main DB-backed fuse box.
+
+    If any relevant fuse is OFF/ON-blocking, action must stop here.
+    """
+    if action_type not in RUNTIME_ACTIONS:
+        return None
+
+    if _config_on("read_only_mode", default=False):
+        return "Settings fuse read_only_mode is ON"
+
+    if _config_on("queue_frozen", default=False) and not manual:
+        return "Settings fuse queue_frozen is ON"
+
+    if action_type == "push":
+        required = [
+            "push_enabled",
+            "runtime_push_enabled",
+            "marketplace_push_enabled",
+        ]
+        if manual:
+            required.append("manual_push_enabled")
+
+        for key in required:
+            if not _config_on(key, default=False):
+                return f"Settings fuse {key} is OFF"
+
+    if action_type == "import":
+        required = [
+            "import_enabled",
+            "runtime_import_enabled",
+            "marketplace_import_enabled",
+        ]
+        if manual:
+            required.append("manual_import_enabled")
+
+        for key in required:
+            if not _config_on(key, default=False):
+                return f"Settings fuse {key} is OFF"
+
+    if action_type == "sync":
+        required = [
+            "sync_enabled",
+            "runtime_sync_enabled",
+            "marketplace_sync_enabled",
+        ]
+        if manual:
+            required.append("manual_sync_enabled")
+
+        for key in required:
+            if not _config_on(key, default=False):
+                return f"Settings fuse {key} is OFF"
 
     return None
 
@@ -71,10 +155,8 @@ def _system_config_disabled(action_type: str) -> Optional[str]:
 def is_runtime_action_allowed(store, action_type, manual=False, context=None):
     """Return a structured authorization decision for runtime actions.
 
-    The guard allows read-only/preview actions, blocks unknown action types, and
-    fail-closes push/sync/import execution when global or store-level controls do
-    not permit runtime work. Fulfillment-specific SKU/listing checks are handled
-    by marketplace_push_eligibility() at the marketplace guard layer.
+    This is the only normal runtime decision point for push/sync/import.
+    Every governed execution path should call this before marketplace execution.
     """
     normalized_action = (action_type or "").strip().lower()
     manual = bool(manual)
@@ -86,9 +168,13 @@ def is_runtime_action_allowed(store, action_type, manual=False, context=None):
     if normalized_action in READ_ONLY_ACTIONS:
         return _structured_result(store, normalized_action, manual, True, "Read-only runtime action allowed")
 
-    global_block = _system_config_disabled(normalized_action)
-    if global_block:
-        return _structured_result(store, normalized_action, manual, False, global_block)
+    env_block = _global_env_block(normalized_action)
+    if env_block:
+        return _structured_result(store, normalized_action, manual, False, env_block)
+
+    fuse_block = _system_fuse_block(normalized_action, manual)
+    if fuse_block:
+        return _structured_result(store, normalized_action, manual, False, fuse_block)
 
     if store is None:
         return _structured_result(store, normalized_action, manual, False, "Store is required for runtime execution")
@@ -96,18 +182,21 @@ def is_runtime_action_allowed(store, action_type, manual=False, context=None):
     if not bool(_store_value(store, "is_active", False)):
         return _structured_result(store, normalized_action, manual, False, "Store is inactive")
 
-    store_mode = str(_store_value(store, "store_mode", "live") or "live").strip().lower()
-    if store_mode != "live" and normalized_action in {"push", "sync"}:
-        return _structured_result(store, normalized_action, manual, False, f"store_mode={store_mode} blocks {normalized_action} execution")
+    store_mode = str(_store_value(store, "store_mode", "safe") or "safe").strip().lower()
+    if store_mode != "live" and normalized_action in {"push", "sync", "import"}:
+        return _structured_result(store, normalized_action, manual, False, f"Store fuse store_mode={store_mode} blocks {normalized_action}")
 
-    if normalized_action == "push" and any(_flag_disabled(store, attr) for attr in ("push_enabled", "auto_push_enabled", "marketplace_push_enabled")):
-        return _structured_result(store, normalized_action, manual, False, "Store push setting disables push execution")
+    if normalized_action == "push":
+        if any(_store_flag_disabled(store, attr) for attr in ("push_enabled", "auto_push_enabled", "marketplace_push_enabled")):
+            return _structured_result(store, normalized_action, manual, False, "Store fuse disables push execution")
 
-    if normalized_action == "sync" and any(_flag_disabled(store, attr) for attr in ("sync_enabled", "auto_sync_enabled", "marketplace_sync_enabled")):
-        return _structured_result(store, normalized_action, manual, False, "Store sync setting disables sync execution")
+    if normalized_action == "sync":
+        if any(_store_flag_disabled(store, attr) for attr in ("sync_enabled", "auto_sync_enabled", "marketplace_sync_enabled", "fbm_sync_enabled")):
+            return _structured_result(store, normalized_action, manual, False, "Store fuse disables sync execution")
 
-    if normalized_action == "import" and any(_flag_disabled(store, attr) for attr in ("import_enabled", "fba_import_enabled", "marketplace_import_enabled")):
-        return _structured_result(store, normalized_action, manual, False, "Store import setting disables import execution")
+    if normalized_action == "import":
+        if any(_store_flag_disabled(store, attr) for attr in ("import_enabled", "fba_import_enabled", "marketplace_import_enabled")):
+            return _structured_result(store, normalized_action, manual, False, "Store fuse disables import execution")
 
     if normalized_action in RUNTIME_ACTIONS and not _store_value(store, "api_key"):
         return _structured_result(store, normalized_action, manual, False, "Store credentials are missing")
@@ -117,4 +206,4 @@ def is_runtime_action_allowed(store, action_type, manual=False, context=None):
     if normalized_action == "push" and ("fba" in platform or fulfillment_type == "FBA"):
         return _structured_result(store, normalized_action, manual, False, "Amazon FBA/read-only stores cannot push")
 
-    return _structured_result(store, normalized_action, manual, True, "Runtime action allowed")
+    return _structured_result(store, normalized_action, manual, True, "Runtime fuse box allowed action")
