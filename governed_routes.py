@@ -559,7 +559,7 @@ def governed_listing_push(listing_id: int):
         actor=_actor(),
         source="ui_listing_button",
     )
-    return jsonify(result), 200 if result.get("ok") else 400
+    return jsonify(result), 200
 
 
 @governed_bp.post("/governed/actions/groups/<int:group_id>/push")
