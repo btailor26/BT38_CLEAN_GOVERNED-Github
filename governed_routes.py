@@ -1228,7 +1228,7 @@ def governed_warehouse_sync_manual_run():
         actor=request.headers.get("X-Actor", "warehouse-sync-button"),
     )
 
-    return jsonify(result), 200 if result.get("success") else 400
+    return jsonify(result), 200
 
 
 @governed_bp.post("/governed/amazon/inventory/import")
