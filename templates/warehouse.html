@@ -140,6 +140,14 @@ function bt38OpenRowAction(button){
 
 <div class="bt38-enterprise-stock">
 
+  <div class="bt38-fuse-notice" id="bt38FuseNotice">
+    <strong>Warehouse is the truth page.</strong>
+    Actions only execute when the Settings fuse box allows them.
+    If a fuse is OFF, warehouse stays visible but push/import/sync is blocked with the exact reason.
+    <a href="/settings">Open Settings Fuse Box</a>
+  </div>
+
+
   <!-- HEADER -->
   <div class="bt38-stock-header">
 
@@ -1269,6 +1277,36 @@ onclick="window.location.href='/warehouse?view=groups&q={{ item.sku|urlencode }}
     align-items:flex-start;
   }
 
+}
+
+
+.bt38-fuse-notice{
+  background:#fff7ed;
+  border:1px solid #fed7aa;
+  color:#7c2d12;
+  border-radius:12px;
+  padding:10px 12px;
+  margin:0 0 12px 0;
+  font-size:13px;
+}
+.bt38-fuse-notice a{
+  font-weight:800;
+  color:#7c2d12;
+  text-decoration:underline;
+  margin-left:8px;
+}
+tr[data-fuse-blocked="true"]{
+  outline:2px solid rgba(220,38,38,.22);
+}
+.bt38-fuse-blocked-label{
+  display:inline-block;
+  background:#fee4e2;
+  color:#912018;
+  border-radius:999px;
+  padding:3px 8px;
+  font-size:11px;
+  font-weight:900;
+  margin-left:6px;
 }
 
 </style>

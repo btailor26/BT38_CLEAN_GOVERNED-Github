@@ -55,9 +55,33 @@
 .bt38-input{width:82px;border:1px solid #ddd;border-radius:8px;padding:5px;background:#fff}
 .bt38-log{background:#08111f;color:#d6e8ff;border-radius:12px;margin:10px;padding:10px;font-size:12px;min-height:92px;white-space:pre-wrap}
 @media(max-width:900px){.bt38-kpis{grid-template-columns:repeat(2,1fr)}.bt38-head{flex-direction:column}.bt38-table{font-size:12px}}
+
+.bt38-fuse-guide{
+  background:#eef4ff;
+  border:1px solid #bfdbfe;
+  color:#1e3a8a;
+  border-radius:12px;
+  padding:10px 12px;
+  margin:0 0 12px 0;
+  font-size:13px;
+  line-height:1.45;
+}
+
 </style>
 
 <div class="bt38-cockpit">
+
+  <div class="bt38-fuse-guide">
+    <strong>Fuse Box Rule:</strong>
+    Settings controls execution. Warehouse shows the truth, but it cannot push/import/sync unless all required fuses are ON.
+    <br>
+    <strong>Push requires:</strong> Read Only OFF, Push ON, Runtime Push ON, Marketplace Push ON, Manual Push ON, Store Live.
+    <br>
+    <strong>Import requires:</strong> Read Only OFF, Import ON, Runtime Import ON, Marketplace Import ON, Manual Import ON, Store Live.
+    <br>
+    <strong>Sync requires:</strong> Read Only OFF, Sync ON, Runtime Sync ON, Marketplace Sync ON, Manual Sync ON, Store Live.
+  </div>
+
   <div class="bt38-head">
     <div>
       <h1>BT38 Runtime Control Cockpit</h1>

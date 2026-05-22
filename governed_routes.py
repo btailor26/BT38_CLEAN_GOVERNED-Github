@@ -826,13 +826,33 @@ def _patch_warehouse_phase1_ui(html: str, stats, search_query: str, active_view:
 
     const btn = row.querySelector('.bt38-marketplace-control');
     if (btn) {{
-      if (state.is_fba) {{
+      const reason = state.reason || state.fuse_reason || 'Not pushable';
+      const isBlocked = Boolean(state.execution_blocked) || state.action_state === 'blocked';
+
+      if (isBlocked) {{
+        row.dataset.fuseBlocked = 'true';
+        btn.title = reason;
+        btn.dataset.blockReason = reason;
+        btn.setAttribute('aria-disabled', 'true');
+
+        if (!row.querySelector('.bt38-fuse-blocked-label')) {{
+          const label = document.createElement('span');
+          label.className = 'bt38-fuse-blocked-label';
+          label.textContent = 'Fuse blocked';
+          label.title = reason;
+          btn.parentElement.appendChild(label);
+        }}
+      }} else if (state.is_fba) {{
         btn.title = 'FBA read-only';
+        btn.dataset.blockReason = 'FBA read-only';
         btn.setAttribute('aria-disabled', 'true');
       }} else if (state.is_pushable) {{
         btn.title = 'Governed pushable receiver';
+        btn.dataset.blockReason = '';
+        btn.removeAttribute('aria-disabled');
       }} else {{
-        btn.title = state.reason || 'Not pushable';
+        btn.title = reason;
+        btn.dataset.blockReason = reason;
       }}
     }}
   }}
