@@ -160,6 +160,28 @@ def governed_settings_page():
     for row in rows:
         config[row.key] = str(row.value)
 
+    def _on(key):
+        return str(config.get(key, "false")).strip().lower() in {"1", "true", "yes", "on"}
+
+    def _status(action, required):
+        if _on("read_only_mode"):
+            return {"label": "BLOCKED", "reason": "read_only_mode is ON", "required": {k: _on(k) for k in required}}
+        for key in required:
+            if not _on(key):
+                return {"label": "BLOCKED", "reason": f"{key} is OFF", "required": {k: _on(k) for k in required}}
+        return {"label": "ALLOWED", "reason": f"{action} circuit is fully powered", "required": {k: _on(k) for k in required}}
+
+    fuse_status = {
+        "push": _status("Push", ["push_enabled", "runtime_push_enabled", "marketplace_push_enabled", "manual_push_enabled"]),
+        "import": _status("Import", ["import_enabled", "runtime_import_enabled", "marketplace_import_enabled", "manual_import_enabled"]),
+        "sync": _status("Sync", ["sync_enabled", "runtime_sync_enabled", "marketplace_sync_enabled", "manual_sync_enabled"]),
+        "global": {
+            "read_only_mode": _on("read_only_mode"),
+            "dry_run_mode": _on("dry_run_mode"),
+            "queue_frozen": _on("queue_frozen"),
+        },
+    }
+
     class Stats:
         failed_24h = 0
         failed_syncs = 0
@@ -170,6 +192,7 @@ def governed_settings_page():
     return render_template(
         "settings.html",
         config=config,
+        fuse_status=fuse_status,
         stores=stores,
         stats=Stats(),
     )

@@ -55,6 +55,18 @@
 .bt38-input{width:82px;border:1px solid #ddd;border-radius:8px;padding:5px;background:#fff}
 .bt38-log{background:#08111f;color:#d6e8ff;border-radius:12px;margin:10px;padding:10px;font-size:12px;min-height:92px;white-space:pre-wrap}
 @media(max-width:900px){.bt38-kpis{grid-template-columns:repeat(2,1fr)}.bt38-head{flex-direction:column}.bt38-table{font-size:12px}}
+
+.bt38-truth-warning{
+  background:#fff7ed;
+  border:1px solid #fed7aa;
+  color:#7c2d12;
+  border-radius:12px;
+  padding:10px 12px;
+  margin:0 0 12px 0;
+  font-size:13px;
+  line-height:1.45;
+}
+
 </style>
 
 <div class="bt38-cockpit">
@@ -79,17 +91,56 @@
     <div class="bt38-kpi"><small>Failures 24h</small><strong>{{ stats.failed_24h|default(0) }}</strong></div>
   </div>
 
+  
+      <div class="bt38-truth-warning">
+        <strong>Fuse board rule:</strong>
+        ON means only that one circuit is powered. Execution requires every required circuit in the chain:
+        Master + Runtime + Marketplace + Manual + Store Live, and Read Only Mode must be OFF.
+      </div>
+
+
+  <div class="bt38-section">
+    <h3>True Execution Status</h3>
+    <table class="bt38-table">
+      <tr><th>Function</th><th>Status</th><th>Exact reason</th><th>Required circuits</th></tr>
+      <tr>
+        <td>Push Execution</td>
+        <td><span class="{% if fuse_status.push.label == 'ALLOWED' %}ok{% else %}bad{% endif %}">{{ fuse_status.push.label }}</span></td>
+        <td>{{ fuse_status.push.reason }}</td>
+        <td><code>push_enabled={{ fuse_status.push.required.push_enabled }}, runtime_push_enabled={{ fuse_status.push.required.runtime_push_enabled }}, marketplace_push_enabled={{ fuse_status.push.required.marketplace_push_enabled }}, manual_push_enabled={{ fuse_status.push.required.manual_push_enabled }}</code></td>
+      </tr>
+      <tr>
+        <td>Import Execution</td>
+        <td><span class="{% if fuse_status.import.label == 'ALLOWED' %}ok{% else %}bad{% endif %}">{{ fuse_status.import.label }}</span></td>
+        <td>{{ fuse_status.import.reason }}</td>
+        <td><code>import_enabled={{ fuse_status.import.required.import_enabled }}, runtime_import_enabled={{ fuse_status.import.required.runtime_import_enabled }}, marketplace_import_enabled={{ fuse_status.import.required.marketplace_import_enabled }}, manual_import_enabled={{ fuse_status.import.required.manual_import_enabled }}</code></td>
+      </tr>
+      <tr>
+        <td>Sync Execution</td>
+        <td><span class="{% if fuse_status.sync.label == 'ALLOWED' %}ok{% else %}bad{% endif %}">{{ fuse_status.sync.label }}</span></td>
+        <td>{{ fuse_status.sync.reason }}</td>
+        <td><code>sync_enabled={{ fuse_status.sync.required.sync_enabled }}, runtime_sync_enabled={{ fuse_status.sync.required.runtime_sync_enabled }}, marketplace_sync_enabled={{ fuse_status.sync.required.marketplace_sync_enabled }}, manual_sync_enabled={{ fuse_status.sync.required.manual_sync_enabled }}</code></td>
+      </tr>
+    </table>
+  </div>
+
   <div class="bt38-section">
     <h3>1. Emergency + Global Runtime</h3>
     <table class="bt38-table">
       <thead><tr><th>Control</th><th>State</th><th>Purpose</th></tr></thead>
       <tbody>
-        <tr><td>Marketplace Push</td><td>{{ config_toggle("push_enabled") }}</td><td>Allows governed push execution.</td></tr>
-        <tr><td>Marketplace Import</td><td>{{ config_toggle("import_enabled") }}</td><td>Allows governed import/hydration.</td></tr>
-        <tr><td>Marketplace Sync</td><td>{{ config_toggle("sync_enabled") }}</td><td>Allows governed sync/reconcile.</td></tr>
-        <tr><td>Read Only Mode</td><td>{{ config_toggle("read_only_mode") }}</td><td>Blocks runtime writes.</td></tr>
-        <tr><td>Dry Run Mode</td><td>{{ config_toggle("dry_run_mode") }}</td><td>Simulate actions without marketplace writes.</td></tr>
-        <tr><td>Queue Freeze</td><td>{{ config_toggle("queue_frozen") }}</td><td>Stops queue dispatch.</td></tr>
+        <tr><td>Master Push Fuse</td><td>{{ config_toggle("push_enabled") }}</td><td>Top-level push permission. This alone does not make push executable.</td></tr>
+        <tr><td>Runtime Push Fuse</td><td>{{ config_toggle("runtime_push_enabled") }}</td><td>Runtime guard permission required for warehouse/manual push.</td></tr>
+        <tr><td>Marketplace Push Fuse</td><td>{{ config_toggle("marketplace_push_enabled") }}</td><td>Marketplace write permission required before any live push can run.</td></tr>
+        <tr><td>Master Import Fuse</td><td>{{ config_toggle("import_enabled") }}</td><td>Top-level import permission. This alone does not make import executable.</td></tr>
+        <tr><td>Runtime Import Fuse</td><td>{{ config_toggle("runtime_import_enabled") }}</td><td>Runtime guard permission required for import/hydration.</td></tr>
+        <tr><td>Marketplace Import Fuse</td><td>{{ config_toggle("marketplace_import_enabled") }}</td><td>Marketplace import permission required before import can run.</td></tr>
+        <tr><td>Master Sync Fuse</td><td>{{ config_toggle("sync_enabled") }}</td><td>Top-level sync permission. This alone does not make sync executable.</td></tr>
+        <tr><td>Runtime Sync Fuse</td><td>{{ config_toggle("runtime_sync_enabled") }}</td><td>Runtime guard permission required for sync/reconcile.</td></tr>
+        <tr><td>Marketplace Sync Fuse</td><td>{{ config_toggle("marketplace_sync_enabled") }}</td><td>Marketplace sync permission required before sync can run.</td></tr>
+        <tr><td>Read Only Mode</td><td>{{ config_toggle("read_only_mode") }}</td><td>MASTER HARD BLOCK. When ON, all marketplace writes/import/sync are blocked.</td></tr>
+        <tr><td>Dry Run Mode</td><td>{{ config_toggle("dry_run_mode") }}</td><td>Simulates actions without live marketplace writes.</td></tr>
+        <tr><td>Queue Freeze</td><td>{{ config_toggle("queue_frozen") }}</td><td>Stops background queue dispatch. Manual actions still need their own fuses.</td></tr>
       </tbody>
     </table>
   </div>
