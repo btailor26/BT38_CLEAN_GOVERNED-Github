@@ -1,27 +1,19 @@
-"""
-BT38 runtime gate compatibility wrapper.
+"""BT38 runtime gate compatibility wrapper.
 
-This file no longer owns runtime execution authority.
+One authority:
+SystemConfig + Store settings via services.runtime_action_guard.
 
-Authority now lives in:
-services/runtime_action_guard.py
-
-runtime_gate.py only exists to preserve compatibility for:
-- governed_execution.py
-- older governed command paths
-- existing tests/imports
+This file exists only so older governed execution code can keep calling
+runtime_gate while the settings cockpit remains the real fuse box.
 """
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from services.runtime_action_guard import is_runtime_action_allowed
 
-APPROVED_AMAZON_FBM_PUSH_TYPE = "amazon_fbm_inventory_push"
-
-RUNTIME_GATE_MESSAGE = (
-    "BT38 runtime execution is controlled by the settings fuse box."
-)
+APPROVED_AMAZON_FBM_PUSH_TYPE = "amazon_fbm_single_sku_inventory_push"
+RUNTIME_GATE_MESSAGE = "BT38 runtime execution is controlled by the settings fuse box."
 
 
 @dataclass
@@ -31,94 +23,72 @@ class RuntimeCommand:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
-def _resolve_action_type(command: RuntimeCommand) -> str:
+def _resolve_action_type(command) -> str:
     action = str(getattr(command, "action", "") or "").strip().lower()
-
     if "push" in action:
         return "push"
-
     if "import" in action:
         return "import"
-
     if "sync" in action:
         return "sync"
-
     return action
 
 
-def _resolve_store(command: RuntimeCommand):
+def _resolve_store(command):
     try:
         from models import Store
-
-        payload = getattr(command, "payload", {}) or {}
-
-        store_id = (
-            payload.get("store_id")
-            or payload.get("store")
-            or payload.get("storeId")
-        )
-
+        payload = dict(getattr(command, "payload", {}) or {})
+        store_id = payload.get("store_id") or payload.get("store") or payload.get("storeId")
         if not store_id:
             return None
-
         return Store.query.get(int(store_id))
-
     except Exception:
         return None
 
 
-def is_runtime_allowed(command: RuntimeCommand):
-    action_type = _resolve_action_type(command)
-    store = _resolve_store(command)
-
-    metadata = getattr(command, "metadata", {}) or {}
-    payload = getattr(command, "payload", {}) or {}
-
-    manual = bool(
-        metadata.get("manual")
-        or metadata.get("manual_trigger")
-        or payload.get("manual")
+def _manual(command) -> bool:
+    payload = dict(getattr(command, "payload", {}) or {})
+    metadata = dict(getattr(command, "metadata", {}) or {})
+    return bool(
+        payload.get("manual")
         or payload.get("manual_trigger")
+        or metadata.get("manual")
+        or metadata.get("manual_trigger")
+        or getattr(command, "actor", None)
     )
 
+
+def decision(command):
+    action_type = _resolve_action_type(command)
+    store = _resolve_store(command)
     result = is_runtime_action_allowed(
         store=store,
         action_type=action_type,
-        manual=manual,
+        manual=_manual(command),
         context={
             "source": "runtime_gate",
             "command_action": getattr(command, "action", None),
+            "marketplace": getattr(command, "marketplace", None),
         },
     )
+    result.setdefault("reason", RUNTIME_GATE_MESSAGE)
+    return result
 
-    return bool(result.get("allowed", False))
+
+def is_runtime_allowed(command=None, *_args, **_kwargs) -> bool:
+    if command is None:
+        return False
+    return bool(decision(command).get("allowed", False))
 
 
-def assert_runtime_allowed(command: RuntimeCommand):
-    action_type = _resolve_action_type(command)
-    store = _resolve_store(command)
+def block_reason(command=None) -> str:
+    if command is None:
+        return "Runtime command missing"
+    return str(decision(command).get("reason") or RUNTIME_GATE_MESSAGE)
 
-    metadata = getattr(command, "metadata", {}) or {}
-    payload = getattr(command, "payload", {}) or {}
 
-    manual = bool(
-        metadata.get("manual")
-        or metadata.get("manual_trigger")
-        or payload.get("manual")
-        or payload.get("manual_trigger")
-    )
-
-    result = is_runtime_action_allowed(
-        store=store,
-        action_type=action_type,
-        manual=manual,
-        context={
-            "source": "runtime_gate_assert",
-            "command_action": getattr(command, "action", None),
-        },
-    )
-
+def assert_runtime_allowed(command=None, *_args, **_kwargs):
+    result = decision(command)
     if not result.get("allowed", False):
-        raise RuntimeError(result.get("reason", RUNTIME_GATE_MESSAGE))
-
+        raise RuntimeError(result.get("reason") or RUNTIME_GATE_MESSAGE)
     return result
