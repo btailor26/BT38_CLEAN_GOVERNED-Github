@@ -109,7 +109,34 @@ def execute_governed_action(command: GovernedCommand) -> Dict[str, Any]:
         )
 
     adapter = _select_adapter(command.marketplace)
-    adapter_payload = _build_adapter_payload(command, eligibility)
+    adapter_payload = command.payload.copy()
+
+    try:
+        from app import app
+        from models import MarketplaceListing, Store
+
+        with app.app_context():
+            listing_id = adapter_payload.get("listing_id")
+            store_id = adapter_payload.get("store_id")
+
+            listing = None
+            store = None
+
+            if listing_id:
+                listing = MarketplaceListing.query.get(listing_id)
+
+            if store_id:
+                store = Store.query.get(store_id)
+
+            if listing and not store:
+                store = Store.query.get(listing.store_id)
+
+            adapter_payload["listing"] = listing
+            adapter_payload["store"] = store
+
+    except Exception as hydration_error:
+        adapter_payload["_hydration_error"] = str(hydration_error)
+
     adapter_result = adapter.execute(command.action, adapter_payload)
     adapter_result.update(
         {
