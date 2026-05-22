@@ -113,81 +113,65 @@ def governed_amazon_setup_preview():
 
 @governed_bp.get("/settings")
 def governed_settings_page():
+    from flask import render_template
+    from models import Store, SystemConfig
 
-    class MockSettings:
-        global_push_enabled = False
-        enable_batch_scheduling = False
-        default_push_frequency_minutes = 15
-        default_batch_size = 25
-        default_retry_attempts = 3
-        batch_schedule_minutes = 15
-        off_hours_only = False
-        off_hours_start = 0
-        off_hours_end = 6
-        require_confirmation_threshold = 25
-        auto_pause_on_errors = True
-        error_rate_threshold = 0.30
-        notify_on_large_pushes = False
-        notify_on_failures = True
-        daily_summary_enabled = False
-        concurrent_store_pushes = 2
-        api_rate_limit_buffer = 0.80
+    default_config = {
+        "push_enabled": "false",
+        "runtime_push_enabled": "false",
+        "marketplace_push_enabled": "false",
+        "import_enabled": "false",
+        "runtime_import_enabled": "false",
+        "marketplace_import_enabled": "false",
+        "sync_enabled": "false",
+        "runtime_sync_enabled": "false",
+        "marketplace_sync_enabled": "false",
+        "manual_push_enabled": "false",
+        "manual_import_enabled": "false",
+        "manual_sync_enabled": "false",
+        "quantity_push_enabled": "false",
+        "price_push_enabled": "false",
+        "group_push_enabled": "false",
+        "bulk_push_enabled": "false",
+        "read_only_mode": "false",
+        "dry_run_mode": "false",
+        "queue_frozen": "false",
+        "scheduler_enabled": "false",
+        "sync_worker_enabled": "false",
+        "push_worker_enabled": "false",
+        "retry_queue_enabled": "false",
+        "reconcile_15m_enabled": "false",
+        "webhook_worker_enabled": "false",
+        "webhook_ebay_enabled": "false",
+        "webhook_amazon_enabled": "false",
+        "default_push_frequency_minutes": "15",
+        "default_batch_size": "25",
+        "default_retry_attempts": "3",
+        "api_rate_limit_buffer": "0.8",
+        "error_rate_threshold": "0.3",
+    }
 
-    class MockStats:
-        failed_syncs = 0
-        successful_syncs = 0
-        pending_syncs = 0
+    config = dict(default_config)
 
-    class MockStats:
-        failed_syncs = 0
-        successful_syncs = 0
-        pending_syncs = 0
+    rows = SystemConfig.query.filter(
+        SystemConfig.key.in_(list(default_config.keys()))
+    ).all()
+
+    for row in rows:
+        config[row.key] = str(row.value)
+
+    class Stats:
         failed_24h = 0
+        failed_syncs = 0
         success_rate = 100
 
-    class MockWebhookSettings:
-        worker_enabled = False
-        platforms = {
-            "amazon": {"enabled": False, "failed_24h": 0, "success_24h": 0},
-            "ebay": {"enabled": False, "failed_24h": 0, "success_24h": 0},
-            "shopify": {"enabled": False, "failed_24h": 0, "success_24h": 0},
-            "tiktok": {"enabled": False, "failed_24h": 0, "success_24h": 0},
-        }
+    stores = Store.query.order_by(Store.id).all()
 
     return render_template(
         "settings.html",
-        global_settings=MockSettings(),
-        stats=MockStats(),
-        webhook_settings=type("WebhookSettings", (), {
-            "worker_enabled": False,
-            "platforms": {
-                "amazon": type("Obj", (), {
-                    "enabled": False,
-                    "last_received": None,
-                    "received_24h": 0,
-                    "failed_24h": 0
-                })(),
-                "ebay": type("Obj", (), {
-                    "enabled": False,
-                    "last_received": None,
-                    "received_24h": 0,
-                    "failed_24h": 0
-                })(),
-                "shopify": type("Obj", (), {
-                    "enabled": False,
-                    "last_received": None,
-                    "received_24h": 0,
-                    "failed_24h": 0
-                })(),
-                "tiktok": type("Obj", (), {
-                    "enabled": False,
-                    "last_received": None,
-                    "received_24h": 0,
-                    "failed_24h": 0
-                })(),
-            }
-        })(),
-        stores=[]
+        config=config,
+        stores=stores,
+        stats=Stats(),
     )
 
 
@@ -1305,3 +1289,160 @@ def governed_product_linking_repair_sync_now():
         "message": "This governed repair action is disabled until approved."
     }), 409
 
+
+# === BT38 PRIVATE SETTINGS COCKPIT API ===
+def _bt38_settings_bool(value):
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    text = str(value).strip().lower()
+    return "true" if text in {"1", "true", "yes", "on", "enabled"} else "false"
+
+
+def _bt38_settings_set_config(key, value):
+    from app import db
+    from models import SystemConfig
+    cfg = SystemConfig.query.filter_by(key=key).first()
+    if cfg is None:
+        cfg = SystemConfig(key=key, value=str(value))
+        db.session.add(cfg)
+    else:
+        cfg.value = str(value)
+    db.session.commit()
+    return cfg
+
+
+@governed_bp.get("/governed/settings/state")
+def governed_settings_state():
+    from flask import jsonify
+    from models import SystemConfig, Store
+
+    keys = [
+        "push_enabled", "runtime_push_enabled", "marketplace_push_enabled",
+        "import_enabled", "runtime_import_enabled", "marketplace_import_enabled",
+        "sync_enabled", "runtime_sync_enabled", "marketplace_sync_enabled",
+        "manual_push_enabled", "manual_import_enabled", "manual_sync_enabled",
+        "quantity_push_enabled", "price_push_enabled", "group_push_enabled", "bulk_push_enabled",
+        "read_only_mode", "dry_run_mode", "queue_frozen",
+        "scheduler_enabled", "sync_worker_enabled", "push_worker_enabled",
+        "retry_queue_enabled", "reconcile_15m_enabled",
+        "webhook_worker_enabled", "webhook_ebay_enabled", "webhook_amazon_enabled",
+        "default_push_frequency_minutes", "default_batch_size", "default_retry_attempts",
+        "api_rate_limit_buffer", "error_rate_threshold",
+    ]
+
+    config = {key: "false" for key in keys}
+    for row in SystemConfig.query.filter(SystemConfig.key.in_(keys)).all():
+        config[row.key] = str(row.value)
+
+    stores = []
+    for store in Store.query.order_by(Store.id).all():
+        stores.append({
+            "id": store.id,
+            "name": store.name,
+            "platform": store.platform,
+            "store_mode": getattr(store, "store_mode", None),
+            "is_active": bool(getattr(store, "is_active", False)),
+            "fba_import_enabled": bool(getattr(store, "fba_import_enabled", False)),
+            "fbm_sync_enabled": bool(getattr(store, "fbm_sync_enabled", False)),
+            "auto_push_enabled": bool(getattr(store, "auto_push_enabled", False)),
+            "sync_status": getattr(store, "sync_status", None),
+            "last_sync": str(getattr(store, "last_sync", "") or ""),
+        })
+
+    return jsonify(ok=True, success=True, governed=True, config=config, stores=stores)
+
+
+@governed_bp.post("/governed/settings/config")
+def governed_settings_config_update():
+    from flask import jsonify, request
+
+    allowed = {
+        "push_enabled", "runtime_push_enabled", "marketplace_push_enabled",
+        "import_enabled", "runtime_import_enabled", "marketplace_import_enabled",
+        "sync_enabled", "runtime_sync_enabled", "marketplace_sync_enabled",
+        "manual_push_enabled", "manual_import_enabled", "manual_sync_enabled",
+        "quantity_push_enabled", "price_push_enabled", "group_push_enabled", "bulk_push_enabled",
+        "read_only_mode", "dry_run_mode", "queue_frozen",
+        "scheduler_enabled", "sync_worker_enabled", "push_worker_enabled",
+        "retry_queue_enabled", "reconcile_15m_enabled",
+        "webhook_worker_enabled", "webhook_ebay_enabled", "webhook_amazon_enabled",
+        "default_push_frequency_minutes", "default_batch_size", "default_retry_attempts",
+        "api_rate_limit_buffer", "error_rate_threshold",
+    }
+
+    body = request.get_json(silent=True) or {}
+    key = str(body.get("key", "")).strip()
+    value = body.get("value")
+
+    if key not in allowed:
+        return jsonify(ok=False, success=False, governed=True, error="setting_not_allowed", key=key), 400
+
+    if isinstance(value, bool):
+        value = _bt38_settings_bool(value)
+
+    _bt38_settings_set_config(key, value)
+    return jsonify(ok=True, success=True, governed=True, key=key, value=str(value))
+
+
+@governed_bp.post("/governed/settings/stores/<int:store_id>")
+def governed_settings_store_update(store_id):
+    from flask import jsonify, request
+    from app import db
+    from models import Store
+
+    allowed = {
+        "is_active": "bool",
+        "fba_import_enabled": "bool",
+        "fbm_sync_enabled": "bool",
+        "auto_push_enabled": "bool",
+        "store_mode": "mode",
+    }
+
+    body = request.get_json(silent=True) or {}
+    field = str(body.get("field", "")).strip()
+    value = body.get("value")
+
+    if field not in allowed:
+        return jsonify(ok=False, success=False, governed=True, error="store_field_not_allowed", field=field), 400
+
+    store = Store.query.get(store_id)
+    if store is None:
+        return jsonify(ok=False, success=False, governed=True, error="store_not_found", store_id=store_id), 404
+
+    if allowed[field] == "bool":
+        setattr(store, field, bool(value))
+    else:
+        mode = str(value).strip().lower()
+        if mode not in {"safe", "live", "disabled"}:
+            return jsonify(ok=False, success=False, governed=True, error="invalid_store_mode", value=value), 400
+        setattr(store, field, mode)
+
+    db.session.commit()
+    return jsonify(ok=True, success=True, governed=True, store_id=store.id, field=field, value=getattr(store, field))
+
+
+@governed_bp.post("/governed/settings/emergency-freeze")
+def governed_settings_emergency_freeze():
+    from flask import jsonify
+
+    freeze = {
+        "push_enabled": "false",
+        "runtime_push_enabled": "false",
+        "marketplace_push_enabled": "false",
+        "import_enabled": "false",
+        "runtime_import_enabled": "false",
+        "marketplace_import_enabled": "false",
+        "sync_enabled": "false",
+        "runtime_sync_enabled": "false",
+        "marketplace_sync_enabled": "false",
+        "manual_push_enabled": "false",
+        "manual_import_enabled": "false",
+        "manual_sync_enabled": "false",
+        "queue_frozen": "true",
+        "read_only_mode": "true",
+    }
+
+    for key, value in freeze.items():
+        _bt38_settings_set_config(key, value)
+
+    return jsonify(ok=True, success=True, governed=True, emergency_freeze=True, updated=freeze)
