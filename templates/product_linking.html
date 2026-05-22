@@ -1008,7 +1008,7 @@ function showAdjustPushModal(warehouseId, sku, name, currentQty) {
 
 async function fetchGroupMembersPreview(warehouseId) {
     try {
-        const response = await fetch(`/api/group-push/preview/${warehouseId}`);
+        const response = await fetch(`/governed-disabled/group-push-preview/${warehouseId}`);
         const data = await response.json();
         
         const container = document.getElementById('groupMembersPreview');
@@ -1040,7 +1040,7 @@ async function executeGroupPush() {
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Pushing...';
     
     try {
-        const response = await fetch('/api/group-push', {
+        const response = await fetch('/governed-disabled/group-push', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
@@ -1509,7 +1509,7 @@ async function searchWarehouseForLinking() {
 // Link a marketplace listing to a warehouse product
 async function linkListingToWarehouse(listingId, warehouseId, listingSku, warehouseSku, userConfirmed = false) {
     try {
-        const response = await fetch('/api/link_listing_to_warehouse', {
+        const response = await fetch('/governed-disabled/link-listing-to-warehouse', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -1571,7 +1571,7 @@ async function unlinkListing(listingId, listingSku, userConfirmed = false) {
     }
     
     try {
-        const response = await fetch('/api/unlink_listing', {
+        const response = await fetch('/governed-disabled/unlink-listing', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -1697,7 +1697,7 @@ async function saveNewLink() {
     }
     
     try {
-        const response = await fetch('/api/product-linking/link', {
+        const response = await fetch('/governed-disabled/product-linking-link', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({

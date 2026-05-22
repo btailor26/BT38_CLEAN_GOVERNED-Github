@@ -319,710 +319,175 @@
 </div>
 
 <script>
-function confirmDeleteGroup(groupId, groupName, itemCount) {
-    const modal = new bootstrap.Modal(document.getElementById('deleteModal'));
-    const form = document.getElementById('deleteForm');
-    const message = document.getElementById('deleteMessage');
-    const warning = document.getElementById('deleteWarning');
-    const deleteButton = document.getElementById('deleteButton');
-    
-    form.action = '/groups/delete/' + groupId;
-    message.textContent = `Are you sure you want to delete the group "${groupName}"?`;
-    
-    if (itemCount > 0) {
-        warning.style.display = 'block';
-        deleteButton.disabled = true;
-        deleteButton.innerHTML = '<i data-feather="x" class="me-1"></i>Cannot Delete';
-    } else {
-        warning.style.display = 'none';
-        deleteButton.disabled = false;
-        deleteButton.innerHTML = '<i data-feather="trash-2" class="me-1"></i>Delete Group';
-    }
-    
-    modal.show();
-    feather.replace();
-}
+(function () {
+  function governedMessage(message) {
+    const text = message || "Governed action did not complete.";
+    try { alert(text); } catch (error) { console.warn(text); }
+  }
 
-// SKU Management Functions
-let currentGroupId = null;
-let currentGroupName = null;
-let selectedSkus = [];
+  async function governedPostJson(url, payload) {
+    let response;
+    let data;
 
-function showAddSkuModal(groupId, groupName) {
-    currentGroupId = groupId;
-    currentGroupName = groupName;
-    selectedSkus = [];
-    
-    // Update modal title
-    document.getElementById('addSkuModalLabel').innerHTML = `
-        <i data-feather="plus-circle" class="text-success me-2"></i>
-        Add SKUs to "${groupName}"
-    `;
-    
-    // Reset modal content
-    document.getElementById('skuSearchInput').value = '';
-    document.getElementById('skuSearchResults').innerHTML = `
-        <div class="text-center py-4 text-muted">
-            <i data-feather="search" size="48"></i>
-            <p class="mt-2">Enter a search term above to find items</p>
-        </div>
-    `;
-    document.getElementById('selectedSkusCount').style.display = 'none';
-    document.getElementById('assignSkusBtn').disabled = true;
-    
-    // Show modal
-    const modal = new bootstrap.Modal(document.getElementById('addSkuModal'));
-    modal.show();
-    feather.replace();
-}
-
-function searchSkus() {
-    const query = document.getElementById('skuSearchInput').value.trim();
-    
-    if (!query) {
-        showAlert('warning', 'Please enter a search term');
-        return;
-    }
-    
-    const searchBtn = document.getElementById('searchSkusBtn');
-    const originalContent = searchBtn.innerHTML;
-    
-    // Show loading state
-    searchBtn.innerHTML = '<i data-feather="loader" class="spin"></i> Searching...';
-    searchBtn.disabled = true;
-    feather.replace();
-    
-    fetch('/search_ungrouped_items', {
-        method: 'POST',
+    try {
+      response = await fetch(url, {
+        method: "POST",
         headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-Token': '{{ csrf_token }}'
+          "Content-Type": "application/json",
+          "X-Actor": "groups-governed-ui"
         },
-        body: JSON.stringify({ query: query })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            displaySearchResults(data.items);
-        } else {
-            showAlert('danger', `❌ Search failed: ${data.error}`);
-            document.getElementById('skuSearchResults').innerHTML = `
-                <div class="text-center py-4 text-muted">
-                    <i data-feather="x" size="48"></i>
-                    <p class="mt-2">Search failed. Please try again.</p>
-                </div>
-            `;
-        }
-    })
-    .catch(error => {
-        console.error('Error searching SKUs:', error);
-        showAlert('danger', '❌ Network error - please try again');
-        document.getElementById('skuSearchResults').innerHTML = `
-            <div class="text-center py-4 text-muted">
-                <i data-feather="wifi-off" size="48"></i>
-                <p class="mt-2">Network error. Please check your connection and try again.</p>
-            </div>
-        `;
-    })
-    .finally(() => {
-        // Restore button state
-        searchBtn.innerHTML = originalContent;
-        searchBtn.disabled = false;
-        feather.replace();
-    });
-}
-
-function displaySearchResults(items) {
-    const resultsContainer = document.getElementById('skuSearchResults');
-    
-    if (items.length === 0) {
-        resultsContainer.innerHTML = `
-            <div class="text-center py-4 text-muted">
-                <i data-feather="search" size="48"></i>
-                <p class="mt-2">No ungrouped items found matching your search.</p>
-                <small>Only ungrouped items can be added to groups.</small>
-            </div>
-        `;
-        feather.replace();
-        return;
+        body: JSON.stringify(payload || {})
+      });
+    } catch (error) {
+      governedMessage("Governed request failed before reaching server.");
+      console.error(error);
+      return { ok:false, success:false, error:String(error) };
     }
-    
-    let html = `
-        <div class="table-responsive">
-            <table class="table table-sm table-hover">
-                <thead>
-                    <tr>
-                        <th width="40">
-                            <input type="checkbox" class="form-check-input" id="selectAllItems" onchange="toggleSelectAllItems(this)">
-                        </th>
-                        <th>SKU</th>
-                        <th>Name</th>
-                        <th>Qty</th>
-                        <th>Price</th>
-                    </tr>
-                </thead>
-                <tbody>
-    `;
-    
-    items.forEach(item => {
-        html += `
-            <tr>
-                <td>
-                    <input type="checkbox" class="form-check-input item-select-checkbox" 
-                           value="${item.id}" data-sku="${item.sku}" 
-                           onchange="updateSelectedSkus()">
-                </td>
-                <td><code>${item.sku}</code></td>
-                <td>
-                    ${item.name}
-                    ${item.quantity < 10 ? '<span class="badge bg-warning text-dark ms-1">Low</span>' : ''}
-                </td>
-                <td>
-                    <span class="badge ${item.quantity < 10 ? 'bg-warning text-dark' : item.quantity > 50 ? 'bg-success' : 'bg-secondary'}">
-                        ${item.quantity}
-                    </span>
-                </td>
-                <td>£${parseFloat(item.price).toFixed(2)}</td>
-            </tr>
-        `;
-    });
-    
-    html += `
-                </tbody>
-            </table>
-        </div>
-    `;
-    
-    resultsContainer.innerHTML = html;
-    feather.replace();
-}
 
-function toggleSelectAllItems(checkbox) {
-    const itemCheckboxes = document.querySelectorAll('.item-select-checkbox');
-    const isChecked = checkbox.checked;
-    
-    itemCheckboxes.forEach(cb => {
-        cb.checked = isChecked;
-    });
-    
-    updateSelectedSkus();
-}
-
-function updateSelectedSkus() {
-    const checkboxes = document.querySelectorAll('.item-select-checkbox:checked');
-    selectedSkus = Array.from(checkboxes).map(cb => ({
-        id: parseInt(cb.value),
-        sku: cb.dataset.sku
-    }));
-    
-    const countElement = document.getElementById('selectedCount');
-    const alertElement = document.getElementById('selectedSkusCount');
-    const assignBtn = document.getElementById('assignSkusBtn');
-    
-    countElement.textContent = selectedSkus.length;
-    
-    if (selectedSkus.length > 0) {
-        alertElement.style.display = 'block';
-        assignBtn.disabled = false;
-    } else {
-        alertElement.style.display = 'none';
-        assignBtn.disabled = true;
+    try {
+      data = await response.json();
+    } catch (error) {
+      data = {
+        ok:false,
+        success:false,
+        message:"Governed route returned non-JSON response.",
+        status:response.status
+      };
     }
-    
-    // Update select all checkbox state
-    const selectAllCheckbox = document.getElementById('selectAllItems');
-    const itemCheckboxes = document.querySelectorAll('.item-select-checkbox');
-    const checkedCount = document.querySelectorAll('.item-select-checkbox:checked').length;
-    
-    if (checkedCount === 0) {
-        selectAllCheckbox.indeterminate = false;
-        selectAllCheckbox.checked = false;
-    } else if (checkedCount === itemCheckboxes.length) {
-        selectAllCheckbox.indeterminate = false;
-        selectAllCheckbox.checked = true;
-    } else {
-        selectAllCheckbox.indeterminate = true;
-    }
-}
 
-function assignSelectedSkus() {
-    if (!selectedSkus.length || !currentGroupId) {
-        showAlert('warning', 'Please select items to assign');
-        return;
-    }
-    
-    const assignBtn = document.getElementById('assignSkusBtn');
-    const originalContent = assignBtn.innerHTML;
-    
-    // Show loading state
-    assignBtn.innerHTML = '<i data-feather="loader" class="spin"></i> Adding...';
-    assignBtn.disabled = true;
-    feather.replace();
-    
-    const itemIds = selectedSkus.map(sku => sku.id);
-    
-    fetch(`/add_sku_to_group/${currentGroupId}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-Token': '{{ csrf_token }}'
-        },
-        body: JSON.stringify({ item_ids: itemIds })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            showAlert('success', `✅ Successfully added ${selectedSkus.length} item(s) to "${currentGroupName}"`);
-            
-            // Hide modal and refresh page
-            const modal = bootstrap.Modal.getInstance(document.getElementById('addSkuModal'));
-            modal.hide();
-            
-            setTimeout(() => {
-                window.location.reload();
-            }, 1500);
-        } else {
-            showAlert('danger', `❌ Failed to add items: ${data.error}`);
-            // Restore button
-            assignBtn.innerHTML = originalContent;
-            assignBtn.disabled = false;
-            feather.replace();
-        }
-    })
-    .catch(error => {
-        console.error('Error assigning SKUs:', error);
-        showAlert('danger', '❌ Network error - please try again');
-        // Restore button
-        assignBtn.innerHTML = originalContent;
-        assignBtn.disabled = false;
-        feather.replace();
+    if (data.message) governedMessage(data.message);
+    else if (data.reason) governedMessage(data.reason);
+    else if (!(data.ok || data.success)) governedMessage("Governed action blocked or unavailable.");
+
+    return data;
+  }
+
+  window.confirmDeleteGroup = function confirmDeleteGroup() {
+    governedMessage("Group delete is disabled until governed delete workflow is approved.");
+    return false;
+  };
+
+  window.showAddSkuModal = function showAddSkuModal() {
+    governedMessage("Add SKU workflow is disabled until governed group linking routes are approved.");
+    return false;
+  };
+
+  window.searchSkus = function searchSkus() {
+    governedMessage("Legacy SKU search route is disabled until governed search route is approved.");
+    return false;
+  };
+
+  window.displaySearchResults = function displaySearchResults() {
+    return false;
+  };
+
+  window.toggleSelectAllItems = function toggleSelectAllItems(checkbox) {
+    const checked = !!(checkbox && checkbox.checked);
+    document.querySelectorAll(".group-item-checkbox").forEach(function(cb) {
+      cb.checked = checked;
     });
-}
+    window.updateSelectedSkus();
+  };
 
-// Utility function for showing notifications (reuse from dashboard.js pattern)
-function showAlert(type, message) {
-    const alertDiv = document.createElement('div');
-    alertDiv.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
-    alertDiv.style.cssText = 'top: 20px; right: 20px; z-index: 9999; max-width: 400px;';
-    alertDiv.innerHTML = `
-        ${message}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    `;
-    
-    document.body.appendChild(alertDiv);
-    
-    // Auto-remove after 5 seconds
-    setTimeout(() => {
-        if (alertDiv.parentNode) {
-            alertDiv.remove();
-        }
-    }, 5000);
-}
+  window.updateSelectedSkus = function updateSelectedSkus() {
+    const count = document.querySelectorAll(".group-item-checkbox:checked").length;
+    const el = document.getElementById("selectedSkuCount");
+    if (el) el.textContent = count;
+  };
 
-// Handle Enter key in search input
-document.addEventListener('DOMContentLoaded', function() {
-    const searchInput = document.getElementById('skuSearchInput');
+  window.assignSelectedSkus = function assignSelectedSkus() {
+    governedMessage("Bulk SKU assignment is disabled until governed group assignment routes are approved.");
+    return false;
+  };
+
+  window.showAlert = function showAlert(type, message) {
+    governedMessage(message || type || "Governed message");
+  };
+
+  window.adjustQuantity = function adjustQuantity() {
+    governedMessage("Inline quantity adjustment is disabled until governed quantity routes are approved.");
+    return false;
+  };
+
+  window.updateQuantityLocal = function updateQuantityLocal() {
+    governedMessage("Local quantity editing is disabled until governed quantity routes are approved.");
+    return false;
+  };
+
+  window.handleQuantityInputChange = function handleQuantityInputChange() {
+    return false;
+  };
+
+  window.handleQuantityKeypress = function handleQuantityKeypress(event) {
+    if (event && event.key === "Enter") {
+      event.preventDefault();
+      return false;
+    }
+  };
+
+  window.updateQuantityBadgeWithColors = function updateQuantityBadgeWithColors() {
+    return false;
+  };
+
+  window.addPendingChangeHighlight = function addPendingChangeHighlight() {
+    return false;
+  };
+
+  window.trackLocalPendingChange = function trackLocalPendingChange() {
+    return false;
+  };
+
+  window.updateLocalPendingBar = function updateLocalPendingBar() {
+    return false;
+  };
+
+  window.pushIndividualItem = function pushIndividualItem() {
+    governedMessage("Individual group item push is disabled until governed item-to-listing mapping is approved.");
+    return false;
+  };
+
+  window.releaseFromGroup = function releaseFromGroup() {
+    governedMessage("Release from group is disabled until governed unlink workflow is approved.");
+    return false;
+  };
+
+  window.confirmDelete = function confirmDelete() {
+    governedMessage("Delete workflow is disabled until governed delete routes are approved.");
+    return false;
+  };
+
+  window.filterGroups = function filterGroups() {
+    const input = document.getElementById("groupSearchInput");
+    const query = input ? input.value.toLowerCase() : "";
+
+    document.querySelectorAll(".group-card").forEach(function(card) {
+      const text = card.textContent.toLowerCase();
+      card.style.display = text.includes(query) ? "" : "none";
+    });
+  };
+
+  window.clearGroupSearch = function clearGroupSearch() {
+    const input = document.getElementById("groupSearchInput");
+    if (input) input.value = "";
+    window.filterGroups();
+  };
+
+  document.addEventListener("DOMContentLoaded", function () {
+    document.querySelectorAll(".group-item-checkbox").forEach(function(cb) {
+      cb.addEventListener("change", window.updateSelectedSkus);
+    });
+
+    const searchInput = document.getElementById("groupSearchInput");
     if (searchInput) {
-        searchInput.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                searchSkus();
-            }
-        });
-    }
-});
-
-// =================== QUANTITY ADJUSTMENT SYSTEM ===================
-// Note: PendingChangesManager is defined in dashboard.js which is included in base.html
-
-// Quantity adjustment functions with enhanced visual feedback
-function adjustQuantity(itemId, change) {
-    const inputElement = document.getElementById(`qty-${itemId}`);
-    const currentValue = parseInt(inputElement.value) || 0;
-    const newValue = Math.max(0, currentValue + change);
-    
-    // Update input value immediately
-    inputElement.value = newValue;
-    
-    // Apply immediate visual feedback with vibrant colors
-    updateQuantityBadgeWithColors(itemId, newValue);
-    addPendingChangeHighlight(itemId);
-    
-    updateQuantityLocal(itemId, newValue);
-}
-
-function updateQuantityLocal(itemId, newQuantity = null) {
-    const inputElement = document.getElementById(`qty-${itemId}`);
-    const quantity = newQuantity !== null ? newQuantity : parseInt(inputElement.value) || 0;
-    
-    // Ensure minimum value of 0
-    const validQuantity = Math.max(0, quantity);
-    
-    // Update input value if needed
-    if (inputElement.value != validQuantity) {
-        inputElement.value = validQuantity;
-    }
-    
-    // Apply enhanced visual feedback
-    updateQuantityBadgeWithColors(itemId, validQuantity);
-    addPendingChangeHighlight(itemId);
-    
-    // Add to pending changes - use global pendingChangesManager if available
-    if (typeof pendingChangesManager !== 'undefined' && pendingChangesManager) {
-        pendingChangesManager.addPendingChange(itemId, validQuantity);
-    } else {
-        // Fallback: track changes locally
-        trackLocalPendingChange(itemId, validQuantity);
-    }
-}
-
-function handleQuantityInputChange(event, itemId) {
-    const newValue = parseInt(event.target.value) || 0;
-    
-    // Apply immediate visual feedback
-    updateQuantityBadgeWithColors(itemId, newValue);
-    addPendingChangeHighlight(itemId);
-    
-    updateQuantityLocal(itemId, newValue);
-}
-
-function handleQuantityKeypress(event, itemId) {
-    if (event.key === 'Enter') {
-        event.target.blur(); // Remove focus to trigger change event
-    }
-}
-
-// Enhanced visual feedback functions with vibrant colors
-function updateQuantityBadgeWithColors(itemId, newQuantity) {
-    const badge = document.querySelector(`.qty-badge-${itemId}`);
-    if (badge) {
-        // Update badge text
-        badge.textContent = newQuantity + (newQuantity < 10 ? ' - Low' : '');
-        
-        // Enhanced color coding with more vibrant and distinct colors
-        if (newQuantity === 0) {
-            badge.className = `badge qty-badge-${itemId} bg-danger text-white`;
-            badge.style.backgroundColor = '#dc3545';
-        } else if (newQuantity < 5) {
-            badge.className = `badge qty-badge-${itemId} bg-warning text-dark`;
-            badge.style.backgroundColor = '#ffc107';
-            badge.style.color = '#000';
-        } else if (newQuantity < 10) {
-            badge.className = `badge qty-badge-${itemId} bg-warning text-dark`;
-            badge.style.backgroundColor = '#fd7e14';
-            badge.style.color = '#000';
-        } else if (newQuantity < 20) {
-            badge.className = `badge qty-badge-${itemId} bg-info text-white`;
-            badge.style.backgroundColor = '#17a2b8';
-        } else if (newQuantity < 50) {
-            badge.className = `badge qty-badge-${itemId} bg-primary text-white`;
-            badge.style.backgroundColor = '#007bff';
-        } else {
-            badge.className = `badge qty-badge-${itemId} bg-success text-white`;
-            badge.style.backgroundColor = '#28a745';
+      searchInput.addEventListener("keydown", function(e) {
+        if (e.key === "Escape") {
+          window.clearGroupSearch();
         }
-        
-        badge.style.fontSize = '0.85em';
-        badge.style.fontWeight = 'bold';
-        badge.style.padding = '0.35em 0.6em';
-        badge.style.borderRadius = '0.375rem';
-        badge.style.textShadow = '0 1px 2px rgba(0,0,0,0.1)';
-        
-        // Add a pulse animation to show the change
-        badge.style.transform = 'scale(1.15)';
-        badge.style.transition = 'all 0.2s ease';
-        setTimeout(() => {
-            badge.style.transform = 'scale(1)';
-        }, 250);
+      });
     }
-}
 
-function addPendingChangeHighlight(itemId) {
-    const row = document.getElementById(`item-row-${itemId}`);
-    if (row) {
-        // Add vibrant border and background to show pending change
-        row.style.border = '3px solid #ff6b6b';
-        row.style.borderRadius = '10px';
-        row.style.backgroundColor = '#fff8e1';
-        row.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
-        row.style.boxShadow = '0 4px 12px rgba(255, 107, 107, 0.4)';
-        
-        // Add a subtle pulse effect
-        let pulseCount = 0;
-        const pulseInterval = setInterval(() => {
-            if (pulseCount >= 2) {
-                clearInterval(pulseInterval);
-                return;
-            }
-            row.style.transform = 'scale(1.02)';
-            setTimeout(() => {
-                row.style.transform = 'scale(1)';
-            }, 150);
-            pulseCount++;
-        }, 300);
-    }
-}
-
-// Fallback local pending changes tracking with enhanced UI
-let localPendingChanges = {};
-
-function trackLocalPendingChange(itemId, newQuantity) {
-    localPendingChanges[itemId] = newQuantity;
-    updateLocalPendingBar();
-}
-
-function updateLocalPendingBar() {
-    const changeCount = Object.keys(localPendingChanges).length;
-    const pendingBar = document.getElementById('pending-changes-bar');
-    const pendingCount = document.getElementById('pending-count');
-    
-    if (changeCount > 0 && pendingBar && pendingCount) {
-        pendingCount.textContent = changeCount;
-        pendingBar.style.display = 'block';
-        pendingBar.style.backgroundColor = '#ff6b6b';
-        pendingBar.style.color = 'white';
-        pendingBar.style.boxShadow = '0 -2px 10px rgba(255, 107, 107, 0.3)';
-        
-        // Add a subtle bounce animation
-        pendingBar.style.transform = 'translateY(-2px)';
-        setTimeout(() => {
-            pendingBar.style.transform = 'translateY(0)';
-        }, 200);
-    } else if (pendingBar) {
-        pendingBar.style.display = 'none';
-    }
-}
-
-// =================== OTHER FUNCTIONS ===================
-
-// Individual item push function
-function pushIndividualItem(itemId, sku) {
-    const btn = event.target.closest('button');
-    const originalContent = btn.innerHTML;
-    
-    // Show loading state
-    btn.innerHTML = '<i data-feather="loader" class="spin"></i>';
-    btn.disabled = true;
-    feather.replace();
-    
-    fetch(`/mock-disabled-action/${itemId}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-        }
-    })
-    .then(response => {
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        return response.json();
-    })
-    .then(data => {
-        if (data.success) {
-            showAlert('success', `✅ Stock pushed for ${sku}`);
-        } else {
-            showAlert('danger', `❌ Failed to push ${sku}: ${data.error}`);
-        }
-    })
-    .catch(error => {
-        console.error('Error pushing stock:', error);
-        showAlert('danger', `❌ Network error pushing ${sku}`);
-    })
-    .finally(() => {
-        // Restore button
-        btn.innerHTML = originalContent;
-        btn.disabled = false;
-        feather.replace();
-    });
-}
-
-// Release item from group function
-function releaseFromGroup(button, itemId, sku) {
-    if (!confirm(`Are you sure you want to release "${sku}" from this group?`)) {
-        return;
-    }
-    
-    const originalContent = button.innerHTML;
-    
-    // Show loading state
-    button.innerHTML = '<i data-feather="loader" class="spin"></i>';
-    button.disabled = true;
-    feather.replace();
-    
-    // Get CSRF token
-    const csrfToken = document.querySelector('meta[name="csrf-token"]');
-    if (!csrfToken) {
-        console.error('CSRF token not found');
-        showAlert('danger', '❌ Security token not found');
-        button.innerHTML = originalContent;
-        button.disabled = false;
-        feather.replace();
-        return;
-    }
-    
-    fetch(`/release_from_group/${itemId}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-Token': csrfToken.getAttribute('content')
-        }
-    })
-    .then(response => {
-        console.log('Response status:', response.status);
-        console.log('Response headers:', response.headers.get('content-type'));
-        
-        // Check if response is ok
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        // Check if response is JSON
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-            throw new Error('Server returned non-JSON response');
-        }
-        
-        return response.json();
-    })
-    .then(data => {
-        if (data.success) {
-            showAlert('success', `✅ ${sku} released from group`);
-            // Reload page to reflect changes
-            setTimeout(() => window.location.reload(), 1500);
-        } else {
-            showAlert('danger', `❌ Failed to release ${sku}: ${data.error}`);
-            // Restore button
-            button.innerHTML = originalContent;
-            button.disabled = false;
-            feather.replace();
-        }
-    })
-    .catch(error => {
-        console.error('Error releasing from group:', error);
-        showAlert('danger', `❌ Network error releasing ${sku}: ${error.message}`);
-        // Restore button
-        button.innerHTML = originalContent;
-        button.disabled = false;
-        feather.replace();
-    });
-}
-
-// Delete confirmation function
-function confirmDelete(itemId, itemName) {
-    if (confirm(`Are you sure you want to delete "${itemName}"? This action cannot be undone.`)) {
-        window.location.href = `/items/delete/${itemId}`;
-    }
-}
-
-// Collapse icon rotation
-document.addEventListener('DOMContentLoaded', function() {
-    // Handle collapse icon rotation
-    document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(button => {
-        const target = document.querySelector(button.getAttribute('data-bs-target'));
-        if (target) {
-            target.addEventListener('show.bs.collapse', () => {
-                const icon = button.querySelector('.collapse-icon');
-                if (icon) {
-                    icon.setAttribute('data-feather', 'chevron-down');
-                    feather.replace();
-                }
-            });
-            
-            target.addEventListener('hide.bs.collapse', () => {
-                const icon = button.querySelector('.collapse-icon');
-                if (icon) {
-                    icon.setAttribute('data-feather', 'chevron-right');
-                    feather.replace();
-                }
-            });
-        }
-    });
-    
-    // PendingChangesManager is already initialized in dashboard.js
-    
-    // Initialize Feather icons
-    feather.replace();
-});
-
-// Group Search Functions
-function filterGroups() {
-    const searchInput = document.getElementById('groupSearchInput');
-    const query = searchInput.value.toLowerCase().trim();
-    const groupCards = document.querySelectorAll('.card.mb-3');
-    const countElement = document.getElementById('groupSearchCount');
-    
-    let visibleCount = 0;
-    
-    groupCards.forEach(card => {
-        const cardHeader = card.querySelector('.card-header');
-        if (!cardHeader) return;
-        
-        // Get search text from group name, description, and group key
-        const groupName = cardHeader.querySelector('h6')?.textContent || '';
-        const groupDescription = cardHeader.querySelector('small.text-muted')?.textContent || '';
-        const groupKey = cardHeader.querySelector('code')?.textContent || '';
-        
-        const searchText = (groupName + ' ' + groupDescription + ' ' + groupKey).toLowerCase();
-        
-        if (query === '' || searchText.includes(query)) {
-            card.style.display = 'block';
-            visibleCount++;
-        } else {
-            card.style.display = 'none';
-        }
-    });
-    
-    // Update the count
-    countElement.textContent = visibleCount;
-    
-    // Show "no results" message if no groups match
-    const existingNoResults = document.getElementById('noGroupResults');
-    if (visibleCount === 0 && query !== '') {
-        if (!existingNoResults) {
-            const noResultsDiv = document.createElement('div');
-            noResultsDiv.id = 'noGroupResults';
-            noResultsDiv.className = 'alert alert-info text-center';
-            noResultsDiv.innerHTML = `
-                <i data-feather="search" class="me-2"></i>
-                No groups found matching "<strong>${query}</strong>"
-                <br><small class="text-muted">Try a different search term or clear the search to see all groups</small>
-            `;
-            
-            // Insert after the search bar
-            const searchRow = document.querySelector('.row.mb-4');
-            searchRow.parentNode.insertBefore(noResultsDiv, searchRow.nextSibling);
-            feather.replace();
-        } else {
-            existingNoResults.innerHTML = `
-                <i data-feather="search" class="me-2"></i>
-                No groups found matching "<strong>${query}</strong>"
-                <br><small class="text-muted">Try a different search term or clear the search to see all groups</small>
-            `;
-            feather.replace();
-        }
-    } else if (existingNoResults) {
-        existingNoResults.remove();
-    }
-}
-
-function clearGroupSearch() {
-    const searchInput = document.getElementById('groupSearchInput');
-    searchInput.value = '';
-    filterGroups();
-    searchInput.focus();
-}
-
-// Add Enter key support for search
-document.addEventListener('DOMContentLoaded', function() {
-    const searchInput = document.getElementById('groupSearchInput');
-    if (searchInput) {
-        searchInput.addEventListener('keydown', function(e) {
-            if (e.key === 'Escape') {
-                clearGroupSearch();
-            }
-        });
-    }
-});
+    if (window.feather) feather.replace();
+  });
+})();
 </script>
 {% endblock %}

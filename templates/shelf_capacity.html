@@ -276,7 +276,7 @@
         if (!warehouseId) return;
         
         try {
-            const resp = await fetch(`/api/warehouse/${warehouseId}/layout`);
+            const resp = await fetch(`/governed-disabled/warehouse-layout/${warehouseId}`);
             const data = await resp.json();
             
             if (data.ok && data.zones) {

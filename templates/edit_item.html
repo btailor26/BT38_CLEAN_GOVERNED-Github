@@ -767,7 +767,7 @@
 
         async performUngroupedSearch(query) {
             try {
-                const response = await fetch('/search_ungrouped_items', {
+                const response = await fetch('/governed/groups/search', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -957,7 +957,7 @@
                     feather.replace();
                 }
 
-                const response = await fetch(`/add_sku_to_group/${this.groupId}`, {
+                const response = await fetch(`/governed/groups/${this.groupId}`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
