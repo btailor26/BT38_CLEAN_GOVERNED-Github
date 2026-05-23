@@ -14,8 +14,8 @@ class EbayAdapter(GovernedMarketplaceAdapter):
     adapter_name = "ebay"
 
     def execute(self, action: str, payload: Mapping[str, Any]) -> dict[str, Any]:
-        store = payload.get("store")
-        listing = payload.get("listing")
+        store = payload.get("_governed_store") or payload.get("store")
+        listing = payload.get("_governed_listing") or payload.get("listing")
 
         if not store:
             return self.blocked_result(
