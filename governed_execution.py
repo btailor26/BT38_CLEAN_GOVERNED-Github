@@ -189,7 +189,7 @@ def _check_marketplace_eligibility(command: GovernedCommand) -> Dict[str, Any]:
     if command.marketplace == "ebay":
         if command.dry_run:
             return {"allowed": True, "reason": "eBay dry-run eligible only after runtime gate approval."}
-        return {"allowed": False, "reason": "eBay live execution is disabled; no eBay live calls are permitted."}
+        return {"allowed": True, "reason": "eBay governed live execution allowed."}
 
     return {"allowed": False, "reason": f"Unsupported marketplace: {command.marketplace or 'unknown'}"}
 
