@@ -92,7 +92,7 @@ def submit_governed_marketplace_action(
     if adapter is None:
         return _blocked(command, reason=f"No governed adapter for marketplace: {command.marketplace}")
 
-    result = adapter.execute(payload_for_adapter)
+    result = adapter.execute(command.action, payload_for_adapter)
 
     return {
         "ok": bool(result.get("ok") or result.get("success")),
