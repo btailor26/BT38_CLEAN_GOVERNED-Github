@@ -1,21 +1,22 @@
 """BT38 fuse-box runtime interpreter.
 
 Single authority rule:
-SystemConfig is the fuse box. It decides whether push/import/sync can run.
+SystemConfig is the execution authority.
 
-This module is NOT a second authority layer.
-It does not read environment execution switches.
-It does not start workers.
-It does not enqueue jobs.
-It does not call marketplaces.
-It only interprets the fuse box and store-level permissions.
+Store fields are capability/state checks only:
+- store_mode
+- is_active
+- api_key
 
-Required path:
-UI shortcut
--> governed route
--> this fuse-box interpreter
--> governed execution
--> marketplace adapter
+MarketplaceListing fields are operational safety checks only:
+- sync_quantity
+- push_state
+- amazon_fulfillment_channel
+
+This module does not read env execution switches.
+This module does not start workers.
+This module does not enqueue jobs.
+This module does not call marketplaces.
 """
 
 from __future__ import annotations
@@ -34,20 +35,8 @@ def _truthy(value: Any) -> bool:
     return str(value).strip().lower() in {"1", "true", "yes", "on", "enabled", "live"}
 
 
-def _falsey(value: Any) -> bool:
-    if isinstance(value, bool):
-        return value is False
-    return str(value).strip().lower() in {"0", "false", "no", "off", "disabled", "none", ""}
-
-
 def _store_value(store: Any, attr: str, default: Any = None) -> Any:
     return getattr(store, attr, default) if store is not None else default
-
-
-def _store_flag_disabled(store: Any, attr: str) -> bool:
-    if store is None or not hasattr(store, attr):
-        return False
-    return _falsey(getattr(store, attr))
 
 
 def _config_value(key: str, default: Any = "false") -> Any:
@@ -114,13 +103,12 @@ def _required_fuses(action_type: str, manual: bool) -> list[str]:
 def is_runtime_action_allowed(store, action_type, manual=False, context=None):
     """Single governed runtime decision point.
 
-    All push/import/sync decisions must be made here from the fuse box.
-    Store flags are treated as store-level fuse permissions, not separate authority.
+    SystemConfig decides execution.
+    Store/listing values only prove whether the requested action is structurally safe.
     """
 
     action = str(action_type or "").strip().lower()
     manual = bool(manual)
-    context = context or {}
 
     if action not in VALID_ACTIONS:
         return _blocked(store, action, manual, "Unsupported runtime action")
@@ -146,19 +134,7 @@ def is_runtime_action_allowed(store, action_type, manual=False, context=None):
 
     store_mode = str(_store_value(store, "store_mode", "safe") or "safe").strip().lower()
     if store_mode != "live":
-        return _blocked(store, action, manual, f"Store fuse store_mode={store_mode} blocks {action}")
-
-    if action == "push":
-        if _store_flag_disabled(store, "auto_push_enabled"):
-            return _blocked(store, action, manual, "Store fuse auto_push_enabled is OFF")
-
-    if action == "sync":
-        if _store_flag_disabled(store, "fbm_sync_enabled"):
-            return _blocked(store, action, manual, "Store fuse fbm_sync_enabled is OFF")
-
-    if action == "import":
-        if _store_flag_disabled(store, "fba_import_enabled"):
-            return _blocked(store, action, manual, "Store fuse fba_import_enabled is OFF")
+        return _blocked(store, action, manual, f"Store state store_mode={store_mode} blocks {action}")
 
     if not _store_value(store, "api_key"):
         return _blocked(store, action, manual, "Store credentials are missing")

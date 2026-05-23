@@ -100,7 +100,7 @@ def governed_group_propagate_quantity(group_id: int):
         }
 
         result = submit_governed_marketplace_action(
-            payload,
+            payload=payload,
             actor=_actor(),
             approval_type=(approval or {}).get("approval_type"),
             approval_id=(approval or {}).get("approval_id"),
