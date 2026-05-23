@@ -210,28 +210,6 @@
     </div>
 </div>
 
-<!-- Sync Confirmation Modal -->
-<div class="modal fade" id="syncModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Trigger Sync</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p>Trigger manual sync for store <strong id="syncStoreName"></strong>?</p>
-                <p class="text-muted small">This will sync all inventory items with the external store platform.</p>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn btn-info" onclick="executeTriggerSync()">
-                    <i data-feather="refresh-cw" class="me-1"></i>
-                    Start Sync
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
@@ -241,52 +219,72 @@
     function manualSync(storeId, storeName) {
         const btn = document.getElementById(`sync-btn-${storeId}`);
         const originalContent = btn.innerHTML;
-        
-        // Show loading state
+
+        if (!confirm(`Run governed import shortcut for "${storeName}"?\n\nThe fuse box decides whether this is allowed.`)) {
+            return;
+        }
+
         btn.disabled = true;
-        btn.innerHTML = '<i data-feather="loader" class="me-1"></i>Syncing...';
-        
-        fetch(`/governed/stores/${storeId}/toggle`, {
+        btn.innerHTML = '<i data-feather="loader" class="me-1"></i>Importing...';
+        feather.replace();
+
+        fetch(`/governed/stores/${storeId}/import`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-            }
+                'X-BT38-Shortcut': 'stores_sync_now_button'
+            },
+            body: JSON.stringify({
+                shortcut: true,
+                shortcut_source: 'stores_sync_now_button'
+            })
         })
         .then(response => response.json())
         .then(data => {
-            if (data.success) {
-                // Show success state temporarily
-                btn.innerHTML = '<i data-feather="check" class="me-1"></i>Started';
+            const alertContainer = document.querySelector('.container-fluid');
+            const alert = document.createElement('div');
+
+            if (data.success || data.status === 'success') {
+                btn.innerHTML = '<i data-feather="check" class="me-1"></i>Imported';
                 btn.classList.remove('btn-outline-info');
                 btn.classList.add('btn-success');
-                
-                // Reset button after 3 seconds
-                setTimeout(() => {
-                    btn.innerHTML = originalContent;
-                    btn.classList.remove('btn-success');
-                    btn.classList.add('btn-outline-info');
-                    btn.disabled = false;
-                    feather.replace();
-                }, 3000);
-                
-                // Show success message
-                const alertContainer = document.querySelector('.container-fluid');
-                const alert = document.createElement('div');
+
                 alert.className = 'alert alert-success alert-dismissible fade show';
                 alert.innerHTML = `
                     <i data-feather="check-circle" class="me-2"></i>
-                    ${data.message}
+                    Import shortcut completed through fuse box.
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                 `;
-                alertContainer.insertBefore(alert, alertContainer.firstChild);
-                feather.replace();
+            } else if (data.status === 'blocked') {
+                btn.innerHTML = '<i data-feather="slash" class="me-1"></i>Blocked';
+
+                alert.className = 'alert alert-warning alert-dismissible fade show';
+                alert.innerHTML = `
+                    <i data-feather="alert-triangle" class="me-2"></i>
+                    Import blocked by fuse box: ${data.reason || 'Not allowed'}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
             } else {
-                // Show error
+                btn.innerHTML = '<i data-feather="info" class="me-1"></i>Not Run';
+
+                alert.className = 'alert alert-info alert-dismissible fade show';
+                alert.innerHTML = `
+                    <i data-feather="info" class="me-2"></i>
+                    ${data.reason || data.message || 'Import shortcut did not run.'}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                `;
+            }
+
+            alertContainer.insertBefore(alert, alertContainer.firstChild);
+            feather.replace();
+
+            setTimeout(() => {
                 btn.innerHTML = originalContent;
+                btn.classList.remove('btn-success');
+                btn.classList.add('btn-outline-info');
                 btn.disabled = false;
                 feather.replace();
-                alert('Error: ' + data.message);
-            }
+            }, 3000);
         })
         .catch(error => {
             btn.innerHTML = originalContent;
@@ -390,39 +388,6 @@
         setTimeout(() => feather.replace(), 100);
     }
     
-    function triggerSync(storeId, storeName) {
-        currentStoreId = storeId;
-        document.getElementById('syncStoreName').textContent = storeName;
-        
-        const modal = new bootstrap.Modal(document.getElementById('syncModal'));
-        modal.show();
-    }
-    
-    function executeTriggerSync() {
-        if (!currentStoreId) return;
-        
-        fetch(`/governed/stores/${currentStoreId}/delete-preview`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.error) {
-                alert('Error: ' + data.error);
-            } else {
-                alert('Sync triggered successfully!');
-                // Close modal and refresh page
-                bootstrap.Modal.getInstance(document.getElementById('syncModal')).hide();
-                setTimeout(() => location.reload(), 1000);
-            }
-        })
-        .catch(error => {
-            console.error('Error triggering sync:', error);
-            alert('Error triggering sync');
-        });
-    }
     
     function toggleStore(storeId, isActive) {
         // This would normally make an API call to update store status
@@ -493,8 +458,5 @@
         feather.replace();
     });
     
-    document.getElementById('syncModal').addEventListener('shown.bs.modal', function () {
-        feather.replace();
-    });
 </script>
 {% endblock %}
