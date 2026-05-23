@@ -692,6 +692,7 @@ def _push_one_listing(*, listing_id: int, quantity, actor: str, source: str) -> 
         "sku": sku,
         "store_id": listing.store_id,
         "listing_id": listing.id,
+        "external_listing_id": listing.external_listing_id,
         "quantity": push_quantity,
         "amazon_fulfillment_channel": listing.amazon_fulfillment_channel or "MFN",
         "source": source,
