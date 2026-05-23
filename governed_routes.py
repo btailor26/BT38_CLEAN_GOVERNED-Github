@@ -12,6 +12,45 @@ except Exception:
 
 governed_bp = Blueprint("governed", __name__)
 
+
+def _governed_json_safe(value):
+    """Convert governed results to JSON-safe values before jsonify."""
+    from datetime import date, datetime
+    from decimal import Decimal
+
+    if value is None or isinstance(value, (str, int, float, bool)):
+        return value
+
+    if isinstance(value, Decimal):
+        return float(value)
+
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+
+    if isinstance(value, dict):
+        safe = {}
+        for key, item in value.items():
+            if key in {"store", "listing", "_governed_store", "_governed_listing"}:
+                if item is None:
+                    safe[key] = None
+                else:
+                    safe[key] = {
+                        "id": getattr(item, "id", None),
+                        "name": getattr(item, "name", None),
+                        "platform": getattr(item, "platform", None),
+                        "sku": getattr(item, "external_sku", None) or getattr(item, "sku", None),
+                        "store_id": getattr(item, "store_id", None),
+                    }
+            else:
+                safe[str(key)] = _governed_json_safe(item)
+        return safe
+
+    if isinstance(value, (list, tuple, set)):
+        return [_governed_json_safe(item) for item in value]
+
+    return str(value)
+
+
 @governed_bp.get("/")
 def governed_root_page():
     return redirect("/dashboard")
@@ -547,7 +586,7 @@ def governed_sku_dry_run():
         approval={"approved": True, "source": "manual_sku_dry_run_route"},
         dry_run=True,
     )
-    return jsonify(result), 200
+    return jsonify(_governed_json_safe(result)), 200
 
 
 @governed_bp.post("/governed/actions/listings/<int:listing_id>/push")
@@ -559,7 +598,7 @@ def governed_listing_push(listing_id: int):
         actor=_actor(),
         source="ui_listing_button",
     )
-    return jsonify(result), 200
+    return jsonify(_governed_json_safe(result)), 200
 
 
 @governed_bp.post("/governed/actions/groups/<int:group_id>/push")
@@ -1228,7 +1267,7 @@ def governed_warehouse_sync_manual_run():
         actor=request.headers.get("X-Actor", "warehouse-sync-button"),
     )
 
-    return jsonify(result), 200
+    return jsonify(_governed_json_safe(result)), 200
 
 
 @governed_bp.post("/governed/amazon/inventory/import")
@@ -1272,7 +1311,7 @@ def governed_amazon_inventory_import():
         from services.governed_amazon_inventory_import import run_governed_amazon_inventory_import
         result = run_governed_amazon_inventory_import(store_id=getattr(store, "id", None))
         if isinstance(result, dict):
-            return jsonify(result)
+            return jsonify(_governed_json_safe(result))
         return jsonify(ok=True, success=True, governed=True, result=result)
 
     except Exception as exc:
