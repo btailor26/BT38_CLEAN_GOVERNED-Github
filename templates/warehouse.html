@@ -663,23 +663,7 @@ onclick="window.location.href='/warehouse?view=groups&q={{ item.sku|urlencode }}
     }
   };
 
-  window.runGovernedWarehouseSync = async function(){
-    if (!confirm("Run governed warehouse sync for current linked listings?")) return false;
 
-    const btn = document.querySelector('[data-bt38-sync], .bt38-sync-btn, button[onclick*="runGovernedWarehouseSync"]');
-    try {
-      setButtonState(btn, "Syncing...");
-      const data = await postJson("/governed/warehouse/sync", {});
-      alert(`Governed sync complete. Pushed: ${data.pushed || 0}. Blocked: ${data.blocked || 0}.`);
-      resetButton(btn);
-      return data;
-    } catch (err) {
-      alert(err.message || "Governed sync failed");
-      resetButton(btn);
-      return false;
-    }
-  };
-})();
 </script>
 
 <style>
