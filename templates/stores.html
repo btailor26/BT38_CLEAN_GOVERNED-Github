@@ -390,9 +390,26 @@
     
     
     function toggleStore(storeId, isActive) {
-        // This would normally make an API call to update store status
-        // For now, just show a message
-        console.log(`Store ${storeId} ${isActive ? 'activated' : 'deactivated'}`);
+        fetch(`/governed/stores/${storeId}/toggle`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                is_active: isActive,
+                shortcut: true,
+                shortcut_source: 'stores_active_toggle'
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (!data.success && !data.ok) {
+                alert(data.reason || data.message || 'Store toggle failed');
+                location.reload();
+            }
+        })
+        .catch(error => {
+            alert('Store toggle failed: ' + error.message);
+            location.reload();
+        });
     }
     
     // UNIFIED AMAZON MODEL: One store with fba_import_enabled and fbm_sync_enabled flags

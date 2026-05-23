@@ -228,8 +228,8 @@
       <tbody>
         <tr><td>Runtime State</td><td><button class="bt38-btn light" onclick="bt38GetRuntimeState()">Check</button></td></tr>
         <tr><td>Normalize Settings</td><td><button class="bt38-btn light" onclick="bt38Post('/governed/settings/normalize', {})">Run</button></td></tr>
-        <tr><td>Amazon Import</td><td><button class="bt38-btn light" onclick="bt38Post('/governed/amazon/inventory/import', {})">Run</button></td></tr>
-        <tr><td>Warehouse Sync</td><td><button class="bt38-btn light" onclick="bt38Post('/governed/warehouse/sync', {})">Run</button></td></tr>
+        <tr><td>Amazon Import</td><td><button class="bt38-btn light" onclick="bt38RunStoreShortcut('import', 'amazon')">Run</button></td></tr>
+        <tr><td>Warehouse Sync</td><td><button class="bt38-btn light" onclick="bt38RunStoreShortcut('sync', null)">Run</button></td></tr>
         <tr><td>Reset Failures</td><td><button class="bt38-btn light" onclick="bt38Post('/governed/product-linking/repair/reset-failures', {})">Run</button></td></tr>
         <tr><td>Rebuild Links</td><td><button class="bt38-btn light" onclick="bt38Post('/governed/product-linking/repair/rebuild-link', {})">Run</button></td></tr>
       </tbody>
@@ -266,6 +266,35 @@ async function bt38Post(url, payload){
 }
 function bt38ConfigUpdate(key, value){ return bt38Post("/governed/settings/config", {key, value}); }
 function bt38StoreUpdate(storeId, field, value){ return bt38Post(`/governed/settings/stores/${storeId}`, {field, value}); }
+
+async function bt38RunStoreShortcut(action, platform){
+  const stateRes = await fetch("/governed/settings/state");
+  const state = await stateRes.json().catch(()=>({ok:false, stores:[]}));
+  const stores = Array.isArray(state.stores) ? state.stores : [];
+
+  const target = stores.find(s => {
+    const platformOk = !platform || String(s.platform || "").toLowerCase().includes(platform);
+    return platformOk && s.is_active && s.store_mode === "live";
+  });
+
+  if(!target){
+    bt38Log({
+      ok:false,
+      success:false,
+      governed:true,
+      shortcut:true,
+      status:"blocked",
+      action_type:action,
+      reason:"No active live store found for this shortcut."
+    });
+    return;
+  }
+
+  return bt38Post(`/governed/stores/${target.id}/${action}`, {
+    shortcut:true,
+    shortcut_source:"settings_cockpit_" + action
+  });
+}
 function bt38EmergencyFreeze(){
   if(!confirm("Freeze all marketplace push/import/sync execution now?")) return;
   return bt38Post("/governed/settings/emergency-freeze", {});
