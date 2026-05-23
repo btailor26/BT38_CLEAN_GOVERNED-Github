@@ -1325,6 +1325,74 @@ def governed_amazon_inventory_import():
         ), 500
 
 
+
+@governed_bp.route("/governed/webhooks/ebay", methods=["GET", "POST"])
+def governed_webhook_ebay_ingest():
+    return _governed_webhook_ingest("ebay")
+
+
+@governed_bp.route("/governed/webhooks/amazon", methods=["GET", "POST"])
+def governed_webhook_amazon_ingest():
+    return _governed_webhook_ingest("amazon")
+
+
+def _governed_webhook_ingest(marketplace: str):
+    from app import db
+    from models import SyncLog, SystemConfig
+
+    enabled_key = f"webhook_{marketplace}_enabled"
+    worker_row = SystemConfig.query.filter_by(key="webhook_worker_enabled").first()
+    market_row = SystemConfig.query.filter_by(key=enabled_key).first()
+    worker_on = str(worker_row.value if worker_row else "false").strip().lower() in {"1", "true", "yes", "on"}
+    market_on = str(market_row.value if market_row else "false").strip().lower() in {"1", "true", "yes", "on"}
+
+    event_payload = request.get_json(silent=True) or {}
+    event_summary = {
+        "marketplace": marketplace,
+        "method": request.method,
+        "path": request.path,
+        "args": dict(request.args),
+        "headers": {
+            "user_agent": request.headers.get("User-Agent"),
+            "content_type": request.headers.get("Content-Type"),
+            "x_signature": request.headers.get("X-Signature"),
+            "x_ebay_signature": request.headers.get("X-EBAY-SIGNATURE"),
+            "x_amz_sns_message_type": request.headers.get("x-amz-sns-message-type"),
+        },
+        "payload_keys": sorted(list(event_payload.keys())) if isinstance(event_payload, dict) else [],
+        "settings": {
+            "webhook_worker_enabled": worker_on,
+            enabled_key: market_on,
+        },
+    }
+
+    db.session.add(SyncLog(
+        store_id=None,
+        status="success" if worker_on and market_on else "blocked",
+        message=(f"governed_webhook_ingest marketplace={marketplace} worker_on={worker_on} marketplace_on={market_on} method={request.method}")[:500],
+        items_synced=0,
+        created_at=datetime.utcnow(),
+    ))
+    db.session.commit()
+
+    return jsonify(
+        ok=bool(worker_on and market_on),
+        success=bool(worker_on and market_on),
+        governed=True,
+        marketplace=marketplace,
+        phase="webhook_ingestion_only",
+        event_logged=True,
+        execution_started=False,
+        push_started=False,
+        import_started=False,
+        sync_started=False,
+        worker_started=False,
+        settings=event_summary["settings"],
+        payload_keys=event_summary["payload_keys"],
+        reason="Webhook received and logged. Execution is not wired in Phase 1." if worker_on and market_on else "Webhook received and logged but blocked by settings fuses.",
+    ), 200
+
+
 @governed_bp.route("/governed-disabled", defaults={"action": ""}, methods=["GET", "POST"])
 @governed_bp.route("/governed-disabled/<path:action>", methods=["GET", "POST"])
 def governed_disabled_action(action: str = ""):
