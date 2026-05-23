@@ -552,7 +552,7 @@ onclick="window.location.href='/warehouse?view=groups&q={{ item.sku|urlencode }}
     let data = {};
     try { data = await resp.json(); } catch(e) {}
     if (!resp.ok || data.ok === false || data.success === false) {
-      throw new Error(data.message || data.error || ("Request failed: " + resp.status));
+      throw new Error(data.reason || data.message || data.error || ("Governed request failed: " + resp.status));
     }
     return data;
   }
