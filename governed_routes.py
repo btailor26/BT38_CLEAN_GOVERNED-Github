@@ -581,7 +581,7 @@ def governed_sku_dry_run():
     governed_payload.setdefault("action", "push_inventory")
 
     result = submit_governed_marketplace_action(
-        governed_payload,
+        payload=governed_payload,
         actor=request.headers.get("X-Actor", "manual-governed-dry-run"),
         approval_type="manual_sku_dry_run_route",
         approval_id="manual_sku_dry_run",
@@ -713,7 +713,7 @@ def _push_one_listing(*, listing_id: int, quantity, actor: str, source: str) -> 
     }
 
     result = submit_governed_marketplace_action(
-        payload,
+        payload=payload,
         actor=actor,
         approval_type=(approval or {}).get("approval_type"),
         approval_id=(approval or {}).get("approval_id"),

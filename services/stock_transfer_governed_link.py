@@ -118,8 +118,9 @@ def submit_stock_transfer_governed_action(
         approved_by=approved_by,
     )
     return submit_governed_marketplace_action(
-        payload,
+        payload=payload,
         actor=actor or approved_by,
-        approval=approval,
+        approval_type=(approval or {}).get("approval_type"),
+        approval_id=(approval or {}).get("approval_id"),
         dry_run=dry_run,
     )
