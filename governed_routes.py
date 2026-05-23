@@ -1258,6 +1258,109 @@ def governed_listing_price_update(listing_id: int):
 
 
 
+@governed_bp.post("/governed/stores/<int:store_id>/sync")
+def governed_store_sync_shortcut(store_id):
+    """Single governed store sync shortcut.
+
+    Page buttons are shortcuts only.
+    SystemConfig fuse box is the authority.
+    Store identity makes the sync store-aware.
+    """
+    from datetime import datetime
+    from flask import jsonify, request
+    from extensions import db
+    from models import Store, SystemLog
+    from services.runtime_action_guard import is_runtime_action_allowed
+    from services.governed_warehouse_sync import run_governed_warehouse_sync
+
+    body = request.get_json(silent=True) or {}
+    shortcut_source = (
+        body.get("shortcut_source")
+        or request.headers.get("X-BT38-Shortcut")
+        or request.headers.get("X-Actor")
+        or "store_sync_shortcut"
+    )
+
+    store = Store.query.get_or_404(store_id)
+
+    guard = is_runtime_action_allowed(
+        store=store,
+        action_type="sync",
+        manual=True,
+        context={
+            "source": shortcut_source,
+            "shortcut": True,
+            "authority": "SystemConfig fuse box",
+        },
+    )
+
+    def log_shortcut(status, message):
+        try:
+            db.session.add(SystemLog(
+                log_type="governed_shortcut_sync",
+                message=message,
+                details=(
+                    f"store_id={store.id} platform={store.platform} "
+                    f"shortcut=true source={shortcut_source} status={status} "
+                    f"allowed={guard.get('allowed')} reason={guard.get('reason')}"
+                )[:1000],
+                created_at=datetime.utcnow(),
+            ))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+    if not guard.get("allowed"):
+        log_shortcut("blocked", "Sync shortcut blocked by fuse box")
+        return jsonify(
+            ok=False,
+            success=False,
+            governed=True,
+            shortcut=True,
+            status="blocked",
+            action_type="sync",
+            store_id=store.id,
+            platform=store.platform,
+            fuse_box_checked=True,
+            allowed=False,
+            reason=guard.get("reason"),
+            guard=guard,
+        ), 200
+
+    result = run_governed_warehouse_sync(
+        store_id=store.id,
+        actor=shortcut_source,
+    )
+
+    log_shortcut("completed", "Sync shortcut executed through fuse box")
+
+    if isinstance(result, dict):
+        result.update({
+            "shortcut": True,
+            "action_type": "sync",
+            "store_id": store.id,
+            "platform": store.platform,
+            "fuse_box_checked": True,
+            "allowed": True,
+            "guard": guard,
+        })
+        return jsonify(_governed_json_safe(result)), 200
+
+    return jsonify(
+        ok=True,
+        success=True,
+        governed=True,
+        shortcut=True,
+        action_type="sync",
+        store_id=store.id,
+        platform=store.platform,
+        result=result,
+        fuse_box_checked=True,
+        allowed=True,
+        guard=guard,
+    ), 200
+
+
 @governed_bp.post("/governed/warehouse/sync")
 def governed_warehouse_sync_manual_run():
     from services.governed_warehouse_sync import run_governed_warehouse_sync
