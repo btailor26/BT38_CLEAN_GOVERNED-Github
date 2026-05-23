@@ -1273,6 +1273,138 @@ def governed_warehouse_sync_manual_run():
     return jsonify(_governed_json_safe(result)), 200
 
 
+@governed_bp.post("/governed/stores/<int:store_id>/import")
+def governed_store_import_shortcut(store_id):
+    """Single governed store import shortcut.
+
+    Page buttons are shortcuts only.
+    SystemConfig fuse box is the authority.
+    Store platform decides which importer is used.
+    """
+    from datetime import datetime
+    from flask import jsonify, request
+    from extensions import db
+    from models import Store, SystemLog
+    from services.runtime_action_guard import is_runtime_action_allowed
+
+    body = request.get_json(silent=True) or {}
+    shortcut_source = (
+        body.get("shortcut_source")
+        or request.headers.get("X-BT38-Shortcut")
+        or "store_import_shortcut"
+    )
+
+    store = Store.query.get_or_404(store_id)
+
+    guard = is_runtime_action_allowed(
+        store=store,
+        action_type="import",
+        manual=True,
+        context={
+            "source": shortcut_source,
+            "shortcut": True,
+            "authority": "SystemConfig fuse box",
+        },
+    )
+
+    def log_shortcut(status, message):
+        try:
+            db.session.add(SystemLog(
+                log_type="governed_shortcut_import",
+                message=message,
+                details=(
+                    f"store_id={store.id} platform={store.platform} "
+                    f"shortcut=true source={shortcut_source} status={status} "
+                    f"allowed={guard.get('allowed')} reason={guard.get('reason')}"
+                )[:1000],
+                created_at=datetime.utcnow(),
+            ))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+    if not guard.get("allowed"):
+        log_shortcut("blocked", "Import shortcut blocked by fuse box")
+        return jsonify(
+            ok=False,
+            success=False,
+            governed=True,
+            shortcut=True,
+            status="blocked",
+            action_type="import",
+            store_id=store.id,
+            platform=store.platform,
+            fuse_box_checked=True,
+            allowed=False,
+            reason=guard.get("reason"),
+            guard=guard,
+        ), 200
+
+    platform = str(store.platform or "").strip().lower()
+
+    if "amazon" in platform:
+        from services.governed_amazon_inventory_import import run_governed_amazon_inventory_import
+
+        result = run_governed_amazon_inventory_import(store_id=store.id)
+        log_shortcut("success", "Amazon import shortcut executed through fuse box")
+
+        if isinstance(result, dict):
+            result.update({
+                "ok": bool(result.get("success", True)),
+                "shortcut": True,
+                "status": "success",
+                "action_type": "import",
+                "store_id": store.id,
+                "platform": store.platform,
+                "fuse_box_checked": True,
+                "allowed": True,
+                "guard": guard,
+            })
+            return jsonify(_governed_json_safe(result)), 200
+
+        return jsonify(
+            ok=True,
+            success=True,
+            governed=True,
+            shortcut=True,
+            result=result,
+        ), 200
+
+    if "ebay" in platform:
+        log_shortcut("not_built", "eBay import shortcut allowed but importer not built")
+        return jsonify(
+            ok=False,
+            success=False,
+            governed=True,
+            shortcut=True,
+            status="not_built",
+            action_type="import",
+            store_id=store.id,
+            platform=store.platform,
+            fuse_box_checked=True,
+            allowed=True,
+            execution_started=False,
+            reason="eBay governed importer is not built yet. Fuse box allowed the shortcut, but no importer is available.",
+            guard=guard,
+        ), 200
+
+    log_shortcut("unsupported", "Import shortcut allowed but platform is unsupported")
+    return jsonify(
+        ok=False,
+        success=False,
+        governed=True,
+        shortcut=True,
+        status="unsupported_platform",
+        action_type="import",
+        store_id=store.id,
+        platform=store.platform,
+        fuse_box_checked=True,
+        allowed=True,
+        reason="No governed importer is wired for this platform.",
+        guard=guard,
+    ), 200
+
+
 @governed_bp.post("/governed/amazon/inventory/import")
 def governed_amazon_inventory_import():
     from flask import jsonify, request
