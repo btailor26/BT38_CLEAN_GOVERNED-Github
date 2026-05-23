@@ -532,7 +532,7 @@ app.register_blueprint(admin_bp)
 # a future approved governed command path is built.
 logging.info(
     "[GOVERNED_STARTUP] Marketplace execution disabled on app boot: "
-    "FBA read-only; FBM/eBay push disabled until governed path exists; "
+    "FBA read-only; FBM/eBay execution controlled by governed fuse-box path; "
     "no workers, schedulers, queue consumers, or marketplace API calls started."
 )
 
@@ -624,8 +624,8 @@ print("Runtime status:")
 print("  [OK] No marketplace execution starts on app boot")
 print("  [OK] No workers, schedulers, queue consumers, or order-import ticks start on app boot")
 print("  [OK] FBA/AFN is read-only; no FBA push path is started")
-print("  [OK] FBM/MFN push is disabled until the governed path exists")
-print("  [OK] eBay push/import is disabled until the governed path exists")
+print("  [OK] FBM/MFN push is controlled by the governed fuse-box path")
+print("  [OK] eBay push/import is controlled by the governed fuse-box path")
 print("  [OK] Amazon/eBay API error tables remain reporting-only at startup")
 print("  [OK] System Activity remains available for audit/reporting")
 print("="*60 + "\n")

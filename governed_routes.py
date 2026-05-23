@@ -692,6 +692,7 @@ def _push_one_listing(*, listing_id: int, quantity, actor: str, source: str) -> 
         "sku": sku,
         "store_id": listing.store_id,
         "listing_id": listing.id,
+        "external_listing_id": listing.external_listing_id,
         "quantity": push_quantity,
         "amazon_fulfillment_channel": listing.amazon_fulfillment_channel or "MFN",
         "source": source,
@@ -1326,6 +1327,66 @@ def governed_amazon_inventory_import():
 
 
 
+@governed_bp.post("/governed/ebay/inventory/import")
+def governed_ebay_inventory_import():
+    """Governed eBay import control point.
+
+    Phase status:
+    - Fuse-box controlled.
+    - Store-aware.
+    - No legacy importer, worker, queue, or scheduler is called here.
+    - Real eBay import must be added later behind this route only.
+    """
+    from flask import jsonify, request
+    from models import Store
+    from services.runtime_action_guard import is_runtime_action_allowed
+
+    body = request.get_json(silent=True) or {}
+    store_id = body.get("store_id") or request.args.get("store_id")
+
+    store = None
+    if store_id:
+        store = Store.query.get(int(store_id))
+    else:
+        store = (
+            Store.query
+            .filter(Store.platform.ilike("%ebay%"))
+            .order_by(Store.is_active.desc(), Store.id.asc())
+            .first()
+        )
+
+    guard = is_runtime_action_allowed(
+        store,
+        action_type="import",
+        manual=True,
+        context={"source": "governed_ebay_inventory_import"},
+    )
+
+    if not guard.get("allowed"):
+        return jsonify(
+            ok=False,
+            success=False,
+            governed=True,
+            marketplace="ebay",
+            import_started=False,
+            execution_started=False,
+            reason=guard.get("reason"),
+            guard=guard,
+        ), 200
+
+    return jsonify(
+        ok=False,
+        success=False,
+        governed=True,
+        marketplace="ebay",
+        import_started=False,
+        execution_started=False,
+        reason="eBay governed import route is fuse-box controlled, but the eBay importer is not built yet.",
+        store_id=getattr(store, "id", None),
+        guard=guard,
+    ), 200
+
+
 @governed_bp.route("/governed/webhooks/ebay", methods=["GET", "POST"])
 def governed_webhook_ebay_ingest():
     return _governed_webhook_ingest("ebay")
@@ -1337,59 +1398,74 @@ def governed_webhook_amazon_ingest():
 
 
 def _governed_webhook_ingest(marketplace: str):
-    from app import db
-    from models import SyncLog, SystemConfig
+    """Phase 1 governed webhook ingestion only.
 
+    This endpoint receives and audits marketplace notifications.
+    It does not push, import, sync, enqueue, start workers, or call marketplaces.
+    The fuse box is the only authority.
+    """
+    from app import db
+    from models import Store, SyncLog, SystemConfig
+
+    marketplace = str(marketplace or "").strip().lower()
     enabled_key = f"webhook_{marketplace}_enabled"
+
     worker_row = SystemConfig.query.filter_by(key="webhook_worker_enabled").first()
     market_row = SystemConfig.query.filter_by(key=enabled_key).first()
+
     worker_on = str(worker_row.value if worker_row else "false").strip().lower() in {"1", "true", "yes", "on"}
     market_on = str(market_row.value if market_row else "false").strip().lower() in {"1", "true", "yes", "on"}
 
-    event_payload = request.get_json(silent=True) or {}
-    event_summary = {
-        "marketplace": marketplace,
-        "method": request.method,
-        "path": request.path,
-        "args": dict(request.args),
-        "headers": {
-            "user_agent": request.headers.get("User-Agent"),
-            "content_type": request.headers.get("Content-Type"),
-            "x_signature": request.headers.get("X-Signature"),
-            "x_ebay_signature": request.headers.get("X-EBAY-SIGNATURE"),
-            "x_amz_sns_message_type": request.headers.get("x-amz-sns-message-type"),
-        },
-        "payload_keys": sorted(list(event_payload.keys())) if isinstance(event_payload, dict) else [],
-        "settings": {
-            "webhook_worker_enabled": worker_on,
-            enabled_key: market_on,
-        },
-    }
+    store = (
+        Store.query
+        .filter(Store.platform.ilike(f"%{marketplace}%"))
+        .order_by(Store.is_active.desc(), Store.id.asc())
+        .first()
+    )
 
-    db.session.add(SyncLog(
-        store_id=None,
-        status="success" if worker_on and market_on else "blocked",
-        message=(f"governed_webhook_ingest marketplace={marketplace} worker_on={worker_on} marketplace_on={market_on} method={request.method}")[:500],
-        items_synced=0,
-        created_at=datetime.utcnow(),
-    ))
-    db.session.commit()
+    event_payload = request.get_json(silent=True) or {}
+    payload_keys = sorted(list(event_payload.keys())) if isinstance(event_payload, dict) else []
+
+    allowed = bool(worker_on and market_on and store is not None)
+    reason = "Webhook received and logged. Execution is not wired in Phase 1."
+    if not worker_on or not market_on:
+        reason = "Webhook received but blocked by settings fuses."
+    elif store is None:
+        reason = "Webhook received but no matching marketplace store exists for audit logging."
+
+    if store is not None:
+        db.session.add(SyncLog(
+            store_id=store.id,
+            status="success" if allowed else "blocked",
+            message=(
+                f"governed_webhook_ingest marketplace={marketplace} "
+                f"store_id={store.id} worker_on={worker_on} marketplace_on={market_on} "
+                f"method={request.method}"
+            )[:500],
+            items_synced=0,
+            created_at=datetime.utcnow(),
+        ))
+        db.session.commit()
 
     return jsonify(
-        ok=bool(worker_on and market_on),
-        success=bool(worker_on and market_on),
+        ok=allowed,
+        success=allowed,
         governed=True,
         marketplace=marketplace,
         phase="webhook_ingestion_only",
-        event_logged=True,
+        event_logged=bool(store is not None),
         execution_started=False,
         push_started=False,
         import_started=False,
         sync_started=False,
         worker_started=False,
-        settings=event_summary["settings"],
-        payload_keys=event_summary["payload_keys"],
-        reason="Webhook received and logged. Execution is not wired in Phase 1." if worker_on and market_on else "Webhook received and logged but blocked by settings fuses.",
+        settings={
+            "webhook_worker_enabled": worker_on,
+            enabled_key: market_on,
+        },
+        store_id=getattr(store, "id", None),
+        payload_keys=payload_keys,
+        reason=reason,
     ), 200
 
 
