@@ -57,7 +57,7 @@ class GovernedMarketplaceAdapter:
         return self.blocked_result(
             action=action,
             payload=payload,
-            reason="Marketplace adapter execute() must be implemented by live adapter.",
+            reason="Marketplace adapters are skeleton dry-run only; no live calls are permitted.",
         )
 
     def blocked_result(self, action: str, payload: Mapping[str, Any], reason: str) -> Dict[str, Any]:

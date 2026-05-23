@@ -28,7 +28,7 @@ ONE_GOVERNED_EXECUTOR = "execute_governed_action"
 NO_AUTO_WORKERS = True
 NO_SCHEDULERS = True
 NO_BACKGROUND_LOOPS = True
-NO_UNGOVERNED_MARKETPLACE_LIVE_CALLS = False
+NO_UNGOVERNED_MARKETPLACE_LIVE_CALLS = True
 
 
 @dataclass(frozen=True)
@@ -109,34 +109,7 @@ def execute_governed_action(command: GovernedCommand) -> Dict[str, Any]:
         )
 
     adapter = _select_adapter(command.marketplace)
-    adapter_payload = command.payload.copy()
-
-    try:
-        from app import app
-        from models import MarketplaceListing, Store
-
-        with app.app_context():
-            listing_id = adapter_payload.get("listing_id")
-            store_id = adapter_payload.get("store_id")
-
-            listing = None
-            store = None
-
-            if listing_id:
-                listing = MarketplaceListing.query.get(listing_id)
-
-            if store_id:
-                store = Store.query.get(store_id)
-
-            if listing and not store:
-                store = Store.query.get(listing.store_id)
-
-            adapter_payload["listing"] = listing
-            adapter_payload["store"] = store
-
-    except Exception as hydration_error:
-        adapter_payload["_hydration_error"] = str(hydration_error)
-
+    adapter_payload = _build_adapter_payload(command, eligibility)
     adapter_result = adapter.execute(command.action, adapter_payload)
     adapter_result.update(
         {
@@ -216,58 +189,9 @@ def _check_marketplace_eligibility(command: GovernedCommand) -> Dict[str, Any]:
     if command.marketplace == "ebay":
         if command.dry_run:
             return {"allowed": True, "reason": "eBay dry-run eligible only after runtime gate approval."}
-        return _check_ebay_live_eligibility(command)
+        return {"allowed": False, "reason": "eBay live execution is disabled; no eBay live calls are permitted."}
 
     return {"allowed": False, "reason": f"Unsupported marketplace: {command.marketplace or 'unknown'}"}
-
-
-
-
-def _check_ebay_live_eligibility(command: GovernedCommand) -> Dict[str, Any]:
-    quantity_ok, quantity_or_reason = _coerce_quantity(command.payload.get("quantity"))
-    if not quantity_ok:
-        return {"allowed": False, "reason": quantity_or_reason}
-
-    store_id = command.payload.get("store_id")
-    listing_id = command.payload.get("listing_id")
-
-    if store_id is None:
-        return {"allowed": False, "reason": "eBay live push blocked: missing store_id."}
-
-    if listing_id is None:
-        return {"allowed": False, "reason": "eBay live push blocked: missing listing_id."}
-
-    store = _resolve_store(store_id)
-
-    if store is None:
-        return {"allowed": False, "reason": "eBay live push blocked: missing store."}
-
-    if "ebay" not in str(getattr(store, "platform", "")).lower():
-        return {"allowed": False, "reason": "eBay live push blocked: store is not eBay."}
-
-    if getattr(store, "is_active", False) is not True:
-        return {"allowed": False, "reason": "eBay live push blocked: store is inactive."}
-
-    if getattr(store, "fbm_sync_enabled", False) is not True:
-        return {"allowed": False, "reason": "eBay live push blocked: FBM sync disabled."}
-
-    if getattr(store, "auto_push_enabled", False) is not True:
-        return {"allowed": False, "reason": "eBay live push blocked: auto push disabled."}
-
-    listing = _resolve_listing(listing_id)
-
-    if listing is None:
-        return {"allowed": False, "reason": "eBay live push blocked: missing marketplace listing."}
-
-    if _normalize_id(getattr(listing, "store_id", None)) != _normalize_id(store_id):
-        return {"allowed": False, "reason": "eBay live push blocked: listing/store mismatch."}
-
-    return {
-        "allowed": True,
-        "store": store,
-        "listing": listing,
-        "marketplace": "ebay",
-    }
 
 
 def _check_amazon_fbm_live_eligibility(command: GovernedCommand, fulfillment: str, sku: str) -> Dict[str, Any]:
