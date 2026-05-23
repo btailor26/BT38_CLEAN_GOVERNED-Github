@@ -1661,7 +1661,7 @@ def governed_ebay_oauth_callback():
     import base64
     import requests
     from datetime import datetime, timedelta
-    from flask import jsonify, request, session
+    from flask import jsonify, request, session, redirect
     from app import db
     from models import Store
 
@@ -1773,7 +1773,7 @@ def governed_ebay_oauth_callback():
     store.store_mode = "live"
     db.session.commit()
 
-    return jsonify({
+    success_payload = {
         "ok": True,
         "success": True,
         "governed": True,
@@ -1781,7 +1781,12 @@ def governed_ebay_oauth_callback():
         "store_id": store.id,
         "store_name": store.name,
         "mode": "production",
-    }), 200
+    }
+
+    if request.args.get("json") == "1":
+        return jsonify(success_payload), 200
+
+    return redirect(f"/stores?ebay_oauth=success&store_id={store.id}")
 
 
 @governed_bp.post("/ebay-oauth/token")
