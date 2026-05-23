@@ -1099,6 +1099,24 @@ def governed_product_linking_diagnostics_compat(warehouse_id: int):
     })
 
 
+
+@governed_bp.post("/governed/product-linking/repair")
+def governed_product_linking_repair_root():
+    """Fail-closed compatibility route for frontend repair contract.
+
+    The root repair action has no warehouse_id context, so it must not mutate
+    DB state or execute marketplace work.
+    """
+    return jsonify({
+        "ok": False,
+        "success": False,
+        "governed": True,
+        "execution_blocked": True,
+        "message": "This governed repair action needs a warehouse item context and is disabled until approved.",
+        "action": "product_linking_repair_root"
+    }), 200
+
+
 @governed_bp.post("/governed/product-linking/repair/<int:warehouse_id>")
 def governed_product_linking_repair_compat(warehouse_id: int):
     """Safe governed repair shell.
