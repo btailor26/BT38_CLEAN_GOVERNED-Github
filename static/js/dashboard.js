@@ -336,19 +336,28 @@ class InventoryDashboard {
     // Method to trigger manual sync for a store
     async triggerStoreSync(storeId, storeName) {
         try {
-            const data = await api(`/stores/sync/${storeId}`, {
-                method: 'POST'
+            const data = await api(`/governed/stores/${storeId}/sync`, {
+                method: 'POST',
+                headers: {
+                    'X-BT38-Shortcut': 'dashboard_trigger_sync'
+                },
+                body: {
+                    shortcut: true,
+                    shortcut_source: 'dashboard_trigger_sync'
+                }
             });
-            
-            this.showNotification(`Sync triggered for ${storeName}`, 'success');
-            // Update sync status immediately
+
+            const message = data.message || data.reason || `Governed sync requested for ${storeName}`;
+            const type = data.success === false || data.ok === false ? 'warning' : 'success';
+
+            this.showNotification(message, type);
             setTimeout(() => this.updateSyncStatus(), 1000);
-            
+
         } catch (error) {
-            showError('Failed to trigger sync', error);
+            showError('Failed to trigger governed sync', error);
         }
     }
-    
+
     // Clean up intervals when leaving the page
     destroy() {
         if (this.syncStatusInterval) {
