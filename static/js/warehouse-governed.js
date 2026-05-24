@@ -1,6 +1,9 @@
-// BT38 warehouse page governed button wiring.
-// This file is intentionally narrow: it only activates on the warehouse table.
+// BT38 warehouse page governed shortcut controller.
+// Single frontend authority for warehouse row and bulk actions.
+// Pages/buttons are shortcuts only; backend fuse box decides execution.
 (function () {
+  'use strict';
+
   function warehouseActive() {
     return !!document.querySelector('.bt38-enterprise-stock .bt38-stock-table');
   }
@@ -14,6 +17,7 @@
     const bar = document.getElementById('bt38FloatingActionBar');
     const count = document.getElementById('bt38SelectedCount');
     if (!bar || !count) return;
+
     count.textContent = selected.length;
     if (selected.length > 0) {
       bar.hidden = false;
@@ -31,7 +35,7 @@
     updateActionBar();
   }
 
-  function postJson(endpoint, body) {
+  function postJson(endpoint, body, actor) {
     const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     return fetch(endpoint, {
       method: 'POST',
@@ -39,7 +43,8 @@
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
-        'X-CSRF-Token': csrf
+        'X-CSRF-Token': csrf,
+        'X-Actor': actor || 'warehouse-governed-shortcut'
       },
       body: JSON.stringify(body || {})
     }).then(async function (response) {
@@ -51,98 +56,170 @@
     });
   }
 
+  function rowListingId(row) {
+    return row ? (row.dataset.listingId || '') : '';
+  }
+
+  function rowSku(row) {
+    return row ? (row.dataset.sku || '') : '';
+  }
+
+  function rowStockId(row) {
+    return row ? (row.dataset.stockId || '') : '';
+  }
+
+  function setButtonState(btn, label) {
+    if (!btn) return;
+    if (!btn.dataset.originalText) btn.dataset.originalText = btn.textContent.trim();
+    btn.textContent = label;
+    btn.disabled = true;
+  }
+
+  function resetButton(btn) {
+    if (!btn) return;
+    if (btn.dataset.originalText) btn.textContent = btn.dataset.originalText;
+    btn.disabled = false;
+  }
+
+  function guardedDisabled(message) {
+    alert(message || 'This action is disabled until the governed route is approved.');
+    return Promise.resolve({
+      ok: false,
+      success: false,
+      governed: true,
+      execution_blocked: true,
+      message: message || 'This action is disabled until the governed route is approved.'
+    });
+  }
+
   function pushGovernedListing(row) {
-    if (!row) return Promise.reject(new Error('Missing row for governed push.'));
-    const listingId = row.dataset.listingId || '';
-    const sku = row.dataset.sku || '';
+    const listingId = rowListingId(row);
+    const sku = rowSku(row);
     if (!listingId || listingId === '0') {
       return Promise.reject(new Error('Missing marketplace listing id for ' + (sku || 'this row') + '.'));
     }
-    return postJson('/governed/actions/listings/' + encodeURIComponent(listingId) + '/push', {});
+    return postJson('/governed/actions/listings/' + encodeURIComponent(listingId) + '/push', {}, 'warehouse-single-push-shortcut');
   }
 
-  function chooseAction(value) {
-    if (!value) return;
-    const selected = selectedRows();
-    if (!selected.length) return alert('Select at least one SKU first.');
+  function saveGovernedQuantity(row, quantity) {
+    const listingId = rowListingId(row);
+    if (!listingId || listingId === '0') {
+      return Promise.reject(new Error('Missing marketplace listing id for governed quantity save.'));
+    }
+    return postJson('/governed/actions/listings/' + encodeURIComponent(listingId) + '/quantity', { quantity: quantity }, 'warehouse-quantity-shortcut');
+  }
 
-    if (value !== 'push' && value !== 'sync') {
-      alert('Only governed Push is wired on this page right now. Other actions remain unchanged until approved.');
-      const select = document.getElementById('bt38ActionSelect');
+  function saveGovernedPrice(row, price) {
+    const listingId = rowListingId(row);
+    if (!listingId || listingId === '0') {
+      return Promise.reject(new Error('Missing marketplace listing id for governed price save.'));
+    }
+    return postJson('/governed/actions/listings/' + encodeURIComponent(listingId) + '/price', { price: price }, 'warehouse-price-shortcut');
+  }
+
+  async function chooseAction(value) {
+    if (!value) return;
+
+    const select = document.getElementById('bt38ActionSelect');
+    const selected = selectedRows();
+
+    if (!selected.length) {
       if (select) select.value = '';
+      alert('Select at least one SKU first.');
+      return;
+    }
+
+    if (value !== 'push') {
+      if (select) select.value = '';
+      await guardedDisabled('Only governed bulk Push is enabled on this page. Other bulk actions remain blocked until approved.');
       return;
     }
 
     if (!confirm('Run governed push for ' + selected.length + ' selected SKU(s)?')) {
-      const select = document.getElementById('bt38ActionSelect');
       if (select) select.value = '';
       return;
     }
 
-    Promise.allSettled(selected.map(function (cb) {
-      return pushGovernedListing(cb.closest('tr'));
-    })).then(function (results) {
+    try {
+      const results = await Promise.allSettled(selected.map(function (cb) {
+        return pushGovernedListing(cb.closest('tr'));
+      }));
       const passed = results.filter(function (result) { return result.status === 'fulfilled'; }).length;
       const failed = results.length - passed;
       alert('Governed push complete. Success: ' + passed + '. Failed: ' + failed + '.');
       window.location.reload();
-    });
+    } finally {
+      if (select) select.value = '';
+    }
   }
 
-  function openRowAction(button) {
-    const row = button.closest('tr');
-    if (!row) return;
+  async function openRowAction(button) {
+    const row = button && button.closest ? button.closest('tr') : null;
+    if (!row) return false;
 
-    const itemId = row.dataset.itemId;
-    const stockId = row.dataset.stockId;
-    const listingId = row.dataset.listingId;
-    const sku = row.dataset.sku || '';
+    const sku = rowSku(row);
+    const stockId = rowStockId(row);
 
-    if (button.classList.contains('bt38-marketplace-control')) {
-      if (!listingId || listingId === '0') return alert('Missing marketplace listing id for governed push.');
-      if (!confirm('Run governed marketplace push for ' + sku + '?')) return;
-      pushGovernedListing(row)
-        .then(function (data) {
-          alert(data.reason || data.message || 'Governed marketplace push completed.');
-          window.location.reload();
-        })
-        .catch(function (err) { alert('Governed marketplace push failed: ' + err.message); });
-      return;
+    try {
+      if (button.classList.contains('bt38-marketplace-control')) {
+        if (!confirm('Run governed marketplace push for ' + (sku || 'this SKU') + '?')) return false;
+        setButtonState(button, 'Pushing...');
+        const data = await pushGovernedListing(row);
+        alert(data.reason || data.message || 'Governed marketplace push completed.');
+        window.location.reload();
+        return false;
+      }
+
+      if (button.classList.contains('bt38-qty-action')) {
+        const current = button.querySelector('span')?.innerText?.trim() || '0';
+        const next = prompt('New quantity for ' + (sku || 'this SKU') + ':', current);
+        if (next === null) return false;
+
+        const qty = parseInt(next, 10);
+        if (Number.isNaN(qty) || qty < 0) {
+          alert('Enter a valid quantity.');
+          return false;
+        }
+
+        setButtonState(button, 'Saving...');
+        await saveGovernedQuantity(row, qty);
+        window.location.reload();
+        return false;
+      }
+
+      if (button.classList.contains('bt38-price-action')) {
+        const current = (button.querySelector('span')?.innerText || '').replace(/[^\d.]/g, '') || '0.00';
+        const next = prompt('New local listing price for ' + (sku || 'this SKU') + ':', current);
+        if (next === null) return false;
+
+        const price = parseFloat(next);
+        if (Number.isNaN(price) || price < 0) {
+          alert('Enter a valid price.');
+          return false;
+        }
+
+        setButtonState(button, 'Saving...');
+        await saveGovernedPrice(row, price);
+        window.location.reload();
+        return false;
+      }
+
+      if (button.classList.contains('bt38-warehouse-action') || button.classList.contains('bt38-action-btn')) {
+        window.location.href = '/warehouse?q=' + encodeURIComponent(sku || stockId || '');
+        return false;
+      }
+
+      return false;
+    } catch (err) {
+      console.error(err);
+      alert(err.message || 'Governed warehouse action failed.');
+      resetButton(button);
+      return false;
     }
+  }
 
-    if (button.classList.contains('bt38-qty-action')) {
-      if (!itemId) return alert('Missing item id for quantity update.');
-      const current = button.querySelector('span')?.innerText?.trim() || '0';
-      const next = prompt('New quantity for ' + sku + ':', current);
-      if (next === null) return;
-      const qty = parseInt(next, 10);
-      if (Number.isNaN(qty) || qty < 0) return alert('Enter a valid quantity.');
-
-      postJson('/update_stock/' + encodeURIComponent(itemId), { quantity: qty })
-        .then(function (data) {
-          if (data.success === false) return alert(data.error || data.message || 'Quantity update failed.');
-          const span = button.querySelector('span');
-          if (span) span.innerText = qty;
-          alert(data.message || 'Quantity saved. Use the marketplace icon to run governed push.');
-          window.location.reload();
-        })
-        .catch(function (err) { alert('Quantity update failed: ' + err.message); });
-      return;
-    }
-
-    if (button.classList.contains('bt38-price-action')) {
-      alert('Price editing will be wired after quantity and governed push actions are stable.');
-      return;
-    }
-
-    if (button.classList.contains('bt38-warehouse-action')) {
-      if (stockId) window.location.href = '/warehouse/' + encodeURIComponent(stockId);
-      return;
-    }
-
-    if (button.classList.contains('bt38-action-btn')) {
-      alert('Use the marketplace icon for governed single push, Qty Save for quantity, or row select for bulk governed push.');
-    }
+  async function runGovernedWarehouseSync() {
+    await guardedDisabled('Warehouse sync must use the store-aware governed sync shortcut. Select a live store from Settings first.');
   }
 
   window.bt38SelectedRows = selectedRows;
@@ -151,72 +228,21 @@
   window.bt38ChooseAction = chooseAction;
   window.bt38OpenRowAction = openRowAction;
   window.bt38PushGovernedListing = pushGovernedListing;
+  window.runGovernedWarehouseSync = runGovernedWarehouseSync;
 
   document.addEventListener('DOMContentLoaded', function () {
     if (!warehouseActive()) return;
+
     document.querySelectorAll('.bt38-row-select').forEach(function (cb) {
       cb.addEventListener('change', updateActionBar);
     });
+
+    const syncBtn = document.getElementById('governedWarehouseSyncBtn');
+    if (syncBtn) {
+      syncBtn.onclick = function (event) {
+        event.preventDefault();
+        runGovernedWarehouseSync();
+      };
+    }
   });
 })();
-
-/* BT38 final governed warehouse bulk shortcut */
-if (typeof window.bt38ChooseAction !== "function") {
-  window.bt38ChooseAction = async function(value) {
-    if (!value) return;
-
-    const select = document.getElementById("bt38ActionSelect");
-    const selected = Array.from(document.querySelectorAll(".bt38-row-check:checked"));
-
-    if (!selected.length) {
-      if (select) select.value = "";
-      alert("Select at least one SKU first.");
-      return;
-    }
-
-    if (value !== "push" && value !== "sync") {
-      if (select) select.value = "";
-      alert("Only governed Push/Sync shortcuts are enabled on this page.");
-      return;
-    }
-
-    if (!confirm(`Run governed ${value} for ${selected.length} selected SKU(s)?`)) {
-      if (select) select.value = "";
-      return;
-    }
-
-    const rows = selected.map(cb => cb.closest("tr")).filter(Boolean);
-
-    try {
-      const results = [];
-
-      for (const row of rows) {
-        const listingId = row.dataset.listingId || "";
-        if (!listingId || listingId === "0") {
-          results.push({ ok: false, message: "Missing listing id" });
-          continue;
-        }
-
-        const resp = await fetch(`/governed/actions/listings/${encodeURIComponent(listingId)}/push`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Actor": "warehouse-bulk-shortcut"
-          },
-          body: JSON.stringify({})
-        });
-
-        results.push(await resp.json().catch(() => ({ ok: false, message: "Invalid response" })));
-      }
-
-      const passed = results.filter(r => r.ok || r.success).length;
-      const failed = results.length - passed;
-      alert(`Governed ${value} complete. Success: ${passed}. Failed: ${failed}.`);
-      window.location.reload();
-    } catch (err) {
-      alert("Governed bulk action failed: " + err.message);
-    } finally {
-      if (select) select.value = "";
-    }
-  };
-}
