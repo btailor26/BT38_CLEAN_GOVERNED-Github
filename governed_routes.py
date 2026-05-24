@@ -1044,37 +1044,83 @@ def governed_product_linking_data_compat():
     stock_rows = stock_query.order_by(WarehouseStock.id.desc()).limit(limit).all()
     listing_rows = listing_query.order_by(MarketplaceListing.id.desc()).limit(limit).all()
 
+    listings_by_stock = {}
+    unlinked_listings = []
+
+    for listing in listing_rows:
+        listing_payload = {
+            "id": listing.id,
+            "external_sku": listing.external_sku,
+            "sku": listing.external_sku,
+            "title": listing.title,
+            "external_listing_id": listing.external_listing_id,
+            "external_id": listing.external_listing_id,
+            "asin": listing.asin,
+            "fnsku": listing.fnsku,
+            "warehouse_stock_id": listing.warehouse_stock_id,
+            "master_product_group_id": listing.master_product_group_id,
+            "store_id": listing.store_id,
+            "store_name": listing.store.name if listing.store else "",
+            "platform": listing.store.platform if listing.store else getattr(listing, "platform", ""),
+            "amazon_fulfillment_channel": listing.amazon_fulfillment_channel,
+            "is_fba": bool(getattr(listing, "is_fba", False)),
+            "is_pushable": bool(getattr(listing, "is_pushable", False)),
+            "effective_quantity": getattr(listing, "effective_quantity", 0),
+        }
+
+        if listing.warehouse_stock_id:
+            listings_by_stock.setdefault(listing.warehouse_stock_id, []).append(listing_payload)
+        else:
+            unlinked_listings.append(listing_payload)
+
+    warehouse_products = []
+    for stock in stock_rows:
+        linked = listings_by_stock.get(stock.id, [])
+        platforms = sorted({str(item.get("platform") or "").strip() for item in linked if item.get("platform")})
+        warehouse_products.append({
+            "id": stock.id,
+            "sku": stock.sku,
+            "name": stock.product_name,
+            "product_name": stock.product_name,
+            "group_name": stock.group_title or stock.product_name or stock.sku,
+            "barcode": stock.barcode,
+            "group_title": stock.group_title,
+            "master_product_group_id": stock.master_product_group_id,
+            "is_group_controlled": bool(getattr(stock, "is_group_controlled", False)),
+            "quantity": getattr(stock, "sellable_quantity", 0),
+            "available_quantity": getattr(stock, "sellable_quantity", 0),
+            "sellable_quantity": getattr(stock, "sellable_quantity", 0),
+            "linked_count": len(linked),
+            "platforms": platforms,
+            "listings": linked,
+        })
+
+    unlinked_by_platform = {}
+    for item in unlinked_listings:
+        platform = item.get("platform") or "Unknown"
+        unlinked_by_platform.setdefault(platform, []).append(item)
+
     return jsonify({
         "success": True,
         "ok": True,
         "governed": True,
         "read_only": True,
-        "warehouse": [
-            {
-                "id": s.id,
-                "sku": s.sku,
-                "product_name": s.product_name,
-                "barcode": s.barcode,
-                "group_title": s.group_title,
-                "master_product_group_id": s.master_product_group_id,
-                "sellable_quantity": getattr(s, "sellable_quantity", 0),
-            }
-            for s in stock_rows
-        ],
+        "truth_source": "WarehouseStock",
+        "warehouse_products": warehouse_products,
+        "unlinked_listings": unlinked_listings,
+        "unlinked_by_platform": unlinked_by_platform,
+        "all_marketplace_listings": [
+            item
+            for grouped in listings_by_stock.values()
+            for item in grouped
+        ] + unlinked_listings,
+        "all_stores": [],
+        "warehouse": warehouse_products,
         "listings": [
-            {
-                "id": l.id,
-                "external_sku": l.external_sku,
-                "title": l.title,
-                "external_listing_id": l.external_listing_id,
-                "asin": l.asin,
-                "fnsku": l.fnsku,
-                "warehouse_stock_id": l.warehouse_stock_id,
-                "master_product_group_id": l.master_product_group_id,
-                "store_id": l.store_id,
-            }
-            for l in listing_rows
-        ],
+            item
+            for grouped in listings_by_stock.values()
+            for item in grouped
+        ] + unlinked_listings,
     })
 
 
