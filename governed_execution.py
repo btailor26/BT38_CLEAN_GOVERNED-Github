@@ -3,9 +3,10 @@
 Single authority model:
 UI -> governed route -> SystemConfig fuse box -> governed execution -> adapter
 
-This module is not an authority layer.
-It assumes governed routes already asked the fuse box before calling it.
-It only validates marketplace payload safety and executes the approved adapter.
+This module is the final live-execution choke point.
+It still validates marketplace payload safety, but live execution now also
+fails closed unless services.runtime_action_guard allows the action from the
+SystemConfig + Store fuse box.
 
 No workers.
 No schedulers.
@@ -44,11 +45,11 @@ def submit_governed_marketplace_action(
 ) -> Dict[str, Any]:
     """Single governed marketplace execution entrypoint.
 
-    Permission must be decided before this function is called.
-    This function only:
+    This function:
     - normalizes command payload
     - performs marketplace safety eligibility checks
-    - runs the adapter
+    - asks the SystemConfig fuse box before any live execution
+    - runs the adapter only after the fuse box allows it
     - returns a safe result shape
     """
 
@@ -73,13 +74,27 @@ def submit_governed_marketplace_action(
             "command_id": command.command_id,
             "reason": eligibility.get("reason", "Governed dry-run eligible."),
             "payload": _safe_payload(command.payload),
+            "fuse_box_checked": False,
+            "execution_started": False,
         }
+
+    fuse_guard = _check_fuse_box_authority(command, eligibility)
+    if not fuse_guard.get("allowed"):
+        return _blocked(
+            command,
+            reason=fuse_guard.get("reason", "Fuse box blocked governed execution."),
+            eligibility=eligibility,
+            fuse_box_checked=True,
+            guard=fuse_guard,
+            execution_started=False,
+        )
 
     payload_for_adapter = dict(command.payload)
     payload_for_adapter["_governed_command_id"] = command.command_id
     payload_for_adapter["_governed_approval_type"] = approval_type
     payload_for_adapter["_governed_approval_id"] = approval_id
     payload_for_adapter["_governed_dry_run"] = False
+    payload_for_adapter["_governed_fuse_box_checked"] = True
 
     if eligibility.get("store") is not None:
         payload_for_adapter["_governed_store"] = eligibility["store"]
@@ -104,6 +119,8 @@ def submit_governed_marketplace_action(
         "command_id": command.command_id,
         "reason": result.get("reason") or result.get("message") or "Governed adapter completed.",
         "adapter_result": _safe_payload(result),
+        "fuse_box_checked": True,
+        "guard": _safe_payload(fuse_guard),
     }
 
 
@@ -134,6 +151,40 @@ def _adapter_for(marketplace: str):
         return EbayAdapter()
 
     return None
+
+
+def _check_fuse_box_authority(command: GovernedCommand, eligibility: Dict[str, Any]) -> Dict[str, Any]:
+    """Ask the single SystemConfig fuse box before any live adapter execution."""
+    from services.runtime_action_guard import is_runtime_action_allowed
+
+    action_type = _runtime_action_type(command.action)
+    store = eligibility.get("store") or _resolve_store(command.payload.get("store_id"))
+
+    return is_runtime_action_allowed(
+        store=store,
+        action_type=action_type,
+        manual=True,
+        context={
+            "source": "governed_execution",
+            "command_id": command.command_id,
+            "marketplace": command.marketplace,
+            "action": command.action,
+            "listing_id": command.payload.get("listing_id"),
+            "store_id": command.payload.get("store_id"),
+            "authority": "SystemConfig fuse box",
+        },
+    )
+
+
+def _runtime_action_type(action: str) -> str:
+    action = str(action or "").strip().lower()
+    if "push" in action:
+        return "push"
+    if "sync" in action:
+        return "sync"
+    if "import" in action:
+        return "import"
+    return action
 
 
 def _check_marketplace_eligibility(command: GovernedCommand) -> Dict[str, Any]:
@@ -296,9 +347,18 @@ def _safe_payload(value: Any):
     if isinstance(value, dict):
         cleaned = {}
         for key, item in value.items():
-            if key in {"_governed_store", "_governed_listing"}:
-                continue
-            if key in {"access_token", "refresh_token", "api_key", "client_secret", "cert_id"}:
+            if key in {"store", "listing", "_governed_store", "_governed_listing"}:
+                if item is None:
+                    cleaned[key] = None
+                else:
+                    cleaned[key] = {
+                        "id": getattr(item, "id", None),
+                        "name": getattr(item, "name", None),
+                        "platform": getattr(item, "platform", None),
+                        "store_id": getattr(item, "store_id", None),
+                        "sku": getattr(item, "external_sku", None) or getattr(item, "sku", None),
+                    }
+            elif key in {"access_token", "refresh_token", "api_key", "client_secret", "cert_id"}:
                 cleaned[key] = "***"
             elif isinstance(item, (str, int, float, bool)) or item is None:
                 cleaned[key] = item
