@@ -765,6 +765,16 @@ let allMarketplaceListings = {{ (all_marketplace_listings or []) | tojson | safe
 
 // Async load flag from server
 const asyncLoadEnabled = {{ 'true' if async_load else 'false' }};
+let productLinkingPage = 1;
+let productLinkingPerPage = 50;
+let productLinkingPagination = {
+    page: 1,
+    per_page: 50,
+    total_stock: 0,
+    total_pages: 1,
+    has_prev: false,
+    has_next: false
+};
 
 // Current filter values from URL
 const currentFilters = {
@@ -778,7 +788,10 @@ const currentFilters = {
 // ASYNC DATA LOADING (Performance Fix)
 // ==========================================
 
-async function loadProductLinkingData() {
+async function loadProductLinkingData(pageOverride) {
+    if (pageOverride) {
+        productLinkingPage = Math.max(1, parseInt(pageOverride, 10) || 1);
+    }
     if (!asyncLoadEnabled) {
         // Data already loaded server-side
         document.getElementById('warehouseLoadingState').classList.add('d-none');
@@ -794,8 +807,9 @@ async function loadProductLinkingData() {
     try {
         // Build query params
         const params = new URLSearchParams({
-            page: 1,
-            per_page: 50,
+            page: productLinkingPage,
+            per_page: productLinkingPerPage,
+            limit: productLinkingPerPage,
             search: currentFilters.search,
             platform: currentFilters.platform,
             store: currentFilters.store,
@@ -825,9 +839,22 @@ async function loadProductLinkingData() {
         // Update global data stores
         allWarehouseProducts = data.warehouse_products || [];
         allUnlinkedListings = data.unlinked_listings || [];
+        allMarketplaceListings = data.all_marketplace_listings || data.listings || [];
+        productLinkingPagination = {
+            page: data.page || productLinkingPage,
+            per_page: data.per_page || productLinkingPerPage,
+            total_stock: data.total_stock || allWarehouseProducts.length,
+            total_pages: data.total_pages || 1,
+            has_prev: !!data.has_prev,
+            has_next: !!data.has_next,
+            prev_page: data.prev_page || 1,
+            next_page: data.next_page || 1
+        };
+        productLinkingPage = productLinkingPagination.page;
+        productLinkingPerPage = productLinkingPagination.per_page;
         
         // Update UI counts
-        document.getElementById('warehouseGroupsCount').textContent = `${allWarehouseProducts.length} groups`;
+        document.getElementById('warehouseGroupsCount').textContent = `${allWarehouseProducts.length} of ${productLinkingPagination.total_stock} groups`;
         
         // Render data into DOM
         renderWarehouseProducts(allWarehouseProducts);
@@ -898,7 +925,8 @@ function renderWarehouseProducts(products) {
     
     products.forEach(product => {
         const hasListings = product.listings && product.listings.length > 0;
-        const statusBadge = product.is_group_controlled 
+        const isGrouped = product.is_group_controlled || !!product.master_product_group_id || (product.linked_count && product.linked_count > 1);
+        const statusBadge = isGrouped
             ? '<span class="badge bg-primary"><i data-feather="layers" class="feather-xs me-1"></i>Grouped</span>'
             : (!hasListings 
                 ? '<span class="badge bg-warning text-dark"><i data-feather="alert-circle" class="feather-xs me-1"></i>Unlinked</span>'
@@ -909,6 +937,9 @@ function renderWarehouseProducts(products) {
             : `<button class="btn btn-sm btn-outline-secondary" onclick="showLinkModal(${product.id}, '${escapeHtml(product.sku)}')" title="Link more"><i data-feather="plus" class="feather-sm me-1"></i>Add</button>`;
         
         let listingsHtml = '';
+        const groupLabel = isGrouped
+            ? `<div class="small text-success mt-1">Group ID: ${product.master_product_group_id || 'auto'}</div>`
+            : '';
         if (product.listings) {
             product.listings.forEach(listing => {
                 const isPrimary = listing.is_primary;
@@ -938,7 +969,7 @@ function renderWarehouseProducts(products) {
                     </div>
                 </td>
                 <td><span class="badge bg-dark fs-6">${product.quantity}</span></td>
-                <td>${statusBadge}</td>
+                <td>${statusBadge}${groupLabel}</td>
                 <td>${linkBtn}</td>
                 <td>${listingsHtml || '<small class="text-muted">No listings linked</small>'}</td>
                 <td>
@@ -959,9 +990,33 @@ function renderWarehouseProducts(products) {
                 </tbody>
             </table>
         </div>
+        ${renderProductLinkingPagination()}
     `;
     
     document.getElementById('warehouseDataContainer').innerHTML = html;
+}
+
+function renderProductLinkingPagination() {
+    const p = productLinkingPagination || {};
+    const total = parseInt(p.total_stock || 0, 10);
+    const page = parseInt(p.page || 1, 10);
+    const perPage = parseInt(p.per_page || productLinkingPerPage || 50, 10);
+    const totalPages = parseInt(p.total_pages || 1, 10);
+    const start = total === 0 ? 0 : ((page - 1) * perPage) + 1;
+    const end = Math.min(total, page * perPage);
+
+    return `
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 border rounded p-2 mt-3 bg-light">
+            <small class="text-muted">Showing ${start} to ${end} of ${total} warehouse products</small>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Product linking pagination">
+                <button type="button" class="btn btn-outline-secondary" ${p.has_prev ? '' : 'disabled'} onclick="loadProductLinkingData(1)">First</button>
+                <button type="button" class="btn btn-outline-secondary" ${p.has_prev ? '' : 'disabled'} onclick="loadProductLinkingData(${p.prev_page || Math.max(1, page - 1)})">← Prev</button>
+                <button type="button" class="btn btn-primary" disabled>Page ${page} of ${totalPages}</button>
+                <button type="button" class="btn btn-outline-secondary" ${p.has_next ? '' : 'disabled'} onclick="loadProductLinkingData(${p.next_page || Math.min(totalPages, page + 1)})">Next →</button>
+                <button type="button" class="btn btn-outline-secondary" ${p.has_next ? '' : 'disabled'} onclick="loadProductLinkingData(${totalPages})">Last</button>
+            </div>
+        </div>
+    `;
 }
 
 function escapeHtml(text) {

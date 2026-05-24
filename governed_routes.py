@@ -1007,14 +1007,22 @@ def governed_product_linking_data_compat():
     from sqlalchemy import or_
 
     search = (request.args.get("search") or request.args.get("q") or "").strip()
-    limit_raw = request.args.get("limit") or 50
+    limit_raw = request.args.get("limit") or request.args.get("per_page") or 50
+    page_raw = request.args.get("page") or 1
 
     try:
-        limit = int(limit_raw)
+        per_page = int(limit_raw)
     except Exception:
-        limit = 50
+        per_page = 50
 
-    limit = max(1, min(limit, 100))
+    try:
+        page = int(page_raw)
+    except Exception:
+        page = 1
+
+    per_page = max(1, min(per_page, 100))
+    page = max(1, page)
+    offset = (page - 1) * per_page
 
     stock_query = db.session.query(WarehouseStock).filter(
         WarehouseStock.is_active == True,  # noqa: E712
@@ -1042,8 +1050,27 @@ def governed_product_linking_data_compat():
             MarketplaceListing.barcode.ilike(like),
         ))
 
-    stock_rows = stock_query.order_by(WarehouseStock.id.desc()).limit(limit).all()
-    listing_rows = listing_query.order_by(MarketplaceListing.id.desc()).limit(limit).all()
+    total_stock = stock_query.count()
+    total_listings = listing_query.count()
+    total_pages_stock = max(1, (total_stock + per_page - 1) // per_page)
+
+    if page > total_pages_stock:
+        page = total_pages_stock
+        offset = (page - 1) * per_page
+
+    stock_rows = stock_query.order_by(WarehouseStock.id.desc()).offset(offset).limit(per_page).all()
+
+    stock_ids_on_page = [stock.id for stock in stock_rows]
+    if stock_ids_on_page:
+        listing_rows = (
+            db.session.query(MarketplaceListing)
+            .filter(MarketplaceListing.is_active == True)  # noqa: E712
+            .filter(MarketplaceListing.warehouse_stock_id.in_(stock_ids_on_page))
+            .order_by(MarketplaceListing.id.desc())
+            .all()
+        )
+    else:
+        listing_rows = []
 
     listings_by_stock = {}
     unlinked_listings = []
@@ -1107,6 +1134,15 @@ def governed_product_linking_data_compat():
         "governed": True,
         "read_only": True,
         "truth_source": "WarehouseStock",
+        "page": page,
+        "per_page": per_page,
+        "total_stock": total_stock,
+        "total_listings": total_listings,
+        "total_pages": total_pages_stock,
+        "has_prev": page > 1,
+        "has_next": page < total_pages_stock,
+        "prev_page": max(1, page - 1),
+        "next_page": min(total_pages_stock, page + 1),
         "warehouse_products": warehouse_products,
         "unlinked_listings": unlinked_listings,
         "unlinked_by_platform": unlinked_by_platform,
