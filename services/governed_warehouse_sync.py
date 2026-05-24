@@ -7,6 +7,7 @@ Rules:
 - No old push_stock routes are used.
 - All-store warehouse sync must discover stores first, then pass each store into
   the fuse box. It must never ask the fuse box to approve sync with store=None.
+- Operator results must show proof, not a vague success/failure alert.
 """
 
 from __future__ import annotations
@@ -16,6 +17,19 @@ from datetime import datetime
 from app import db
 from models import MarketplaceListing, Store, SystemLog
 from services.runtime_action_guard import is_runtime_action_allowed
+
+
+READ_ONLY_MARKERS = (
+    "fba/afn is read-only",
+    "no fba push path",
+    "fba push path is permitted",
+)
+AUTH_MARKERS = (
+    "invalid access token",
+    "oauth",
+    "unauthorized",
+    "401",
+)
 
 
 def _log_sync(message: str, details: str = "") -> None:
@@ -41,28 +55,126 @@ def _live_candidate_stores():
     )
 
 
+def _result_text(row) -> str:
+    parts = [
+        row.get("reason"),
+        row.get("error"),
+        row.get("message"),
+    ]
+    adapter = row.get("adapter_result") if isinstance(row, dict) else None
+    if isinstance(adapter, dict):
+        parts.extend([
+            adapter.get("reason"),
+            adapter.get("message"),
+            adapter.get("response_text"),
+        ])
+        amazon_result = adapter.get("amazon_result")
+        if isinstance(amazon_result, dict):
+            parts.extend([
+                amazon_result.get("reason"),
+                amazon_result.get("message"),
+                amazon_result.get("error"),
+                amazon_result.get("response_text"),
+            ])
+    return " ".join(str(p) for p in parts if p).lower()
+
+
+def _proof_row(row):
+    adapter = row.get("adapter_result") if isinstance(row, dict) else None
+    status_code = None
+    response_text = None
+    if isinstance(adapter, dict):
+        status_code = adapter.get("status_code")
+        response_text = adapter.get("response_text")
+        amazon_result = adapter.get("amazon_result")
+        if isinstance(amazon_result, dict):
+            status_code = status_code or amazon_result.get("status_code")
+            response_text = response_text or amazon_result.get("response_text") or amazon_result.get("message") or amazon_result.get("error")
+    return {
+        "listing_id": row.get("listing_id"),
+        "sku": row.get("sku"),
+        "store_id": row.get("store_id"),
+        "platform": row.get("platform"),
+        "ok": bool(row.get("ok") or row.get("success")),
+        "reason": row.get("reason") or row.get("error") or row.get("message") or "No reason returned.",
+        "status_code": status_code,
+        "response_text": (str(response_text)[:500] if response_text else None),
+    }
+
+
+def _summarize_results(results):
+    pushed = 0
+    blocked = 0
+    skipped_read_only = 0
+    auth_failed = 0
+    failed = 0
+    failure_samples = []
+    skipped_samples = []
+
+    for row in results:
+        if row.get("ok") or row.get("success"):
+            pushed += 1
+            continue
+
+        text = _result_text(row)
+        if row.get("execution_blocked"):
+            blocked += 1
+        if any(marker in text for marker in READ_ONLY_MARKERS):
+            skipped_read_only += 1
+            if len(skipped_samples) < 20:
+                skipped_samples.append(_proof_row(row))
+            continue
+        if any(marker in text for marker in AUTH_MARKERS):
+            auth_failed += 1
+
+        failed += 1
+        if len(failure_samples) < 20:
+            failure_samples.append(_proof_row(row))
+
+    return {
+        "pushed": pushed,
+        "blocked": blocked,
+        "skipped_read_only": skipped_read_only,
+        "auth_failed": auth_failed,
+        "failed": failed,
+        "failure_samples": failure_samples,
+        "skipped_samples": skipped_samples,
+    }
+
+
 def _combine_store_results(store_results, actor):
     pushed = sum(int(row.get("pushed") or 0) for row in store_results)
     blocked = sum(int(row.get("blocked") or 0) for row in store_results)
+    skipped_read_only = sum(int(row.get("skipped_read_only") or 0) for row in store_results)
+    auth_failed = sum(int(row.get("auth_failed") or 0) for row in store_results)
     failed = sum(int(row.get("failed") or 0) for row in store_results)
     checked = sum(int(row.get("checked") or 0) for row in store_results)
     total = sum(int(row.get("total") or 0) for row in store_results)
 
+    failure_samples = []
+    skipped_samples = []
+    for row in store_results:
+        failure_samples.extend(row.get("failure_samples") or [])
+        skipped_samples.extend(row.get("skipped_samples") or [])
+    failure_samples = failure_samples[:20]
+    skipped_samples = skipped_samples[:20]
+
     blocked_stores = [row for row in store_results if row.get("execution_blocked")]
-    failed_stores = [row for row in store_results if row.get("ok") is False and not row.get("execution_blocked")]
+    failed_stores = [row for row in store_results if row.get("failed", 0) > 0]
 
     _log_sync(
         "Governed all-store warehouse sync executed",
         (
             f"actor={actor} stores={len(store_results)} total={total} checked={checked} "
-            f"pushed={pushed} blocked={blocked} failed={failed} "
-            f"blocked_stores={len(blocked_stores)} failed_stores={len(failed_stores)}"
+            f"pushed={pushed} skipped_read_only={skipped_read_only} auth_failed={auth_failed} "
+            f"blocked={blocked} failed={failed} blocked_stores={len(blocked_stores)} "
+            f"failed_stores={len(failed_stores)}"
         ),
     )
 
     return {
-        "success": failed == 0,
-        "ok": failed == 0,
+        "success": failed == 0 and auth_failed == 0,
+        "ok": failed == 0 and auth_failed == 0,
         "governed": True,
         "manual": True,
         "mode": "governed_all_store_execution",
@@ -72,11 +184,16 @@ def _combine_store_results(store_results, actor):
         "checked": checked,
         "pushed": pushed,
         "blocked": blocked,
+        "skipped_read_only": skipped_read_only,
+        "auth_failed": auth_failed,
         "failed": failed,
         "message": (
-            f"Governed warehouse sync executed across {len(store_results)} active store(s). "
-            f"Pushed: {pushed}. Blocked: {blocked}. Failed: {failed}."
+            f"Governed warehouse sync checked {len(store_results)} active store(s). "
+            f"Pushed: {pushed}. Read-only skipped: {skipped_read_only}. "
+            f"Auth failed: {auth_failed}. Other failed: {failed}."
         ),
+        "failure_samples": failure_samples,
+        "skipped_samples": skipped_samples,
         "results": store_results,
     }
 
@@ -102,8 +219,12 @@ def run_governed_warehouse_sync(store_id=None, actor="manual-warehouse-sync", li
                 "checked": 0,
                 "pushed": 0,
                 "blocked": 0,
+                "skipped_read_only": 0,
+                "auth_failed": 0,
                 "failed": 0,
                 "message": "No active stores found for governed warehouse sync.",
+                "failure_samples": [],
+                "skipped_samples": [],
                 "results": [],
             }
 
@@ -143,6 +264,10 @@ def run_governed_warehouse_sync(store_id=None, actor="manual-warehouse-sync", li
             "reason": f"Store {store_id} not found.",
             "mode": "governed_execution",
             "store_id": store_id,
+            "skipped_read_only": 0,
+            "auth_failed": 0,
+            "failure_samples": [],
+            "skipped_samples": [],
         }
 
     sync_guard = is_runtime_action_allowed(
@@ -178,7 +303,11 @@ def run_governed_warehouse_sync(store_id=None, actor="manual-warehouse-sync", li
             "checked": 0,
             "pushed": 0,
             "blocked": 0,
+            "skipped_read_only": 0,
+            "auth_failed": 0,
             "failed": 0,
+            "failure_samples": [],
+            "skipped_samples": [],
         }
 
     query = db.session.query(MarketplaceListing).filter(
@@ -212,8 +341,12 @@ def run_governed_warehouse_sync(store_id=None, actor="manual-warehouse-sync", li
             "checked": 0,
             "pushed": 0,
             "blocked": 0,
+            "skipped_read_only": 0,
+            "auth_failed": 0,
             "failed": 0,
             "message": "No active linked marketplace listings found for governed sync.",
+            "failure_samples": [],
+            "skipped_samples": [],
             "results": [],
             "guard": sync_guard,
         }
@@ -284,18 +417,20 @@ def run_governed_warehouse_sync(store_id=None, actor="manual-warehouse-sync", li
                 "error": str(exc),
             })
 
-    pushed = sum(1 for row in results if row.get("ok") or row.get("success"))
-    blocked = sum(1 for row in results if row.get("execution_blocked"))
-    failed = len(results) - pushed - blocked
+    summary = _summarize_results(results)
 
     _log_sync(
         "Governed warehouse sync executed",
-        f"store_id={store_id} actor={actor} total={len(results)} pushed={pushed} blocked={blocked} failed={failed}",
+        (
+            f"store_id={store_id} actor={actor} total={len(results)} pushed={summary['pushed']} "
+            f"skipped_read_only={summary['skipped_read_only']} auth_failed={summary['auth_failed']} "
+            f"blocked={summary['blocked']} failed={summary['failed']}"
+        ),
     )
 
     return {
-        "success": failed == 0,
-        "ok": failed == 0,
+        "success": summary["failed"] == 0 and summary["auth_failed"] == 0,
+        "ok": summary["failed"] == 0 and summary["auth_failed"] == 0,
         "governed": True,
         "manual": True,
         "mode": "governed_execution",
@@ -304,10 +439,18 @@ def run_governed_warehouse_sync(store_id=None, actor="manual-warehouse-sync", li
         "platform": getattr(store, "platform", None),
         "total": len(results),
         "checked": len(results),
-        "pushed": pushed,
-        "blocked": blocked,
-        "failed": failed,
-        "message": f"Governed warehouse sync executed for store {store_id}. Pushed: {pushed}. Blocked: {blocked}. Failed: {failed}.",
+        "pushed": summary["pushed"],
+        "blocked": summary["blocked"],
+        "skipped_read_only": summary["skipped_read_only"],
+        "auth_failed": summary["auth_failed"],
+        "failed": summary["failed"],
+        "message": (
+            f"Governed warehouse sync executed for store {store_id}. Pushed: {summary['pushed']}. "
+            f"Read-only skipped: {summary['skipped_read_only']}. Auth failed: {summary['auth_failed']}. "
+            f"Other failed: {summary['failed']}."
+        ),
+        "failure_samples": summary["failure_samples"],
+        "skipped_samples": summary["skipped_samples"],
         "results": results,
         "guard": sync_guard,
     }
