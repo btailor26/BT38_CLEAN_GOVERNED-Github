@@ -12,7 +12,11 @@ def governed_warehouse_runtime_state():
     from models import MarketplaceListing, WarehouseStock
 
     q = (request.args.get("q") or "").strip().lower()
-    limit = min(int(request.args.get("limit", 500)), 1000)
+    try:
+        limit = int(request.args.get("limit", 50))
+    except Exception:
+        limit = 50
+    limit = min(max(limit, 1), 100)
 
     rows = []
     listings = (
