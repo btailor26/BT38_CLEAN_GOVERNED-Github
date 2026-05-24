@@ -1738,16 +1738,202 @@ def _governed_webhook_ingest(marketplace: str):
 @governed_bp.route("/governed-disabled", defaults={"action": ""}, methods=["GET", "POST"])
 @governed_bp.route("/governed-disabled/<path:action>", methods=["GET", "POST"])
 def governed_disabled_action(action: str = ""):
+    """Phase 2 governed bridge for old product-linking frontend calls.
+
+    This is not a second execution authority.
+    It only translates old frontend paths into governed product-linking/group behavior.
+
+    Marketplace push still flows through:
+    governed group/listing route
+    -> runtime_action_guard.py
+    -> SystemConfig fuse box
+    -> governed_execution.py
+    -> marketplace adapter
+    """
     from flask import jsonify, request
-    return jsonify({
-        "success": False,
-        "ok": False,
-        "governed": True,
-        "execution_blocked": True,
-        "action": action,
-        "method": request.method,
-        "message": "This legacy action is disabled until the governed route is approved."
-    }), 409
+    from extensions import db
+    from models import MarketplaceListing, MasterProductGroup, WarehouseStock
+
+    action = (action or "").strip("/")
+    body = request.get_json(silent=True) or {}
+
+    def blocked(message, status=409, **extra):
+        payload = {
+            "success": False,
+            "ok": False,
+            "governed": True,
+            "legacy_bridge": True,
+            "execution_blocked": True,
+            "action": action,
+            "method": request.method,
+            "message": message,
+        }
+        payload.update(extra)
+        return jsonify(payload), status
+
+    def resolve_stock(stock_id):
+        try:
+            stock_id_int = int(stock_id)
+        except Exception:
+            return None
+        return db.session.get(WarehouseStock, stock_id_int)
+
+    def ensure_group_for_stock(stock):
+        if not stock:
+            return None
+        if getattr(stock, "master_product_group_id", None):
+            group = db.session.get(MasterProductGroup, int(stock.master_product_group_id))
+            if group:
+                return group
+
+        group = MasterProductGroup(
+            display_title=(stock.product_name or stock.group_title or stock.sku or "Untitled Master Group")[:500],
+            display_image_url=getattr(stock, "image_url", None),
+        )
+        db.session.add(group)
+        db.session.flush()
+
+        stock.master_product_group_id = group.id
+        stock.is_group_controlled = True
+        if hasattr(stock, "group_controlled_at") and not stock.group_controlled_at:
+            from datetime import datetime
+            stock.group_controlled_at = datetime.utcnow()
+        if hasattr(stock, "updated_at"):
+            from datetime import datetime
+            stock.updated_at = datetime.utcnow()
+
+        group.updated_at = getattr(stock, "updated_at", None) or group.updated_at
+        return group
+
+    def listing_preview_for_stock(stock):
+        listings = (
+            db.session.query(MarketplaceListing)
+            .filter(MarketplaceListing.warehouse_stock_id == stock.id)
+            .filter(MarketplaceListing.is_active == True)  # noqa: E712
+            .order_by(MarketplaceListing.id)
+            .all()
+        )
+        preview = []
+        for listing in listings:
+            platform = (listing.store.platform if listing.store else listing.platform or "").strip()
+            channel = (listing.normalized_amazon_fulfillment_channel or "").upper()
+            is_amazon = "amazon" in platform.lower()
+            is_fba = is_amazon and channel not in ("MFN", "FBM", "MERCHANT")
+            preview.append({
+                "listing_id": listing.id,
+                "sku": listing.external_sku,
+                "external_id": listing.external_listing_id,
+                "platform": platform,
+                "store_name": listing.store.name if listing.store else None,
+                "quantity": listing.effective_quantity,
+                "is_fba": bool(is_fba),
+                "pushable": bool((not is_fba) and listing.is_pushable),
+            })
+        return preview
+
+    if action.startswith("group-push-preview/") and request.method == "GET":
+        stock_id = action.rsplit("/", 1)[-1]
+        stock = resolve_stock(stock_id)
+        if not stock:
+            return blocked("Warehouse stock was not found.", status=404, warehouse_stock_id=stock_id)
+
+        listings = listing_preview_for_stock(stock)
+        return jsonify({
+            "success": True,
+            "ok": True,
+            "governed": True,
+            "legacy_bridge": True,
+            "preview_only": True,
+            "warehouse_stock_id": stock.id,
+            "group_id": stock.master_product_group_id,
+            "sku": stock.sku,
+            "target_qty": stock.sellable_quantity,
+            "listings": listings,
+            "listings_count": len([x for x in listings if x.get("pushable")]),
+            "message": "Governed preview only. Push still requires governed fuse-box execution.",
+        }), 200
+
+    if action == "group-push" and request.method == "POST":
+        stock_id = body.get("warehouse_stock_id") or body.get("stock_id")
+        stock = resolve_stock(stock_id)
+        if not stock:
+            return blocked("Warehouse stock was not found.", status=404, warehouse_stock_id=stock_id)
+
+        group = ensure_group_for_stock(stock)
+        db.session.commit()
+
+        from governed_group_propagation_routes import governed_group_propagate_quantity
+        return governed_group_propagate_quantity(group.id)
+
+    if action == "link-listing-to-warehouse" and request.method == "POST":
+        listing_id = body.get("listing_id") or body.get("marketplace_listing_id")
+        stock_id = body.get("warehouse_id") or body.get("warehouse_stock_id") or body.get("stock_id")
+
+        listing = db.session.get(MarketplaceListing, int(listing_id)) if listing_id else None
+        stock = resolve_stock(stock_id)
+
+        if not listing:
+            return blocked("Marketplace listing was not found.", status=404, listing_id=listing_id)
+        if not stock:
+            return blocked("Warehouse stock was not found.", status=404, warehouse_stock_id=stock_id)
+
+        group = ensure_group_for_stock(stock)
+
+        listing.warehouse_stock_id = stock.id
+        listing.master_product_group_id = group.id
+        if hasattr(listing, "updated_at"):
+            from datetime import datetime
+            listing.updated_at = datetime.utcnow()
+
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "ok": True,
+            "governed": True,
+            "legacy_bridge": True,
+            "listing_id": listing.id,
+            "warehouse_stock_id": stock.id,
+            "group_id": group.id,
+            "message": "Listing linked through governed Phase 2 bridge.",
+        }), 200
+
+    if action == "unlink-listing" and request.method == "POST":
+        listing_id = body.get("listing_id") or body.get("marketplace_listing_id")
+        listing = db.session.get(MarketplaceListing, int(listing_id)) if listing_id else None
+
+        if not listing:
+            return blocked("Marketplace listing was not found.", status=404, listing_id=listing_id)
+
+        old_stock_id = listing.warehouse_stock_id
+        old_group_id = listing.master_product_group_id
+        listing.warehouse_stock_id = None
+        listing.master_product_group_id = None
+        if hasattr(listing, "updated_at"):
+            from datetime import datetime
+            listing.updated_at = datetime.utcnow()
+
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "ok": True,
+            "governed": True,
+            "legacy_bridge": True,
+            "listing_id": listing.id,
+            "old_warehouse_stock_id": old_stock_id,
+            "old_group_id": old_group_id,
+            "message": "Listing unlinked through governed Phase 2 bridge.",
+        }), 200
+
+    if action == "product-linking-link" and request.method == "POST":
+        return blocked(
+            "Create-new-listing link is not enabled yet. Use existing marketplace listings and governed link-listing-to-warehouse first.",
+            status=409,
+            action_supported=False,
+        )
+
+    return blocked("This legacy action is disabled until a governed bridge is approved.")
 
 
 @governed_bp.post("/governed/product-linking/repair/reset-failures")
