@@ -49,6 +49,95 @@ class EbayAdapter(GovernedMarketplaceAdapter):
             or creds.get("token")
         )
 
+        def _token_expires_soon(value: Any) -> bool:
+            if not value:
+                return True
+            try:
+                from datetime import datetime, timedelta
+
+                expires_at = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+                if expires_at.tzinfo is not None:
+                    expires_at = expires_at.replace(tzinfo=None)
+                return expires_at <= datetime.utcnow() + timedelta(minutes=10)
+            except Exception:
+                return True
+
+        if _token_expires_soon(creds.get("access_token_expires_at")):
+            import base64
+            import os
+            from datetime import datetime, timedelta
+
+            from app import db
+
+            refresh_token = creds.get("refresh_token")
+            client_id = os.getenv("EBAY_CLIENT_ID") or creds.get("app_id")
+            client_secret = os.getenv("EBAY_CLIENT_SECRET") or creds.get("cert_id")
+
+            if not refresh_token or not client_id or not client_secret:
+                return self.blocked_result(
+                    action=action,
+                    payload=payload,
+                    reason="Missing eBay refresh credentials.",
+                )
+
+            basic = base64.b64encode(f"{client_id}:{client_secret}".encode("utf-8")).decode("ascii")
+            scopes = os.getenv("EBAY_SCOPES") or (
+                "https://api.ebay.com/oauth/api_scope "
+                "https://api.ebay.com/oauth/api_scope/sell.inventory "
+                "https://api.ebay.com/oauth/api_scope/sell.fulfillment "
+                "https://api.ebay.com/oauth/api_scope/sell.account"
+            )
+
+            refresh_response = requests.post(
+                "https://api.ebay.com/identity/v1/oauth2/token",
+                headers={
+                    "Authorization": f"Basic {basic}",
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                data={
+                    "grant_type": "refresh_token",
+                    "refresh_token": refresh_token,
+                    "scope": scopes,
+                },
+                timeout=30,
+            )
+
+            try:
+                refresh_payload = refresh_response.json()
+            except Exception:
+                refresh_payload = {"raw": refresh_response.text}
+
+            if refresh_response.status_code >= 300 or not refresh_payload.get("access_token"):
+                return {
+                    "ok": False,
+                    "success": False,
+                    "marketplace": "ebay",
+                    "action": action,
+                    "status_code": refresh_response.status_code,
+                    "reason": "eBay access token refresh failed before push.",
+                    "refresh_response": refresh_payload,
+                    "live_write": False,
+                }
+
+            now = datetime.utcnow()
+            creds.update({
+                "access_token": refresh_payload.get("access_token"),
+                "token_type": refresh_payload.get("token_type"),
+                "access_token_expires_at": (
+                    now + timedelta(seconds=int(refresh_payload.get("expires_in", 7200)))
+                ).isoformat(),
+                "oauth_source": "governed_ebay_adapter_refresh_before_push",
+                "refreshed_at": now.isoformat(),
+                "sandbox": False,
+            })
+
+            store.api_key = json.dumps(creds)
+            store.is_active = True
+            store.store_mode = "live"
+            db.session.commit()
+
+            token = creds.get("access_token")
+
         if not token:
             return self.blocked_result(
                 action=action,
