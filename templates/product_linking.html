@@ -190,22 +190,22 @@
                                                 </span>
                                             </td>
                                             <td>
-                                                <code>{{ listing.sku }}</code>
-                                                {% if listing.external_id %}
-                                                <br><small class="text-muted">{{ 'ASIN' if platform == 'amazon' or platform == 'Amazon' else 'ID' }}: {{ listing.external_id }}</small>
+                                                <code>{{ listing.external_sku }}</code>
+                                                {% if listing.external_listing_id %}
+                                                <br><small class="text-muted">{{ 'ASIN' if platform == 'amazon' or platform == 'Amazon' else 'ID' }}: {{ listing.external_listing_id }}</small>
                                                 {% endif %}
                                             </td>
                                             <td>
                                                 {{ listing.store_name }}
-                                                {% if listing.fulfillment %}
-                                                <span class="badge {% if listing.fulfillment == 'AFN' %}bg-info{% else %}bg-secondary{% endif %} ms-1">
-                                                    {{ 'FBA' if listing.fulfillment == 'AFN' else 'FBM' }}
+                                                {% if listing.amazon_fulfillment_channel %}
+                                                <span class="badge {% if listing.amazon_fulfillment_channel == 'AFN' %}bg-info{% else %}bg-secondary{% endif %} ms-1">
+                                                    {{ 'FBA' if listing.amazon_fulfillment_channel == 'AFN' else 'FBM' }}
                                                 </span>
                                                 {% endif %}
                                             </td>
                                             <td>
                                                 <button class="btn btn-sm btn-success" 
-                                                        onclick="selectWarehouseForListing({{ listing.id }}, '{{ listing.sku|e }}', '{{ listing.title|e|truncate(50) }}', '{{ listing.platform|e }}', '{{ listing.store_name|e }}', '{{ listing.external_id|e }}', '{{ listing.fulfillment|e }}')"
+                                                        onclick="selectWarehouseForListing({{ listing.id }}, '{{ listing.external_sku|e }}', '{{ listing.title|e|truncate(50) }}', '{{ listing.platform|e }}', '{{ listing.store_name|e }}', '{{ listing.external_listing_id|e }}', '{{ listing.amazon_fulfillment_channel|e }}')"
                                                         title="Connect this listing to a warehouse product so they share the same master stock">
                                                     <i data-feather="package" class="feather-sm"></i> Link to Warehouse
                                                 </button>
@@ -342,10 +342,10 @@
                                                     {{ listing.platform }}
                                                 </a>
                                                 <small class="text-truncate" style="max-width: 120px;" title="{{ listing.title }}">
-                                                    {{ listing.sku }}
+                                                    {{ listing.external_sku }}
                                                 </small>
                                                 <button class="btn btn-link btn-sm p-0 ms-1 text-danger" 
-                                                        onclick="unlinkListing({{ listing.id }}, '{{ listing.sku|e }}')"
+                                                        onclick="unlinkListing({{ listing.id }}, '{{ listing.external_sku|e }}')"
                                                         title="Unlink">
                                                     <i data-feather="x" class="feather-sm"></i>
                                                 </button>
@@ -415,8 +415,8 @@
                                                             </span>
                                                         </td>
                                                         <td><small>{{ listing.store_name }}</small></td>
-                                                        <td><code>{{ listing.sku }}</code></td>
-                                                        <td><small class="text-muted">{{ listing.external_id }}</small></td>
+                                                        <td><code>{{ listing.external_sku }}</code></td>
+                                                        <td><small class="text-muted">{{ listing.external_listing_id }}</small></td>
                                                         <td>
                                                             <span class="text-truncate d-inline-block" style="max-width: 200px;" title="{{ listing.title }}">
                                                                 {{ listing.title }}
@@ -436,7 +436,7 @@
                                                                     <i data-feather="edit-2" class="feather-xs"></i>
                                                                 </a>
                                                                 <button class="btn btn-outline-danger" 
-                                                                        onclick="unlinkListing({{ listing.id }}, '{{ listing.sku|e }}')"
+                                                                        onclick="unlinkListing({{ listing.id }}, '{{ listing.external_sku|e }}')"
                                                                         title="Unlink">
                                                                     <i data-feather="x" class="feather-xs"></i>
                                                                 </button>
@@ -922,7 +922,7 @@ function renderWarehouseProducts(products) {
                             ${isPrimary ? '<i data-feather="star" class="feather-xs me-1"></i>' : ''}
                             ${listing.platform}
                         </span>
-                        <small class="text-truncate" style="max-width: 120px;">${escapeHtml(listing.sku)}</small>
+                        <small class="text-truncate" style="max-width: 120px;">${escapeHtml(listing.external_sku || listing.sku || '')}</small>
                     </div>`;
             });
         }
@@ -1151,9 +1151,9 @@ function filterFlatListings() {
                 const linkableListings = getLinkableListings(currentWarehouseId);
                 const filtered = linkableListings.filter(listing => {
                     const searchLower = searchText.toLowerCase();
-                    const sku = (listing.sku || '').toLowerCase();
+                    const sku = (listing.external_sku || listing.sku || '').toLowerCase();
                     const title = (listing.title || '').toLowerCase();
-                    const externalId = (listing.external_id || '').toLowerCase();
+                    const externalId = (listing.external_listing_id || listing.external_id || '').toLowerCase();
                     return sku.includes(searchLower) || title.includes(searchLower) || externalId.includes(searchLower);
                 });
                 renderFlatListings(filtered);
@@ -1164,9 +1164,9 @@ function filterFlatListings() {
             const linkableListings = getLinkableListings(currentWarehouseId);
             const searchLower = searchText.toLowerCase();
             const filtered = linkableListings.filter(listing => {
-                const sku = (listing.sku || '').toLowerCase();
+                const sku = (listing.external_sku || listing.sku || '').toLowerCase();
                 const title = (listing.title || '').toLowerCase();
-                const externalId = (listing.external_id || '').toLowerCase();
+                const externalId = (listing.external_listing_id || listing.external_id || '').toLowerCase();
                 return sku.includes(searchLower) || title.includes(searchLower) || externalId.includes(searchLower);
             });
             renderFlatListings(filtered);
@@ -1206,7 +1206,7 @@ function renderFlatListings(listings) {
     `;
     
     listings.forEach(listing => {
-        const isFBA = listing.fulfillment === 'AFN';
+        const isFBA = listing.amazon_fulfillment_channel === 'AFN';
         const platform = listing.platform || 'Unknown';
         
         // Determine marketplace badge
@@ -1234,12 +1234,12 @@ function renderFlatListings(listings) {
             html += `
                 <tr class="table-light">
                     <td><span class="text-truncate d-inline-block" style="max-width:180px" title="${listing.title || ''}">${listing.title || 'No title'}</span>${linkStatusBadge}</td>
-                    <td><code class="small">${listing.sku || '-'}</code></td>
-                    <td><code class="small">${listing.external_id || '-'}</code></td>
+                    <td><code class="small">${listing.external_sku || listing.sku || '-'}</code></td>
+                    <td><code class="small">${listing.external_listing_id || listing.external_id || '-'}</code></td>
                     <td>${marketplaceBadge}</td>
                     <td><small>${listing.store_name || '-'}</small></td>
                     <td>
-                        <button class="btn btn-sm ${buttonClass}" onclick="linkListingToWarehouse(${listing.id}, ${currentWarehouseId}, '${(listing.sku || listing.external_id || '').replace(/'/g, "\\'")}', '${currentWarehouseSku.replace(/'/g, "\\'")}')" title="Link for tracking (push disabled for FBA)">
+                        <button class="btn btn-sm ${buttonClass}" onclick="linkListingToWarehouse(${listing.id}, ${currentWarehouseId}, '${(listing.external_sku || listing.sku || listing.external_listing_id || listing.external_id || '').replace(/'/g, "\\'")}', '${currentWarehouseSku.replace(/'/g, "\\'")}')" title="Link for tracking (push disabled for FBA)">
                             <i data-feather="link" class="feather-sm"></i> ${buttonText}
                         </button>
                         <small class="d-block text-muted" style="font-size:10px">No push</small>
@@ -1253,12 +1253,12 @@ function renderFlatListings(listings) {
             html += `
                 <tr>
                     <td><span class="text-truncate d-inline-block" style="max-width:180px" title="${listing.title || ''}">${listing.title || 'No title'}</span>${linkStatusBadge}</td>
-                    <td><code class="small">${listing.sku || '-'}</code></td>
-                    <td><code class="small">${listing.external_id || '-'}</code></td>
+                    <td><code class="small">${listing.external_sku || listing.sku || '-'}</code></td>
+                    <td><code class="small">${listing.external_listing_id || listing.external_id || '-'}</code></td>
                     <td>${marketplaceBadge}</td>
                     <td><small>${listing.store_name || '-'}</small></td>
                     <td>
-                        <button class="btn btn-sm ${buttonClass}" onclick="linkListingToWarehouse(${listing.id}, ${currentWarehouseId}, '${(listing.sku || listing.external_id || '').replace(/'/g, "\\'")}', '${currentWarehouseSku.replace(/'/g, "\\'")}')">
+                        <button class="btn btn-sm ${buttonClass}" onclick="linkListingToWarehouse(${listing.id}, ${currentWarehouseId}, '${(listing.external_sku || listing.sku || listing.external_listing_id || listing.external_id || '').replace(/'/g, "\\'")}', '${currentWarehouseSku.replace(/'/g, "\\'")}')">
                             <i data-feather="link" class="feather-sm"></i> ${buttonText}
                         </button>
                     </td>
@@ -1344,18 +1344,18 @@ function renderListingsInModal(listings, warehouseId, warehouseSku) {
         
         byPlatform[platform].forEach(listing => {
             const row = document.createElement('tr');
-            const externalIdLabel = listing.platform && listing.platform.toLowerCase() === 'amazon' ? listing.external_id : listing.external_id;
+            const externalIdLabel = listing.platform && listing.platform.toLowerCase() === 'amazon' ? listing.external_listing_id : listing.external_listing_id;
             
             if (isFBA) {
                 // FBA row - can link for tracking, but push is disabled
                 row.className = 'table-light';
                 row.innerHTML = `
                     <td><span class="text-truncate d-inline-block" style="max-width:200px" title="${listing.title || ''}">${listing.title || 'No title'}</span></td>
-                    <td><code class="small">${listing.sku || '-'}</code></td>
-                    <td><code class="small">${listing.external_id || '-'}</code></td>
+                    <td><code class="small">${listing.external_sku || listing.sku || '-'}</code></td>
+                    <td><code class="small">${listing.external_listing_id || listing.external_id || '-'}</code></td>
                     <td><small>${listing.store_name || '-'}</small></td>
                     <td>
-                        <button class="btn btn-sm btn-info" onclick="linkListingToWarehouse(${listing.id}, ${warehouseId}, '${(listing.sku || listing.external_id || '').replace(/'/g, "\\'")}', '${warehouseSku.replace(/'/g, "\\'")}')" title="Link for tracking (push disabled for FBA)">
+                        <button class="btn btn-sm btn-info" onclick="linkListingToWarehouse(${listing.id}, ${warehouseId}, '${(listing.external_sku || listing.sku || listing.external_listing_id || listing.external_id || '').replace(/'/g, "\\'")}', '${warehouseSku.replace(/'/g, "\\'")}')" title="Link for tracking (push disabled for FBA)">
                             <i data-feather="link" class="feather-sm"></i> Link
                         </button>
                         <small class="d-block text-muted" style="font-size:10px">No push</small>
@@ -1365,11 +1365,11 @@ function renderListingsInModal(listings, warehouseId, warehouseSku) {
                 // FBM or eBay - show link button
                 row.innerHTML = `
                     <td><span class="text-truncate d-inline-block" style="max-width:200px" title="${listing.title || ''}">${listing.title || 'No title'}</span></td>
-                    <td><code class="small">${listing.sku || '-'}</code></td>
-                    <td><code class="small">${listing.external_id || '-'}</code></td>
+                    <td><code class="small">${listing.external_sku || listing.sku || '-'}</code></td>
+                    <td><code class="small">${listing.external_listing_id || listing.external_id || '-'}</code></td>
                     <td><small>${listing.store_name || '-'}</small></td>
                     <td>
-                        <button class="btn btn-sm btn-success" onclick="linkListingToWarehouse(${listing.id}, ${warehouseId}, '${(listing.sku || listing.external_id || '').replace(/'/g, "\\'")}', '${warehouseSku.replace(/'/g, "\\'")}')">
+                        <button class="btn btn-sm btn-success" onclick="linkListingToWarehouse(${listing.id}, ${warehouseId}, '${(listing.external_sku || listing.sku || listing.external_listing_id || listing.external_id || '').replace(/'/g, "\\'")}', '${warehouseSku.replace(/'/g, "\\'")}')">
                             <i data-feather="link" class="feather-sm"></i> Link
                         </button>
                     </td>
@@ -1394,9 +1394,9 @@ function selectWarehouseForListing(listingId, listingSku, listingTitle, platform
     
     // Populate listing details in the modal
     document.getElementById('targetListingTitle').textContent = listing ? listing.title : listingTitle;
-    document.getElementById('targetListingSku').textContent = listing ? (listing.sku || '-') : listingSku;
+    document.getElementById('targetListingSku').textContent = listing ? (listing.external_sku || '-') : listingSku;
     document.getElementById('targetListingStore').textContent = listing ? listing.store_name : (storeName || '-');
-    document.getElementById('targetListingExternalId').textContent = listing ? (listing.external_id || '-') : (externalId || '-');
+    document.getElementById('targetListingExternalId').textContent = listing ? (listing.external_listing_id || '-') : (externalId || '-');
     
     // Platform badge
     const platformBadge = document.getElementById('targetListingPlatform');
@@ -1406,7 +1406,7 @@ function selectWarehouseForListing(listingId, listingSku, listingTitle, platform
     
     // Fulfillment badge
     const fulfillmentBadge = document.getElementById('targetListingFulfillment');
-    const fulfillmentValue = listing ? listing.fulfillment : fulfillment;
+    const fulfillmentValue = listing ? listing.amazon_fulfillment_channel : fulfillment;
     if (fulfillmentValue) {
         fulfillmentBadge.style.display = '';
         fulfillmentBadge.textContent = fulfillmentValue === 'AFN' ? 'FBA' : 'FBM';
