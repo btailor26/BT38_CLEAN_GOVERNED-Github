@@ -273,7 +273,8 @@ def governed_product_linking_page():
         current_search="",
         current_platform="all",
         current_store="all",
-        current_show_linked="all"
+        current_show_linked="all",
+        async_load=True
     )
 
 
