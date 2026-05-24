@@ -498,6 +498,11 @@ onclick="window.location.href='/warehouse?view=groups&q={{ item.sku|urlencode }}
     <form method="get" action="/warehouse" class="bt38-results-form">
       <input type="hidden" name="q" value="{{ search_query or '' }}">
       <input type="hidden" name="view" value="{{ active_view or 'all' }}">
+      <input type="hidden" name="marketplace" value="{{ marketplace_filter or 'all' }}">
+      <input type="hidden" name="status" value="{{ status_filter or 'all' }}">
+      <input type="hidden" name="group" value="{{ group_filter or 'all' }}">
+      <input type="hidden" name="listing_status" value="{{ listing_status_filter or 'all' }}">
+      <input type="hidden" name="page" value="1">
       <label for="bt38ResultsPerPageSelect">Results per page:</label>
       <select id="bt38ResultsPerPageSelect" name="per_page" onchange="this.form.submit()">
         <option value="15" {% if (per_page or 15)|int == 15 %}selected{% endif %}>15</option>
@@ -506,6 +511,24 @@ onclick="window.location.href='/warehouse?view=groups&q={{ item.sku|urlencode }}
         <option value="100" {% if (per_page or 15)|int == 100 %}selected{% endif %}>100</option>
       </select>
     </form>
+
+    {% if pagination %}
+    <div class="bt38-page-nav">
+      <a class="bt38-page-link {% if not pagination.has_prev %}disabled{% endif %}"
+         href="/warehouse?q={{ search_query or '' }}&marketplace={{ marketplace_filter or 'all' }}&status={{ status_filter or 'all' }}&group={{ group_filter or 'all' }}&listing_status={{ listing_status_filter or 'all' }}&view={{ active_view or 'all' }}&per_page={{ per_page or 15 }}&page={{ pagination.prev_page }}">
+        Previous
+      </a>
+
+      <span class="bt38-page-status">
+        Page {{ pagination.page }} of {{ pagination.total_pages }} · {{ pagination.total }} total
+      </span>
+
+      <a class="bt38-page-link {% if not pagination.has_next %}disabled{% endif %}"
+         href="/warehouse?q={{ search_query or '' }}&marketplace={{ marketplace_filter or 'all' }}&status={{ status_filter or 'all' }}&group={{ group_filter or 'all' }}&listing_status={{ listing_status_filter or 'all' }}&view={{ active_view or 'all' }}&per_page={{ per_page or 15 }}&page={{ pagination.next_page }}">
+        Next
+      </a>
+    </div>
+    {% endif %}
   </div>
 
   <!-- AMAZON-STYLE FLOATING ACTION BAR -->

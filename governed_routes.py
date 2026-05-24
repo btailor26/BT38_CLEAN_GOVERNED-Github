@@ -359,6 +359,12 @@ def governed_warehouse_page():
     if row_limit not in (15, 25, 50, 100):
         row_limit = 15
 
+    try:
+        page = int(request.args.get("page") or 1)
+    except Exception:
+        page = 1
+    page = max(page, 1)
+
     listing_query = (
         db.session.query(MarketplaceListing)
         .options(
@@ -404,9 +410,15 @@ def governed_warehouse_page():
     elif listing_status_filter == "unlinked":
         listing_query = listing_query.filter(MarketplaceListing.warehouse_stock_id.is_(None))
 
+    total_matching_rows = listing_query.count()
+    total_pages = max(1, (total_matching_rows + row_limit - 1) // row_limit)
+    page = min(page, total_pages)
+    offset = (page - 1) * row_limit
+
     listing_rows = (
         listing_query
         .order_by(MarketplaceListing.updated_at.desc(), MarketplaceListing.id.desc())
+        .offset(offset)
         .limit(row_limit)
         .all()
     )
@@ -561,7 +573,17 @@ def governed_warehouse_page():
         inventory_value=round(float(inventory_value), 2),
     )
 
-    warehouse_items = SimpleNamespace(items=rows, total=len(rows))
+    warehouse_items = SimpleNamespace(items=rows, total=total_matching_rows, visible=len(rows))
+    pagination = SimpleNamespace(
+        page=page,
+        per_page=row_limit,
+        total=total_matching_rows,
+        total_pages=total_pages,
+        has_prev=page > 1,
+        has_next=page < total_pages,
+        prev_page=max(1, page - 1),
+        next_page=min(total_pages, page + 1),
+    )
 
     html = render_template(
         "warehouse.html",
@@ -569,6 +591,13 @@ def governed_warehouse_page():
         stats=stats,
         search_query=q,
         active_view=view,
+        per_page=row_limit,
+        page=page,
+        pagination=pagination,
+        marketplace_filter=marketplace_filter,
+        status_filter=status_filter,
+        group_filter=group_filter,
+        listing_status_filter=listing_status_filter,
     )
     return _patch_warehouse_phase1_ui(html, stats, q, view)
 
