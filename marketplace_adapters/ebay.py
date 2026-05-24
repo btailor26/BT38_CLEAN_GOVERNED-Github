@@ -112,11 +112,40 @@ class EbayAdapter(GovernedMarketplaceAdapter):
         )
 
         response_text = response.text or ""
-        ack_success = (
-            "<Ack>Success</Ack>" in response_text
-            or "<Ack>Warning</Ack>" in response_text
-        )
+
+        ack = "UNKNOWN"
+        if "<Ack>Success</Ack>" in response_text:
+            ack = "Success"
+        elif "<Ack>Warning</Ack>" in response_text:
+            ack = "Warning"
+        elif "<Ack>Failure</Ack>" in response_text:
+            ack = "Failure"
+
+        short_error = None
+        if "<ShortMessage>" in response_text:
+            try:
+                short_error = response_text.split("<ShortMessage>", 1)[1].split("</ShortMessage>", 1)[0].strip()
+            except Exception:
+                short_error = None
+
+        long_error = None
+        if "<LongMessage>" in response_text:
+            try:
+                long_error = response_text.split("<LongMessage>", 1)[1].split("</LongMessage>", 1)[0].strip()
+            except Exception:
+                long_error = None
+
+        ack_success = ack in ("Success", "Warning")
         ok = response.status_code < 300 and ack_success
+
+        response_summary = (
+            f"Ack={ack}; ItemID={item_id}; SKU={sku}; "
+            f"Quantity={int(quantity or 0)}"
+        )
+        if short_error:
+            response_summary += f"; ShortError={short_error}"
+        if long_error:
+            response_summary += f"; LongError={long_error}"
 
         return {
             "ok": ok,
@@ -124,6 +153,10 @@ class EbayAdapter(GovernedMarketplaceAdapter):
             "marketplace": "ebay",
             "action": action,
             "status_code": response.status_code,
+            "ack": ack,
+            "short_error": short_error,
+            "long_error": long_error,
+            "response_summary": response_summary,
             "response_text": response_text[:4000],
             "live_write": True,
             "ebay_call": "ReviseInventoryStatus",
