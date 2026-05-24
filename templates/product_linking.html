@@ -943,17 +943,32 @@ function renderWarehouseProducts(products) {
         if (product.listings) {
             product.listings.forEach(listing => {
                 const isPrimary = listing.is_primary;
-                const platformBadge = listing.platform === 'Amazon' ? 'bg-info' : 
-                    (listing.platform === 'Amazon' ? 'bg-secondary' : 
-                    (listing.platform === 'ebay' ? 'bg-warning text-dark' : 'bg-dark'));
+                const platformText = listing.platform || 'Unknown';
+                const platformLower = String(platformText).toLowerCase();
+                const platformBadge = platformLower.includes('amazon')
+                    ? 'bg-info'
+                    : (platformLower.includes('ebay') ? 'bg-warning text-dark' : 'bg-dark');
+                const titleText = listing.title || 'No title';
+                const skuText = listing.external_sku || listing.sku || '-';
+                const externalIdText = listing.external_listing_id || listing.external_id || listing.asin || '-';
+
                 listingsHtml += `
-                    <div class="d-inline-flex align-items-center me-2 mb-1 p-1 border rounded ${isPrimary ? 'bg-success bg-opacity-25 border-success' : 'bg-light'}">
-                        <span class="badge ${isPrimary ? 'bg-success' : 'bg-primary'} me-1">
-                            ${listing.platform === 'Amazon' ? '<i data-feather="lock" class="feather-xs me-1"></i>' : ''}
-                            ${isPrimary ? '<i data-feather="star" class="feather-xs me-1"></i>' : ''}
-                            ${listing.platform}
-                        </span>
-                        <small class="text-truncate" style="max-width: 120px;">${escapeHtml(listing.external_sku || listing.sku || '')}</small>
+                    <div class="d-block mb-2 p-2 border rounded ${isPrimary ? 'bg-success bg-opacity-25 border-success' : 'bg-light'}">
+                        <div class="d-flex align-items-center gap-1 mb-1">
+                            <span class="badge ${platformBadge}">
+                                ${platformLower.includes('amazon') ? '<i data-feather="lock" class="feather-xs me-1"></i>' : ''}
+                                ${isPrimary ? '<i data-feather="star" class="feather-xs me-1"></i>' : ''}
+                                ${escapeHtml(platformText)}
+                            </span>
+                            ${listing.is_fba ? '<span class="badge bg-secondary">FBA read-only</span>' : ''}
+                            ${listing.is_pushable ? '<span class="badge bg-success">Pushable</span>' : '<span class="badge bg-light text-dark border">Not pushable</span>'}
+                        </div>
+                        <div class="small fw-semibold text-truncate" title="${escapeHtml(titleText)}">${escapeHtml(titleText)}</div>
+                        <div class="small text-muted">
+                            SKU: <code>${escapeHtml(skuText)}</code>
+                            <span class="mx-1">|</span>
+                            ID: <code>${escapeHtml(externalIdText)}</code>
+                        </div>
                     </div>`;
             });
         }
@@ -2020,9 +2035,6 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   const blockedFunctions = [
-    "executeGroupPush",
-    "linkListingToWarehouse",
-    "unlinkListing",
     "saveNewLink",
     "saveAmazonFbmLink",
     "saveAmazonFbaLink",
