@@ -220,3 +220,52 @@ if (typeof window.bt38ChooseAction !== "function") {
     }
   };
 }
+
+/* BT38 governed quantity shortcut interceptor.
+   Captures old warehouse /update_stock/<stock_id> form submits and routes them
+   through the governed fuse-box listing quantity endpoint. */
+document.addEventListener("submit", async function(event) {
+  const form = event.target;
+  if (!form || !form.action || !form.action.includes("/update_stock/")) return;
+
+  event.preventDefault();
+
+  const row = form.closest("tr");
+  const listingId = row ? (row.dataset.listingId || "") : "";
+
+  if (!listingId || listingId === "0") {
+    alert("Quantity update blocked: this row has no governed marketplace listing id.");
+    return;
+  }
+
+  const qtyInput =
+    form.querySelector('input[name="quantity"]') ||
+    form.querySelector('input[name="available_quantity"]') ||
+    form.querySelector('input[type="number"]');
+
+  const quantity = qtyInput ? qtyInput.value : prompt("Enter new quantity");
+
+  if (quantity === null || quantity === "") return;
+
+  try {
+    const resp = await fetch(`/governed/actions/listings/${encodeURIComponent(listingId)}/quantity`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Actor": "warehouse-quantity-shortcut"
+      },
+      body: JSON.stringify({ quantity })
+    });
+
+    const data = await resp.json().catch(() => ({}));
+
+    if (!(data.ok || data.success)) {
+      throw new Error(data.message || data.error || "Governed action failed.");
+    }
+
+    alert(data.message || "Warehouse quantity saved through governed fuse box.");
+    window.location.reload();
+  } catch (err) {
+    alert("Quantity update failed: " + (err.message || err));
+  }
+}, true);
