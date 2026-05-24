@@ -219,7 +219,33 @@
   }
 
   async function runGovernedWarehouseSync() {
-    await guardedDisabled('Warehouse sync must use the store-aware governed sync shortcut. Select a live store from Settings first.');
+    const btn = document.getElementById('governedWarehouseSyncBtn');
+    if (!btn) return;
+
+    const original = btn.textContent;
+    try {
+      setButtonState(btn, 'Syncing...');
+      const data = await postJson('/governed/warehouse/sync', {
+        shortcut_source: 'warehouse-sync-all-live-stores',
+        store_scope: 'all_active_live_stores'
+      }, 'warehouse-sync-all-live-stores');
+
+      const pushed = data.pushed || 0;
+      const blocked = data.blocked || 0;
+      const failed = data.failed || 0;
+      alert(data.message || ('Governed warehouse sync complete. Pushed: ' + pushed + '. Blocked: ' + blocked + '. Failed: ' + failed + '.'));
+      window.location.reload();
+    } catch (err) {
+      console.error(err);
+      alert(err.message || 'Governed warehouse sync failed.');
+      resetButton(btn);
+    } finally {
+      setTimeout(function () {
+        if (btn && !btn.disabled) return;
+        btn.textContent = original || 'Sync Now';
+        btn.disabled = false;
+      }, 1200);
+    }
   }
 
   window.bt38SelectedRows = selectedRows;
