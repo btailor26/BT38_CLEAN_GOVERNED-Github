@@ -75,30 +75,48 @@ class EbayAdapter(GovernedMarketplaceAdapter):
             if stock:
                 quantity = getattr(stock, "quantity", 0)
 
-        body = {
-            "availability": {
-                "shipToLocationAvailability": {
-                    "quantity": int(quantity or 0)
-                }
-            }
-        }
+        sku = (
+            payload.get("sku")
+            or getattr(listing, "external_sku", None)
+            or ""
+        )
 
-        url = f"https://api.ebay.com/sell/inventory/v1/inventory_item/{item_id}"
+        xml_body = f"""<?xml version="1.0" encoding="utf-8"?>
+<ReviseInventoryStatusRequest xmlns="urn:ebay:apis:eBLBaseComponents">
+  <RequesterCredentials>
+    <eBayAuthToken>{token}</eBayAuthToken>
+  </RequesterCredentials>
+  <ErrorLanguage>en_GB</ErrorLanguage>
+  <WarningLevel>High</WarningLevel>
+  <InventoryStatus>
+    <ItemID>{item_id}</ItemID>
+    <SKU>{sku}</SKU>
+    <Quantity>{int(quantity or 0)}</Quantity>
+  </InventoryStatus>
+</ReviseInventoryStatusRequest>"""
+
+        url = "https://api.ebay.com/ws/api.dll"
 
         headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "Content-Language": "en-GB",
+            "Content-Type": "text/xml",
+            "X-EBAY-API-CALL-NAME": "ReviseInventoryStatus",
+            "X-EBAY-API-SITEID": str(creds.get("site_id") or creds.get("siteid") or "3"),
+            "X-EBAY-API-COMPATIBILITY-LEVEL": str(creds.get("compatibility_level") or "1193"),
         }
 
-        response = requests.put(
+        response = requests.post(
             url,
             headers=headers,
-            json=body,
+            data=xml_body.encode("utf-8"),
             timeout=30,
         )
 
-        ok = response.status_code < 300
+        response_text = response.text or ""
+        ack_success = (
+            "<Ack>Success</Ack>" in response_text
+            or "<Ack>Warning</Ack>" in response_text
+        )
+        ok = response.status_code < 300 and ack_success
 
         return {
             "ok": ok,
@@ -106,8 +124,10 @@ class EbayAdapter(GovernedMarketplaceAdapter):
             "marketplace": "ebay",
             "action": action,
             "status_code": response.status_code,
-            "response_text": response.text[:4000],
+            "response_text": response_text[:4000],
             "live_write": True,
+            "ebay_call": "ReviseInventoryStatus",
             "external_listing_id": item_id,
+            "sku": sku,
             "quantity": quantity,
         }
