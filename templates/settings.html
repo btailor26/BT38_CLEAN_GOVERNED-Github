@@ -35,6 +35,7 @@
 .bt38-kpi strong{font-size:18px}
 .bt38-section{background:#fff;border:1px solid #ddd;border-radius:14px;overflow:hidden;margin-bottom:12px}
 .bt38-section h3{margin:0;padding:10px 12px;background:#111;color:#fff;font-size:14px;font-weight:900}
+.bt38-section-note{padding:9px 12px;border-bottom:1px solid #eee;background:#fafafa;color:#444;font-size:12px;line-height:1.45}
 .bt38-table{width:100%;border-collapse:collapse;font-size:13px}
 .bt38-table th,.bt38-table td{padding:8px 10px;border-bottom:1px solid #eee;text-align:left;vertical-align:middle}
 .bt38-table th{background:#f2f3f5;font-size:11px;text-transform:uppercase;color:#555}
@@ -162,9 +163,12 @@
   </div>
 
   <div class="bt38-section">
-    <h3>3. Store Control</h3>
+    <h3>3. Store Control + Marketplace Layers</h3>
+    <div class="bt38-section-note">
+      Store Control is the visible middle layer between the fuse box and marketplace actions. FBA is read-only import/visibility. FBM and eBay are warehouse-to-marketplace push/sync.
+    </div>
     <table class="bt38-table">
-      <thead><tr><th>Store</th><th>Platform</th><th>Mode</th><th>Active</th><th>Import</th><th>Push/Sync</th><th>Auto Push</th><th>Status</th><th>Last Sync</th></tr></thead>
+      <thead><tr><th>Store</th><th>Marketplace</th><th>Mode</th><th>Store On</th><th>FBA Read-Only Import</th><th>FBM / Marketplace Push-Sync</th><th>Auto Push</th><th>Status</th><th>Last Sync</th></tr></thead>
       <tbody>
         {% for store in stores %}
         <tr>
@@ -228,8 +232,8 @@
       <tbody>
         <tr><td>Runtime State</td><td><button class="bt38-btn light" onclick="bt38GetRuntimeState()">Check</button></td></tr>
         <tr><td>Normalize Settings</td><td><button class="bt38-btn light" onclick="bt38Post('/governed/settings/normalize', {})">Run</button></td></tr>
-        <tr><td>Amazon Import</td><td><button class="bt38-btn light" onclick="bt38RunStoreShortcut('import', 'amazon')">Run</button></td></tr>
-        <tr><td>Warehouse Sync</td><td><button class="bt38-btn light" onclick="bt38RunStoreShortcut('sync', null)">Run</button></td></tr>
+        <tr><td>Amazon FBA Read-Only Import</td><td><button class="bt38-btn light" onclick="bt38RunStoreShortcut('import', 'amazon')">Run</button></td></tr>
+        <tr><td>Warehouse Sync All On Stores</td><td><button class="bt38-btn light" onclick="bt38RunAllStoreWarehouseSync()">Run</button></td></tr>
         <tr><td>Reset Failures</td><td><button class="bt38-btn light" onclick="bt38Post('/governed/product-linking/repair/reset-failures', {})">Run</button></td></tr>
         <tr><td>Rebuild Links</td><td><button class="bt38-btn light" onclick="bt38Post('/governed/product-linking/repair/rebuild-link', {})">Run</button></td></tr>
       </tbody>
@@ -293,6 +297,13 @@ async function bt38RunStoreShortcut(action, platform){
   return bt38Post(`/governed/stores/${target.id}/${action}`, {
     shortcut:true,
     shortcut_source:"settings_cockpit_" + action
+  });
+}
+async function bt38RunAllStoreWarehouseSync(){
+  return bt38Post('/governed/warehouse/sync', {
+    shortcut:true,
+    shortcut_source:'settings_cockpit_all_store_sync',
+    store_scope:'all_active_live_stores'
   });
 }
 function bt38EmergencyFreeze(){
