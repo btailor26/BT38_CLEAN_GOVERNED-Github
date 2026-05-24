@@ -159,3 +159,64 @@
     });
   });
 })();
+
+/* BT38 final governed warehouse bulk shortcut */
+if (typeof window.bt38ChooseAction !== "function") {
+  window.bt38ChooseAction = async function(value) {
+    if (!value) return;
+
+    const select = document.getElementById("bt38ActionSelect");
+    const selected = Array.from(document.querySelectorAll(".bt38-row-check:checked"));
+
+    if (!selected.length) {
+      if (select) select.value = "";
+      alert("Select at least one SKU first.");
+      return;
+    }
+
+    if (value !== "push" && value !== "sync") {
+      if (select) select.value = "";
+      alert("Only governed Push/Sync shortcuts are enabled on this page.");
+      return;
+    }
+
+    if (!confirm(`Run governed ${value} for ${selected.length} selected SKU(s)?`)) {
+      if (select) select.value = "";
+      return;
+    }
+
+    const rows = selected.map(cb => cb.closest("tr")).filter(Boolean);
+
+    try {
+      const results = [];
+
+      for (const row of rows) {
+        const listingId = row.dataset.listingId || "";
+        if (!listingId || listingId === "0") {
+          results.push({ ok: false, message: "Missing listing id" });
+          continue;
+        }
+
+        const resp = await fetch(`/governed/actions/listings/${encodeURIComponent(listingId)}/push`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Actor": "warehouse-bulk-shortcut"
+          },
+          body: JSON.stringify({})
+        });
+
+        results.push(await resp.json().catch(() => ({ ok: false, message: "Invalid response" })));
+      }
+
+      const passed = results.filter(r => r.ok || r.success).length;
+      const failed = results.length - passed;
+      alert(`Governed ${value} complete. Success: ${passed}. Failed: ${failed}.`);
+      window.location.reload();
+    } catch (err) {
+      alert("Governed bulk action failed: " + err.message);
+    } finally {
+      if (select) select.value = "";
+    }
+  };
+}
