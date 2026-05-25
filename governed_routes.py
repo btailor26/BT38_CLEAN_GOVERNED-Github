@@ -358,12 +358,33 @@ USER_PERMISSION_SECTIONS = [
 ]
 
 
-def _build_user_permissions_from_form(form):
+def _full_user_permissions():
+    """Full owner/admin fuse-box authority.
+
+    This is still one permission layer. It only fills the existing
+    User.permissions JSON so the owner account is visible as fully aligned.
+    """
+    permissions = {}
+    for section in USER_PERMISSION_SECTIONS:
+        permissions[f"view_{section}"] = True
+        permissions[f"edit_{section}"] = True
+
+    permissions["can_push"] = True
+    permissions["can_sync"] = True
+    permissions["can_import"] = True
+    permissions["can_manage_users"] = True
+    return permissions
+
+
+def _build_user_permissions_from_form(form, role="viewer"):
     """Build the existing permissions JSON from one fuse-box authority form.
 
     These are shortcut/authority flags only. They do not create duplicate sync,
     push, import, marketplace, or runtime paths.
     """
+    if str(role or "").strip().lower() == "admin":
+        return _full_user_permissions()
+
     permissions = {}
     for section in USER_PERMISSION_SECTIONS:
         permissions[f"view_{section}"] = form.get(f"view_{section}") == "on"
@@ -407,10 +428,10 @@ def create_user():
 
         existing = User.query.filter((User.username == username) | (User.email == email)).first()
         if existing:
-            flash("A user with that username or email already exists.", "danger")
-            return render_template("create_user.html")
+            flash("That user already exists. Opened the existing user so you can edit access.", "warning")
+            return redirect(url_for("governed.edit_user", user_id=existing.id))
 
-        user = User(username=username, email=email, role=role, permissions={})
+        user = User(username=username, email=email, role=role, permissions=_full_user_permissions() if role == "admin" else {})
         user.set_password(password)
         db.session.add(user)
         db.session.commit()
@@ -446,7 +467,7 @@ def edit_user(user_id):
         user.email = email
         user.role = role
         user.is_active = request.form.get("is_active") == "on"
-        user.permissions = _build_user_permissions_from_form(request.form)
+        user.permissions = _build_user_permissions_from_form(request.form, role)
 
         if password:
             if len(password) < 6:
