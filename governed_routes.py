@@ -2839,9 +2839,8 @@ def governed_warehouse_stock_transfer_convert_to_fbm():
             listing.amazon_fulfillment_channel = "MFN"
             listing_updated = True
 
-        if hasattr(listing, "normalized_amazon_fulfillment_channel"):
-            listing.normalized_amazon_fulfillment_channel = "MFN"
-            listing_updated = True
+        # normalized_amazon_fulfillment_channel is a computed property.
+        # Do not assign directly. It derives from underlying listing state.
 
         if hasattr(listing, "push_state"):
             listing.push_state = "active"
