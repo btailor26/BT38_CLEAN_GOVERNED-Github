@@ -69,7 +69,7 @@ def governed_dashboard_page():
     """
     import json as _json
     from types import SimpleNamespace
-    from models import Store, SystemLog
+    from models import Store, SystemLog, MarketplaceOrder, SalesOrder, SalesOrderItem, MCFOrder
 
     stores = Store.query.order_by(Store.id).all()
 
@@ -78,6 +78,34 @@ def governed_dashboard_page():
         .filter(SystemLog.log_type == "marketplace_webhook")
         .order_by(SystemLog.created_at.desc())
         .limit(12)
+        .all()
+    )
+
+    marketplace_orders = (
+        MarketplaceOrder.query
+        .order_by(MarketplaceOrder.created_at.desc())
+        .limit(50)
+        .all()
+    )
+
+    sales_orders = (
+        SalesOrder.query
+        .order_by(SalesOrder.created_at.desc())
+        .limit(50)
+        .all()
+    )
+
+    sales_order_items = (
+        SalesOrderItem.query
+        .order_by(SalesOrderItem.created_at.desc())
+        .limit(50)
+        .all()
+    )
+
+    mcf_orders = (
+        MCFOrder.query
+        .order_by(MCFOrder.created_at.desc())
+        .limit(50)
         .all()
     )
 
@@ -120,6 +148,96 @@ def governed_dashboard_page():
             return "Listing needs attention", f"{platform_name} listing needs review."
 
         return "Marketplace update received", f"{platform_name} has sent a notification."
+
+    real_sales_count = len(marketplace_orders) + len(sales_orders)
+    real_dispatch_pending = 0
+    real_mcf_pending = 0
+
+    for order in marketplace_orders:
+        status = (order.status or "").strip().lower()
+        fulfillment = (order.fulfillment_type or "FBM").strip().upper()
+        is_shipped = bool(order.shipped_at)
+
+        if status in {"pending", "new", "unshipped", "awaiting_dispatch", "processing"} or not is_shipped:
+            real_dispatch_pending += 1
+            platform = order.store.platform if order.store else "Marketplace"
+            store_name = order.store.name if order.store else "Marketplace"
+            title = "Order waiting to dispatch"
+            if fulfillment == "FBA":
+                title = "FBA / MCF order needs attention"
+
+            attention_items.append(SimpleNamespace(
+                source="marketplace_order",
+                marketplace=(platform or "Marketplace").title(),
+                store_name=store_name,
+                title=title,
+                message=f"{store_name} order {order.marketplace_order_id} needs attention for SKU {order.sku} x{order.quantity}.",
+                status=order.status or "pending",
+                reason=order.error_message or "",
+                severity="warning",
+                action_url=(
+                    "https://www.ebay.co.uk/sh/ord"
+                    if "ebay" in (platform or "").lower()
+                    else "https://sellercentral.amazon.co.uk/orders-v3"
+                    if "amazon" in (platform or "").lower()
+                    else "/dashboard"
+                ),
+                action_label=f"Open {(platform or 'Marketplace').title()}",
+                created_at=order.created_at,
+            ))
+
+    for order in sales_orders:
+        status = (order.status or "").strip().lower()
+        if status in {"draft", "pending", "confirmed", "processing", "unfulfilled"} or not order.ship_date:
+            real_dispatch_pending += 1
+            attention_items.append(SimpleNamespace(
+                source="sales_order",
+                marketplace="Sales",
+                store_name="Sales Orders",
+                title="Sales order waiting to fulfil",
+                message=f"Sales order {order.order_number} needs fulfilment attention.",
+                status=order.status or "pending",
+                reason="",
+                severity="warning",
+                action_url="/dashboard",
+                action_label="Open dashboard",
+                created_at=order.created_at,
+            ))
+
+    for item in sales_order_items:
+        if not item.is_fulfilled:
+            attention_items.append(SimpleNamespace(
+                source="sales_order_item",
+                marketplace="Sales",
+                store_name="Sales Orders",
+                title="Order item not fulfilled",
+                message=f"SKU {item.sku or 'Unknown'} has {item.quantity or 0} unit(s) not fulfilled.",
+                status="not_fulfilled",
+                reason="",
+                severity="warning",
+                action_url="/dashboard",
+                action_label="Review",
+                created_at=item.created_at,
+            ))
+
+    for order in mcf_orders:
+        status = (order.status or "").strip().lower()
+        amazon_status = (order.amazon_status or "").strip().lower()
+        if status in {"pending", "failed", "error", "processing"} or amazon_status in {"pending", "failed", "error"}:
+            real_mcf_pending += 1
+            attention_items.append(SimpleNamespace(
+                source="mcf_order",
+                marketplace=(order.source_channel or "MCF").title(),
+                store_name="Amazon MCF",
+                title="MCF fulfilment needs attention",
+                message=f"MCF order {order.seller_fulfillment_order_id} is {order.status or 'pending'}.",
+                status=order.status or "pending",
+                reason=order.last_error or "",
+                severity="warning",
+                action_url="https://sellercentral.amazon.co.uk/orders-v3",
+                action_label="Open Amazon",
+                created_at=order.created_at,
+            ))
 
     for log in webhook_logs:
         try:
@@ -198,19 +316,23 @@ def governed_dashboard_page():
         if "dispatch" in (item.title or "").lower()
     )
 
-    class DashboardStats:
-        total_items = 0
-        active_stores = sum(1 for store in stores if store.is_active)
-        total_stores = len(stores)
-        low_stock_items = 0
-        total_attention = len(attention_items)
-        pending_messages = pending_messages
-        pending_dispatch = pending_dispatch
+    dashboard_stats = {
+        "total_items": 0,
+        "active_stores": sum(1 for store in stores if store.is_active),
+        "total_stores": len(stores),
+        "low_stock_items": 0,
+        "total_attention": len(attention_items),
+        "pending_messages": pending_messages,
+        "pending_dispatch": real_dispatch_pending,
+        "real_sales_count": real_sales_count,
+        "real_mcf_pending": real_mcf_pending,
+    }
 
     return render_template(
         "dashboard.html",
-        stats=DashboardStats(),
+        stats=dashboard_stats,
         attention_items=attention_items[:12],
+        stores=stores,
     )
 
 

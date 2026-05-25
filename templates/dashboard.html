@@ -40,19 +40,30 @@
       </div>
       <div class="card-body">
         <div class="row g-2">
-          {% for name in ["Amazon UK", "eBay UK", "TikTok Shop", "Walmart", "Etsy"] %}
-          <div class="col">
-            <div class="bt38-metric p-3 text-center h-100">
-              <strong>{{ name }}</strong>
-              <div class="mt-2">
-                <span class="bt38-chip {% if loop.index in [2,5] %}bg-warning text-dark{% else %}bg-success text-white{% endif %}">
-                  {% if loop.index in [2,5] %}Attention{% else %}Healthy{% endif %}
-                </span>
+          {% if stores %}
+            {% for store in stores[:5] %}
+            <div class="col">
+              <div class="bt38-metric p-3 text-center h-100">
+                <strong>{{ store.name }}</strong>
+                <div class="small text-muted">{{ store.platform }}</div>
+                <div class="mt-2">
+                  <span class="bt38-chip {% if store.is_active %}bg-success text-white{% else %}bg-warning text-dark{% endif %}">
+                    {% if store.is_active %}Healthy{% else %}Attention{% endif %}
+                  </span>
+                </div>
+                <a class="small d-block mt-2" href="/settings">Go to Store</a>
               </div>
-              <a class="small d-block mt-2" href="/settings">Go to Store</a>
             </div>
-          </div>
-          {% endfor %}
+            {% endfor %}
+          {% else %}
+            <div class="col-12">
+              <div class="bt38-metric p-3 text-center h-100">
+                <strong>No stores connected yet</strong>
+                <div class="small text-muted">Connected marketplaces will appear here.</div>
+                <a class="small d-block mt-2" href="/settings">Open settings</a>
+              </div>
+            </div>
+          {% endif %}
         </div>
       </div>
     </div>
@@ -66,9 +77,10 @@
       </div>
       <div class="card-body">
         <div class="row g-2">
-          <div class="col-md-4"><div class="bt38-metric p-3"><small class="text-muted">Actions</small><h4>{{ stats.total_attention }}</h4></div></div>
-          <div class="col-md-4"><div class="bt38-metric p-3"><small class="text-muted">Messages</small><h4>{{ stats.pending_messages }}</h4></div></div>
-          <div class="col-md-4"><div class="bt38-metric p-3"><small class="text-muted">Dispatch</small><h4>{{ stats.pending_dispatch }}</h4></div></div>
+          <div class="col-md-3"><div class="bt38-metric p-3"><small class="text-muted">Real sales</small><h4>{{ stats.real_sales_count }}</h4></div></div>
+          <div class="col-md-3"><div class="bt38-metric p-3"><small class="text-muted">Dispatch</small><h4>{{ stats.pending_dispatch }}</h4></div></div>
+          <div class="col-md-3"><div class="bt38-metric p-3"><small class="text-muted">Messages</small><h4>{{ stats.pending_messages }}</h4></div></div>
+          <div class="col-md-3"><div class="bt38-metric p-3"><small class="text-muted">MCF</small><h4>{{ stats.real_mcf_pending }}</h4></div></div>
         </div>
       </div>
     </div>
@@ -105,8 +117,8 @@
         {% else %}
           <div class="text-center py-4">
             <i data-feather="check-circle" class="text-success mb-2" size="42"></i>
-            <h5>Everything looks calm right now.</h5>
-            <p class="text-muted mb-0">When something needs attention, it will appear here.</p>
+            <h5>No live sales/order actions found right now.</h5>
+            <p class="text-muted mb-0">When real marketplace orders, sales orders, MCF orders, or buyer messages are present, they will appear here.</p>
           </div>
         {% endif %}
       </div>
@@ -123,7 +135,8 @@
         <div class="row g-2">
           <div class="col-md-6"><div class="bt38-metric p-3"><small>Stock on hand</small><h4>Watching</h4><span class="badge bg-success">Healthy</span></div></div>
           <div class="col-md-6"><div class="bt38-metric p-3"><small>Marketplace alerts</small><h4>Governed</h4><span class="badge bg-primary">Active</span></div></div>
-          <div class="col-md-6"><div class="bt38-metric p-3"><small>Orders</small><h4>{{ stats.pending_dispatch }}</h4><span class="badge bg-warning text-dark">Check</span></div></div>
+          <div class="col-md-6"><div class="bt38-metric p-3"><small>Real sales/orders</small><h4>{{ stats.real_sales_count }}</h4><span class="badge bg-primary">Live data</span></div></div>
+          <div class="col-md-6"><div class="bt38-metric p-3"><small>Orders to dispatch</small><h4>{{ stats.pending_dispatch }}</h4><span class="badge bg-warning text-dark">Check</span></div></div>
           <div class="col-md-6"><div class="bt38-metric p-3"><small>Overall Health</small><h4>Good</h4><span class="badge bg-success">On track</span></div></div>
         </div>
       </div>
