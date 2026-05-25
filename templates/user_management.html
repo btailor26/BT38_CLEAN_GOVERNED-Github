@@ -12,7 +12,7 @@
             </h2>
         </div>
         <div class="col-auto">
-            <a href="{{ url_for('routes.create_user') }}" class="btn btn-primary">
+            <a href="{{ url_for('governed.create_user') }}" class="btn btn-primary">
                 <i data-feather="user-plus" class="me-1"></i>
                 Add New User
             </a>
@@ -70,13 +70,13 @@
                             </td>
                             <td>{{ user.created_at.strftime('%Y-%m-%d') if user.created_at else '-' }}</td>
                             <td>
-                                <a href="{{ url_for('routes.edit_user', user_id=user.id) }}"
+                                <a href="{{ url_for('governed.edit_user', user_id=user.id) }}"
                                    class="btn btn-sm btn-outline-primary">
                                     <i data-feather="edit" style="width: 14px; height: 14px;"></i>
                                     Edit
                                 </a>
                                 {% if user.id != current_user.id %}
-                                <form method="POST" action="{{ url_for('routes.delete_user', user_id=user.id) }}"
+                                <form method="POST" action="{{ url_for('governed.delete_user', user_id=user.id) }}"
                                       style="display: inline;" onsubmit="return confirm('Are you sure you want to deactivate this user?');">
                                     <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                                     <button type="submit" class="btn btn-sm btn-outline-danger">
