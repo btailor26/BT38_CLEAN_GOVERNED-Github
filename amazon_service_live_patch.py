@@ -32,8 +32,7 @@ def governed_amazon_quantity_patch(
 
     if not clean_sku:
         return _blocked("Missing Amazon SKU", store=store, listing=listing, sku=sku, quantity=quantity, command_id=command_id, approval_id=approval_id)
-    if clean_sku.upper().startswith("FBA-"):
-        return _blocked("FBA/AFN is read-only", store=store, listing=listing, sku=clean_sku, quantity=quantity, command_id=command_id, approval_id=approval_id)
+    # SKU text is identity/history only. Fulfillment/channel eligibility is checked before this live patch layer.
 
     try:
         clean_quantity = int(quantity)
