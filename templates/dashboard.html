@@ -40,19 +40,30 @@
       </div>
       <div class="card-body">
         <div class="row g-2">
-          {% for name in ["Amazon UK", "eBay UK", "TikTok Shop", "Walmart", "Etsy"] %}
-          <div class="col">
-            <div class="bt38-metric p-3 text-center h-100">
-              <strong>{{ name }}</strong>
-              <div class="mt-2">
-                <span class="bt38-chip {% if loop.index in [2,5] %}bg-warning text-dark{% else %}bg-success text-white{% endif %}">
-                  {% if loop.index in [2,5] %}Attention{% else %}Healthy{% endif %}
-                </span>
+          {% if stores %}
+            {% for store in stores[:5] %}
+            <div class="col">
+              <div class="bt38-metric p-3 text-center h-100">
+                <strong>{{ store.name }}</strong>
+                <div class="small text-muted">{{ store.platform }}</div>
+                <div class="mt-2">
+                  <span class="bt38-chip {% if store.is_active %}bg-success text-white{% else %}bg-warning text-dark{% endif %}">
+                    {% if store.is_active %}Healthy{% else %}Attention{% endif %}
+                  </span>
+                </div>
+                <a class="small d-block mt-2" href="/settings">Go to Store</a>
               </div>
-              <a class="small d-block mt-2" href="/settings">Go to Store</a>
             </div>
-          </div>
-          {% endfor %}
+            {% endfor %}
+          {% else %}
+            <div class="col-12">
+              <div class="bt38-metric p-3 text-center h-100">
+                <strong>No stores connected yet</strong>
+                <div class="small text-muted">Connected marketplaces will appear here.</div>
+                <a class="small d-block mt-2" href="/settings">Open settings</a>
+              </div>
+            </div>
+          {% endif %}
         </div>
       </div>
     </div>

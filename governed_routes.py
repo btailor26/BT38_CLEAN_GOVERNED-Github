@@ -198,19 +198,21 @@ def governed_dashboard_page():
         if "dispatch" in (item.title or "").lower()
     )
 
-    class DashboardStats:
-        total_items = 0
-        active_stores = sum(1 for store in stores if store.is_active)
-        total_stores = len(stores)
-        low_stock_items = 0
-        total_attention = len(attention_items)
-        pending_messages = pending_messages
-        pending_dispatch = pending_dispatch
+    dashboard_stats = {
+        "total_items": 0,
+        "active_stores": sum(1 for store in stores if store.is_active),
+        "total_stores": len(stores),
+        "low_stock_items": 0,
+        "total_attention": len(attention_items),
+        "pending_messages": pending_messages,
+        "pending_dispatch": pending_dispatch,
+    }
 
     return render_template(
         "dashboard.html",
-        stats=DashboardStats(),
+        stats=dashboard_stats,
         attention_items=attention_items[:12],
+        stores=stores,
     )
 
 
