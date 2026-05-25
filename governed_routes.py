@@ -1526,11 +1526,79 @@ def _patch_warehouse_phase1_ui(html: str, stats, search_query: str, active_view:
     }}
   }}
 
+
+  function attentionReason(state) {{
+    if (!state) return '';
+    return state.reason || state.last_push_error || state.push_state || state.action_state || 'Needs review';
+  }}
+
+  function isAttentionState(state) {{
+    if (!state) return false;
+
+    const action = String(state.action_state || '').toLowerCase();
+    const push = String(state.push_state || '').toLowerCase();
+    const reason = String(attentionReason(state) || '').toLowerCase();
+
+    return (
+      action === 'blocked' ||
+      push === 'blocked' ||
+      push === 'needs_review' ||
+      reason.includes('failed') ||
+      reason.includes('review') ||
+      reason.includes('fba') ||
+      reason.includes('read-only')
+    );
+  }}
+
+  function injectWarehouseAttentionBox(rows) {{
+    if (!Array.isArray(rows)) return;
+    if (document.querySelector('.bt38-warehouse-attention-box')) return;
+
+    const attention = rows.filter(isAttentionState).slice(0, 8);
+
+    if (!attention.length) return;
+
+    const wrapper = document.createElement('div');
+    wrapper.className = 'bt38-warehouse-attention-box';
+
+    wrapper.innerHTML =
+      '<div class="bt38-attention-head">' +
+        '<strong>SKUs needing action</strong>' +
+        '<span>Real warehouse/listing issues only</span>' +
+      '</div>' +
+      '<div class="bt38-attention-list"></div>';
+
+    const list = wrapper.querySelector('.bt38-attention-list');
+
+    attention.forEach(state => {{
+      const sku = state.sku || state.external_sku || 'Unknown SKU';
+
+      const card = document.createElement('a');
+      card.className = 'bt38-attention-item';
+      card.href = '/warehouse?q=' + encodeURIComponent(sku) + '&view=all&per_page=100';
+
+      card.innerHTML =
+        '<strong>' + sku + '</strong>' +
+        '<span>Needs action</span>' +
+        '<small>' + String(attentionReason(state)).slice(0, 140) + '</small>';
+
+      list.appendChild(card);
+    }});
+
+    const kpi = document.querySelector('.bt38-kpi-row');
+
+    if (kpi && kpi.parentNode) {{
+      kpi.parentNode.insertBefore(wrapper, kpi);
+    }}
+  }}
+
   function loadRuntimeOverlay() {{
     fetch('/governed/warehouse/runtime-state')
       .then(r => r.json())
       .then(data => {{
         if (!data || !Array.isArray(data.rows)) return;
+
+        injectWarehouseAttentionBox(data.rows);
 
         const byListing = new Map();
         const byStock = new Map();
@@ -1568,6 +1636,14 @@ tr[data-runtime-role="quantity_authority"]{{outline:1px solid rgba(37,99,235,.12
 tr[data-action-state="governed_pushable"]{{outline:1px solid rgba(22,163,74,.12);}}
 tr[data-action-state="skip_before_push"]{{outline:1px solid rgba(245,158,11,.16);}}
 tr[data-action-state="blocked"]{{outline:1px solid rgba(220,38,38,.14);}}
+.bt38-warehouse-attention-box{{margin:14px 0;padding:12px;border:1px solid rgba(15,23,42,.12);border-radius:12px;background:#fff;}}
+.bt38-attention-head{{display:flex;justify-content:space-between;gap:10px;margin-bottom:10px;}}
+.bt38-attention-head span{{color:#64748b;font-size:12px;}}
+.bt38-attention-list{{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:8px;}}
+.bt38-attention-item{{display:block;padding:10px;border:1px solid rgba(15,23,42,.10);border-radius:10px;text-decoration:none;color:inherit;background:#fafafa;}}
+.bt38-attention-item strong,.bt38-attention-item span,.bt38-attention-item small{{display:block;}}
+.bt38-attention-item span{{font-size:13px;margin-top:2px;}}
+.bt38-attention-item small{{color:#64748b;margin-top:3px;}}
 </style>
 """
     return html + script
