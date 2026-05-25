@@ -59,26 +59,158 @@ def governed_root_page():
 
 @governed_bp.get("/dashboard")
 def governed_dashboard_page():
+    """Human health dashboard.
 
-    class MockStats:
+    One clear path:
+    existing governed sources -> attention summary -> dashboard.
+
+    The dashboard does not call marketplaces, start sync, push stock, import
+    orders, or create a second notification system.
+    """
+    import json as _json
+    from types import SimpleNamespace
+    from models import Store, SystemLog
+
+    stores = Store.query.order_by(Store.id).all()
+
+    webhook_logs = (
+        SystemLog.query
+        .filter(SystemLog.log_type == "marketplace_webhook")
+        .order_by(SystemLog.created_at.desc())
+        .limit(12)
+        .all()
+    )
+
+    attention_items = []
+
+    def _platform_link(platform: str, action_type: str) -> str:
+        p = (platform or "").lower()
+        a = (action_type or "").lower()
+
+        if "ebay" in p:
+            if "dispatch" in a or "order" in a:
+                return "https://www.ebay.co.uk/sh/ord"
+            if "message" in a or "buyer" in a:
+                return "https://www.ebay.co.uk/sh/messages"
+            return "https://www.ebay.co.uk/sh/overview"
+
+        if "amazon" in p:
+            if "dispatch" in a or "order" in a:
+                return "https://sellercentral.amazon.co.uk/orders-v3"
+            if "message" in a or "buyer" in a:
+                return "https://sellercentral.amazon.co.uk/messaging"
+            return "https://sellercentral.amazon.co.uk/home"
+
+        return "/dashboard"
+
+    def _human_title(platform: str, event_type: str) -> tuple[str, str]:
+        text = (event_type or "").replace("_", " ").replace("-", " ").strip().lower()
+        platform_name = (platform or "Marketplace").title()
+
+        if "message" in text or "buyer" in text or "inquiry" in text:
+            return "Buyer message waiting", f"{platform_name} customer message needs a reply."
+
+        if "dispatch" in text or "ship" in text or "fulfillment" in text or "order" in text:
+            return "Order waiting to dispatch", f"{platform_name} order needs dispatch attention."
+
+        if "auth" in text or "disconnect" in text or "token" in text:
+            return "Marketplace connection needs attention", f"{platform_name} connection may need reconnecting."
+
+        if "listing" in text or "blocked" in text or "policy" in text:
+            return "Listing needs attention", f"{platform_name} listing needs review."
+
+        return "Marketplace update received", f"{platform_name} has sent a notification."
+
+    for log in webhook_logs:
+        try:
+            details = _json.loads(log.details or "{}")
+        except Exception:
+            details = {}
+
+        platform = details.get("marketplace") or "marketplace"
+        event_type = details.get("event_type") or "marketplace_notification"
+        status = details.get("status") or "received"
+        reason = details.get("reason") or ""
+        payload = details.get("payload") or {}
+
+        title, message = _human_title(platform, event_type)
+        action_url = (
+            payload.get("action_url")
+            or payload.get("external_url")
+            or payload.get("url")
+            or _platform_link(platform, event_type)
+        )
+
+        attention_items.append(SimpleNamespace(
+            source="webhook",
+            marketplace=platform.title(),
+            store_name=details.get("store_name") or "Marketplace",
+            title=title,
+            message=message,
+            status=status,
+            reason=reason,
+            severity="info" if status == "received" else "muted",
+            action_url=action_url,
+            action_label=f"Open {platform.title()}",
+            created_at=log.created_at,
+        ))
+
+    for store in stores:
+        auth_status = (store.auth_status or "ok").lower()
+        if auth_status and auth_status != "ok":
+            platform = store.platform or "Marketplace"
+            attention_items.append(SimpleNamespace(
+                source="store",
+                marketplace=platform.title(),
+                store_name=store.name,
+                title="Store connection needs attention",
+                message=store.auth_error_message or f"{store.name} may need reconnecting.",
+                status=auth_status,
+                reason=store.auth_error_code or "auth_status",
+                severity="warning",
+                action_url="/settings",
+                action_label="Open settings",
+                created_at=store.auth_error_at or store.updated_at,
+            ))
+
+        if (store.sync_status or "").lower() in {"error", "failed"}:
+            platform = store.platform or "Marketplace"
+            attention_items.append(SimpleNamespace(
+                source="store",
+                marketplace=platform.title(),
+                store_name=store.name,
+                title="Marketplace action needs attention",
+                message=f"{store.name} has a marketplace status of {store.sync_status}.",
+                status=store.sync_status,
+                reason=store.pause_reason or "",
+                severity="warning",
+                action_url="/settings",
+                action_label="Open settings",
+                created_at=store.updated_at,
+            ))
+
+    pending_messages = sum(
+        1 for item in attention_items
+        if "message" in (item.title or "").lower()
+    )
+    pending_dispatch = sum(
+        1 for item in attention_items
+        if "dispatch" in (item.title or "").lower()
+    )
+
+    class DashboardStats:
         total_items = 0
-        total_groups = 0
-        total_marketplaces = 0
-        total_stores = 0
-        low_stock_count = 0
+        active_stores = sum(1 for store in stores if store.is_active)
+        total_stores = len(stores)
         low_stock_items = 0
-        out_of_stock_count = 0
-        failed_syncs = 0
-        successful_syncs = 0
-        pending_syncs = 0
-        success_rate = 100
-        total_value = 0
+        total_attention = len(attention_items)
+        pending_messages = pending_messages
+        pending_dispatch = pending_dispatch
 
     return render_template(
         "dashboard.html",
-        stats=MockStats(),
-        recent_items=[],
-        recent_syncs=[]
+        stats=DashboardStats(),
+        attention_items=attention_items[:12],
     )
 
 
