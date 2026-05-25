@@ -1292,7 +1292,7 @@ def governed_product_linking_data_compat():
         "governed": True,
         "read_only": True,
         "truth_source": "WarehouseStock",
-        "mode": "grouping_index",
+        "mode": "warehouse_truth_shortcut",
         "search_term": search,
         "page": page,
         "per_page": per_page,
