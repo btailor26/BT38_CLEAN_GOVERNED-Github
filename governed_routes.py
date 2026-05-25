@@ -578,6 +578,57 @@ def login():
     )
 
 
+def _bt38_structure_secret_ok(payload: dict) -> bool:
+    """Owner-only structure lock.
+
+    Normal Sync All usage must not require a password.
+    This only protects changing sync/fuse/store structure.
+    Secret is stored only in Fly:
+    BT38_SYNC_ALL_SECRET
+    """
+    import os
+
+    expected = (os.environ.get("BT38_SYNC_ALL_SECRET") or "").strip()
+    provided = str((payload or {}).get("structure_secret") or "").strip()
+
+    return bool(expected and provided and provided == expected)
+
+
+def _bt38_structure_lock_response():
+    return jsonify({
+        "ok": False,
+        "success": False,
+        "governed": True,
+        "locked": True,
+        "execution_blocked": True,
+        "reason": "Structure change locked. Enter the owner password to change sync/fuse alignment.",
+    }), 423
+
+
+BT38_SYNC_STRUCTURE_KEYS = {
+    "sync_enabled",
+    "runtime_sync_enabled",
+    "marketplace_sync_enabled",
+    "manual_sync_enabled",
+    "sync_worker_enabled",
+    "scheduler_enabled",
+    "reconcile_15m_enabled",
+    "webhook_worker_enabled",
+    "webhook_ebay_enabled",
+    "webhook_amazon_enabled",
+}
+
+BT38_SYNC_STORE_FIELDS = {
+    "store_mode",
+    "is_active",
+    "fbm_sync_enabled",
+    "auto_push_enabled",
+    "fba_import_enabled",
+}
+
+
+
+
 def _governed_admin_required(f):
     """Single admin gate for fuse-box user authority."""
     from functools import wraps
@@ -2147,17 +2198,134 @@ def governed_store_sync_shortcut(store_id):
 
 @governed_bp.post("/governed/warehouse/sync")
 def governed_warehouse_sync_manual_run():
+    """One governed Sync All shortcut.
+
+    One button sends a signal to stores/markets that are switched ON.
+    This route is an orchestrator, not a bypass executor.
+
+    Normal Sync All does not ask for a password.
+    Password is only required when changing the sync/fuse structure.
+    """
+    from datetime import datetime
+    from flask import jsonify, request
+    from extensions import db
+    from models import Store, SystemLog
+    from services.runtime_action_guard import is_runtime_action_allowed
     from services.governed_warehouse_sync import run_governed_warehouse_sync
 
     body = dict(request.get_json(silent=True) or {})
-    store_id = body.get("store_id")
-
-    result = run_governed_warehouse_sync(
-        store_id=store_id,
-        actor=request.headers.get("X-Actor", "warehouse-sync-button"),
+    shortcut_source = (
+        body.get("shortcut_source")
+        or request.headers.get("X-BT38-Shortcut")
+        or request.headers.get("X-Actor")
+        or "warehouse_sync_all_shortcut"
     )
 
-    return jsonify(_governed_json_safe(result)), 200
+    stores = (
+        Store.query
+        .filter(Store.is_active == True)  # noqa: E712
+        .filter(Store.store_mode == "live")
+        .filter(Store.fbm_sync_enabled == True)  # noqa: E712
+        .order_by(Store.id)
+        .all()
+    )
+
+    summary = {
+        "ok": True,
+        "success": True,
+        "governed": True,
+        "shortcut": True,
+        "action_type": "sync_all",
+        "authority": "SystemConfig fuse box",
+        "fuse_box_checked": True,
+        "source": shortcut_source,
+        "stores_total": len(stores),
+        "stores_allowed": 0,
+        "stores_blocked": 0,
+        "stores_failed": 0,
+        "results": [],
+    }
+
+    for store in stores:
+        guard = is_runtime_action_allowed(
+            store=store,
+            action_type="sync",
+            manual=True,
+            context={
+                "source": shortcut_source,
+                "shortcut": True,
+                "scope": "sync_all_switched_on_markets",
+                "authority": "SystemConfig fuse box",
+            },
+        )
+
+        if not guard.get("allowed"):
+            summary["stores_blocked"] += 1
+            summary["results"].append({
+                "store_id": store.id,
+                "store": store.name,
+                "platform": store.platform,
+                "status": "blocked",
+                "allowed": False,
+                "reason": guard.get("reason"),
+                "guard": guard,
+            })
+            continue
+
+        try:
+            result = run_governed_warehouse_sync(
+                store_id=store.id,
+                actor=shortcut_source,
+            )
+            summary["stores_allowed"] += 1
+            summary["results"].append({
+                "store_id": store.id,
+                "store": store.name,
+                "platform": store.platform,
+                "status": "completed",
+                "allowed": True,
+                "guard": guard,
+                "result": result,
+            })
+        except Exception as exc:
+            summary["stores_failed"] += 1
+            summary["success"] = False
+            summary["ok"] = False
+            summary["results"].append({
+                "store_id": store.id,
+                "store": store.name,
+                "platform": store.platform,
+                "status": "failed",
+                "allowed": True,
+                "guard": guard,
+                "reason": str(exc),
+            })
+
+    try:
+        db.session.add(SystemLog(
+            log_type="governed_sync_all_shortcut",
+            message="Sync All shortcut completed through switched-on fuse-box stores.",
+            details=str({
+                "source": shortcut_source,
+                "stores_total": summary["stores_total"],
+                "stores_allowed": summary["stores_allowed"],
+                "stores_blocked": summary["stores_blocked"],
+                "stores_failed": summary["stores_failed"],
+            })[:1000],
+            created_at=datetime.utcnow(),
+        ))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
+    summary["message"] = (
+        f"Sync All checked {summary['stores_total']} switched-on stores. "
+        f"Allowed: {summary['stores_allowed']}. "
+        f"Blocked: {summary['stores_blocked']}. "
+        f"Failed: {summary['stores_failed']}."
+    )
+
+    return jsonify(_governed_json_safe(summary)), 200
 
 
 @governed_bp.post("/governed/stores/<int:store_id>/import")
@@ -2962,6 +3130,10 @@ def governed_settings_config_update():
     }
 
     body = request.get_json(silent=True) or {}
+    key = str(body.get("key") or "").strip()
+    if key in BT38_SYNC_STRUCTURE_KEYS and not _bt38_structure_secret_ok(body):
+        return _bt38_structure_lock_response()
+
     key = str(body.get("key", "")).strip()
     value = body.get("value")
 
@@ -3003,6 +3175,10 @@ def governed_settings_store_update(store_id):
     }
 
     body = request.get_json(silent=True) or {}
+    field = str(body.get("field") or "").strip()
+    if field in BT38_SYNC_STORE_FIELDS and not _bt38_structure_secret_ok(body):
+        return _bt38_structure_lock_response()
+
     field = str(body.get("field", "")).strip()
     value = body.get("value")
 
