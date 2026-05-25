@@ -1,28 +1,28 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard - Inventory Management{% endblock %}
+{% block title %}Dashboard - BT38 Health{% endblock %}
 
 {% block content %}
 <div class="row">
     <div class="col-12">
-        <h1 class="mb-4">
-            <i data-feather="activity" class="me-2"></i>
-            Dashboard
+        <h1 class="mb-2">
+            <i data-feather="heart" class="me-2"></i>
+            Business Health
         </h1>
+        <p class="text-muted mb-4">A calm view of what needs your attention today.</p>
     </div>
 </div>
 
-<!-- Statistics Cards -->
 <div class="row mb-4">
     <div class="col-md-3 mb-3">
         <div class="card bg-primary text-white">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h6 class="card-title mb-0">Total Items</h6>
-                        <h3 class="mb-0">{{ stats.total_items }}</h3>
+                        <h6 class="card-title mb-0">Actions Today</h6>
+                        <h3 class="mb-0">{{ stats.total_attention }}</h3>
                     </div>
-                    <i data-feather="box" size="32"></i>
+                    <i data-feather="bell" size="32"></i>
                 </div>
             </div>
         </div>
@@ -47,200 +47,79 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center">
                     <div>
-                        <h6 class="card-title mb-0">Total Stores</h6>
-                        <h3 class="mb-0">{{ stats.total_stores }}</h3>
+                        <h6 class="card-title mb-0">Buyer Messages</h6>
+                        <h3 class="mb-0">{{ stats.pending_messages }}</h3>
                     </div>
-                    <i data-feather="shopping-bag" size="32"></i>
+                    <i data-feather="message-circle" size="32"></i>
                 </div>
             </div>
         </div>
     </div>
 
     <div class="col-md-3 mb-3">
-        <a href="{{ '#' }}" class="text-decoration-none">
-            <div class="card {% if stats.low_stock_items > 0 %}bg-warning{% else %}bg-secondary{% endif %} text-white">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="card-title mb-0">Low Stock</h6>
-                            <h3 class="mb-0">{{ stats.low_stock_items }}</h3>
-                            <small>Click to view</small>
-                        </div>
-                        <i data-feather="alert-triangle" size="32"></i>
-                    </div>
-                </div>
-            </div>
-        </a>
-    </div>
-</div>
-
-<!-- Quick Actions -->
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">
-                    <i data-feather="zap" class="me-2"></i>
-                    Quick Actions
-                </h5>
-            </div>
+        <div class="card {% if stats.pending_dispatch > 0 %}bg-warning{% else %}bg-secondary{% endif %} text-white">
             <div class="card-body">
-                <div class="row">
-                    <div class="col-md-4 mb-3">
-                        <a href="{{ '/inventory' }}" class="btn btn-info btn-lg w-100">
-                            <i data-feather="package" class="me-2"></i>
-                            View Products
-                        </a>
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6 class="card-title mb-0">Orders to Dispatch</h6>
+                        <h3 class="mb-0">{{ stats.pending_dispatch }}</h3>
                     </div>
-                    <div class="col-md-4 mb-3">
-                        <a href="{{ '#' }}" class="btn btn-primary btn-lg w-100">
-                            <i data-feather="plus" class="me-2"></i>
-                            Add New Item
-                        </a>
-                    </div>
-                    <div class="col-md-4 mb-3">
-                        <a href="{{ '#' }}" class="btn btn-success btn-lg w-100">
-                            <i data-feather="plus-circle" class="me-2"></i>
-                            Add New Store
-                        </a>
-                    </div>
+                    <i data-feather="truck" size="32"></i>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Recent Products -->
 <div class="row mb-4">
     <div class="col-12">
-        <div class="card">
+        <div class="card shadow-sm">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                    <i data-feather="package" class="me-2"></i>
-                    Recent Products
-                </h5>
-                <a href="{{ '/inventory' }}" class="btn btn-sm btn-outline-primary">
-                    View All
+                <div>
+                    <h5 class="mb-0">
+                        <i data-feather="smile" class="me-2"></i>
+                        Attention Center
+                    </h5>
+                    <small class="text-muted">Guidance from governed marketplace notifications and store health.</small>
+                </div>
+                <a href="/settings" class="btn btn-sm btn-outline-secondary">
+                    Fuse box
                 </a>
             </div>
             <div class="card-body">
-                {% if recent_items %}
-                    <div class="table-responsive">
-                        <table class="table table-sm">
-                            <thead>
-                                <tr>
-                                    <th>SKU</th>
-                                    <th>Name</th>
-                                    <th>Quantity</th>
-                                    <th>Price</th>
-                                    <th>Amazon</th>
-                                    <th>Last Updated</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for item in recent_items %}
-                                <tr>
-                                    <td><code class="small">{{ item.sku }}</code></td>
-                                    <td>{{ item.name }}</td>
-                                    <td>
-                                        <span class="badge {% if item.quantity < 10 %}bg-warning text-dark{% elif item.quantity > 50 %}bg-success{% else %}bg-secondary{% endif %}">
-                                            {{ item.quantity }}
+                {% if attention_items %}
+                    <div class="row">
+                        {% for item in attention_items %}
+                        <div class="col-lg-6 mb-3">
+                            <div class="border rounded p-3 h-100">
+                                <div class="d-flex justify-content-between align-items-start mb-2">
+                                    <div>
+                                        <span class="badge {% if item.severity == 'warning' %}bg-warning text-dark{% elif item.status == 'blocked_by_fuse' %}bg-secondary{% else %}bg-primary{% endif %}">
+                                            {{ item.marketplace }}
                                         </span>
-                                    </td>
-                                    <td>£{{ "%.2f"|format(item.price) }}</td>
-                                    <td>
-                                        {% if item.asin %}
-                                            <div class="small">
-                                                <div><strong>ASIN:</strong> <code>{{ item.asin }}</code></div>
-                                                {% if item.fnsku %}
-                                                    <div class="text-muted"><strong>FNSKU:</strong> <code>{{ item.fnsku }}</code></div>
-                                                {% endif %}
-                                            </div>
-                                        {% else %}
-                                            <span class="text-muted small">-</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <small class="text-muted">
-                                            {{ item.updated_at.strftime('%m/%d %H:%M') if item.updated_at else 'Unknown' }}
-                                        </small>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                                        <span class="badge bg-light text-dark">{{ item.store_name }}</span>
+                                    </div>
+                                    <small class="text-muted">
+                                        {{ item.created_at.strftime('%d %b %H:%M') if item.created_at else 'Now' }}
+                                    </small>
+                                </div>
+                                <h6 class="mb-1">{{ item.title }}</h6>
+                                <p class="text-muted small mb-3">{{ item.message }}</p>
+                                {% if item.status == 'blocked_by_fuse' %}
+                                    <p class="small text-muted mb-3">This was captured, but the fuse box blocked processing: {{ item.reason }}</p>
+                                {% endif %}
+                                <a class="btn btn-sm btn-outline-primary" href="{{ item.action_url }}" target="{% if item.action_url.startswith('http') %}_blank{% else %}_self{% endif %}" rel="noopener">
+                                    {{ item.action_label }}
+                                </a>
+                            </div>
+                        </div>
+                        {% endfor %}
                     </div>
                 {% else %}
-                    <div class="text-center py-4">
-                        <i data-feather="package" size="48" class="text-muted mb-3"></i>
-                        <p class="text-muted">No products imported yet</p>
-                        <p class="small text-muted">Products will appear here once stores sync their inventory</p>
-                    </div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Recent Sync Activity -->
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">
-                    <i data-feather="refresh-cw" class="me-2"></i>
-                    Recent Sync Activity
-                </h5>
-                <button class="btn btn-sm btn-outline-secondary" onclick="refreshSyncStatus()">
-                    <i data-feather="refresh-cw" class="me-1"></i>
-                    Refresh
-                </button>
-            </div>
-            <div class="card-body">
-                {% if recent_logs %}
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Store</th>
-                                    <th>Status</th>
-                                    <th>Items Synced</th>
-                                    <th>Message</th>
-                                    <th>Time</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for log in recent_logs %}
-                                <tr>
-                                    <td>{{ log.store.name if log.store else 'Unknown' }}</td>
-                                    <td>
-                                        {% if log.status == 'completed' %}
-                                            <span class="badge bg-success">{{ log.status.title() }}</span>
-                                        {% elif log.status == 'failed' %}
-                                            <span class="badge bg-danger">{{ log.status.title() }}</span>
-                                        {% elif log.status == 'started' %}
-                                            <span class="badge bg-info">{{ log.status.title() }}</span>
-                                        {% else %}
-                                            <span class="badge bg-secondary">{{ log.status.title() }}</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>{{ log.items_synced or 0 }}</td>
-                                    <td>{{ log.message or 'No message' }}</td>
-                                    <td>
-                                        <small class="text-muted">
-                                            {{ log.created_at.strftime('%Y-%m-%d %H:%M:%S') if log.created_at else 'Unknown' }}
-                                        </small>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                {% else %}
-                    <div class="text-center py-4">
-                        <i data-feather="inbox" size="48" class="text-muted mb-3"></i>
-                        <p class="text-muted">No sync activity yet</p>
-                        <p class="small text-muted">Sync logs will appear here once stores start syncing</p>
+                    <div class="text-center py-5">
+                        <i data-feather="check-circle" size="52" class="text-success mb-3"></i>
+                        <h5 class="mb-1">Everything looks calm right now.</h5>
+                        <p class="text-muted mb-0">When marketplaces send messages, dispatch alerts, connection issues, or other health items, they will appear here.</p>
                     </div>
                 {% endif %}
             </div>
@@ -251,47 +130,10 @@
 
 {% block scripts %}
 <script>
-    // Auto-refresh sync status every 30 seconds
-    setInterval(function() {
-        refreshSyncStatus();
-    }, 30000);
-
-    function refreshSyncStatus() {
-        // removed dead mock polling
-            .then(response => response.json())
-            .then(data => {
-                updateSyncStatusDisplay(data);
-            })
-            .catch(error => {
-                console.error('Error fetching sync status:', error);
-            });
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.feather) {
+        feather.replace();
     }
-
-    function updateSyncStatusDisplay(stores) {
-        const statusElement = document.getElementById('sync-status');
-        if (stores && stores.length > 0) {
-            const syncingStores = stores.filter(store => store.sync_status === 'syncing').length;
-            const errorStores = stores.filter(store => store.sync_status === 'error').length;
-
-            let statusText = '';
-            let badgeClass = '';
-
-            if (syncingStores > 0) {
-                statusText = `${syncingStores} Syncing`;
-                badgeClass = 'bg-warning';
-            } else if (errorStores > 0) {
-                statusText = `${errorStores} Error(s)`;
-                badgeClass = 'bg-danger';
-            } else {
-                statusText = 'All Synced';
-                badgeClass = 'bg-success';
-            }
-
-            statusElement.innerHTML = `Sync Status: <span class="badge ${badgeClass}">${statusText}</span>`;
-        }
-    }
-
-    // Initial sync status check
-    refreshSyncStatus();
+});
 </script>
 {% endblock %}
