@@ -154,8 +154,24 @@ def _adapter_for(marketplace: str):
 
 
 def _check_fuse_box_authority(command: GovernedCommand, eligibility: Dict[str, Any]) -> Dict[str, Any]:
-    """Ask the single SystemConfig fuse box before any live adapter execution."""
+    """Ask the single SystemConfig fuse box before any live adapter execution.
+
+    Block replacement scope:
+    - keep runtime_action_guard as the final authority
+    - pass explicit actor_user when a Flask user is available
+    - preserve non-request/system contexts without inventing a user
+    """
     from services.runtime_action_guard import is_runtime_action_allowed
+
+    actor_user = None
+    try:
+        from flask import has_request_context
+        from flask_login import current_user
+
+        if has_request_context() and current_user and getattr(current_user, "is_authenticated", False):
+            actor_user = current_user
+    except Exception:
+        actor_user = None
 
     action_type = _runtime_action_type(command.action)
     store = eligibility.get("store") or _resolve_store(command.payload.get("store_id"))
@@ -171,6 +187,8 @@ def _check_fuse_box_authority(command: GovernedCommand, eligibility: Dict[str, A
             "action": command.action,
             "listing_id": command.payload.get("listing_id"),
             "store_id": command.payload.get("store_id"),
+            "actor": command.actor,
+            "actor_user": actor_user,
             "authority": "SystemConfig fuse box",
         },
     )
