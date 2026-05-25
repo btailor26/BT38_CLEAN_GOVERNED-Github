@@ -503,6 +503,167 @@ def delete_user(user_id):
     return redirect(url_for("governed.user_management"))
 
 
+# ============================================================
+# Governed marketplace webhook intake
+# ============================================================
+# One clear path:
+# marketplace notification -> governed intake -> existing SystemLog
+# No sync, push, import, adapter call, or marketplace execution happens here.
+# Dashboard will later read normalized attention from governed sources only.
+
+def _bt38_config_on(key: str) -> bool:
+    from models import SystemConfig
+
+    row = SystemConfig.query.filter_by(key=key).first()
+    if not row:
+        return False
+    return str(row.value).strip().lower() in {"1", "true", "yes", "on", "enabled"}
+
+
+def _bt38_webhook_platform_allowed(platform: str) -> tuple[bool, str]:
+    platform = (platform or "").strip().lower()
+
+    if platform not in {"amazon", "ebay"}:
+        return False, "unsupported_marketplace"
+
+    if not _bt38_config_on("webhook_worker_enabled"):
+        return False, "webhook_worker_enabled is OFF"
+
+    if platform == "amazon" and not _bt38_config_on("webhook_amazon_enabled"):
+        return False, "webhook_amazon_enabled is OFF"
+
+    if platform == "ebay" and not _bt38_config_on("webhook_ebay_enabled"):
+        return False, "webhook_ebay_enabled is OFF"
+
+    return True, "allowed"
+
+
+def _bt38_webhook_payload() -> dict:
+    body = request.get_json(silent=True)
+    if isinstance(body, dict):
+        return body
+
+    raw = request.get_data(as_text=True) or ""
+    if raw:
+        return {"raw": raw}
+
+    return {}
+
+
+def _bt38_match_webhook_store(platform: str, payload: dict):
+    from models import Store
+
+    store_id = request.headers.get("X-BT38-Store-ID") or payload.get("store_id")
+    if store_id:
+        try:
+            return Store.query.get(int(store_id))
+        except Exception:
+            return None
+
+    platform_like = f"%{platform}%"
+    return (
+        Store.query
+        .filter(Store.platform.ilike(platform_like))
+        .filter(Store.is_active == True)  # noqa: E712
+        .order_by(Store.id)
+        .first()
+    )
+
+
+def _bt38_record_webhook_event(platform: str, status: str, reason: str, payload: dict):
+    from extensions import db
+    from models import SystemLog
+
+    store = _bt38_match_webhook_store(platform, payload)
+
+    event_type = (
+        payload.get("event_type")
+        or payload.get("notificationType")
+        or payload.get("topic")
+        or payload.get("type")
+        or "marketplace_notification"
+    )
+
+    details = {
+        "governed": True,
+        "source": "governed_webhook_intake",
+        "marketplace": platform,
+        "store_id": getattr(store, "id", None),
+        "store_name": getattr(store, "name", None),
+        "event_type": event_type,
+        "status": status,
+        "reason": reason,
+        "headers": {
+            "user_agent": request.headers.get("User-Agent"),
+            "content_type": request.headers.get("Content-Type"),
+            "x_bt38_store_id": request.headers.get("X-BT38-Store-ID"),
+        },
+        "payload": payload,
+    }
+
+    row = SystemLog(
+        log_type="marketplace_webhook",
+        message=f"{platform} webhook {status}: {event_type}",
+        details=json.dumps(details, default=str),
+    )
+    db.session.add(row)
+    db.session.commit()
+    return row
+
+
+@governed_bp.route("/governed/webhooks/<marketplace>", methods=["GET", "POST"])
+def governed_marketplace_webhook_intake(marketplace):
+    platform = (marketplace or "").strip().lower()
+
+    if platform not in {"amazon", "ebay"}:
+        return jsonify({
+            "ok": False,
+            "success": False,
+            "governed": True,
+            "error": "unsupported_marketplace",
+            "marketplace": platform,
+        }), 404
+
+    # Lightweight challenge echo only. Provider-specific verification can be
+    # added later after the exact marketplace challenge contract is audited.
+    if request.method == "GET":
+        challenge = (
+            request.args.get("challenge_code")
+            or request.args.get("challenge")
+            or request.args.get("hub.challenge")
+        )
+        return jsonify({
+            "ok": True,
+            "success": True,
+            "governed": True,
+            "marketplace": platform,
+            "challenge": challenge,
+            "message": "Governed webhook intake is reachable. No marketplace execution was run.",
+        }), 200
+
+    payload = _bt38_webhook_payload()
+    allowed, reason = _bt38_webhook_platform_allowed(platform)
+    status = "received" if allowed else "blocked_by_fuse"
+
+    row = _bt38_record_webhook_event(
+        platform=platform,
+        status=status,
+        reason=reason,
+        payload=payload,
+    )
+
+    return jsonify({
+        "ok": True,
+        "success": True,
+        "governed": True,
+        "marketplace": platform,
+        "status": status,
+        "reason": reason,
+        "system_log_id": row.id,
+        "message": "Webhook notification stored. No sync, push, import, or marketplace action was executed.",
+    }), 200
+
+
 @governed_bp.get("/shutdown-proof/status")
 def shutdown_proof_status():
     return jsonify({
