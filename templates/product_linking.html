@@ -766,10 +766,10 @@ let allMarketplaceListings = {{ (all_marketplace_listings or []) | tojson | safe
 // Async load flag from server
 const asyncLoadEnabled = {{ 'true' if async_load else 'false' }};
 let productLinkingPage = 1;
-let productLinkingPerPage = 50;
+let productLinkingPerPage = 25;
 let productLinkingPagination = {
     page: 1,
-    per_page: 50,
+    per_page: 25,
     total_stock: 0,
     total_pages: 1,
     has_prev: false,
@@ -791,6 +791,8 @@ const currentFilters = {
 async function loadProductLinkingData(pageOverride) {
     if (pageOverride) {
         productLinkingPage = Math.max(1, parseInt(pageOverride, 10) || 1);
+    } else {
+        productLinkingPage = productLinkingPage || 1;
     }
     if (!asyncLoadEnabled) {
         // Data already loaded server-side
@@ -854,7 +856,8 @@ async function loadProductLinkingData(pageOverride) {
         productLinkingPerPage = productLinkingPagination.per_page;
         
         // Update UI counts
-        document.getElementById('warehouseGroupsCount').textContent = `${allWarehouseProducts.length} of ${productLinkingPagination.total_stock} groups`;
+        const searchLabel = data.search_term ? ` matching "${data.search_term}"` : "";
+        document.getElementById('warehouseGroupsCount').textContent = `${allWarehouseProducts.length} of ${productLinkingPagination.total_stock} warehouse groups${searchLabel}`;
         
         // Render data into DOM
         renderWarehouseProducts(allWarehouseProducts);
