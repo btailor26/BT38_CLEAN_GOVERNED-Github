@@ -229,10 +229,8 @@ def is_runtime_action_allowed(store, action_type, manual=False, context=None):
     if not _store_value(store, "api_key"):
         return _blocked(store, action, manual, "Store credentials are missing", user=actor_user, user_checked=user_checked)
 
-    platform = str(_store_value(store, "platform", "") or "").strip().lower()
-    fulfillment_type = str(_store_value(store, "fulfillment_type", "") or "").strip().upper()
-
-    if action == "push" and ("fba" in platform or fulfillment_type == "FBA"):
-        return _blocked(store, action, manual, "FBA/AFN is read-only and cannot push", user=actor_user, user_checked=user_checked)
-
+    # Store-level guard must not permanently classify stock as FBA/FBM.
+    # SKU text and deprecated store fulfillment_type are identity/history signals only.
+    # Listing, warehouse, and transfer state decide whether a specific row is pushable.
+    # FBA/AFN read-only protection remains in governed_execution.py listing eligibility.
     return _allowed(store, action, manual, user=actor_user, user_checked=user_checked)
