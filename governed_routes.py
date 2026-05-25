@@ -2670,16 +2670,16 @@ def governed_product_linking_repair_sync_now():
 
 @governed_bp.post("/governed/warehouse/stock-transfer/convert-to-fbm")
 def governed_warehouse_stock_transfer_convert_to_fbm():
-    """Governed warehouse action: mark pending-action stock as transferred to FBM.
+    """Governed warehouse action: convert a warehouse row to FBM operational control.
 
     This does not create a new SKU.
     This does not call Amazon/eBay.
-    This records operational movement so warehouse/transfer state can become authority.
+    This records transfer movement and updates linked listing state to MFN/FBM.
     """
     from datetime import datetime
     from flask import jsonify, request
     from extensions import db
-    from models import StockTransfer, WarehouseStock
+    from models import StockTransfer, WarehouseStock, MarketplaceListing
 
     body = request.get_json(silent=True) or {}
     stock_id = body.get("warehouse_stock_id") or body.get("stock_id")
@@ -2710,27 +2710,25 @@ def governed_warehouse_stock_transfer_convert_to_fbm():
             warehouse_stock_id=stock_id_int,
         ), 404
 
-    try:
-        qty = int(quantity) if quantity not in (None, "") else int(getattr(stock, "sellable_quantity", 0) or getattr(stock, "quantity", 0) or 0)
-    except Exception:
-        return jsonify(
-            ok=False,
-            success=False,
-            governed=True,
-            execution_blocked=True,
-            reason="Quantity must be an integer.",
-            warehouse_stock_id=stock_id_int,
-        ), 400
+    def first_int(*values):
+        for value in values:
+            try:
+                parsed = int(value or 0)
+            except Exception:
+                parsed = 0
+            if parsed > 0:
+                return parsed
+        return 0
 
-    if qty < 0:
-        return jsonify(
-            ok=False,
-            success=False,
-            governed=True,
-            execution_blocked=True,
-            reason="Quantity cannot be negative.",
-            warehouse_stock_id=stock_id_int,
-        ), 400
+    qty = first_int(
+        quantity,
+        getattr(stock, "sellable_quantity", None),
+        getattr(stock, "available_quantity", None),
+        getattr(stock, "available", None),
+        getattr(stock, "quantity", None),
+        getattr(stock, "qty", None),
+        getattr(stock, "stock_quantity", None),
+    )
 
     transfer = StockTransfer(
         warehouse_stock_id=stock.id,
@@ -2750,6 +2748,40 @@ def governed_warehouse_stock_transfer_convert_to_fbm():
         received_at=datetime.utcnow(),
     )
 
+    listing = None
+    listing_updated = False
+    stale_failure_reset = False
+
+    if listing_id not in (None, "", "0"):
+        try:
+            listing = db.session.get(MarketplaceListing, int(listing_id))
+        except Exception:
+            listing = None
+
+    if listing is not None:
+        if hasattr(listing, "amazon_fulfillment_channel"):
+            listing.amazon_fulfillment_channel = "MFN"
+            listing_updated = True
+
+        if hasattr(listing, "normalized_amazon_fulfillment_channel"):
+            listing.normalized_amazon_fulfillment_channel = "MFN"
+            listing_updated = True
+
+        if hasattr(listing, "push_state"):
+            listing.push_state = "active"
+            listing_updated = True
+
+        old_error = str(getattr(listing, "last_push_error", "") or "")
+        if "FBA/AFN is read-only" in old_error or "no FBA push path" in old_error:
+            if hasattr(listing, "consecutive_failures"):
+                listing.consecutive_failures = 0
+            if hasattr(listing, "last_push_error"):
+                listing.last_push_error = None
+            if hasattr(listing, "last_push_status"):
+                listing.last_push_status = "converted_to_fbm"
+            stale_failure_reset = True
+            listing_updated = True
+
     db.session.add(transfer)
     db.session.commit()
 
@@ -2761,14 +2793,16 @@ def governed_warehouse_stock_transfer_convert_to_fbm():
         marketplace_execution=False,
         action="convert_to_fbm",
         warehouse_stock_id=stock.id,
-        listing_id=listing_id,
+        listing_id=getattr(listing, "id", listing_id),
         sku=getattr(stock, "sku", None),
         stock_transfer_id=transfer.id,
         transfer_status=transfer.status,
         from_location=transfer.from_location,
         to_location=transfer.to_location,
         quantity=qty,
-        reason="Stock transfer recorded. SKU identity preserved. Marketplace execution has not been started.",
+        listing_updated=listing_updated,
+        stale_failure_reset=stale_failure_reset,
+        reason="Stock transfer recorded and listing marked MFN/FBM where linked. SKU identity preserved. Marketplace execution has not been started.",
     ), 200
 
 
