@@ -3,114 +3,141 @@
 {% block title %}Dashboard - BT38 Health{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <h1 class="mb-2">
-            <i data-feather="heart" class="me-2"></i>
-            Business Health
-        </h1>
-        <p class="text-muted mb-4">A calm view of what needs your attention today.</p>
-    </div>
-</div>
-
-<div class="row mb-4">
-    <div class="col-md-3 mb-3">
-        <div class="card bg-primary text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
+<div class="row g-3 mb-3">
+    <div class="col-lg-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-start gap-3">
                     <div>
-                        <h6 class="card-title mb-0">Actions Today</h6>
-                        <h3 class="mb-0">{{ stats.total_attention }}</h3>
+                        <p class="text-muted mb-1 small">BT38 business health</p>
+                        <h2 class="mb-2">You have {{ stats.total_attention }} action{{ '' if stats.total_attention == 1 else 's' }} today.</h2>
+                        {% if stats.total_attention > 0 %}
+                            <p class="mb-0 text-muted">Don’t worry — start with the first item and we’ll help you get back on track.</p>
+                        {% else %}
+                            <p class="mb-0 text-muted">Everything looks calm right now. Keep going.</p>
+                        {% endif %}
                     </div>
-                    <i data-feather="bell" size="32"></i>
+                    <div class="text-end">
+                        <span class="badge bg-success mb-2">Guided mode</span>
+                        <div>
+                            <a href="/settings" class="btn btn-sm btn-outline-secondary">Fuse box</a>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="col-md-3 mb-3">
-        <div class="card bg-success text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="card-title mb-0">Active Stores</h6>
-                        <h3 class="mb-0">{{ stats.active_stores }}</h3>
-                    </div>
-                    <i data-feather="shopping-bag" size="32"></i>
+    <div class="col-lg-4">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body p-4">
+                <p class="text-muted mb-1 small">Today’s focus</p>
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Buyer messages</span>
+                    <strong>{{ stats.pending_messages }}</strong>
                 </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-md-3 mb-3">
-        <div class="card bg-info text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="card-title mb-0">Buyer Messages</h6>
-                        <h3 class="mb-0">{{ stats.pending_messages }}</h3>
-                    </div>
-                    <i data-feather="message-circle" size="32"></i>
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Orders to dispatch</span>
+                    <strong>{{ stats.pending_dispatch }}</strong>
                 </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-md-3 mb-3">
-        <div class="card {% if stats.pending_dispatch > 0 %}bg-warning{% else %}bg-secondary{% endif %} text-white">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="card-title mb-0">Orders to Dispatch</h6>
-                        <h3 class="mb-0">{{ stats.pending_dispatch }}</h3>
-                    </div>
-                    <i data-feather="truck" size="32"></i>
+                <div class="d-flex justify-content-between">
+                    <span>Active stores</span>
+                    <strong>{{ stats.active_stores }}</strong>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row mb-4">
-    <div class="col-12">
-        <div class="card shadow-sm">
-            <div class="card-header d-flex justify-content-between align-items-center">
+<div class="row g-3 mb-3">
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <small class="text-muted">Actions</small>
+                        <h4 class="mb-0">{{ stats.total_attention }}</h4>
+                    </div>
+                    <i data-feather="bell"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <small class="text-muted">Messages</small>
+                        <h4 class="mb-0">{{ stats.pending_messages }}</h4>
+                    </div>
+                    <i data-feather="message-circle"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <small class="text-muted">Dispatch</small>
+                        <h4 class="mb-0">{{ stats.pending_dispatch }}</h4>
+                    </div>
+                    <i data-feather="truck"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <small class="text-muted">Stores</small>
+                        <h4 class="mb-0">{{ stats.active_stores }}/{{ stats.total_stores }}</h4>
+                    </div>
+                    <i data-feather="shopping-bag"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-8">
+        <div class="card shadow-sm border-0">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
                 <div>
-                    <h5 class="mb-0">
-                        <i data-feather="smile" class="me-2"></i>
-                        Attention Center
-                    </h5>
-                    <small class="text-muted">Guidance from governed marketplace notifications and store health.</small>
+                    <h5 class="mb-0">Actions requiring attention</h5>
+                    <small class="text-muted">Plain-English guidance from governed marketplace sources.</small>
                 </div>
-                <a href="/settings" class="btn btn-sm btn-outline-secondary">
-                    Fuse box
-                </a>
             </div>
             <div class="card-body">
                 {% if attention_items %}
-                    <div class="row">
+                    <div class="list-group list-group-flush">
                         {% for item in attention_items %}
-                        <div class="col-lg-6 mb-3">
-                            <div class="border rounded p-3 h-100">
-                                <div class="d-flex justify-content-between align-items-start mb-2">
-                                    <div>
+                        <div class="list-group-item px-0">
+                            <div class="d-flex justify-content-between align-items-start gap-3">
+                                <div>
+                                    <div class="mb-1">
                                         <span class="badge {% if item.severity == 'warning' %}bg-warning text-dark{% elif item.status == 'blocked_by_fuse' %}bg-secondary{% else %}bg-primary{% endif %}">
                                             {{ item.marketplace }}
                                         </span>
                                         <span class="badge bg-light text-dark">{{ item.store_name }}</span>
                                     </div>
-                                    <small class="text-muted">
-                                        {{ item.created_at.strftime('%d %b %H:%M') if item.created_at else 'Now' }}
-                                    </small>
+                                    <h6 class="mb-1">{{ item.title }}</h6>
+                                    <p class="text-muted small mb-1">{{ item.message }}</p>
+                                    {% if item.status == 'blocked_by_fuse' %}
+                                        <small class="text-muted">Captured but blocked by fuse box: {{ item.reason }}</small>
+                                    {% endif %}
                                 </div>
-                                <h6 class="mb-1">{{ item.title }}</h6>
-                                <p class="text-muted small mb-3">{{ item.message }}</p>
-                                {% if item.status == 'blocked_by_fuse' %}
-                                    <p class="small text-muted mb-3">This was captured, but the fuse box blocked processing: {{ item.reason }}</p>
-                                {% endif %}
-                                <a class="btn btn-sm btn-outline-primary" href="{{ item.action_url }}" target="{% if item.action_url.startswith('http') %}_blank{% else %}_self{% endif %}" rel="noopener">
-                                    {{ item.action_label }}
-                                </a>
+                                <div class="text-end flex-shrink-0">
+                                    <small class="text-muted d-block mb-2">{{ item.created_at.strftime('%d %b %H:%M') if item.created_at else 'Now' }}</small>
+                                    <a class="btn btn-sm btn-outline-primary" href="{{ item.action_url }}" target="{% if item.action_url.startswith('http') %}_blank{% else %}_self{% endif %}" rel="noopener">
+                                        {{ item.action_label }}
+                                    </a>
+                                </div>
                             </div>
                         </div>
                         {% endfor %}
@@ -119,9 +146,39 @@
                     <div class="text-center py-5">
                         <i data-feather="check-circle" size="52" class="text-success mb-3"></i>
                         <h5 class="mb-1">Everything looks calm right now.</h5>
-                        <p class="text-muted mb-0">When marketplaces send messages, dispatch alerts, connection issues, or other health items, they will appear here.</p>
+                        <p class="text-muted mb-0">Messages, dispatch alerts, connection issues, and marketplace health items will appear here.</p>
                     </div>
                 {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card shadow-sm border-0 mb-3">
+            <div class="card-header bg-white">
+                <h5 class="mb-0">Health overview</h5>
+                <small class="text-muted">A quick confidence check.</small>
+            </div>
+            <div class="card-body">
+                <div class="d-flex justify-content-between mb-3">
+                    <span>Store connection</span>
+                    <span class="badge bg-success">Watching</span>
+                </div>
+                <div class="d-flex justify-content-between mb-3">
+                    <span>Marketplace alerts</span>
+                    <span class="badge bg-primary">Governed</span>
+                </div>
+                <div class="d-flex justify-content-between">
+                    <span>Action feed</span>
+                    <span class="badge bg-secondary">Read only</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm border-0">
+            <div class="card-body">
+                <h5 class="mb-2">Good progress</h5>
+                <p class="text-muted small mb-0">The dashboard is now a health area, not a stress area. It shows what needs attention without running marketplace actions directly.</p>
             </div>
         </div>
     </div>
