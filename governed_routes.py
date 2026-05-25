@@ -1165,7 +1165,7 @@ def governed_product_linking_data_compat():
     from sqlalchemy import or_
 
     search = (request.args.get("search") or request.args.get("q") or "").strip()
-    limit_raw = request.args.get("limit") or request.args.get("per_page") or 50
+    limit_raw = request.args.get("limit") or request.args.get("per_page") or 25
     page_raw = request.args.get("page") or 1
 
     try:
@@ -1292,6 +1292,8 @@ def governed_product_linking_data_compat():
         "governed": True,
         "read_only": True,
         "truth_source": "WarehouseStock",
+        "mode": "grouping_index",
+        "search_term": search,
         "page": page,
         "per_page": per_page,
         "total_stock": total_stock,
