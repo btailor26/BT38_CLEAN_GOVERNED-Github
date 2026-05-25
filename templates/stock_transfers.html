@@ -307,7 +307,7 @@ function submitReceive() {
         return;
     }
     
-    fetch(`/api/stock_transfer/${transferId}/receive`, {
+    bt38LegacyStockTransferDisabled( {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -334,3 +334,17 @@ function submitReceive() {
 }
 </script>
 {% endblock %}
+
+
+<script>
+function bt38LegacyStockTransferDisabled() {
+  alert("This legacy stock-transfer action has been retired. Use the governed warehouse Transfer / Convert to FBM action.");
+  return Promise.resolve({
+    ok: false,
+    success: false,
+    governed: true,
+    execution_blocked: true,
+    message: "Legacy stock-transfer action retired."
+  });
+}
+</script>

@@ -2545,6 +2545,111 @@ def governed_product_linking_repair_sync_now():
     }), 409
 
 
+
+@governed_bp.post("/governed/warehouse/stock-transfer/convert-to-fbm")
+def governed_warehouse_stock_transfer_convert_to_fbm():
+    """Governed warehouse action: mark pending-action stock as transferred to FBM.
+
+    This does not create a new SKU.
+    This does not call Amazon/eBay.
+    This records operational movement so warehouse/transfer state can become authority.
+    """
+    from datetime import datetime
+    from flask import jsonify, request
+    from extensions import db
+    from models import StockTransfer, WarehouseStock
+
+    body = request.get_json(silent=True) or {}
+    stock_id = body.get("warehouse_stock_id") or body.get("stock_id")
+    listing_id = body.get("listing_id")
+    quantity = body.get("quantity")
+    reason = body.get("reason") or "Convert to FBM from warehouse pending action"
+    notes = body.get("notes") or "Created from governed warehouse Convert to FBM action."
+
+    try:
+        stock_id_int = int(stock_id)
+    except Exception:
+        return jsonify(
+            ok=False,
+            success=False,
+            governed=True,
+            execution_blocked=True,
+            reason="warehouse_stock_id is required for Convert to FBM.",
+        ), 400
+
+    stock = db.session.get(WarehouseStock, stock_id_int)
+    if stock is None:
+        return jsonify(
+            ok=False,
+            success=False,
+            governed=True,
+            execution_blocked=True,
+            reason="Warehouse stock was not found.",
+            warehouse_stock_id=stock_id_int,
+        ), 404
+
+    try:
+        qty = int(quantity) if quantity not in (None, "") else int(getattr(stock, "sellable_quantity", 0) or getattr(stock, "quantity", 0) or 0)
+    except Exception:
+        return jsonify(
+            ok=False,
+            success=False,
+            governed=True,
+            execution_blocked=True,
+            reason="Quantity must be an integer.",
+            warehouse_stock_id=stock_id_int,
+        ), 400
+
+    if qty < 0:
+        return jsonify(
+            ok=False,
+            success=False,
+            governed=True,
+            execution_blocked=True,
+            reason="Quantity cannot be negative.",
+            warehouse_stock_id=stock_id_int,
+        ), 400
+
+    transfer = StockTransfer(
+        warehouse_stock_id=stock.id,
+        from_location="fba",
+        to_location="warehouse",
+        qty_planned=qty,
+        qty_received=qty,
+        qty_sellable=qty,
+        qty_damaged=0,
+        reason=reason,
+        notes=notes,
+        status="Completed",
+        created_by=request.headers.get("X-Actor", "warehouse-convert-to-fbm"),
+        received_by=request.headers.get("X-Actor", "warehouse-convert-to-fbm"),
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow(),
+        received_at=datetime.utcnow(),
+    )
+
+    db.session.add(transfer)
+    db.session.commit()
+
+    return jsonify(
+        ok=True,
+        success=True,
+        governed=True,
+        execution_started=False,
+        marketplace_execution=False,
+        action="convert_to_fbm",
+        warehouse_stock_id=stock.id,
+        listing_id=listing_id,
+        sku=getattr(stock, "sku", None),
+        stock_transfer_id=transfer.id,
+        transfer_status=transfer.status,
+        from_location=transfer.from_location,
+        to_location=transfer.to_location,
+        quantity=qty,
+        reason="Stock transfer recorded. SKU identity preserved. Marketplace execution has not been started.",
+    ), 200
+
+
 # === BT38 PRIVATE SETTINGS COCKPIT API ===
 def _bt38_settings_bool(value):
     if isinstance(value, bool):
