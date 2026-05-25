@@ -117,6 +117,23 @@
     return postJson('/governed/actions/listings/' + encodeURIComponent(listingId) + '/price', { price: price }, 'warehouse-price-shortcut');
   }
 
+  function convertRowToFbm(row) {
+    const stockId = rowStockId(row);
+    const listingId = rowListingId(row);
+    const sku = rowSku(row);
+
+    if (!stockId || stockId === '0') {
+      return Promise.reject(new Error('Missing warehouse stock id for ' + (sku || 'this row') + '.'));
+    }
+
+    return postJson('/governed/warehouse/stock-transfer/convert-to-fbm', {
+      warehouse_stock_id: stockId,
+      listing_id: listingId || null,
+      reason: 'Warehouse Convert to FBM action',
+      notes: 'Created from warehouse governed transfer shortcut.'
+    }, 'warehouse-convert-to-fbm-shortcut');
+  }
+
   async function chooseAction(value) {
     if (!value) return;
 
@@ -129,9 +146,29 @@
       return;
     }
 
+    if (value === 'transfer') {
+      if (!confirm('Convert ' + selected.length + ' selected SKU(s) to FBM warehouse-controlled stock?')) {
+        if (select) select.value = '';
+        return;
+      }
+
+      try {
+        const results = await Promise.allSettled(selected.map(function (cb) {
+          return convertRowToFbm(cb.closest('tr'));
+        }));
+        const passed = results.filter(function (result) { return result.status === 'fulfilled'; }).length;
+        const failed = results.length - passed;
+        alert('Governed stock transfer complete. Converted: ' + passed + '. Failed: ' + failed + '.');
+        window.location.reload();
+      } finally {
+        if (select) select.value = '';
+      }
+      return;
+    }
+
     if (value !== 'push') {
       if (select) select.value = '';
-      await guardedDisabled('Only governed bulk Push is enabled on this page. Other bulk actions remain blocked until approved.');
+      await guardedDisabled('Only governed Push and Transfer are enabled on this page. Other actions remain blocked until approved.');
       return;
     }
 
@@ -205,7 +242,11 @@
       }
 
       if (button.classList.contains('bt38-warehouse-action') || button.classList.contains('bt38-action-btn')) {
-        window.location.href = '/warehouse?q=' + encodeURIComponent(sku || stockId || '');
+        if (!confirm('Convert ' + (sku || 'this SKU') + ' to FBM warehouse-controlled stock?')) return false;
+        setButtonState(button, 'Transferring...');
+        const data = await convertRowToFbm(row);
+        alert(data.reason || data.message || 'Governed stock transfer recorded.');
+        window.location.reload();
         return false;
       }
 
@@ -254,6 +295,7 @@
   window.bt38ChooseAction = chooseAction;
   window.bt38OpenRowAction = openRowAction;
   window.bt38PushGovernedListing = pushGovernedListing;
+  window.bt38ConvertRowToFbm = convertRowToFbm;
   window.runGovernedWarehouseSync = runGovernedWarehouseSync;
 
   document.addEventListener('DOMContentLoaded', function () {

@@ -52,7 +52,7 @@ class AmazonAPIService(DisabledMarketplaceService):
                 reason="Missing Amazon SKU",
             )
 
-        if clean_sku.upper().startswith("FBA-") or channel in {"AFN", "FBA"}:
+        if channel in {"AFN", "FBA"}:
             return _blocked(
                 "update_fbm_inventory_quantity_governed",
                 sku=clean_sku,
