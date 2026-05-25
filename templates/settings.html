@@ -318,10 +318,17 @@ async function bt38RunStoreShortcut(action, platform){
   });
 }
 async function bt38RunAllStoreWarehouseSync(){
+  const syncSecret = window.prompt("Sync All is locked. Enter Sync All password.");
+  if(!syncSecret){
+    bt38Log({ok:false, success:false, governed:true, locked:true, reason:"Sync All cancelled."});
+    return;
+  }
+
   return bt38Post('/governed/warehouse/sync', {
     shortcut:true,
     shortcut_source:'settings_cockpit_all_store_sync',
-    store_scope:'all_active_live_stores'
+    store_scope:'all_active_live_stores',
+    sync_all_secret:syncSecret
   });
 }
 function bt38EmergencyFreeze(){

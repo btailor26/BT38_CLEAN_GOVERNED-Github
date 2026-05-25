@@ -265,10 +265,17 @@
 
     const original = btn.textContent;
     try {
+      const syncSecret = window.prompt('Sync All is locked. Enter Sync All password.');
+      if (!syncSecret) {
+        alert('Sync All cancelled.');
+        return;
+      }
+
       setButtonState(btn, 'Syncing...');
       const data = await postJson('/governed/warehouse/sync', {
         shortcut_source: 'warehouse-sync-all-live-stores',
-        store_scope: 'all_active_live_stores'
+        store_scope: 'all_active_live_stores',
+        sync_all_secret: syncSecret
       }, 'warehouse-sync-all-live-stores');
 
       const pushed = data.pushed || 0;

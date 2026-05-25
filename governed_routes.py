@@ -2147,15 +2147,51 @@ def governed_store_sync_shortcut(store_id):
 
 @governed_bp.post("/governed/warehouse/sync")
 def governed_warehouse_sync_manual_run():
+    """Locked governed Sync All shortcut.
+
+    Password lives only in Fly secret:
+    BT38_SYNC_ALL_SECRET
+
+    Page buttons are shortcuts only.
+    This route is the single warehouse/settings Sync All gate before fuse-box execution.
+    """
+    import os
     from services.governed_warehouse_sync import run_governed_warehouse_sync
 
     body = dict(request.get_json(silent=True) or {})
     store_id = body.get("store_id")
 
+    expected_secret = os.environ.get("BT38_SYNC_ALL_SECRET", "")
+    provided_secret = str(body.get("sync_all_secret") or "").strip()
+
+    if not expected_secret:
+        return jsonify({
+            "ok": False,
+            "success": False,
+            "governed": True,
+            "locked": True,
+            "execution_blocked": True,
+            "reason": "Sync All lock is not configured. Add BT38_SYNC_ALL_SECRET in Fly secrets.",
+        }), 423
+
+    if provided_secret != expected_secret:
+        return jsonify({
+            "ok": False,
+            "success": False,
+            "governed": True,
+            "locked": True,
+            "execution_blocked": True,
+            "reason": "Sync All locked. Password required.",
+        }), 423
+
     result = run_governed_warehouse_sync(
         store_id=store_id,
         actor=request.headers.get("X-Actor", "warehouse-sync-button"),
     )
+
+    if isinstance(result, dict):
+        result.setdefault("sync_all_secret_checked", True)
+        result.setdefault("locked_shortcut", True)
 
     return jsonify(_governed_json_safe(result)), 200
 
