@@ -1406,6 +1406,25 @@ def _push_one_listing(*, listing_id: int, quantity, actor: str, source: str) -> 
     listing.push_attempts = 0 if ok else (listing.push_attempts or 0) + 1
     listing.consecutive_failures = 0 if ok else (listing.consecutive_failures or 0) + 1
 
+    # If Amazon listing is now MFN/FBM, remove stale historical FBA/AFN read-only errors.
+    current_channel = str(
+        listing.normalized_amazon_fulfillment_channel
+        or listing.amazon_fulfillment_channel
+        or ""
+    ).strip().upper()
+    stale_error = str(listing.last_push_error or "").lower()
+    if (
+        current_channel in {"MFN", "FBM", "MERCHANT"}
+        and (
+            "fba/afn is read-only" in stale_error
+            or "no fba push path" in stale_error
+            or "read-only" in stale_error
+        )
+    ):
+        listing.last_push_error = None
+        listing.last_push_status = "pending"
+        listing.consecutive_failures = 0
+
     db.session.add(SyncLog(
         store_id=listing.store_id,
         status="success" if ok else "error",
