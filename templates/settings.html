@@ -7,7 +7,7 @@
   <label class="bt38-toggle">
     <input type="checkbox" {% if on %}checked{% endif %} onchange="bt38ConfigUpdate('{{ key }}', this.checked)">
     <span></span>
-    <b class="{{ 'on' if on else 'off' }}">{{ "ON" if on else "OFF" }}</b>
+    <b class="{{ 'on' if on else 'off' }}">{{ "CONFIG ON" if on else "CONFIG OFF" }}</b>
   </label>
 {% endmacro %}
 
@@ -245,14 +245,14 @@
     <table class="bt38-table">
       <thead><tr><th>Control</th><th>Config</th><th>Live Runtime</th><th>Truth</th></tr></thead>
       <tbody>
-        <tr><td>Scheduler</td><td>CONFIG {{ config_toggle("scheduler_enabled") }}</td><td><span class="bt38-runtime-badge off">NOT RUNNING</span></td><td>Scheduler permission exists, but no scheduler starts on app boot.</td></tr>
-        <tr><td>Sync Worker</td><td>CONFIG {{ config_toggle("sync_worker_enabled") }}</td><td><span class="bt38-runtime-badge off">NOT RUNNING</span></td><td>Manual sync works through the governed fuse-box path. Background sync worker is not running.</td></tr>
-        <tr><td>Push Worker</td><td>CONFIG {{ config_toggle("push_worker_enabled") }}</td><td><span class="bt38-runtime-badge off">NOT RUNNING</span></td><td>Manual push works through governed execution. Background push worker is not running.</td></tr>
-        <tr><td>Retry Queue</td><td>CONFIG {{ config_toggle("retry_queue_enabled") }}</td><td><span class="bt38-runtime-badge off">NOT RUNNING</span></td><td>Retry permission is configured, but queue dispatch is not currently running.</td></tr>
-        <tr><td>15-Min Reconcile</td><td>CONFIG {{ config_toggle("reconcile_15m_enabled") }}</td><td><span class="bt38-runtime-badge off">NOT RUNNING</span></td><td>15-minute value is configured, but no live 15-minute reconcile loop is active yet.</td></tr>
-        <tr><td>Webhook Worker</td><td>CONFIG {{ config_toggle("webhook_worker_enabled") }}</td><td><span class="bt38-runtime-badge warn">INGESTION ONLY</span></td><td>Receives and records marketplace notifications only. It does not start workers, sync, import, or push.</td></tr>
-        <tr><td>eBay Webhooks</td><td>CONFIG {{ config_toggle("webhook_ebay_enabled") }}</td><td><span class="bt38-runtime-badge warn">GATE ONLY</span></td><td>eBay webhook gate can allow notification intake. It does not trigger automatic sync yet.</td></tr>
-        <tr><td>Amazon Notifications</td><td>CONFIG {{ config_toggle("webhook_amazon_enabled") }}</td><td><span class="bt38-runtime-badge warn">GATE ONLY</span></td><td>Amazon notification gate can allow intake only. FBA remains read-only and no automatic execution is started.</td></tr>
+        <tr><td>Scheduler</td><td>{{ config_toggle("scheduler_enabled") }}</td><td><span class="bt38-runtime-badge off">NOT RUNNING</span></td><td>Scheduler permission exists, but no scheduler starts on app boot.</td></tr>
+        <tr><td>Sync Worker</td><td>{{ config_toggle("sync_worker_enabled") }}</td><td><span class="bt38-runtime-badge off">NOT RUNNING</span></td><td>Manual sync works through the governed fuse-box path. Background sync worker is not running.</td></tr>
+        <tr><td>Push Worker</td><td>{{ config_toggle("push_worker_enabled") }}</td><td><span class="bt38-runtime-badge off">NOT RUNNING</span></td><td>Manual push works through governed execution. Background push worker is not running.</td></tr>
+        <tr><td>Retry Queue</td><td>{{ config_toggle("retry_queue_enabled") }}</td><td><span class="bt38-runtime-badge off">NOT RUNNING</span></td><td>Retry permission is configured, but queue dispatch is not currently running.</td></tr>
+        <tr><td>15-Min Reconcile</td><td>{{ config_toggle("reconcile_15m_enabled") }}</td><td><span class="bt38-runtime-badge off">NOT RUNNING</span></td><td>15-minute value is configured, but no live 15-minute reconcile loop is active yet.</td></tr>
+        <tr><td>Webhook Worker</td><td>{{ config_toggle("webhook_worker_enabled") }}</td><td><span class="bt38-runtime-badge warn">INGESTION ONLY</span></td><td>Receives and records marketplace notifications only. It does not start workers, sync, import, or push.</td></tr>
+        <tr><td>eBay Webhooks</td><td>{{ config_toggle("webhook_ebay_enabled") }}</td><td><span class="bt38-runtime-badge warn">GATE ONLY</span></td><td>eBay webhook gate can allow notification intake. It does not trigger automatic sync yet.</td></tr>
+        <tr><td>Amazon Notifications</td><td>{{ config_toggle("webhook_amazon_enabled") }}</td><td><span class="bt38-runtime-badge warn">GATE ONLY</span></td><td>Amazon notification gate can allow intake only. FBA remains read-only and no automatic execution is started.</td></tr>
       </tbody>
     </table>
   </div>
