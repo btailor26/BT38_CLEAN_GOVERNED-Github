@@ -165,7 +165,14 @@ def refresh_governed_listing_from_snapshot(
         created = True
         db.session.add(listing)
 
-    listing.external_sku = sku
+    # Preserve stable operational SKU identity.
+    # Never overwrite an existing working SKU with a blank incoming value.
+    incoming_sku = normalize_sku(sku)
+    existing_sku = normalize_sku(getattr(listing, "external_sku", None))
+    if incoming_sku:
+        listing.external_sku = incoming_sku
+    elif not existing_sku:
+        listing.external_sku = ""
     listing.amazon_fulfillment_channel = fulfillment
     listing.title = title or listing.title or sku
     listing.price = float(price if price is not None else listing.price or 0)

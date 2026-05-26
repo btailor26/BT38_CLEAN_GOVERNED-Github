@@ -73,7 +73,10 @@ def _find_or_create_warehouse_stock(sku, qty, channel, asin=None, fnsku=None):
 
 def _find_or_create_marketplace_listing(store, stock, sku, channel, qty, asin=None, fnsku=None):
 
-    external_listing_id = asin or fnsku or sku
+    # Operational listing identity must be variation-safe.
+    # ASIN is catalog-level and may be shared by child SKUs.
+    # Prefer FNSKU/SKU before ASIN to avoid variation collisions.
+    external_listing_id = fnsku or sku or asin
 
     listing = (
         db.session.query(MarketplaceListing)
