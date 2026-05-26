@@ -3172,27 +3172,36 @@ def governed_settings_state():
             "last_sync": str(getattr(store, "last_sync", "") or ""),
         })
 
+    try:
+        from services.governed_runtime_engine import get_governed_runtime_status
+        runtime_status = get_governed_runtime_status()
+    except Exception:
+        runtime_status = {}
+
+    engine_running = bool(runtime_status.get("engine_started"))
+
     live_runtime = {
-        "marketplace_execution_on_boot": False,
-        "workers_running": False,
-        "schedulers_running": False,
-        "queue_consumers_running": False,
-        "order_import_ticks_running": False,
+        "marketplace_execution_on_boot": engine_running,
+        "workers_running": engine_running,
+        "schedulers_running": engine_running,
+        "queue_consumers_running": engine_running,
+        "order_import_ticks_running": engine_running,
         "push_loops_running": False,
-        "runtime_mode": "MANUAL GOVERNED",
-        "execution_mode": "MANUAL ONLY",
-        "runtime_truth": "Config can be ON while live workers remain NOT RUNNING. Manual governed actions can run only through the fuse-box path.",
+        "runtime_mode": runtime_status.get("runtime_mode") or ("AUTOMATED GOVERNED" if engine_running else "MANUAL GOVERNED"),
+        "execution_mode": runtime_status.get("execution_mode") or ("AUTOMATED + MANUAL GOVERNED" if engine_running else "MANUAL ONLY"),
+        "runtime_truth": "Governed runtime engine is RUNNING. Automation obeys fuse-box/store settings and FBA remains read-only." if engine_running else "Config can be ON while live workers remain NOT RUNNING. Manual governed actions can run only through the fuse-box path.",
         "automation_runtime_status": {
-            "scheduler": "NOT RUNNING",
-            "sync_worker": "NOT RUNNING",
-            "push_worker": "NOT RUNNING",
-            "retry_queue": "NOT RUNNING",
-            "reconcile_15m": "NOT RUNNING",
-            "webhook_worker": "INGESTION ONLY",
-            "webhook_ebay": "GATE ONLY",
-            "webhook_amazon": "GATE ONLY",
-            "webhook_execution": "NOT WIRED",
+            "scheduler": "RUNNING" if engine_running else "NOT RUNNING",
+            "sync_worker": "RUNNING" if engine_running else "NOT RUNNING",
+            "push_worker": "GOVERNED QUEUE READY" if engine_running else "NOT RUNNING",
+            "retry_queue": "RUNNING" if engine_running else "NOT RUNNING",
+            "reconcile_15m": "RUNNING" if engine_running else "NOT RUNNING",
+            "webhook_worker": "RUNNING" if engine_running else "INGESTION ONLY",
+            "webhook_ebay": "GATE + GOVERNED RUNTIME" if engine_running else "GATE ONLY",
+            "webhook_amazon": "GATE + GOVERNED RUNTIME" if engine_running else "GATE ONLY",
+            "webhook_execution": "GOVERNED RUNTIME READY" if engine_running else "NOT WIRED",
         },
+        "engine": runtime_status,
     }
 
     return jsonify(
