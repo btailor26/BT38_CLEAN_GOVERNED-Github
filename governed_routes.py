@@ -3187,6 +3187,9 @@ def governed_settings_state():
             "retry_queue": "NOT RUNNING",
             "reconcile_15m": "NOT RUNNING",
             "webhook_worker": "INGESTION ONLY",
+            "webhook_ebay": "GATE ONLY",
+            "webhook_amazon": "GATE ONLY",
+            "webhook_execution": "NOT WIRED",
         },
     }
 
