@@ -172,18 +172,18 @@
     <table class="bt38-table">
       <thead><tr><th>Control</th><th>State</th><th>Purpose</th></tr></thead>
       <tbody>
-        <tr><td>Master Push Fuse</td><td>{{ config_toggle("push_enabled") }}</td><td>Top-level push permission. This alone does not make push executable.</td></tr>
-        <tr><td>Runtime Push Fuse</td><td>{{ config_toggle("runtime_push_enabled") }}</td><td>Runtime guard permission required for warehouse/manual push.</td></tr>
-        <tr><td>Marketplace Push Fuse</td><td>{{ config_toggle("marketplace_push_enabled") }}</td><td>Marketplace write permission required before any live push can run.</td></tr>
-        <tr><td>Master Import Fuse</td><td>{{ config_toggle("import_enabled") }}</td><td>Top-level import permission. This alone does not make import executable.</td></tr>
-        <tr><td>Runtime Import Fuse</td><td>{{ config_toggle("runtime_import_enabled") }}</td><td>Runtime guard permission required for import/hydration.</td></tr>
-        <tr><td>Marketplace Import Fuse</td><td>{{ config_toggle("marketplace_import_enabled") }}</td><td>Marketplace import permission required before import can run.</td></tr>
-        <tr><td>Master Sync Fuse</td><td>{{ config_toggle("sync_enabled") }}</td><td>Top-level sync permission. This alone does not make sync executable.</td></tr>
-        <tr><td>Runtime Sync Fuse</td><td>{{ config_toggle("runtime_sync_enabled") }}</td><td>Runtime guard permission required for sync/reconcile.</td></tr>
-        <tr><td>Marketplace Sync Fuse</td><td>{{ config_toggle("marketplace_sync_enabled") }}</td><td>Marketplace sync permission required before sync can run.</td></tr>
+        <tr><td>Master Push Fuse</td><td>{{ config_toggle("push_enabled") }}</td><td>CONFIG ON grants top-level push permission only. It does not start runtime execution.</td></tr>
+        <tr><td>Runtime Push Fuse</td><td>{{ config_toggle("runtime_push_enabled") }}</td><td>CONFIG ON grants runtime guard permission for governed/manual push.</td></tr>
+        <tr><td>Marketplace Push Fuse</td><td>{{ config_toggle("marketplace_push_enabled") }}</td><td>CONFIG ON grants marketplace write permission before governed execution can run.</td></tr>
+        <tr><td>Master Import Fuse</td><td>{{ config_toggle("import_enabled") }}</td><td>CONFIG ON grants top-level import permission only. It does not start runtime execution.</td></tr>
+        <tr><td>Runtime Import Fuse</td><td>{{ config_toggle("runtime_import_enabled") }}</td><td>CONFIG ON grants runtime guard permission for governed import/hydration.</td></tr>
+        <tr><td>Marketplace Import Fuse</td><td>{{ config_toggle("marketplace_import_enabled") }}</td><td>CONFIG ON grants marketplace import permission before governed execution can run.</td></tr>
+        <tr><td>Master Sync Fuse</td><td>{{ config_toggle("sync_enabled") }}</td><td>CONFIG ON grants top-level sync permission only. It does not start runtime execution.</td></tr>
+        <tr><td>Runtime Sync Fuse</td><td>{{ config_toggle("runtime_sync_enabled") }}</td><td>CONFIG ON grants runtime guard permission for governed sync/reconcile.</td></tr>
+        <tr><td>Marketplace Sync Fuse</td><td>{{ config_toggle("marketplace_sync_enabled") }}</td><td>CONFIG ON grants marketplace sync permission before governed execution can run.</td></tr>
         <tr><td>Read Only Mode</td><td>{{ config_toggle("read_only_mode") }}</td><td>MASTER HARD BLOCK. When ON, all marketplace writes/import/sync are blocked.</td></tr>
-        <tr><td>Dry Run Mode</td><td>{{ config_toggle("dry_run_mode") }}</td><td>Simulates actions without live marketplace writes.</td></tr>
-        <tr><td>Queue Freeze</td><td>{{ config_toggle("queue_frozen") }}</td><td>Blocks queued/background dispatch if workers are later enabled. Manual actions still need their own fuses.</td></tr>
+        <tr><td>Dry Run Mode</td><td>{{ config_toggle("dry_run_mode") }}</td><td>CONFIG ON simulates governed actions without live marketplace writes.</td></tr>
+        <tr><td>Queue Freeze</td><td>{{ config_toggle("queue_frozen") }}</td><td>CONFIG ON blocks future background dispatch if workers are later enabled. Manual governed actions still require fuse approval.</td></tr>
       </tbody>
     </table>
   </div>
@@ -193,13 +193,13 @@
     <table class="bt38-table">
       <thead><tr><th>Action</th><th>State</th><th>Purpose</th></tr></thead>
       <tbody>
-        <tr><td>Manual Import</td><td>{{ config_toggle("manual_import_enabled") }}</td><td>User-triggered import only.</td></tr>
-        <tr><td>Manual Push</td><td>{{ config_toggle("manual_push_enabled") }}</td><td>User-triggered push only.</td></tr>
-        <tr><td>Manual Sync</td><td>{{ config_toggle("manual_sync_enabled") }}</td><td>User-triggered sync only.</td></tr>
-        <tr><td>Quantity Push</td><td>{{ config_toggle("quantity_push_enabled") }}</td><td>Allows quantity marketplace writes.</td></tr>
-        <tr><td>Price Push</td><td>{{ config_toggle("price_push_enabled") }}</td><td>Allows price marketplace writes.</td></tr>
-        <tr><td>Group Push</td><td>{{ config_toggle("group_push_enabled") }}</td><td>Allows grouped listing push.</td></tr>
-        <tr><td>Bulk Push</td><td>{{ config_toggle("bulk_push_enabled") }}</td><td>Bulk execution gate.</td></tr>
+        <tr><td>Manual Import</td><td>{{ config_toggle("manual_import_enabled") }}</td><td>CONFIG ON allows manual user-triggered import only.</td></tr>
+        <tr><td>Manual Push</td><td>{{ config_toggle("manual_push_enabled") }}</td><td>CONFIG ON allows manual user-triggered push only.</td></tr>
+        <tr><td>Manual Sync</td><td>{{ config_toggle("manual_sync_enabled") }}</td><td>CONFIG ON allows manual user-triggered sync only.</td></tr>
+        <tr><td>Quantity Push</td><td>{{ config_toggle("quantity_push_enabled") }}</td><td>CONFIG ON allows governed quantity marketplace writes.</td></tr>
+        <tr><td>Price Push</td><td>{{ config_toggle("price_push_enabled") }}</td><td>CONFIG ON allows governed price marketplace writes.</td></tr>
+        <tr><td>Group Push</td><td>{{ config_toggle("group_push_enabled") }}</td><td>CONFIG ON allows governed grouped listing push.</td></tr>
+        <tr><td>Bulk Push</td><td>{{ config_toggle("bulk_push_enabled") }}</td><td>CONFIG ON allows governed bulk execution.</td></tr>
       </tbody>
     </table>
   </div>
