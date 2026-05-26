@@ -2613,17 +2613,34 @@ def governed_ebay_inventory_import():
             guard=guard,
         ), 200
 
-    return jsonify(
-        ok=False,
-        success=False,
-        governed=True,
-        marketplace="ebay",
-        import_started=False,
-        execution_started=False,
-        reason="eBay governed import route is fuse-box controlled, but the eBay importer is not built yet.",
-        store_id=getattr(store, "id", None),
-        guard=guard,
-    ), 200
+    from services.governed_ebay_inventory_import import run_governed_ebay_inventory_import
+
+    try:
+        result = run_governed_ebay_inventory_import(
+            store_id=getattr(store, "id", None)
+        )
+
+        if isinstance(result, dict):
+            return jsonify(_governed_json_safe(result)), 200
+
+        return jsonify(
+            ok=True,
+            success=True,
+            governed=True,
+            marketplace="ebay",
+            result=result,
+        ), 200
+
+    except Exception as exc:
+        return jsonify(
+            ok=False,
+            success=False,
+            governed=True,
+            marketplace="ebay",
+            error="ebay_import_failed",
+            message=str(exc),
+            instruction="eBay governed variation import failed.",
+        ), 500
 
 
 @governed_bp.route("/governed/webhooks/ebay", methods=["GET", "POST"])
