@@ -1102,7 +1102,14 @@ def governed_warehouse_page():
             is_fba=bool(is_fba),
             is_fbm=bool(is_fbm),
             is_group_controlled=bool(stock.is_group_controlled) if stock else False,
-            available_quantity=stock.sellable_quantity if stock else 0,
+            # Operational quantity authority:
+            # AFN/FBA = imported marketplace quantity
+            # MFN/FBM = warehouse sellable quantity
+            available_quantity=(
+                int(listing.last_marketplace_qty or 0)
+                if is_fba
+                else int(stock.sellable_quantity or 0)
+            ) if stock else int(listing.last_marketplace_qty or 0),
             price=listing.price or 0,
             store_name=listing.store.name if listing.store else platform,
             platform=platform,
@@ -1370,7 +1377,13 @@ def _push_one_listing(*, listing_id: int, quantity, actor: str, source: str) -> 
         "listing_id": listing.id,
         "external_listing_id": listing.external_listing_id,
         "quantity": push_quantity,
-        "amazon_fulfillment_channel": listing.amazon_fulfillment_channel or "MFN",
+        # Use normalized operational fulfilment state.
+        # Never trust stale raw labels or SKU prefixes.
+        "amazon_fulfillment_channel": (
+            listing.normalized_amazon_fulfillment_channel
+            or listing.amazon_fulfillment_channel
+            or "MFN"
+        ),
         "source": source,
     }
     approval = {
@@ -1766,6 +1779,9 @@ def governed_product_linking_data_compat():
             MarketplaceListing.external_sku.ilike(like),
             MarketplaceListing.title.ilike(like),
             MarketplaceListing.external_listing_id.ilike(like),
+            MarketplaceListing.parent_item_id.ilike(like),
+            MarketplaceListing.external_parent_id.ilike(like),
+            MarketplaceListing.variation_sku_map.ilike(like),
             MarketplaceListing.asin.ilike(like),
             MarketplaceListing.fnsku.ilike(like),
             MarketplaceListing.barcode.ilike(like),
