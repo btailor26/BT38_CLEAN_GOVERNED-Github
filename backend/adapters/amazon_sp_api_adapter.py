@@ -25,20 +25,29 @@ class AmazonSPAPIAdapter:
 
         self.creds = creds
 
-        self.client = Inventories(
-            marketplace=Marketplaces.UK,
-            refresh_token=creds.get("refresh_token"),
-            lwa_client_id=(
+        credentials = {
+            "refresh_token": creds.get("refresh_token"),
+            "lwa_client_id": (
                 creds.get("lwa_client_id")
+                or creds.get("lwa_app_id")
                 or creds.get("client_id")
             ),
-            lwa_client_secret=(
+            "lwa_client_secret": (
                 creds.get("lwa_client_secret")
                 or creds.get("client_secret")
             ),
-            aws_access_key=creds.get("aws_access_key"),
-            aws_secret_key=creds.get("aws_secret_key"),
-            role_arn=creds.get("role_arn"),
+        }
+
+        if creds.get("aws_access_key"):
+            credentials["aws_access_key"] = creds.get("aws_access_key")
+        if creds.get("aws_secret_key"):
+            credentials["aws_secret_key"] = creds.get("aws_secret_key")
+        if creds.get("role_arn"):
+            credentials["role_arn"] = creds.get("role_arn")
+
+        self.client = Inventories(
+            marketplace=Marketplaces.UK,
+            credentials=credentials,
         )
 
     def get_inventory(self):
