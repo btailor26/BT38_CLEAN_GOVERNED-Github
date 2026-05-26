@@ -196,9 +196,16 @@ def _patch_listing_quantity_with_sp_api(*, credentials: Mapping[str, str], sku: 
 
 
 def _sp_api_credentials(credentials: Mapping[str, str]) -> dict[str, str]:
+    """
+    python-amazon-sp-api expects lwa_client_id, not lwa_app_id.
+
+    Internally BT38 may still store the value as lwa_app_id because older
+    Amazon/LWA wording used that name. This block normalizes the stored value
+    into the library's current constructor key without changing stored secrets.
+    """
     result = {
         "refresh_token": credentials["refresh_token"],
-        "lwa_app_id": credentials["lwa_app_id"],
+        "lwa_client_id": credentials.get("lwa_client_id") or credentials["lwa_app_id"],
         "lwa_client_secret": credentials["lwa_client_secret"],
     }
     if credentials.get("aws_access_key_id"):

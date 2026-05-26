@@ -1088,12 +1088,28 @@ def governed_warehouse_page():
         is_fba = is_amazon and not is_fbm
         location = f"{platform} {'FBA' if is_fba else 'FBM'}" if is_amazon else platform
 
+        is_ebay_variation_child = bool(
+            (not is_amazon)
+            and (
+                getattr(listing, "parent_item_id", None)
+                or getattr(listing, "external_parent_id", None)
+            )
+            and str(getattr(listing, "external_listing_id", "") or "").strip()
+        )
+
+        display_sku = (
+            listing.external_sku
+            or (stock.sku if stock else None)
+            or listing.external_listing_id
+            or ""
+        )
+
         rows.append(SimpleNamespace(
             id=stock.id if stock else 0,
             inventory_item_id=None,
             item_id=None,
             marketplace_listing_id=listing.id,
-            sku=(stock.sku if stock else listing.external_sku) or "",
+            sku=display_sku,
             master_product_group_id=listing.master_product_group_id or (stock.master_product_group_id if stock else None),
             location=location,
             image_url=stock.image_url if stock else None,
@@ -1105,12 +1121,17 @@ def governed_warehouse_page():
             is_fba=bool(is_fba),
             is_fbm=bool(is_fbm),
             is_group_controlled=bool(stock.is_group_controlled) if stock else False,
+            is_ebay_variation_child=is_ebay_variation_child,
+            parent_item_id=getattr(listing, "parent_item_id", None),
+            external_parent_id=getattr(listing, "external_parent_id", None),
+            variation_sku_map=getattr(listing, "variation_sku_map", None),
             # Quantity authority:
             # AFN/FBA rows display imported marketplace quantity.
+            # eBay variation child rows display their own imported marketplace quantity.
             # MFN/FBM rows display warehouse sellable quantity.
             available_quantity=(
                 int(listing.last_marketplace_qty or 0)
-                if is_fba
+                if (is_fba or is_ebay_variation_child)
                 else int(stock.sellable_quantity or 0)
             ) if stock else int(listing.last_marketplace_qty or 0),
             price=listing.price or 0,
