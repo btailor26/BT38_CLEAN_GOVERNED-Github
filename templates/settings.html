@@ -148,19 +148,19 @@
       <tr><th>Function</th><th>Status</th><th>Exact reason</th><th>Required circuits</th></tr>
       <tr>
         <td>Push Execution</td>
-        <td><span class="{% if fuse_status.push.label == 'ALLOWED' %}ok{% else %}bad{% endif %}">{{ fuse_status.push.label }}</span></td>
+        <td><span class="{% if fuse_status.push.label == 'ALLOWED' %}ok{% else %}bad{% endif %}">{% if fuse_status.push.label == 'ALLOWED' %}MANUAL GOVERNED ALLOWED{% else %}{{ fuse_status.push.label }}{% endif %}</span></td>
         <td>{{ fuse_status.push.reason }}</td>
         <td><code>push_enabled={{ fuse_status.push.required.push_enabled }}, runtime_push_enabled={{ fuse_status.push.required.runtime_push_enabled }}, marketplace_push_enabled={{ fuse_status.push.required.marketplace_push_enabled }}, manual_push_enabled={{ fuse_status.push.required.manual_push_enabled }}</code></td>
       </tr>
       <tr>
         <td>Import Execution</td>
-        <td><span class="{% if fuse_status.import.label == 'ALLOWED' %}ok{% else %}bad{% endif %}">{{ fuse_status.import.label }}</span></td>
+        <td><span class="{% if fuse_status.import.label == 'ALLOWED' %}ok{% else %}bad{% endif %}">{% if fuse_status.import.label == 'ALLOWED' %}MANUAL GOVERNED ALLOWED{% else %}{{ fuse_status.import.label }}{% endif %}</span></td>
         <td>{{ fuse_status.import.reason }}</td>
         <td><code>import_enabled={{ fuse_status.import.required.import_enabled }}, runtime_import_enabled={{ fuse_status.import.required.runtime_import_enabled }}, marketplace_import_enabled={{ fuse_status.import.required.marketplace_import_enabled }}, manual_import_enabled={{ fuse_status.import.required.manual_import_enabled }}</code></td>
       </tr>
       <tr>
         <td>Sync Execution</td>
-        <td><span class="{% if fuse_status.sync.label == 'ALLOWED' %}ok{% else %}bad{% endif %}">{{ fuse_status.sync.label }}</span></td>
+        <td><span class="{% if fuse_status.sync.label == 'ALLOWED' %}ok{% else %}bad{% endif %}">{% if fuse_status.sync.label == 'ALLOWED' %}MANUAL GOVERNED ALLOWED{% else %}{{ fuse_status.sync.label }}{% endif %}</span></td>
         <td>{{ fuse_status.sync.reason }}</td>
         <td><code>sync_enabled={{ fuse_status.sync.required.sync_enabled }}, runtime_sync_enabled={{ fuse_status.sync.required.runtime_sync_enabled }}, marketplace_sync_enabled={{ fuse_status.sync.required.marketplace_sync_enabled }}, manual_sync_enabled={{ fuse_status.sync.required.manual_sync_enabled }}</code></td>
       </tr>
@@ -290,7 +290,49 @@
 
 <script>
 function bt38Log(data){
-  document.getElementById("bt38Log").textContent = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+  const box = document.getElementById("bt38Log");
+  if (!box) return;
+
+  if (typeof data === "string") {
+    box.textContent = data;
+    return;
+  }
+
+  const lines = [];
+  lines.push("BT38 operator summary");
+  lines.push("---------------------");
+
+  if (data && Object.prototype.hasOwnProperty.call(data, "ok")) lines.push("OK: " + data.ok);
+  if (data && Object.prototype.hasOwnProperty.call(data, "success")) lines.push("Success: " + data.success);
+  if (data && data.message) lines.push("Message: " + data.message);
+  if (data && data.reason) lines.push("Reason: " + data.reason);
+  if (data && data.error) lines.push("Error: " + data.error);
+
+  if (data && data.live_runtime) {
+    lines.push("");
+    lines.push("Runtime mode: " + (data.live_runtime.runtime_mode || "unknown"));
+    lines.push("Execution mode: " + (data.live_runtime.execution_mode || "unknown"));
+    lines.push("Workers running: " + Boolean(data.live_runtime.workers_running));
+    lines.push("Schedulers running: " + Boolean(data.live_runtime.schedulers_running));
+    lines.push("Runtime truth: " + (data.live_runtime.runtime_truth || "not provided"));
+  }
+
+  if (data && data.config) {
+    lines.push("");
+    lines.push("Fuse config:");
+    lines.push("Push: " + (data.config.push_enabled === "true" ? "Config ON" : "Config OFF"));
+    lines.push("Import: " + (data.config.import_enabled === "true" ? "Config ON" : "Config OFF"));
+    lines.push("Sync: " + (data.config.sync_enabled === "true" ? "Config ON" : "Config OFF"));
+    lines.push("Read only: " + (data.config.read_only_mode === "true" ? "ON" : "OFF"));
+    lines.push("Queue frozen: " + (data.config.queue_frozen === "true" ? "YES" : "NO"));
+  }
+
+  if (data && Array.isArray(data.stores)) {
+    lines.push("");
+    lines.push("Stores visible: " + data.stores.length);
+  }
+
+  box.textContent = lines.join("\n");
 }
 async function bt38Post(url, payload){
   const res = await fetch(url, {
