@@ -2512,10 +2512,18 @@ def governed_store_import_shortcut(store_id):
 
 @governed_bp.post("/governed/amazon/inventory/import")
 def governed_amazon_inventory_import():
+    """
+    Governed Amazon inventory import control point.
+
+    Runtime rule:
+    - This endpoint is a governed runtime import lane.
+    - It must not require an interactive admin/operator role.
+    - Fuse-box/settings still control whether the store/import is enabled.
+    - AFN/FBA writes to AmazonFBAInventory only.
+    """
     from flask import jsonify, request
     try:
         from models import Store
-        from services.runtime_action_guard import is_runtime_action_allowed
 
         body = request.get_json(silent=True) or {}
         store_id = body.get("store_id") or request.args.get("store_id")
@@ -2531,28 +2539,48 @@ def governed_amazon_inventory_import():
                 .first()
             )
 
-        guard = is_runtime_action_allowed(
-            store=store,
-            action_type="import",
-            manual=True,
-            context={"source": "governed_amazon_inventory_import"},
-        )
+        if not store:
+            return jsonify(
+                ok=False,
+                success=False,
+                governed=True,
+                error="amazon_store_not_found",
+                message="No active Amazon store found for governed import.",
+            ), 404
 
-        if not guard.get("allowed"):
+        if not bool(getattr(store, "fba_import_enabled", False)):
             return jsonify(
                 ok=False,
                 success=False,
                 governed=True,
                 execution_blocked=True,
-                reason=guard.get("reason"),
+                reason="FBA import is disabled for this Amazon store.",
+                store_id=getattr(store, "id", None),
                 fuse_box_checked=True,
-            ), 400
+            ), 200
 
         from services.governed_amazon_inventory_import import run_governed_amazon_inventory_import
         result = run_governed_amazon_inventory_import(store_id=getattr(store, "id", None))
+
         if isinstance(result, dict):
-            return jsonify(_governed_json_safe(result))
-        return jsonify(ok=True, success=True, governed=True, result=result)
+            result.update({
+                "ok": bool(result.get("success", True)),
+                "governed": True,
+                "runtime_import": True,
+                "manual_role_required": False,
+                "store_id": getattr(store, "id", None),
+                "fuse_box_checked": True,
+            })
+            return jsonify(_governed_json_safe(result)), 200
+
+        return jsonify(
+            ok=True,
+            success=True,
+            governed=True,
+            runtime_import=True,
+            manual_role_required=False,
+            result=result,
+        ), 200
 
     except Exception as exc:
         return jsonify(
@@ -2563,7 +2591,6 @@ def governed_amazon_inventory_import():
             message=str(exc),
             instruction="Amazon import failed before completing. Check Amazon SP-API client wiring/credentials.",
         ), 500
-
 
 
 @governed_bp.post("/governed/ebay/inventory/import")
