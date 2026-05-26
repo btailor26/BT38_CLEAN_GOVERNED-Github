@@ -195,16 +195,22 @@ def is_runtime_action_allowed(store, action_type, manual=False, context=None):
     if action in READ_ONLY_ACTIONS:
         return _allowed(store, action, manual, "Read-only action allowed", user=actor_user, user_checked=False)
 
+    # Manual runtime actions from an unauthenticated HTTP request stay blocked.
+    # System/runtime import loops may execute with no actor because they are controlled
+    # by the fuse-box and store state, not by a browser user session.
     if not _user_has_action_access(actor_user, action):
-        permission_key = ACTION_PERMISSION_KEYS.get(action, "runtime_action_permission")
-        return _blocked(
-            store,
-            action,
-            manual,
-            f"User access blocks {action}: requires admin/owner/operator role or {permission_key}",
-            user=actor_user,
-            user_checked=user_checked,
-        )
+        if actor_user is None and not _request_context_exists() and action == "import":
+            pass
+        else:
+            permission_key = ACTION_PERMISSION_KEYS.get(action, "runtime_action_permission")
+            return _blocked(
+                store,
+                action,
+                manual,
+                f"User access blocks {action}: requires admin/owner/operator role or {permission_key}",
+                user=actor_user,
+                user_checked=user_checked,
+            )
 
     if _config_on("read_only_mode", default=False):
         return _blocked(store, action, manual, "Fuse box read_only_mode is ON", user=actor_user, user_checked=user_checked)

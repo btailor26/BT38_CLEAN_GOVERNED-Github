@@ -3,6 +3,7 @@ BT38 CLEAN AMAZON SP-API ADAPTER
 """
 
 import json
+import os
 from datetime import datetime
 
 from sp_api.api import Inventories
@@ -26,24 +27,57 @@ class AmazonSPAPIAdapter:
         self.creds = creds
 
         credentials = {
-            "refresh_token": creds.get("refresh_token"),
-            "lwa_client_id": (
-                creds.get("lwa_client_id")
-                or creds.get("lwa_app_id")
+            "refresh_token": (
+                creds.get("refresh_token")
+                or os.getenv("AMAZON_REFRESH_TOKEN")
+                or os.getenv("SP_API_REFRESH_TOKEN")
+            ),
+            # python-amazon-sp-api 1.9.48 validates this internal key as lwa_app_id.
+            # The constructor receives credentials=..., not lwa_app_id=...
+            "lwa_app_id": (
+                creds.get("lwa_app_id")
+                or creds.get("lwa_client_id")
                 or creds.get("client_id")
+                or os.getenv("AMAZON_LWA_CLIENT_ID")
+                or os.getenv("AMAZON_LWA_APP_ID")
+                or os.getenv("SP_API_LWA_CLIENT_ID")
             ),
             "lwa_client_secret": (
                 creds.get("lwa_client_secret")
                 or creds.get("client_secret")
+                or os.getenv("AMAZON_LWA_CLIENT_SECRET")
+                or os.getenv("SP_API_LWA_CLIENT_SECRET")
             ),
         }
 
-        if creds.get("aws_access_key"):
-            credentials["aws_access_key"] = creds.get("aws_access_key")
-        if creds.get("aws_secret_key"):
-            credentials["aws_secret_key"] = creds.get("aws_secret_key")
-        if creds.get("role_arn"):
-            credentials["role_arn"] = creds.get("role_arn")
+        aws_access_key = (
+            creds.get("aws_access_key")
+            or creds.get("aws_access_key_id")
+            or os.getenv("AWS_ACCESS_KEY_ID")
+            or os.getenv("AMAZON_AWS_ACCESS_KEY_ID")
+            or os.getenv("SP_API_AWS_ACCESS_KEY_ID")
+        )
+        aws_secret_key = (
+            creds.get("aws_secret_key")
+            or creds.get("aws_secret_access_key")
+            or os.getenv("AWS_SECRET_ACCESS_KEY")
+            or os.getenv("AMAZON_AWS_SECRET_ACCESS_KEY")
+            or os.getenv("SP_API_AWS_SECRET_ACCESS_KEY")
+        )
+        role_arn = (
+            creds.get("role_arn")
+            or creds.get("aws_user_arn")
+            or os.getenv("AWS_ROLE_ARN")
+            or os.getenv("AMAZON_AWS_ROLE_ARN")
+            or os.getenv("SP_API_ROLE_ARN")
+        )
+
+        if aws_access_key:
+            credentials["aws_access_key"] = aws_access_key
+        if aws_secret_key:
+            credentials["aws_secret_key"] = aws_secret_key
+        if role_arn:
+            credentials["role_arn"] = role_arn
 
         self.client = Inventories(
             marketplace=Marketplaces.UK,
