@@ -68,6 +68,28 @@
   line-height:1.45;
 }
 
+
+.bt38-runtime-badge{
+  display:inline-block;
+  padding:4px 8px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:700;
+}
+.bt38-runtime-badge.off{
+  background:#fee2e2;
+  color:#991b1b;
+}
+.bt38-runtime-badge.warn{
+  background:#fef3c7;
+  color:#92400e;
+}
+.bt38-help{
+  margin:0 0 12px;
+  color:#475569;
+  font-size:13px;
+}
+
 </style>
 
 <div class="bt38-cockpit">
@@ -215,17 +237,20 @@
 
   <div class="bt38-section">
     <h3>4. Automation + Webhooks</h3>
+    <p class="bt38-help">
+      CEO truth layer: Config ON means permission is requested. Live Runtime shows whether the process is actually running now.
+    </p>
     <table class="bt38-table">
-      <thead><tr><th>Control</th><th>State</th><th>Purpose</th></tr></thead>
+      <thead><tr><th>Control</th><th>Config</th><th>Live Runtime</th><th>Truth</th></tr></thead>
       <tbody>
-        <tr><td>Scheduler</td><td>{{ config_toggle("scheduler_enabled") }}</td><td>Scheduled checks/reconcile.</td></tr>
-        <tr><td>Sync Worker</td><td>{{ config_toggle("sync_worker_enabled") }}</td><td>Background sync worker.</td></tr>
-        <tr><td>Push Worker</td><td>{{ config_toggle("push_worker_enabled") }}</td><td>Background push worker.</td></tr>
-        <tr><td>Retry Queue</td><td>{{ config_toggle("retry_queue_enabled") }}</td><td>Retry failed jobs.</td></tr>
-        <tr><td>15-Min Reconcile</td><td>{{ config_toggle("reconcile_15m_enabled") }}</td><td>Controlled reconciliation cycle.</td></tr>
-        <tr><td>Webhook Worker</td><td>{{ config_toggle("webhook_worker_enabled") }}</td><td>Process notifications.</td></tr>
-        <tr><td>eBay Webhooks</td><td>{{ config_toggle("webhook_ebay_enabled") }}</td><td>eBay notification gate.</td></tr>
-        <tr><td>Amazon Notifications</td><td>{{ config_toggle("webhook_amazon_enabled") }}</td><td>Amazon notification gate.</td></tr>
+        <tr><td>Scheduler</td><td>{{ config_toggle("scheduler_enabled") }}</td><td><span class="bt38-runtime-badge off">NOT RUNNING</span></td><td>Scheduler permission exists, but no scheduler starts on app boot.</td></tr>
+        <tr><td>Sync Worker</td><td>{{ config_toggle("sync_worker_enabled") }}</td><td><span class="bt38-runtime-badge off">NOT RUNNING</span></td><td>Manual sync works through the governed fuse-box path. Background sync worker is not running.</td></tr>
+        <tr><td>Push Worker</td><td>{{ config_toggle("push_worker_enabled") }}</td><td><span class="bt38-runtime-badge off">NOT RUNNING</span></td><td>Manual push works through governed execution. Background push worker is not running.</td></tr>
+        <tr><td>Retry Queue</td><td>{{ config_toggle("retry_queue_enabled") }}</td><td><span class="bt38-runtime-badge off">NOT RUNNING</span></td><td>Retry permission is configured, but queue dispatch is not currently running.</td></tr>
+        <tr><td>15-Min Reconcile</td><td>{{ config_toggle("reconcile_15m_enabled") }}</td><td><span class="bt38-runtime-badge off">NOT RUNNING</span></td><td>15-minute value is configured, but no live 15-minute reconcile loop is active yet.</td></tr>
+        <tr><td>Webhook Worker</td><td>{{ config_toggle("webhook_worker_enabled") }}</td><td><span class="bt38-runtime-badge warn">INGESTION ONLY</span></td><td>Webhook routes can receive/log notifications. They do not execute sync, push, or import yet.</td></tr>
+        <tr><td>eBay Webhooks</td><td>{{ config_toggle("webhook_ebay_enabled") }}</td><td><span class="bt38-runtime-badge warn">GATE ONLY</span></td><td>eBay notification gate exists. Execution remains governed/manual until webhook worker execution is approved.</td></tr>
+        <tr><td>Amazon Notifications</td><td>{{ config_toggle("webhook_amazon_enabled") }}</td><td><span class="bt38-runtime-badge warn">GATE ONLY</span></td><td>Amazon notification gate exists. FBA remains read-only and no automatic execution is started.</td></tr>
       </tbody>
     </table>
   </div>
