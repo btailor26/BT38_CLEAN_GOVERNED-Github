@@ -28,8 +28,8 @@ class AmazonSPAPIAdapter:
         self.client = Inventories(
             marketplace=Marketplaces.UK,
             refresh_token=creds.get("refresh_token"),
-            lwa_app_id=(
-                creds.get("lwa_app_id")
+            lwa_client_id=(
+                creds.get("lwa_client_id")
                 or creds.get("client_id")
             ),
             lwa_client_secret=(

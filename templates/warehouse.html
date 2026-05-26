@@ -220,6 +220,24 @@
                     SKU: {{ item.sku }}
                   </div>
 
+                  {% if item.external_listing_id %}
+                  <div class="bt38-meta">
+                    Listing ID: {{ item.external_listing_id }}
+                  </div>
+                  {% endif %}
+
+                  {% if item.parent_item_id or item.external_parent_id %}
+                  <div class="bt38-meta">
+                    Parent Item: {{ item.parent_item_id or item.external_parent_id }}
+                  </div>
+                  {% endif %}
+
+                  {% if item.is_ebay_variation_child %}
+                  <div class="bt38-meta">
+                    eBay Variation Child
+                  </div>
+                  {% endif %}
+
                   {% if item.barcode %}
                   <div class="bt38-meta">
                     FNSKU: {{ item.barcode }}
