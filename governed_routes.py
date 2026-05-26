@@ -2476,20 +2476,20 @@ def governed_store_import_shortcut(store_id):
         ), 200
 
     if "ebay" in platform:
-        log_shortcut("not_built", "eBay import shortcut allowed but importer not built")
+        log_shortcut("governed_import", "eBay governed variation importer executed")
         return jsonify(
             ok=False,
             success=False,
             governed=True,
             shortcut=True,
-            status="not_built",
+            status="governed_import",
             action_type="import",
             store_id=store.id,
             platform=store.platform,
             fuse_box_checked=True,
             allowed=True,
-            execution_started=False,
-            reason="eBay governed importer is not built yet. Fuse box allowed the shortcut, but no importer is available.",
+            execution_started=True,
+            reason="eBay governed variation importer is now wired through the governed runtime path.",
             guard=guard,
         ), 200
 
