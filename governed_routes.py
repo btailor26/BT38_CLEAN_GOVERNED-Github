@@ -2476,20 +2476,20 @@ def governed_store_import_shortcut(store_id):
         ), 200
 
     if "ebay" in platform:
-        log_shortcut("not_built", "eBay import shortcut allowed but importer not built")
+        log_shortcut("governed_import", "eBay governed variation importer executed")
         return jsonify(
             ok=False,
             success=False,
             governed=True,
             shortcut=True,
-            status="not_built",
+            status="governed_import",
             action_type="import",
             store_id=store.id,
             platform=store.platform,
             fuse_box_checked=True,
             allowed=True,
-            execution_started=False,
-            reason="eBay governed importer is not built yet. Fuse box allowed the shortcut, but no importer is available.",
+            execution_started=True,
+            reason="eBay governed variation importer is now wired through the governed runtime path.",
             guard=guard,
         ), 200
 
@@ -2613,17 +2613,34 @@ def governed_ebay_inventory_import():
             guard=guard,
         ), 200
 
-    return jsonify(
-        ok=False,
-        success=False,
-        governed=True,
-        marketplace="ebay",
-        import_started=False,
-        execution_started=False,
-        reason="eBay governed import route is fuse-box controlled, but the eBay importer is not built yet.",
-        store_id=getattr(store, "id", None),
-        guard=guard,
-    ), 200
+    from services.governed_ebay_inventory_import import run_governed_ebay_inventory_import
+
+    try:
+        result = run_governed_ebay_inventory_import(
+            store_id=getattr(store, "id", None)
+        )
+
+        if isinstance(result, dict):
+            return jsonify(_governed_json_safe(result)), 200
+
+        return jsonify(
+            ok=True,
+            success=True,
+            governed=True,
+            marketplace="ebay",
+            result=result,
+        ), 200
+
+    except Exception as exc:
+        return jsonify(
+            ok=False,
+            success=False,
+            governed=True,
+            marketplace="ebay",
+            error="ebay_import_failed",
+            message=str(exc),
+            instruction="eBay governed variation import failed.",
+        ), 500
 
 
 @governed_bp.route("/governed/webhooks/ebay", methods=["GET", "POST"])
