@@ -630,6 +630,13 @@ print("  [OK] Amazon/eBay API error tables remain reporting-only at startup")
 print("  [OK] System Activity remains available for audit/reporting")
 print("="*60 + "\n")
 
+try:
+    from services.governed_runtime_engine import start_governed_runtime_engine
+    started = start_governed_runtime_engine(app)
+    print(f"[GOVERNED_RUNTIME_ENGINE] started={started}")
+except Exception as exc:
+    logging.exception(f"[GOVERNED_RUNTIME_ENGINE] startup failed: {exc}")
+
 # =========================
 
 # =========================
