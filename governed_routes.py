@@ -1105,7 +1105,14 @@ def governed_warehouse_page():
             is_fba=bool(is_fba),
             is_fbm=bool(is_fbm),
             is_group_controlled=bool(stock.is_group_controlled) if stock else False,
-            available_quantity=stock.sellable_quantity if stock else 0,
+            # Quantity authority:
+            # AFN/FBA rows display imported marketplace quantity.
+            # MFN/FBM rows display warehouse sellable quantity.
+            available_quantity=(
+                int(listing.last_marketplace_qty or 0)
+                if is_fba
+                else int(stock.sellable_quantity or 0)
+            ) if stock else int(listing.last_marketplace_qty or 0),
             price=listing.price or 0,
             store_name=listing.store.name if listing.store else platform,
             platform=platform,
@@ -1405,6 +1412,25 @@ def _push_one_listing(*, listing_id: int, quantity, actor: str, source: str) -> 
     listing.last_push_error = None if ok else str(result.get("reason") or result.get("failure_reason") or result)[:1000]
     listing.push_attempts = 0 if ok else (listing.push_attempts or 0) + 1
     listing.consecutive_failures = 0 if ok else (listing.consecutive_failures or 0) + 1
+
+    # If Amazon listing is now MFN/FBM, remove stale historical FBA/AFN read-only errors.
+    current_channel = str(
+        listing.normalized_amazon_fulfillment_channel
+        or listing.amazon_fulfillment_channel
+        or ""
+    ).strip().upper()
+    stale_error = str(listing.last_push_error or "").lower()
+    if (
+        current_channel in {"MFN", "FBM", "MERCHANT"}
+        and (
+            "fba/afn is read-only" in stale_error
+            or "no fba push path" in stale_error
+            or "read-only" in stale_error
+        )
+    ):
+        listing.last_push_error = None
+        listing.last_push_status = "pending"
+        listing.consecutive_failures = 0
 
     db.session.add(SyncLog(
         store_id=listing.store_id,
