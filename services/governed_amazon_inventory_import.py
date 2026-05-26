@@ -113,6 +113,7 @@ def run_governed_amazon_inventory_import(store_id=None):
             inv.available_quantity = qty
             inv.asin = asin
             inv.fnsku = fnsku
+            inv.is_archived = False
             inv.updated_at = datetime.utcnow()
 
             listing = _find_or_create_marketplace_listing(
