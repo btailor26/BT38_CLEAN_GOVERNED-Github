@@ -3179,7 +3179,9 @@ def governed_settings_state():
         "queue_consumers_running": False,
         "order_import_ticks_running": False,
         "push_loops_running": False,
-        "runtime_truth": "Workers and schedulers are disabled at app boot. Manual governed actions can run only through the fuse-box path.",
+        "runtime_mode": "MANUAL GOVERNED",
+        "execution_mode": "MANUAL ONLY",
+        "runtime_truth": "Config can be ON while live workers remain NOT RUNNING. Manual governed actions can run only through the fuse-box path.",
         "automation_runtime_status": {
             "scheduler": "NOT RUNNING",
             "sync_worker": "NOT RUNNING",
