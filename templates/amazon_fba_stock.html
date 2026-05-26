@@ -144,14 +144,14 @@
         <ul class="nav nav-pills">
             <li class="nav-item">
                 <a class="nav-link {{ 'active' if status_filter == 'active' else '' }}" 
-                   href="{{ url_for('routes.amazon_fba_stock', status='active', search=current_search) }}">
+                   href="{{ url_for('governed.amazon_fba_stock', status='active', search=current_search) }}">
                     <i data-feather="check-circle" style="width:14px;height:14px;"></i>
                     Active
                 </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link {{ 'active' if status_filter == 'orphaned' else '' }} {{ 'text-warning' if orphaned_count > 0 else '' }}" 
-                   href="{{ url_for('routes.amazon_fba_stock', status='orphaned', search=current_search) }}"
+                   href="{{ url_for('governed.amazon_fba_stock', status='orphaned', search=current_search) }}"
                    title="Warehouse SKU deleted but FBA has stock - needs manual resolution">
                     <i data-feather="alert-triangle" style="width:14px;height:14px;"></i>
                     Orphaned {% if orphaned_count > 0 %}<span class="badge bg-warning text-dark">{{ orphaned_count }}</span>{% endif %}
@@ -159,14 +159,14 @@
             </li>
             <li class="nav-item">
                 <a class="nav-link {{ 'active' if status_filter == 'archived' else '' }}" 
-                   href="{{ url_for('routes.amazon_fba_stock', status='archived', search=current_search) }}">
+                   href="{{ url_for('governed.amazon_fba_stock', status='archived', search=current_search) }}">
                     <i data-feather="archive" style="width:14px;height:14px;"></i>
                     Archived {% if archived_count > 0 %}<span class="badge bg-secondary">{{ archived_count }}</span>{% endif %}
                 </a>
             </li>
             <li class="nav-item">
                 <a class="nav-link {{ 'active' if status_filter == 'all' else '' }}" 
-                   href="{{ url_for('routes.amazon_fba_stock', status='all', search=current_search) }}">
+                   href="{{ url_for('governed.amazon_fba_stock', status='all', search=current_search) }}">
                     <i data-feather="list" style="width:14px;height:14px;"></i>
                     All
                 </a>
@@ -292,7 +292,7 @@
                     <ul class="pagination mb-0 justify-content-center">
                         {% if fba_items.has_prev %}
                         <li class="page-item">
-                            <a class="page-link" href="{{ url_for('routes.amazon_fba_stock', page=fba_items.prev_num, search=current_search) }}">
+                            <a class="page-link" href="{{ url_for('governed.amazon_fba_stock', page=fba_items.prev_num, search=current_search) }}">
                                 Previous
                             </a>
                         </li>
@@ -306,7 +306,7 @@
                                 </li>
                                 {% else %}
                                 <li class="page-item">
-                                    <a class="page-link" href="{{ url_for('routes.amazon_fba_stock', page=page_num, search=current_search) }}">
+                                    <a class="page-link" href="{{ url_for('governed.amazon_fba_stock', page=page_num, search=current_search) }}">
                                         {{ page_num }}
                                     </a>
                                 </li>
@@ -320,7 +320,7 @@
                         
                         {% if fba_items.has_next %}
                         <li class="page-item">
-                            <a class="page-link" href="{{ url_for('routes.amazon_fba_stock', page=fba_items.next_num, search=current_search) }}">
+                            <a class="page-link" href="{{ url_for('governed.amazon_fba_stock', page=fba_items.next_num, search=current_search) }}">
                                 Next
                             </a>
                         </li>
