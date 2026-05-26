@@ -3010,19 +3010,54 @@ def governed_warehouse_stock_transfer_convert_to_fbm():
         # normalized_amazon_fulfillment_channel is a computed property.
         # Do not assign directly. It derives from underlying listing state.
 
-        if hasattr(listing, "push_state"):
-            listing.push_state = "active"
-            listing_updated = True
+        external_sku = str(getattr(listing, "external_sku", "") or "").strip()
+        channel = str(
+            getattr(listing, "normalized_amazon_fulfillment_channel", "") or ""
+        ).strip().upper()
 
-        old_error = str(getattr(listing, "last_push_error", "") or "")
-        if "FBA/AFN is read-only" in old_error or "no FBA push path" in old_error:
+        transfer_confirmed = bool(
+            getattr(listing, "warehouse_stock_id", None)
+            and getattr(listing, "is_active", False)
+            and external_sku
+            and channel in {"MFN", "FBM", "MERCHANT"}
+        )
+
+        if transfer_confirmed:
+            if hasattr(listing, "push_state"):
+                listing.push_state = "active"
+
             if hasattr(listing, "consecutive_failures"):
                 listing.consecutive_failures = 0
-            if hasattr(listing, "last_push_error"):
-                listing.last_push_error = None
+
+            old_error = str(getattr(listing, "last_push_error", "") or "")
+            old_error_lower = old_error.lower()
+
+            if (
+                "fba/afn" in old_error_lower
+                or "fba push" in old_error_lower
+                or "read-only" in old_error_lower
+                or "afn" in old_error_lower
+            ):
+                if hasattr(listing, "last_push_error"):
+                    listing.last_push_error = None
+
             if hasattr(listing, "last_push_status"):
                 listing.last_push_status = "converted_to_fbm"
+
             stale_failure_reset = True
+            listing_updated = True
+
+        else:
+            if hasattr(listing, "last_push_status"):
+                listing.last_push_status = "transfer_pending_confirmation"
+
+            if hasattr(listing, "last_push_error"):
+                listing.last_push_error = (
+                    "Transfer pending confirmation: "
+                    "listing must be warehouse-linked, active, "
+                    "MFN/FBM, and have stable SKU identity."
+                )
+
             listing_updated = True
 
     db.session.add(transfer)
