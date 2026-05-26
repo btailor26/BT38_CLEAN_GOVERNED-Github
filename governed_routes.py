@@ -1105,7 +1105,14 @@ def governed_warehouse_page():
             is_fba=bool(is_fba),
             is_fbm=bool(is_fbm),
             is_group_controlled=bool(stock.is_group_controlled) if stock else False,
-            available_quantity=stock.sellable_quantity if stock else 0,
+            # Quantity authority:
+            # AFN/FBA rows display imported marketplace quantity.
+            # MFN/FBM rows display warehouse sellable quantity.
+            available_quantity=(
+                int(listing.last_marketplace_qty or 0)
+                if is_fba
+                else int(stock.sellable_quantity or 0)
+            ) if stock else int(listing.last_marketplace_qty or 0),
             price=listing.price or 0,
             store_name=listing.store.name if listing.store else platform,
             platform=platform,
