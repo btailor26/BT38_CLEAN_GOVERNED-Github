@@ -68,6 +68,28 @@
   line-height:1.45;
 }
 
+
+.bt38-runtime-badge{
+  display:inline-block;
+  padding:4px 8px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:700;
+}
+.bt38-runtime-badge.off{
+  background:#fee2e2;
+  color:#991b1b;
+}
+.bt38-runtime-badge.warn{
+  background:#fef3c7;
+  color:#92400e;
+}
+.bt38-help{
+  margin:0 0 12px;
+  color:#475569;
+  font-size:13px;
+}
+
 </style>
 
 <div class="bt38-cockpit">
@@ -85,7 +107,9 @@
   </div>
 
   <div class="bt38-kpis">
-    <div class="bt38-kpi"><small>Runtime</small><strong id="runtimeMode">Loading</strong></div>
+    <div class="bt38-kpi"><small>Runtime Mode</small><strong id="runtimeMode">Loading</strong></div>
+    <div class="bt38-kpi"><small>Workers</small><strong id="workerMode">Loading</strong></div>
+    <div class="bt38-kpi"><small>Execution</small><strong id="executionMode">Loading</strong></div>
     <div class="bt38-kpi"><small>Push</small><strong id="pushState">Loading</strong></div>
     <div class="bt38-kpi"><small>Import</small><strong id="importState">Loading</strong></div>
     <div class="bt38-kpi"><small>Sync</small><strong id="syncState">Loading</strong></div>
@@ -159,7 +183,7 @@
         <tr><td>Marketplace Sync Fuse</td><td>{{ config_toggle("marketplace_sync_enabled") }}</td><td>Marketplace sync permission required before sync can run.</td></tr>
         <tr><td>Read Only Mode</td><td>{{ config_toggle("read_only_mode") }}</td><td>MASTER HARD BLOCK. When ON, all marketplace writes/import/sync are blocked.</td></tr>
         <tr><td>Dry Run Mode</td><td>{{ config_toggle("dry_run_mode") }}</td><td>Simulates actions without live marketplace writes.</td></tr>
-        <tr><td>Queue Freeze</td><td>{{ config_toggle("queue_frozen") }}</td><td>Stops background queue dispatch. Manual actions still need their own fuses.</td></tr>
+        <tr><td>Queue Freeze</td><td>{{ config_toggle("queue_frozen") }}</td><td>Blocks queued/background dispatch if workers are later enabled. Manual actions still need their own fuses.</td></tr>
       </tbody>
     </table>
   </div>
@@ -186,7 +210,7 @@
       Store Control is the visible middle layer between the fuse box and marketplace actions. FBA is read-only import/visibility. FBM and eBay are warehouse-to-marketplace push/sync.
     </div>
     <table class="bt38-table">
-      <thead><tr><th>Store</th><th>Marketplace</th><th>Mode</th><th>Store On</th><th>FBA Read-Only Import</th><th>FBM / Marketplace Push-Sync</th><th>Auto Push</th><th>Status</th><th>Last Sync</th></tr></thead>
+      <thead><tr><th>Store</th><th>Marketplace</th><th>Mode</th><th>Store On</th><th>FBA Read-Only Import</th><th>FBM / Marketplace Push-Sync</th><th>Future Auto Push Permission</th><th>Status</th><th>Last Sync</th></tr></thead>
       <tbody>
         {% for store in stores %}
         <tr>
@@ -202,7 +226,7 @@
           <td>{{ store_toggle(store.id, "is_active", store.is_active) }}</td>
           <td>{{ store_toggle(store.id, "fba_import_enabled", store.fba_import_enabled) }}</td>
           <td>{{ store_toggle(store.id, "fbm_sync_enabled", store.fbm_sync_enabled) }}</td>
-          <td>{{ store_toggle(store.id, "auto_push_enabled", store.auto_push_enabled) }}</td>
+          <td>{{ store_toggle(store.id, "auto_push_enabled", store.auto_push_enabled) }}<br><small>Permission only. No auto worker is running.</small></td>
           <td><span class="bt38-pill info">{{ store.sync_status or "unknown" }}</span></td>
           <td>{{ store.last_sync or "Never" }}</td>
         </tr>
@@ -215,17 +239,20 @@
 
   <div class="bt38-section">
     <h3>4. Automation + Webhooks</h3>
+    <p class="bt38-help">
+      CEO truth layer: Config ON means permission is requested. Live Runtime shows whether the process is actually running now.
+    </p>
     <table class="bt38-table">
-      <thead><tr><th>Control</th><th>State</th><th>Purpose</th></tr></thead>
+      <thead><tr><th>Control</th><th>Config</th><th>Live Runtime</th><th>Truth</th></tr></thead>
       <tbody>
-        <tr><td>Scheduler</td><td>{{ config_toggle("scheduler_enabled") }}</td><td>Scheduled checks/reconcile.</td></tr>
-        <tr><td>Sync Worker</td><td>{{ config_toggle("sync_worker_enabled") }}</td><td>Background sync worker.</td></tr>
-        <tr><td>Push Worker</td><td>{{ config_toggle("push_worker_enabled") }}</td><td>Background push worker.</td></tr>
-        <tr><td>Retry Queue</td><td>{{ config_toggle("retry_queue_enabled") }}</td><td>Retry failed jobs.</td></tr>
-        <tr><td>15-Min Reconcile</td><td>{{ config_toggle("reconcile_15m_enabled") }}</td><td>Controlled reconciliation cycle.</td></tr>
-        <tr><td>Webhook Worker</td><td>{{ config_toggle("webhook_worker_enabled") }}</td><td>Process notifications.</td></tr>
-        <tr><td>eBay Webhooks</td><td>{{ config_toggle("webhook_ebay_enabled") }}</td><td>eBay notification gate.</td></tr>
-        <tr><td>Amazon Notifications</td><td>{{ config_toggle("webhook_amazon_enabled") }}</td><td>Amazon notification gate.</td></tr>
+        <tr><td>Scheduler</td><td>{{ config_toggle("scheduler_enabled") }}</td><td><span class="bt38-runtime-badge off">NOT RUNNING</span></td><td>Scheduler permission exists, but no scheduler starts on app boot.</td></tr>
+        <tr><td>Sync Worker</td><td>{{ config_toggle("sync_worker_enabled") }}</td><td><span class="bt38-runtime-badge off">NOT RUNNING</span></td><td>Manual sync works through the governed fuse-box path. Background sync worker is not running.</td></tr>
+        <tr><td>Push Worker</td><td>{{ config_toggle("push_worker_enabled") }}</td><td><span class="bt38-runtime-badge off">NOT RUNNING</span></td><td>Manual push works through governed execution. Background push worker is not running.</td></tr>
+        <tr><td>Retry Queue</td><td>{{ config_toggle("retry_queue_enabled") }}</td><td><span class="bt38-runtime-badge off">NOT RUNNING</span></td><td>Retry permission is configured, but queue dispatch is not currently running.</td></tr>
+        <tr><td>15-Min Reconcile</td><td>{{ config_toggle("reconcile_15m_enabled") }}</td><td><span class="bt38-runtime-badge off">NOT RUNNING</span></td><td>15-minute value is configured, but no live 15-minute reconcile loop is active yet.</td></tr>
+        <tr><td>Webhook Worker</td><td>{{ config_toggle("webhook_worker_enabled") }}</td><td><span class="bt38-runtime-badge warn">INGESTION ONLY</span></td><td>Receives and records marketplace notifications only. It does not start workers, sync, import, or push.</td></tr>
+        <tr><td>eBay Webhooks</td><td>{{ config_toggle("webhook_ebay_enabled") }}</td><td><span class="bt38-runtime-badge warn">GATE ONLY</span></td><td>eBay webhook gate can allow notification intake. It does not trigger automatic sync yet.</td></tr>
+        <tr><td>Amazon Notifications</td><td>{{ config_toggle("webhook_amazon_enabled") }}</td><td><span class="bt38-runtime-badge warn">GATE ONLY</span></td><td>Amazon notification gate can allow intake only. FBA remains read-only and no automatic execution is started.</td></tr>
       </tbody>
     </table>
   </div>
@@ -247,13 +274,14 @@
   <div class="bt38-section">
     <h3>6. Diagnostics + Recovery</h3>
     <table class="bt38-table">
+      <thead><tr><th>Action</th><th>Control</th><th>Truth</th></tr></thead>
       <tbody>
-        <tr><td>Runtime State</td><td><button class="bt38-btn light" onclick="bt38GetRuntimeState()">Check</button></td></tr>
-        <tr><td>Normalize Settings</td><td><button class="bt38-btn light" onclick="bt38Post('/governed/settings/normalize', {})">Run</button></td></tr>
-        <tr><td>Amazon FBA Read-Only Import</td><td><button class="bt38-btn light" onclick="bt38RunStoreShortcut('import', 'amazon')">Run</button></td></tr>
-        <tr><td>Warehouse Sync All On Stores</td><td><button class="bt38-btn light" onclick="bt38RunAllStoreWarehouseSync()">Run</button></td></tr>
-        <tr><td>Reset Failures</td><td><button class="bt38-btn light" onclick="bt38Post('/governed/product-linking/repair/reset-failures', {})">Run</button></td></tr>
-        <tr><td>Rebuild Links</td><td><button class="bt38-btn light" onclick="bt38Post('/governed/product-linking/repair/rebuild-link', {})">Run</button></td></tr>
+        <tr><td>Runtime State</td><td><button class="bt38-btn light" onclick="bt38GetRuntimeState()">Check</button></td><td>Lightweight heartbeat only.</td></tr>
+        <tr><td>Normalize Settings</td><td><button class="bt38-btn light" onclick="bt38Post('/governed/settings/normalize', {})">Run</button></td><td>Config cleanup only.</td></tr>
+        <tr><td>Amazon FBA Read-Only Import</td><td><button class="bt38-btn light" onclick="bt38RunStoreShortcut('import', 'amazon')">Run</button></td><td>Manual import shortcut. FBA remains read-only.</td></tr>
+        <tr><td>Warehouse Sync All On Stores</td><td><button class="bt38-btn light" onclick="bt38RunAllStoreWarehouseSync()">Run</button></td><td>Manual governed execution. Not a background worker.</td></tr>
+        <tr><td>Reset Failures</td><td><button class="bt38-btn light" onclick="bt38Post('/governed/product-linking/repair/reset-failures', {})">Run</button></td><td>Manual recovery action.</td></tr>
+        <tr><td>Rebuild Links</td><td><button class="bt38-btn light" onclick="bt38Post('/governed/product-linking/repair/rebuild-link', {})">Run</button></td><td>Manual product-linking repair.</td></tr>
       </tbody>
     </table>
     <div class="bt38-log" id="bt38Log">Waiting for operator action...</div>
@@ -382,10 +410,14 @@ async function bt38RefreshState(){
   const data = await res.json().catch(()=>({ok:false,error:"settings_state_non_json"}));
   bt38Log(data);
   if(data.config){
-    runtimeMode.textContent = data.config.read_only_mode === "true" ? "Read Only" : "Live";
-    pushState.textContent = data.config.push_enabled === "true" ? "On" : "Off";
-    importState.textContent = data.config.import_enabled === "true" ? "On" : "Off";
-    syncState.textContent = data.config.sync_enabled === "true" ? "On" : "Off";
+    runtimeMode.textContent = data.config.read_only_mode === "true" ? "READ ONLY" : "MANUAL GOVERNED";
+    const workerMode = document.getElementById("workerMode");
+    const executionMode = document.getElementById("executionMode");
+    if (workerMode) workerMode.textContent = data.live_runtime && data.live_runtime.workers_running ? "RUNNING" : "NOT RUNNING";
+    if (executionMode) executionMode.textContent = "MANUAL ONLY";
+    pushState.textContent = data.config.push_enabled === "true" ? "Config ON" : "Config OFF";
+    importState.textContent = data.config.import_enabled === "true" ? "Config ON" : "Config OFF";
+    syncState.textContent = data.config.sync_enabled === "true" ? "Config ON" : "Config OFF";
     queueState.textContent = data.config.queue_frozen === "true" ? "Frozen" : "Open";
   }
 }

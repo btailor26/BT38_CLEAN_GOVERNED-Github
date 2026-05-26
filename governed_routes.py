@@ -3172,7 +3172,37 @@ def governed_settings_state():
             "last_sync": str(getattr(store, "last_sync", "") or ""),
         })
 
-    return jsonify(ok=True, success=True, governed=True, config=config, stores=stores)
+    live_runtime = {
+        "marketplace_execution_on_boot": False,
+        "workers_running": False,
+        "schedulers_running": False,
+        "queue_consumers_running": False,
+        "order_import_ticks_running": False,
+        "push_loops_running": False,
+        "runtime_mode": "MANUAL GOVERNED",
+        "execution_mode": "MANUAL ONLY",
+        "runtime_truth": "Config can be ON while live workers remain NOT RUNNING. Manual governed actions can run only through the fuse-box path.",
+        "automation_runtime_status": {
+            "scheduler": "NOT RUNNING",
+            "sync_worker": "NOT RUNNING",
+            "push_worker": "NOT RUNNING",
+            "retry_queue": "NOT RUNNING",
+            "reconcile_15m": "NOT RUNNING",
+            "webhook_worker": "INGESTION ONLY",
+            "webhook_ebay": "GATE ONLY",
+            "webhook_amazon": "GATE ONLY",
+            "webhook_execution": "NOT WIRED",
+        },
+    }
+
+    return jsonify(
+        ok=True,
+        success=True,
+        governed=True,
+        config=config,
+        stores=stores,
+        live_runtime=live_runtime,
+    )
 
 
 @governed_bp.post("/governed/settings/config")
