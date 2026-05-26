@@ -3709,7 +3709,7 @@ def governed_ebay_oauth_refresh_token():
 @governed_bp.route('/amazon-fba-stock')
 def amazon_fba_stock():
     """Amazon FBA read-only stock page. FBA/AFN is imported from Amazon and never pushed from warehouse."""
-    from models import AmazonFBAInventory, Store
+    from models import db, AmazonFBAInventory, Store
 
     page = request.args.get('page', 1, type=int)
     search = (request.args.get('search') or '').strip()
