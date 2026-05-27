@@ -368,19 +368,35 @@ def run_governed_ebay_inventory_import(store_id=None) -> dict[str, Any]:
         imported = 0
         variations = 0
         pages = 0
+        seen_item_ids = set()
 
         for page in range(1, 6):
-            items = _get_active_items(creds, page=page, entries=100)
+            items = _get_active_items(creds, page=page, entries=25)
+
             if not items:
                 break
 
             pages += 1
+
             for item in items:
+                item_id = _xml_text(item, "{*}ItemID")
+
+                if not item_id:
+                    continue
+
+                if item_id in seen_item_ids:
+                    continue
+
+                seen_item_ids.add(item_id)
+
                 counts = _import_item(store, creds, item)
+
                 imported += counts["items"]
                 variations += counts["variations"]
 
-            if len(items) < 100:
+                db.session.commit()
+
+            if len(items) < 25:
                 break
 
         db.session.add(SyncLog(
