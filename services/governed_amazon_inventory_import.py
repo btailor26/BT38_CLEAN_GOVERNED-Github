@@ -121,7 +121,16 @@ def run_governed_amazon_inventory_import(store_id=None):
                 continue
 
             qty = int(row.get("available_quantity") or 0)
-            channel = (row.get("fulfillment_channel") or "AFN").upper()
+            # Fulfillment must come from Amazon truth.
+            # Never default missing fulfillment data to AFN/FBA because that can wrongly lock FBM stock.
+            channel = (row.get("fulfillment_channel") or "").strip().upper()
+
+            if channel in {"FBA", "AMAZON", "AMAZON_FULFILLED"}:
+                channel = "AFN"
+            elif channel in {"FBM", "MFN", "MERCHANT", "MERCHANT_FULFILLED"}:
+                channel = "MFN"
+            elif not channel:
+                channel = "UNKNOWN"
             asin = row.get("asin")
             fnsku = row.get("fnsku")
 
