@@ -139,9 +139,9 @@ def _load_credentials(store) -> dict[str, Any]:
         "lwa_client_secret": _first_value(parsed, "lwa_client_secret", "client_secret", "AMAZON_LWA_CLIENT_SECRET", "SP_API_LWA_CLIENT_SECRET"),
         "seller_id": _first_value(parsed, "seller_id", "selling_partner_id", "AMAZON_SELLER_ID", "SP_API_SELLER_ID"),
         "marketplace_id": _first_value(parsed, "marketplace_id", "AMAZON_MARKETPLACE_ID", "SP_API_MARKETPLACE_ID") or DEFAULT_UK_MARKETPLACE_ID,
-        "aws_access_key_id": _first_value(parsed, "aws_access_key_id", "AWS_ACCESS_KEY_ID", "AMAZON_AWS_ACCESS_KEY_ID", "SP_API_AWS_ACCESS_KEY_ID"),
-        "aws_secret_access_key": _first_value(parsed, "aws_secret_access_key", "AWS_SECRET_ACCESS_KEY", "AMAZON_AWS_SECRET_ACCESS_KEY", "SP_API_AWS_SECRET_ACCESS_KEY"),
-        "role_arn": _first_value(parsed, "role_arn", "aws_user_arn", "AWS_ROLE_ARN", "AMAZON_AWS_ROLE_ARN", "SP_API_ROLE_ARN"),
+        "aws_access_key_id": _first_value(parsed, "aws_access_key_id", "AMAZON_AWS_ACCESS_KEY_ID", "SP_API_AWS_ACCESS_KEY_ID"),
+        "aws_secret_access_key": _first_value(parsed, "aws_secret_access_key", "AMAZON_AWS_SECRET_ACCESS_KEY", "SP_API_AWS_SECRET_ACCESS_KEY"),
+        "role_arn": _first_value(parsed, "role_arn", "aws_user_arn", "AMAZON_AWS_ROLE_ARN", "SP_API_ROLE_ARN"),
     }
 
     missing = [key for key in ("refresh_token", "lwa_app_id", "lwa_client_secret", "seller_id") if not credentials[key]]
