@@ -4,7 +4,7 @@ BT38 CLEAN AMAZON SP-API ADAPTER
 
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from sp_api.api import Inventories
 from sp_api.base import Marketplaces
@@ -52,19 +52,19 @@ class AmazonSPAPIAdapter:
 
         aws_access_key = (
             creds.get("aws_access_key")
-            or creds.get("aws_access_key_id")
+            or creds.get("aws_access_key_id")
             or os.getenv("AMAZON_AWS_ACCESS_KEY_ID")
             or os.getenv("SP_API_AWS_ACCESS_KEY_ID")
         )
         aws_secret_key = (
             creds.get("aws_secret_key")
-            or creds.get("aws_secret_access_key")
+            or creds.get("aws_secret_access_key")
             or os.getenv("AMAZON_AWS_SECRET_ACCESS_KEY")
             or os.getenv("SP_API_AWS_SECRET_ACCESS_KEY")
         )
         role_arn = (
             creds.get("role_arn")
-            or creds.get("aws_user_arn")
+            or creds.get("aws_user_arn")
             or os.getenv("AMAZON_AWS_ROLE_ARN")
             or os.getenv("SP_API_ROLE_ARN")
         )
@@ -83,7 +83,12 @@ class AmazonSPAPIAdapter:
 
     def get_inventory(self):
 
-        response = self.client.get_inventory_summary_marketplace(details=True)
+        response = self.client.get_inventory_summary_marketplace(
+            details=True,
+            granularityType="Marketplace",
+            granularityId=(self.creds.get("marketplace_id") or "A1F83G8C2ARO7P"),
+            startDateTime=(datetime.utcnow() - timedelta(days=30)).isoformat() + "Z",
+        )
 
         payload = response.payload or {}
 
