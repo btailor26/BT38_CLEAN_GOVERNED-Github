@@ -89,6 +89,13 @@ class AmazonSPAPIAdapter:
 
         rows = payload.get("inventorySummaries") or []
 
+        def quantity_value(value, nested_key=None):
+            if isinstance(value, dict):
+                if nested_key:
+                    return int(value.get(nested_key) or 0)
+                return 0
+            return int(value or 0)
+
         normalized = []
 
         for row in rows:
@@ -112,16 +119,13 @@ class AmazonSPAPIAdapter:
                 # AMAZON OPERATIONAL TRUTH
                 "available_quantity": int(fulfillable or 0),
 
-                "reserved_quantity": int(
-                    inventory_details.get(
-                        "reservedQuantity"
-                    ) or 0
+                "reserved_quantity": quantity_value(
+                    inventory_details.get("reservedQuantity"),
+                    "totalReservedQuantity"
                 ),
 
-                "inbound_quantity": int(
-                    inventory_details.get(
-                        "inboundWorkingQuantity"
-                    ) or 0
+                "inbound_quantity": quantity_value(
+                    inventory_details.get("inboundWorkingQuantity")
                 ),
 
                 "fulfillment_channel": (
