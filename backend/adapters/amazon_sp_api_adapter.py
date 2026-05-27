@@ -100,11 +100,12 @@ class AmazonSPAPIAdapter:
                 row.get("inventoryDetails") or {}
             )
 
-            fulfillable = (
-                inventory_details.get(
-                    "fulfillableQuantity"
-                ) or 0
+            fulfillable = inventory_details.get(
+                "fulfillableQuantity"
             )
+
+            if fulfillable is None:
+                fulfillable = row.get("totalQuantity") or 0
 
             normalized.append({
                 "seller_sku": row.get("sellerSku"),
