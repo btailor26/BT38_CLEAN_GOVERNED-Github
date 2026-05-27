@@ -111,6 +111,15 @@ def run_governed_amazon_inventory_import(store_id=None):
                 inv.store_id = store.id
 
             inv.available_quantity = qty
+
+            inv.reserved_quantity = int(
+                row.get("reserved_quantity") or 0
+            )
+
+            inv.inbound_quantity = int(
+                row.get("inbound_quantity") or 0
+            )
+
             inv.asin = asin
             inv.fnsku = fnsku
             inv.is_archived = False
