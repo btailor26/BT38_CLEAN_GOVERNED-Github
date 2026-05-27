@@ -240,7 +240,7 @@
   <div class="bt38-section">
     <h3>4. Automation + Webhooks</h3>
     <p class="bt38-help">
-      CEO truth layer: Config ON means permission is requested. Live Runtime shows whether the process is actually running now.
+      CEO truth layer: Automation, webhook and import work as one governed refresh lane. Webhooks can trigger import/DB hydration only. Push remains separately governed.
     </p>
     <table class="bt38-table">
       <thead><tr><th>Control</th><th>Config</th><th>Live Runtime</th><th>Truth</th></tr></thead>
@@ -279,7 +279,7 @@
         <tr><td>Runtime State</td><td><button class="bt38-btn light" onclick="bt38GetRuntimeState()">Check</button></td><td>Lightweight heartbeat only.</td></tr>
         <tr><td>Normalize Settings</td><td><button class="bt38-btn light" onclick="bt38Post('/governed/settings/normalize', {})">Run</button></td><td>Config cleanup only.</td></tr>
         <tr><td>Amazon FBA Read-Only Import</td><td><button class="bt38-btn light" onclick="bt38RunStoreShortcut('import', 'amazon')">Run</button></td><td>Manual import shortcut. FBA remains read-only.</td></tr>
-        <tr><td>Warehouse Sync All On Stores</td><td><button class="bt38-btn light" onclick="bt38RunAllStoreWarehouseSync()">Run</button></td><td>Manual governed execution. Not a background worker.</td></tr>
+        <tr><td>Marketplace Refresh All On Stores</td><td><button class="bt38-btn light" onclick="bt38RunAllStoreWarehouseSync()">Run</button></td><td>One shortcut signal to switched-on marketplaces. Imports refresh DB first; push remains fuse-box governed.</td></tr>
         <tr><td>Reset Failures</td><td><button class="bt38-btn light" onclick="bt38Post('/governed/product-linking/repair/reset-failures', {})">Run</button></td><td>Manual recovery action.</td></tr>
         <tr><td>Rebuild Links</td><td><button class="bt38-btn light" onclick="bt38Post('/governed/product-linking/repair/rebuild-link', {})">Run</button></td><td>Manual product-linking repair.</td></tr>
       </tbody>
