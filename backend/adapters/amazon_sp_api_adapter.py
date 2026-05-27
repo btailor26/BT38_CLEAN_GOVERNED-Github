@@ -110,13 +110,30 @@ class AmazonSPAPIAdapter:
                 "seller_sku": row.get("sellerSku"),
                 "asin": row.get("asin"),
                 "fnsku": row.get("fnSku"),
-                "available_quantity": int(fulfillable),
+
+                # AMAZON OPERATIONAL TRUTH
+                "available_quantity": int(fulfillable or 0),
+
+                "reserved_quantity": int(
+                    inventory_details.get(
+                        "reservedQuantity"
+                    ) or 0
+                ),
+
+                "inbound_quantity": int(
+                    inventory_details.get(
+                        "inboundWorkingQuantity"
+                    ) or 0
+                ),
+
                 "fulfillment_channel": (
                     "AFN"
                     if row.get("fnSku")
                     else "MFN"
                 ),
+
                 "raw": row,
+
                 "synced_at": (
                     datetime.utcnow().isoformat()
                 ),
