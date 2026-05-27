@@ -52,22 +52,19 @@ class AmazonSPAPIAdapter:
 
         aws_access_key = (
             creds.get("aws_access_key")
-            or creds.get("aws_access_key_id")
-            or os.getenv("AWS_ACCESS_KEY_ID")
+            or creds.get("aws_access_key_id")
             or os.getenv("AMAZON_AWS_ACCESS_KEY_ID")
             or os.getenv("SP_API_AWS_ACCESS_KEY_ID")
         )
         aws_secret_key = (
             creds.get("aws_secret_key")
-            or creds.get("aws_secret_access_key")
-            or os.getenv("AWS_SECRET_ACCESS_KEY")
+            or creds.get("aws_secret_access_key")
             or os.getenv("AMAZON_AWS_SECRET_ACCESS_KEY")
             or os.getenv("SP_API_AWS_SECRET_ACCESS_KEY")
         )
         role_arn = (
             creds.get("role_arn")
-            or creds.get("aws_user_arn")
-            or os.getenv("AWS_ROLE_ARN")
+            or creds.get("aws_user_arn")
             or os.getenv("AMAZON_AWS_ROLE_ARN")
             or os.getenv("SP_API_ROLE_ARN")
         )
