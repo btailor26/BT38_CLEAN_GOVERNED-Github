@@ -85,81 +85,41 @@ class AmazonSPAPIAdapter:
         )
 
     def get_inventory(self):
+
         response = self.client.get_inventory_summary_marketplace()
-        payload = response.payload if hasattr(response, "payload") else response
+
+        payload = response.payload or {}
+
         rows = payload.get("inventorySummaries") or []
 
-        mapped = []
-
-        def as_int(value):
-            try:
-                return int(value or 0)
-            except Exception:
-                return 0
+        normalized = []
 
         for row in rows:
-            inventory_details = row.get("inventoryDetails") or {}
 
-            fulfillable = as_int(
-                row.get("fulfillableQuantity")
-                or inventory_details.get("fulfillableQuantity")
-                or inventory_details.get("afnFulfillableQuantity")
+            inventory_details = (
+                row.get("inventoryDetails") or {}
             )
 
-            reserved = as_int(
-                row.get("reservedQuantity")
-                or inventory_details.get("reservedQuantity")
-                or inventory_details.get("afnReservedQuantity")
+            fulfillable = (
+                inventory_details.get(
+                    "fulfillableQuantity"
+                ) or 0
             )
 
-            inbound_working = as_int(
-                row.get("inboundWorkingQuantity")
-                or inventory_details.get("inboundWorkingQuantity")
-                or inventory_details.get("afnInboundWorkingQuantity")
-            )
-
-            inbound_shipped = as_int(
-                row.get("inboundShippedQuantity")
-                or inventory_details.get("inboundShippedQuantity")
-                or inventory_details.get("afnInboundShippedQuantity")
-            )
-
-            inbound_receiving = as_int(
-                row.get("inboundReceivingQuantity")
-                or inventory_details.get("inboundReceivingQuantity")
-                or inventory_details.get("afnInboundReceivingQuantity")
-            )
-
-            unfulfillable = as_int(
-                row.get("unfulfillableQuantity")
-                or inventory_details.get("unfulfillableQuantity")
-                or inventory_details.get("afnUnfulfillableQuantity")
-            )
-
-            researching = as_int(
-                row.get("researchingQuantity")
-                or inventory_details.get("researchingQuantity")
-                or inventory_details.get("afnResearchingQuantity")
-            )
-
-            inbound_total = inbound_working + inbound_shipped + inbound_receiving
-            on_hand = fulfillable + reserved + unfulfillable + researching
-
-            mapped.append({
-                "seller_sku": row.get("sellerSku") or row.get("seller_sku") or row.get("sku"),
+            normalized.append({
+                "seller_sku": row.get("sellerSku"),
                 "asin": row.get("asin"),
-                "fnsku": row.get("fnSku") or row.get("fnsku"),
-                "title": row.get("productName") or row.get("title"),
-                "available_quantity": fulfillable,
-                "reserved_quantity": reserved,
-                "inbound_quantity": inbound_total,
-                "inbound_working": inbound_working,
-                "inbound_shipped": inbound_shipped,
-                "inbound_receiving": inbound_receiving,
-                "unfulfillable_quantity": unfulfillable,
-                "researching_quantity": researching,
-                "on_hand_quantity": on_hand,
-                "fulfillment_channel": row.get("fulfillmentChannel") or row.get("fulfillment_channel") or "AFN",
+                "fnsku": row.get("fnSku"),
+                "available_quantity": int(fulfillable),
+                "fulfillment_channel": (
+                    "AFN"
+                    if row.get("fnSku")
+                    else "MFN"
+                ),
+                "raw": row,
+                "synced_at": (
+                    datetime.utcnow().isoformat()
+                ),
             })
 
-        return mapped
+        return normalized

@@ -3777,44 +3777,14 @@ def amazon_fba_stock():
     )
 
     total_skus = AmazonFBAInventory.query.filter(AmazonFBAInventory.is_archived == False).count()
-
-    total_fba = db.session.query(
-        db.func.coalesce(db.func.sum(AmazonFBAInventory.available_quantity), 0)
-    ).scalar() or 0
-
-    total_reserved = db.session.query(
-        db.func.coalesce(db.func.sum(AmazonFBAInventory.reserved_quantity), 0)
-    ).scalar() or 0
-
-    total_inbound = db.session.query(
-        db.func.coalesce(db.func.sum(AmazonFBAInventory.inbound_quantity), 0)
-    ).scalar() or 0
-
-    total_researching = db.session.query(
-        db.func.coalesce(db.func.sum(AmazonFBAInventory.researching_quantity), 0)
-    ).scalar() or 0
-
-    total_unfulfillable = db.session.query(
-        db.func.coalesce(db.func.sum(AmazonFBAInventory.unfulfillable_quantity), 0)
-    ).scalar() or 0
-
+    total_quantity = db.session.query(db.func.coalesce(db.func.sum(AmazonFBAInventory.available_quantity), 0)).scalar() or 0
     stores_count = len(fba_stores)
-
-    orphaned_count = AmazonFBAInventory.query.filter(
-        AmazonFBAInventory.is_orphaned == True
-    ).count()
-
-    archived_count = AmazonFBAInventory.query.filter(
-        AmazonFBAInventory.is_archived == True
-    ).count()
+    orphaned_count = AmazonFBAInventory.query.filter(AmazonFBAInventory.is_orphaned == True).count()
+    archived_count = AmazonFBAInventory.query.filter(AmazonFBAInventory.is_archived == True).count()
 
     stats = {
         'total_skus': total_skus,
-        'total_fba': total_fba,
-        'total_reserved': total_reserved,
-        'total_inbound': total_inbound,
-        'total_researching': total_researching,
-        'total_unfulfillable': total_unfulfillable,
+        'total_quantity': total_quantity,
         'stores_count': stores_count
     }
 
