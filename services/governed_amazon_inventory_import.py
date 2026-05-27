@@ -89,6 +89,14 @@ def run_governed_amazon_inventory_import(store_id=None):
                 continue
 
             qty = int(row.get("available_quantity") or 0)
+            reserved_qty = int(row.get("reserved_quantity") or 0)
+            inbound_qty = int(row.get("inbound_quantity") or 0)
+            inbound_working = int(row.get("inbound_working") or 0)
+            inbound_shipped = int(row.get("inbound_shipped") or 0)
+            inbound_receiving = int(row.get("inbound_receiving") or 0)
+            unfulfillable_qty = int(row.get("unfulfillable_quantity") or 0)
+            researching_qty = int(row.get("researching_quantity") or 0)
+
             channel = (row.get("fulfillment_channel") or "AFN").upper()
             asin = row.get("asin")
             fnsku = row.get("fnsku")
@@ -111,9 +119,19 @@ def run_governed_amazon_inventory_import(store_id=None):
                 inv.store_id = store.id
 
             inv.available_quantity = qty
+            inv.reserved_quantity = reserved_qty
+            inv.inbound_quantity = inbound_qty
+            inv.inbound_working = inbound_working
+            inv.inbound_shipped = inbound_shipped
+            inv.inbound_receiving = inbound_receiving
+            inv.unfulfillable_quantity = unfulfillable_qty
+            inv.researching_quantity = researching_qty
             inv.asin = asin
             inv.fnsku = fnsku
+            inv.title = row.get("title") or inv.title
             inv.is_archived = False
+            inv.last_synced_at = datetime.utcnow()
+            inv.last_sync_status = "success"
             inv.updated_at = datetime.utcnow()
 
             listing = _find_or_create_marketplace_listing(
