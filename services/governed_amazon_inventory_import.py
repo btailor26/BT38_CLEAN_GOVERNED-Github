@@ -63,6 +63,38 @@ def _find_or_create_marketplace_listing(store, sku, channel, qty, asin=None, fns
 
     return listing
 
+def deactivate_fba_shadow_listing_duplicates():
+    """
+    FBA read-only rows belong in AmazonFBAInventory.
+    Old standalone MarketplaceListing shadow rows are duplicates when:
+    - warehouse_stock_id is NULL
+    - title starts with "Amazon SKU"
+    - fnsku/external_listing_id points to FNSKU
+    """
+    rows = (
+        db.session.query(MarketplaceListing)
+        .filter(MarketplaceListing.warehouse_stock_id.is_(None))
+        .filter(MarketplaceListing.title.ilike("Amazon SKU%"))
+        .filter(MarketplaceListing.is_active == True)  # noqa: E712
+        .all()
+    )
+
+    cleaned = 0
+
+    for row in rows:
+        row.is_active = False
+        row.status = "archived_fba_shadow_duplicate"
+        cleaned += 1
+
+    db.session.commit()
+
+    return {
+        "success": True,
+        "governed": True,
+        "cleaned": cleaned,
+        "rule": "FBA read-only quantities live in AmazonFBAInventory only",
+    }
+
 
 def run_governed_amazon_inventory_import(store_id=None):
     query = db.session.query(Store).filter(
@@ -125,17 +157,9 @@ def run_governed_amazon_inventory_import(store_id=None):
             inv.is_archived = False
             inv.updated_at = datetime.utcnow()
 
-            listing = _find_or_create_marketplace_listing(
-                store=store,
-                sku=sku,
-                channel=channel,
-                qty=qty,
-                asin=asin,
-                fnsku=fnsku,
-            )
-
-            if listing:
-                linked_listings += 1
+            # FBA read-only import must update AmazonFBAInventory only.
+            # Do not create standalone MarketplaceListing shadow rows.
+            # Warehouse page reads FBA quantities by SKU/FNSKU shortcut overlay.
 
             imported += 1
 
