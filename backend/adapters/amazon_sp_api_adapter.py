@@ -83,7 +83,7 @@ class AmazonSPAPIAdapter:
 
     def get_inventory(self):
 
-        response = self.client.get_inventory_summary_marketplace()
+        response = self.client.get_inventory_summary_marketplace(details=True)
 
         payload = response.payload or {}
 
