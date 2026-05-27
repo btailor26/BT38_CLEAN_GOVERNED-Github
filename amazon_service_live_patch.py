@@ -205,7 +205,7 @@ def _sp_api_credentials(credentials: Mapping[str, str]) -> dict[str, str]:
     """
     result = {
         "refresh_token": credentials["refresh_token"],
-        "lwa_client_id": credentials.get("lwa_client_id") or credentials["lwa_app_id"],
+        "lwa_app_id": credentials["lwa_app_id"],
         "lwa_client_secret": credentials["lwa_client_secret"],
     }
     if credentials.get("aws_access_key_id"):
