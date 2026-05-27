@@ -20,7 +20,7 @@ from typing import Any
 import requests
 
 from app import db
-from models import Store, MarketplaceListing, Warehouse, WarehouseStock, SyncLog
+from models import Store, MarketplaceListing, Warehouse, WarehouseStock, SyncLog, SystemConfig
 
 
 EBAY_TRADING_URL = "https://api.ebay.com/ws/api.dll"
@@ -370,13 +370,32 @@ def run_governed_ebay_inventory_import(store_id=None) -> dict[str, Any]:
         pages = 0
         seen_item_ids = set()
 
-        for page in range(1, 6):
-            items = _get_active_items(creds, page=page, entries=25)
+        # eBay may return up to 100 items even when a smaller entries value is requested.
+        # Keep each governed cycle bounded, but resume from the next page next time.
+        progress_key = f"ebay_import_next_page_store_{store.id}"
+        progress_row = SystemConfig.query.filter_by(key=progress_key).first()
+
+        try:
+            start_page = int(progress_row.value) if progress_row and progress_row.value else 1
+        except Exception:
+            start_page = 1
+
+        if start_page < 1:
+            start_page = 1
+
+        max_pages_per_cycle = 2
+        end_page = start_page + max_pages_per_cycle - 1
+        next_page = start_page
+
+        for page in range(start_page, end_page + 1):
+            items = _get_active_items(creds, page=page, entries=100)
 
             if not items:
+                next_page = 1
                 break
 
             pages += 1
+            next_page = page + 1
 
             for item in items:
                 item_id = _xml_text(item, "{*}ItemID")
@@ -396,8 +415,18 @@ def run_governed_ebay_inventory_import(store_id=None) -> dict[str, Any]:
 
                 db.session.commit()
 
-            if len(items) < 25:
+            # Final page reached. Reset next cycle back to page 1.
+            if len(items) < 100:
+                next_page = 1
                 break
+
+        if progress_row is None:
+            progress_row = SystemConfig(key=progress_key, value=str(next_page))
+            db.session.add(progress_row)
+        else:
+            progress_row.value = str(next_page)
+
+        db.session.commit()
 
         db.session.add(SyncLog(
             store_id=store.id,
