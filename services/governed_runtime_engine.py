@@ -224,10 +224,16 @@ def _engine_loop(app):
                 if _last_light_reconcile is None or (now - _last_light_reconcile).total_seconds() >= LIGHT_RECONCILE_SECONDS:
                     if _config_on("scheduler_enabled", False) and _config_on("reconcile_15m_enabled", False):
                         _run_light_reconcile_cycle()
+                    else:
+                        _safe_log("15-minute reconcile skipped by fuse box")
+                        _last_light_reconcile = now
 
                 if _last_full_sync is None or (now - _last_full_sync).total_seconds() >= FULL_SYNC_SECONDS:
                     if _config_on("sync_enabled", False) and _config_on("sync_worker_enabled", False):
                         _run_full_sync_cycle()
+                    else:
+                        _safe_log("8-hour full cycle skipped by fuse box")
+                        _last_full_sync = now
 
         except Exception as exc:
             _safe_error("Engine loop error", exc)
