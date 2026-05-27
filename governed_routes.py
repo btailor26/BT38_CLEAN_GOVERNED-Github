@@ -990,7 +990,7 @@ def governed_warehouse_page():
     - limits initial render size
     """
     from extensions import db
-    from models import MarketplaceListing, WarehouseStock, Store
+    from models import MarketplaceListing, WarehouseStock, Store, AmazonFBAInventory
     from sqlalchemy import or_
     from sqlalchemy.orm import joinedload
 
@@ -1104,6 +1104,20 @@ def governed_warehouse_page():
             or ""
         )
 
+        fba_truth = None
+
+        if is_fba:
+            fba_truth = (
+                db.session.query(AmazonFBAInventory)
+                .filter(
+                    or_(
+                        AmazonFBAInventory.seller_sku == listing.external_sku,
+                        AmazonFBAInventory.fnsku == listing.fnsku,
+                    )
+                )
+                .first()
+            )
+
         rows.append(SimpleNamespace(
             id=stock.id if stock else 0,
             inventory_item_id=None,
@@ -1130,10 +1144,18 @@ def governed_warehouse_page():
             # eBay variation child rows display their own imported marketplace quantity.
             # MFN/FBM rows display warehouse sellable quantity.
             available_quantity=(
-                int(listing.last_marketplace_qty or 0)
-                if (is_fba or is_ebay_variation_child)
-                else int(stock.sellable_quantity or 0)
-            ) if stock else int(listing.last_marketplace_qty or 0),
+                int(getattr(fba_truth, "available_quantity", 0) or 0)
+                if is_fba
+                else (
+                    int(listing.last_marketplace_qty or 0)
+                    if is_ebay_variation_child
+                    else int(stock.sellable_quantity or 0)
+                )
+            ) if stock else (
+                int(getattr(fba_truth, "available_quantity", 0) or 0)
+                if is_fba
+                else int(listing.last_marketplace_qty or 0)
+            ),
             price=listing.price or 0,
             store_name=listing.store.name if listing.store else platform,
             platform=platform,
