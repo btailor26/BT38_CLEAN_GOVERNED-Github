@@ -3163,7 +3163,7 @@ def governed_warehouse_stock_transfer_convert_to_fbm():
     from datetime import datetime
     from flask import jsonify, request
     from extensions import db
-    from models import StockTransfer, WarehouseStock, MarketplaceListing
+    from models import StockTransfer, WarehouseStock, MarketplaceListing, AmazonFBAInventory
 
     body = request.get_json(silent=True) or {}
     stock_id = body.get("warehouse_stock_id") or body.get("stock_id")
@@ -3235,6 +3235,7 @@ def governed_warehouse_stock_transfer_convert_to_fbm():
     listing = None
     listing_updated = False
     stale_failure_reset = False
+    fba_row_archived = False
 
     if listing_id not in (None, "", "0"):
         try:
@@ -3298,6 +3299,21 @@ def governed_warehouse_stock_transfer_convert_to_fbm():
             if hasattr(listing, "last_push_status"):
                 listing.last_push_status = "converted_to_fbm"
 
+            matching_fba_rows = (
+                db.session.query(AmazonFBAInventory)
+                .filter(AmazonFBAInventory.seller_sku == external_sku)
+                .all()
+            )
+
+            for fba_row in matching_fba_rows:
+                fba_row.available_quantity = 0
+                fba_row.reserved_quantity = 0
+                fba_row.inbound_quantity = 0
+                fba_row.is_archived = True
+                fba_row.is_orphaned = False
+                fba_row.updated_at = datetime.utcnow()
+                fba_row_archived = True
+
             stale_failure_reset = True
             listing_updated = True
 
@@ -3334,7 +3350,8 @@ def governed_warehouse_stock_transfer_convert_to_fbm():
         quantity=qty,
         listing_updated=listing_updated,
         stale_failure_reset=stale_failure_reset,
-        reason="Stock transfer recorded and listing marked MFN/FBM where linked. SKU identity preserved. Marketplace execution has not been started.",
+        fba_row_archived=fba_row_archived,
+        reason="Stock transfer recorded, listing marked MFN/FBM, and matching FBA read-only row archived where confirmed. SKU identity preserved. Marketplace execution has not been started.",
     ), 200
 
 
