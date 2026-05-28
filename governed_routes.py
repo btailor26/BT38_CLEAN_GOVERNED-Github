@@ -1849,12 +1849,42 @@ def governed_product_linking_data_compat():
 
     if search:
         like = f"%{search}%"
-        stock_query = stock_query.filter(or_(
+
+        matching_listing_stock_ids = [
+            row[0]
+            for row in (
+                db.session.query(MarketplaceListing.warehouse_stock_id)
+                .filter(MarketplaceListing.is_active == True)  # noqa: E712
+                .filter(MarketplaceListing.warehouse_stock_id.isnot(None))
+                .filter(or_(
+                    MarketplaceListing.external_sku.ilike(like),
+                    MarketplaceListing.title.ilike(like),
+                    MarketplaceListing.external_listing_id.ilike(like),
+                    MarketplaceListing.asin.ilike(like),
+                    MarketplaceListing.fnsku.ilike(like),
+                    MarketplaceListing.barcode.ilike(like),
+                    MarketplaceListing.parent_item_id.ilike(like),
+                    MarketplaceListing.external_parent_id.ilike(like),
+                    MarketplaceListing.variation_sku_map.ilike(like),
+                ))
+                .distinct()
+                .all()
+            )
+            if row[0] is not None
+        ]
+
+        stock_search_clauses = [
             WarehouseStock.sku.ilike(like),
             WarehouseStock.product_name.ilike(like),
             WarehouseStock.barcode.ilike(like),
             WarehouseStock.group_title.ilike(like),
-        ))
+        ]
+
+        if matching_listing_stock_ids:
+            stock_search_clauses.append(WarehouseStock.id.in_(matching_listing_stock_ids))
+
+        stock_query = stock_query.filter(or_(*stock_search_clauses))
+
         listing_query = listing_query.filter(or_(
             MarketplaceListing.external_sku.ilike(like),
             MarketplaceListing.title.ilike(like),
@@ -1862,6 +1892,9 @@ def governed_product_linking_data_compat():
             MarketplaceListing.asin.ilike(like),
             MarketplaceListing.fnsku.ilike(like),
             MarketplaceListing.barcode.ilike(like),
+            MarketplaceListing.parent_item_id.ilike(like),
+            MarketplaceListing.external_parent_id.ilike(like),
+            MarketplaceListing.variation_sku_map.ilike(like),
         ))
 
     total_stock = stock_query.count()
