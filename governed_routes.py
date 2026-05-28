@@ -6,9 +6,12 @@ import json
 
 from flask import Blueprint, jsonify, request, render_template, redirect, url_for
 try:
-    from flask_login import current_user
+    from flask_login import current_user, login_required
 except Exception:
     current_user = None
+
+    def login_required(f):
+        return f
 
 governed_bp = Blueprint("governed", __name__)
 
@@ -980,6 +983,7 @@ def shutdown_proof_status():
 
 
 @governed_bp.get("/warehouse")
+@login_required
 def governed_warehouse_page():
     """Governed Master Stock UI.
 
@@ -1340,6 +1344,7 @@ def governed_sku_dry_run():
 
 
 @governed_bp.post("/governed/actions/listings/<int:listing_id>/push")
+@login_required
 def governed_listing_push(listing_id: int):
     body = dict(request.get_json(silent=True) or {})
     result = _push_one_listing(
@@ -1352,6 +1357,7 @@ def governed_listing_push(listing_id: int):
 
 
 @governed_bp.post("/governed/actions/groups/<int:group_id>/push")
+@login_required
 def governed_group_push(group_id: int):
     from extensions import db
     from models import MarketplaceListing
