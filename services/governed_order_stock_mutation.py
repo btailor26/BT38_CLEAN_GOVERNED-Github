@@ -1,0 +1,301 @@
+"""
+Governed order -> warehouse stock mutation bridge.
+
+Rule:
+- Marketplace sale/order events must update the linked warehouse/group stock.
+- SKU name does not decide authority.
+- Linked MarketplaceListing.warehouse_stock_id decides the warehouse stock row.
+- If grouped, the shared warehouse/group stock is mutated once.
+- This service does NOT push directly to marketplaces.
+- Push/reconcile remains controlled by governed fuse-box paths.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+
+from app import db
+from models import MarketplaceListing, WarehouseStock, StockLedgerEntry
+
+
+SALE_TYPES = {"order", "sale", "sold", "payment", "completed", "paid"}
+RETURN_TYPES = {"refund", "return", "returned", "cancelled", "canceled"}
+
+
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        if value is None or value == "":
+            return default
+        return int(float(value))
+    except Exception:
+        return default
+
+
+def _text(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _line_idempotency_key(line: Any) -> str:
+    existing = _text(getattr(line, "stock_mutation_key", None))
+    if existing:
+        return existing
+
+    explicit = _text(getattr(line, "idempotency_key", None))
+    if explicit:
+        return f"order_stock:{explicit}"
+
+    platform = _text(getattr(line, "platform", None))
+    order_id = (
+        _text(getattr(line, "external_order_id", None))
+        or _text(getattr(line, "marketplace_order_id", None))
+        or _text(getattr(line, "order_number", None))
+        or _text(getattr(line, "id", None))
+    )
+    sku = _text(getattr(line, "sku", None))
+    qty = _text(getattr(line, "quantity", None))
+    return f"order_stock:{platform}:{order_id}:{sku}:{qty}"
+
+
+def _already_mutated(key: str) -> bool:
+    if not key:
+        return False
+
+    return (
+        db.session.query(StockLedgerEntry.id)
+        .filter(StockLedgerEntry.reference_id == key)
+        .first()
+        is not None
+    )
+
+
+def _line_sku(line: Any) -> str:
+    return (
+        _text(getattr(line, "sku", None))
+        or _text(getattr(line, "external_sku", None))
+        or _text(getattr(line, "seller_sku", None))
+    )
+
+
+def _line_platform(line: Any) -> str:
+    return _text(getattr(line, "platform", None) or getattr(line, "marketplace", None)).lower()
+
+
+def _line_quantity(line: Any) -> int:
+    for attr in ("quantity", "qty", "quantity_sold", "qty_sold"):
+        qty = _safe_int(getattr(line, attr, None), 0)
+        if qty:
+            return abs(qty)
+    return 1
+
+
+def _line_type(line: Any) -> str:
+    return _text(
+        getattr(line, "transaction_type", None)
+        or getattr(line, "type", None)
+        or getattr(line, "status", None)
+    ).lower()
+
+
+def _is_sale(line: Any) -> bool:
+    value = _line_type(line)
+    if not value:
+        return True
+    return any(token in value for token in SALE_TYPES)
+
+
+def _is_return(line: Any) -> bool:
+    value = _line_type(line)
+    return any(token in value for token in RETURN_TYPES)
+
+
+def _find_listing_for_line(line: Any):
+    sku = _line_sku(line)
+    if not sku:
+        return None
+
+    query = MarketplaceListing.query.filter(
+        MarketplaceListing.is_active == True,  # noqa: E712
+        MarketplaceListing.external_sku == sku,
+    )
+
+    platform = _line_platform(line)
+    if platform:
+        query = query.join(MarketplaceListing.store).filter(
+            MarketplaceListing.store.has()
+        )
+
+    return query.order_by(
+        MarketplaceListing.warehouse_stock_id.is_(None),
+        MarketplaceListing.updated_at.desc(),
+        MarketplaceListing.id.desc(),
+    ).first()
+
+
+def mutate_warehouse_stock_from_order_line(line: Any, source: str = "governed_order_bridge") -> dict[str, Any]:
+    """
+    Mutates warehouse stock from one marketplace order/sale line.
+
+    Sale:
+      available_quantity decreases by quantity.
+
+    Return/refund:
+      available_quantity increases by quantity.
+
+    Idempotency:
+      Uses StockLedgerEntry.reference_id so the same order line is not applied twice.
+    """
+
+    key = _line_idempotency_key(line)
+
+    if _already_mutated(key):
+        return {
+            "success": True,
+            "skipped": True,
+            "reason": "already_mutated",
+            "reference_id": key,
+        }
+
+    listing = _find_listing_for_line(line)
+
+    if not listing or not listing.warehouse_stock_id:
+        return {
+            "success": False,
+            "skipped": True,
+            "reason": "no_linked_marketplace_listing",
+            "sku": _line_sku(line),
+            "reference_id": key,
+        }
+
+    stock = db.session.get(WarehouseStock, listing.warehouse_stock_id)
+
+    if not stock:
+        return {
+            "success": False,
+            "skipped": True,
+            "reason": "warehouse_stock_missing",
+            "warehouse_stock_id": listing.warehouse_stock_id,
+            "reference_id": key,
+        }
+
+    qty = _line_quantity(line)
+
+    before_available = _safe_int(stock.available_quantity)
+    before_reserved = _safe_int(stock.reserved_quantity)
+    before_allocated = _safe_int(stock.allocated_quantity)
+
+    if _is_return(line):
+        after_available = before_available + qty
+        transaction_type = "return"
+        adjustment_type = "increase"
+    elif _is_sale(line):
+        after_available = max(0, before_available - qty)
+        transaction_type = "sale"
+        adjustment_type = "decrease"
+    else:
+        return {
+            "success": False,
+            "skipped": True,
+            "reason": "unsupported_order_line_type",
+            "line_type": _line_type(line),
+            "reference_id": key,
+        }
+
+    stock.available_quantity = after_available
+    stock.updated_at = datetime.utcnow()
+
+    # Mark linked listings dirty for governed reconcile/push, but do not push here.
+    linked = (
+        MarketplaceListing.query
+        .filter(MarketplaceListing.warehouse_stock_id == stock.id)
+        .all()
+    )
+
+    for linked_listing in linked:
+        if hasattr(linked_listing, "push_state"):
+            linked_listing.push_state = "pending_group_reconcile"
+        if hasattr(linked_listing, "last_sync_status"):
+            linked_listing.last_sync_status = "pending_group_reconcile"
+        if hasattr(linked_listing, "updated_at"):
+            linked_listing.updated_at = datetime.utcnow()
+
+    ledger = StockLedgerEntry(
+        warehouse_stock_id=stock.id,
+        transaction_type=transaction_type,
+        adjustment_type=adjustment_type,
+        quantity=qty,
+        available_quantity_before=before_available,
+        available_quantity_after=after_available,
+        reserved_quantity_before=before_reserved,
+        reserved_quantity_after=before_reserved,
+        allocated_quantity_before=before_allocated,
+        allocated_quantity_after=before_allocated,
+        reference_type="marketplace_order",
+        reference_id=key,
+        reason=f"{source}: marketplace order updated grouped warehouse stock",
+        update_source=source,
+    )
+
+    db.session.add(ledger)
+    db.session.commit()
+
+    return {
+        "success": True,
+        "skipped": False,
+        "sku": stock.sku,
+        "warehouse_stock_id": stock.id,
+        "group_id": getattr(stock, "master_product_group_id", None),
+        "is_group_controlled": bool(getattr(stock, "is_group_controlled", False)),
+        "quantity": qty,
+        "available_before": before_available,
+        "available_after": after_available,
+        "affected_listings": len(linked),
+        "reference_id": key,
+    }
+
+
+def mutate_recent_marketplace_order_lines(limit: int = 100, source: str = "governed_order_bridge") -> dict[str, Any]:
+    """
+    Best-effort governed bridge for existing order-line tables.
+
+    Supports whichever order-line models exist in the current schema:
+    - CanonicalOrderLine
+    - MarketplaceOrder
+    - SalesOrderItem
+
+    Does not push to marketplaces.
+    """
+
+    from models import CanonicalOrderLine, MarketplaceOrder, SalesOrderItem
+
+    candidates = []
+
+    for model in (CanonicalOrderLine, MarketplaceOrder, SalesOrderItem):
+        try:
+            rows = model.query.order_by(model.id.desc()).limit(limit).all()
+            candidates.extend(rows)
+        except Exception:
+            continue
+
+    results = []
+    mutated = 0
+    skipped = 0
+
+    for line in candidates:
+        result = mutate_warehouse_stock_from_order_line(line, source=source)
+        results.append(result)
+
+        if result.get("success") and not result.get("skipped"):
+            mutated += 1
+        else:
+            skipped += 1
+
+    return {
+        "success": True,
+        "governed": True,
+        "source": source,
+        "checked": len(candidates),
+        "mutated": mutated,
+        "skipped": skipped,
+        "results": results[:50],
+    }
