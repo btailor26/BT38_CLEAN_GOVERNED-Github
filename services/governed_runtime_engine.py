@@ -177,6 +177,26 @@ def run_governed_marketplace_import_refresh(store_id=None, source="governed_runt
                 "error": str(exc),
             })
 
+    order_stock_bridge = None
+
+    try:
+        from services.governed_order_stock_mutation import (
+            mutate_recent_marketplace_order_lines,
+        )
+
+        order_stock_bridge = mutate_recent_marketplace_order_lines(
+            limit=100,
+            source=f"{source}_order_stock_bridge",
+        )
+
+    except Exception as exc:
+        _safe_error("order stock mutation bridge failed", exc)
+
+        order_stock_bridge = {
+            "success": False,
+            "error": str(exc),
+        }
+
     _last_marketplace_import = datetime.utcnow()
 
     return {
@@ -187,6 +207,7 @@ def run_governed_marketplace_import_refresh(store_id=None, source="governed_runt
         "push_started": False,
         "sync_started": False,
         "results": results,
+        "order_stock_bridge": order_stock_bridge,
     }
 
 
