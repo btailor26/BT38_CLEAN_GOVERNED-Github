@@ -778,10 +778,10 @@ let productLinkingPagination = {
 
 // Current filter values from URL
 const currentFilters = {
-    search: '{{ current_search|e }}',
-    platform: '{{ current_platform|e }}',
-    store: '{{ current_store|e }}',
-    show_linked: '{{ current_show_linked|e }}'
+    search: '{{ (current_search or request.args.get("search") or request.args.get("q") or "")|e }}',
+    platform: '{{ (current_platform or request.args.get("platform") or "all")|e }}',
+    store: '{{ (current_store or request.args.get("store") or "all")|e }}',
+    show_linked: '{{ (current_show_linked or request.args.get("show_linked") or "all")|e }}'
 };
 
 // ==========================================
