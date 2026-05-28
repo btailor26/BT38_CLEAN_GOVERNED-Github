@@ -184,11 +184,25 @@ def refresh_governed_listing_from_snapshot(
     if warehouse_stock is not None:
         listing.warehouse_stock_id = warehouse_stock.id
 
+    normalized_live_channel = str(
+        getattr(listing, "normalized_amazon_fulfillment_channel", "") or ""
+    ).strip().upper()
+
+    converted_fbm_listing = (
+        normalized_live_channel in {"MFN", "FBM", "MERCHANT"}
+        and bool(getattr(listing, "warehouse_stock_id", None))
+    )
+
     if transfer_status == TRANSFER_PENDING_REVIEW:
         listing.push_state = "needs_review"
-    elif fulfillment in {"AFN", "FBA"}:
+
+    elif fulfillment in {"AFN", "FBA"} and not converted_fbm_listing:
         listing.push_state = "blocked"
-    elif fulfillment in {"MFN", "FBM"} and listing.push_state in {None, "blocked", "needs_review"}:
+
+    elif (
+        fulfillment in {"MFN", "FBM"}
+        or converted_fbm_listing
+    ) and listing.push_state in {None, "blocked", "needs_review"}:
         listing.push_state = "active"
 
     db.session.commit()

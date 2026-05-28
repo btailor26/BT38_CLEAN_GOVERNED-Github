@@ -1450,7 +1450,14 @@ def _push_one_listing(*, listing_id: int, quantity, actor: str, source: str) -> 
         "listing_id": listing.id,
         "external_listing_id": listing.external_listing_id,
         "quantity": push_quantity,
-        "amazon_fulfillment_channel": listing.amazon_fulfillment_channel or "MFN",
+        # Push authority must use normalized live fulfillment state.
+        # Raw amazon_fulfillment_channel may still contain stale AFN values
+        # after convert-to-FBM operations.
+        "amazon_fulfillment_channel": (
+            listing.normalized_amazon_fulfillment_channel
+            or listing.amazon_fulfillment_channel
+            or "MFN"
+        ),
         "source": source,
     }
     approval = {
