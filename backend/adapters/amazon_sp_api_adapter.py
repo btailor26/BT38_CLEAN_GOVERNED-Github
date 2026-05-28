@@ -83,16 +83,37 @@ class AmazonSPAPIAdapter:
 
     def get_inventory(self):
 
-        response = self.client.get_inventory_summary_marketplace(
-            details=True,
-            granularityType="Marketplace",
-            granularityId=(self.creds.get("marketplace_id") or "A1F83G8C2ARO7P"),
-            startDateTime=(datetime.utcnow() - timedelta(days=30)).isoformat() + "Z",
-        )
+        rows = []
+        next_token = None
 
-        payload = response.payload or {}
+        while True:
+            kwargs = {
+                "details": True,
+                "granularityType": "Marketplace",
+                "granularityId": (self.creds.get("marketplace_id") or "A1F83G8C2ARO7P"),
+                "startDateTime": (datetime.utcnow() - timedelta(days=30)).isoformat() + "Z",
+            }
 
-        rows = payload.get("inventorySummaries") or []
+            if next_token:
+                kwargs["nextToken"] = next_token
+
+            response = self.client.get_inventory_summary_marketplace(**kwargs)
+
+            payload = response.payload or {}
+            rows.extend(payload.get("inventorySummaries") or [])
+
+            pagination = payload.get("pagination") or {}
+            next_token = (
+                pagination.get("nextToken")
+                or payload.get("nextToken")
+                or payload.get("NextToken")
+            )
+
+            if not next_token:
+                break
+
+            if len(rows) >= 5000:
+                break
 
         def quantity_value(value, nested_key=None):
             if isinstance(value, dict):
@@ -120,30 +141,22 @@ class AmazonSPAPIAdapter:
                 "seller_sku": row.get("sellerSku"),
                 "asin": row.get("asin"),
                 "fnsku": row.get("fnSku"),
-
-                # AMAZON OPERATIONAL TRUTH
-                "available_quantity": int(fulfillable or 0),
-
+                "condition": row.get("condition"),
+                "available_quantity": quantity_value(fulfillable),
                 "reserved_quantity": quantity_value(
                     inventory_details.get("reservedQuantity"),
-                    "totalReservedQuantity"
+                    "totalReservedQuantity",
                 ),
-
                 "inbound_quantity": quantity_value(
                     inventory_details.get("inboundWorkingQuantity")
+                ) + quantity_value(
+                    inventory_details.get("inboundShippedQuantity")
+                ) + quantity_value(
+                    inventory_details.get("inboundReceivingQuantity")
                 ),
-
-                "fulfillment_channel": (
-                    "AFN"
-                    if row.get("fnSku")
-                    else "MFN"
-                ),
-
+                "fulfillment_channel": row.get("fulfillmentChannel") or row.get("fulfillment_channel"),
+                "title": row.get("productName") or row.get("title"),
                 "raw": row,
-
-                "synced_at": (
-                    datetime.utcnow().isoformat()
-                ),
             })
 
         return normalized
