@@ -106,7 +106,8 @@ class AmazonSPAPIAdapter:
 
             pagination = payload.get("pagination") or {}
             next_token = (
-                pagination.get("nextToken")
+                getattr(response, "next_token", None)
+                or pagination.get("nextToken")
                 or payload.get("nextToken")
                 or payload.get("NextToken")
             )
