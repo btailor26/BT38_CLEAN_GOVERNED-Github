@@ -2132,6 +2132,25 @@ def governed_listing_quantity_update(listing_id: int):
             message="No writable warehouse quantity column was found.",
         ), 409
 
+    # eBay variation rows render from listing-layer marketplace quantity fields.
+    # Keep variation child rows aligned with the same saved quantity as normal listings.
+    platform = (listing.store.platform if listing.store else "") or ""
+    is_ebay_variation = (
+        "ebay" in platform.lower()
+        and (
+            getattr(listing, "parent_item_id", None)
+            or getattr(listing, "external_parent_id", None)
+            or getattr(listing, "variation_sku_map", None)
+        )
+    )
+
+    if is_ebay_variation:
+        listing.last_marketplace_qty = qty
+        listing.last_push_quantity = qty
+        listing.last_push_status = "pending"
+        listing.push_state = "active"
+        listing.updated_at = datetime.utcnow()
+
     db.session.commit()
 
     return jsonify(
@@ -2142,6 +2161,7 @@ def governed_listing_quantity_update(listing_id: int):
         warehouse_stock_id=stock.id,
         quantity=qty,
         updated_column=updated_column,
+        listing_quantity_updated=bool(is_ebay_variation),
         message="Warehouse quantity saved locally. Use Push to sync marketplace.",
     )
 
