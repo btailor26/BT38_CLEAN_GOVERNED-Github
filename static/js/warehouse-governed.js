@@ -39,7 +39,8 @@
     const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
     return fetch(endpoint, {
       method: 'POST',
-      credentials: 'same-origin',
+      credentials: 'include',
+      redirect: 'manual',
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -48,7 +49,12 @@
       },
       body: JSON.stringify(body || {})
     }).then(async function (response) {
+      if (response.type === 'opaqueredirect' || response.status === 302 || response.redirected) {
+        throw new Error('Your login session was not accepted for this action. Log out, log back in, then retry.');
+      }
+
       const data = await response.json().catch(function () { return {}; });
+
       if (!response.ok || data.success === false || data.ok === false) {
         throw new Error(data.reason || data.error || data.message || 'Governed action failed.');
       }
