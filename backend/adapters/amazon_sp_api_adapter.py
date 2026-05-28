@@ -86,8 +86,11 @@ class AmazonSPAPIAdapter:
 
         rows = []
         next_token = None
+        page_count = 0
+        max_pages = 20
 
         while True:
+            page_count += 1
             # Full FBA truth refresh must not be restricted to a recent/change window.
             # Light/recent sync can add a startDateTime mode later, but default inventory
             # refresh must read the complete marketplace inventory summary.
@@ -104,9 +107,20 @@ class AmazonSPAPIAdapter:
                 response = self.client.get_inventory_summary_marketplace(**kwargs)
             except Exception as exc:
                 message = str(exc)
-                if "QuotaExceeded" in message or "RequestThrottled" in message or "Throttled" in message:
+
+                if (
+                    "QuotaExceeded" in message
+                    or "RequestThrottled" in message
+                    or "Throttled" in message
+                    or "Read timed out" in message
+                    or "Connection timed out" in message
+                    or "Timeout" in message
+                    or "timeout" in message
+                ):
                     # Keep already fetched pages and let the next governed cycle continue later.
+                    # Runtime automation must never block forever on Amazon inventory pagination.
                     break
+
                 raise
 
             payload = response.payload or {}
@@ -125,6 +139,9 @@ class AmazonSPAPIAdapter:
             )
 
             if not next_token:
+                break
+
+            if page_count >= max_pages:
                 break
 
             if len(rows) >= 5000:
