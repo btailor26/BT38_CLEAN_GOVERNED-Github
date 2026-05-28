@@ -3249,8 +3249,6 @@ def governed_warehouse_stock_transfer_convert_to_fbm():
 
         # Converted Amazon rows must be governed by live fulfilment state, not SKU prefix.
         # A SKU starting with FBA- is pushable once the listing is MFN/FBM/MERCHANT.
-        if hasattr(listing, "is_pushable"):
-            listing.is_pushable = True
         if hasattr(listing, "push_state"):
             listing.push_state = "active"
         if hasattr(listing, "last_push_status"):
