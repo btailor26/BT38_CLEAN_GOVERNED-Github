@@ -299,3 +299,119 @@ def mutate_recent_marketplace_order_lines(limit: int = 100, source: str = "gover
         "skipped": skipped,
         "results": results[:50],
     }
+
+def replay_failed_grouped_marketplace_orders(limit: int = 100, source: str = "governed_failed_order_replay") -> dict[str, Any]:
+    """
+    Controlled replay for old failed marketplace orders after grouping/linking is corrected.
+
+    Safe rules:
+    - MarketplaceOrder only
+    - status must be failed
+    - SKU must now link to MarketplaceListing.warehouse_stock_id
+    - warehouse stock must exist
+    - order must not already have a StockLedgerEntry
+    - sale mutates stock once
+    - order status becomes stock_applied_pending_reconcile
+    - no marketplace push happens here
+    """
+
+    from models import MarketplaceOrder
+
+    rows = (
+        MarketplaceOrder.query
+        .filter(MarketplaceOrder.status == "failed")
+        .order_by(MarketplaceOrder.id.desc())
+        .limit(limit)
+        .all()
+    )
+
+    checked = 0
+    replayed = 0
+    skipped = 0
+    results = []
+
+    for order in rows:
+        checked += 1
+
+        key = _line_idempotency_key(order)
+
+        if _already_mutated(key):
+            skipped += 1
+            results.append({
+                "order_id": getattr(order, "marketplace_order_id", None),
+                "sku": getattr(order, "sku", None),
+                "skipped": True,
+                "reason": "already_mutated",
+            })
+            continue
+
+        listing = _find_listing_for_line(order)
+
+        if not listing or not listing.warehouse_stock_id:
+            skipped += 1
+            results.append({
+                "order_id": getattr(order, "marketplace_order_id", None),
+                "sku": getattr(order, "sku", None),
+                "skipped": True,
+                "reason": "still_not_linked_to_warehouse",
+            })
+            continue
+
+        stock = db.session.get(WarehouseStock, listing.warehouse_stock_id)
+
+        if not stock:
+            skipped += 1
+            results.append({
+                "order_id": getattr(order, "marketplace_order_id", None),
+                "sku": getattr(order, "sku", None),
+                "skipped": True,
+                "reason": "warehouse_stock_missing",
+            })
+            continue
+
+        qty = _line_quantity(order)
+
+        if int(stock.sellable_quantity or 0) < qty:
+            skipped += 1
+            results.append({
+                "order_id": getattr(order, "marketplace_order_id", None),
+                "sku": getattr(order, "sku", None),
+                "warehouse_stock_id": stock.id,
+                "available": int(stock.sellable_quantity or 0),
+                "required": qty,
+                "skipped": True,
+                "reason": "insufficient_current_stock",
+            })
+            continue
+
+        result = mutate_warehouse_stock_from_order_line(
+            order,
+            source=source,
+        )
+
+        if result.get("success") and not result.get("skipped"):
+            order.status = "stock_applied_pending_reconcile"
+            order.error_message = None
+            if hasattr(order, "updated_at"):
+                order.updated_at = datetime.utcnow()
+            db.session.commit()
+            replayed += 1
+        else:
+            skipped += 1
+
+        results.append({
+            "order_id": getattr(order, "marketplace_order_id", None),
+            "sku": getattr(order, "sku", None),
+            "result": result,
+        })
+
+    return {
+        "success": True,
+        "governed": True,
+        "source": source,
+        "checked": checked,
+        "replayed": replayed,
+        "skipped": skipped,
+        "results": results[:50],
+    }
+
