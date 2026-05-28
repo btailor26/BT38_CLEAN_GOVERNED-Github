@@ -15,6 +15,26 @@ except Exception:
 
 governed_bp = Blueprint("governed", __name__)
 
+@governed_bp.route("/logout")
+@login_required
+def logout():
+    from flask import redirect, url_for, session
+
+    try:
+        session.clear()
+    except Exception:
+        pass
+
+    if logout_user:
+        logout_user()
+
+    response = redirect(url_for("governed.login"))
+
+    response.delete_cookie("bt38_session_prod")
+
+    return response
+
+
 
 def _governed_json_safe(value):
     """Convert governed results to JSON-safe values before jsonify."""
