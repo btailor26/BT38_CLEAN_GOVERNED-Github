@@ -76,11 +76,12 @@ def _governed_json_safe(value):
 
 @governed_bp.get("/")
 def governed_root_page():
-    return redirect("/dashboard")
+    return redirect(url_for("governed.governed_dashboard_page"))
 
 
 
 @governed_bp.get("/dashboard")
+@login_required
 def governed_dashboard_page():
     """Human health dashboard.
 
@@ -222,7 +223,7 @@ def governed_dashboard_page():
                 status=order.status or "pending",
                 reason="",
                 severity="warning",
-                action_url="/dashboard",
+                action_url=url_for("governed.governed_dashboard_page"),
                 action_label="Open dashboard",
                 created_at=order.created_at,
             ))
@@ -238,7 +239,7 @@ def governed_dashboard_page():
                 status="not_fulfilled",
                 reason="",
                 severity="warning",
-                action_url="/dashboard",
+                action_url=url_for("governed.governed_dashboard_page"),
                 action_label="Review",
                 created_at=item.created_at,
             ))
