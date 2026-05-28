@@ -3245,7 +3245,21 @@ def governed_warehouse_stock_transfer_convert_to_fbm():
     if listing is not None:
         if hasattr(listing, "amazon_fulfillment_channel"):
             listing.amazon_fulfillment_channel = "MFN"
-            listing_updated = True
+
+        # Converted Amazon rows must be governed by live fulfilment state, not SKU prefix.
+        # A SKU starting with FBA- is pushable once the listing is MFN/FBM/MERCHANT.
+        if hasattr(listing, "is_pushable"):
+            listing.is_pushable = True
+        if hasattr(listing, "push_state"):
+            listing.push_state = "active"
+        if hasattr(listing, "last_push_status"):
+            listing.last_push_status = "pending"
+        if hasattr(listing, "last_sync_status"):
+            listing.last_sync_status = "converted_to_fbm"
+        if hasattr(listing, "last_error_message"):
+            listing.last_error_message = None
+
+        listing_updated = True
 
         # normalized_amazon_fulfillment_channel is a computed property.
         # Do not assign directly. It derives from underlying listing state.
