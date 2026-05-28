@@ -1120,16 +1120,24 @@ def governed_warehouse_page():
         fba_truth = None
 
         if is_fba:
-            fba_truth = (
-                db.session.query(AmazonFBAInventory)
-                .filter(
-                    or_(
-                        AmazonFBAInventory.seller_sku == listing.external_sku,
-                        AmazonFBAInventory.fnsku == listing.fnsku,
-                    )
+            # Amazon FBA identity must be SKU-first.
+            # ASIN is metadata only and must not merge multiple seller SKUs.
+            # FNSKU is a secondary fallback only when seller SKU is unavailable.
+            fba_truth = None
+
+            if listing.external_sku:
+                fba_truth = (
+                    db.session.query(AmazonFBAInventory)
+                    .filter(AmazonFBAInventory.seller_sku == listing.external_sku)
+                    .first()
                 )
-                .first()
-            )
+
+            if not fba_truth and listing.fnsku and not listing.external_sku:
+                fba_truth = (
+                    db.session.query(AmazonFBAInventory)
+                    .filter(AmazonFBAInventory.fnsku == listing.fnsku)
+                    .first()
+                )
 
         rows.append(SimpleNamespace(
             id=stock.id if stock else 0,
