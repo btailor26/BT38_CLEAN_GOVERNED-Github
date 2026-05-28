@@ -27,7 +27,7 @@ class AmazonFbmAdapter(GovernedMarketplaceAdapter):
         fulfillment = _normalized_fulfillment(payload)
         sku = str(payload.get("sku") or "unknown")
 
-        if fulfillment in {"AFN", "FBA"} or sku.upper().startswith("FBA-"):
+        if fulfillment in {"AFN", "FBA"}:
             return self.blocked_result(
                 action=action,
                 payload=payload,
