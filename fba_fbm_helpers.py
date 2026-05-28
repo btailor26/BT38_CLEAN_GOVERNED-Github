@@ -229,13 +229,17 @@ def classify_fulfillment_channel(fulfillment_channel: str) -> str:
 def marketplace_push_eligibility(store, *, sku=None, item=None, warehouse_stock=None, listing=None, payload=None, query_database=True):
     """Central marketplace push eligibility guard.
 
-    This is the single authority for outbound marketplace inventory push
-    decisions. It allows non-Amazon marketplaces, allows explicit Amazon
-    MFN/FBM, and fail-closes Amazon FBA/AFN/read-only or unclassified
-    inventory before queueing, dispatch, service calls, or feed creation.
+    Fulfilment authority rule:
+    SKU text is never used to decide FBA/FBM.
+    A SKU may contain FBA in its name and still be MFN/FBM.
 
-    Returns:
-        (allowed: bool, reason: str)
+    Authority order:
+    1. Store must be valid and FBM-enabled for Amazon.
+    2. MarketplaceListing must exist for Amazon pushes.
+    3. MarketplaceListing.amazon_fulfillment_channel decides FBA/FBM.
+    4. AFN/FBA is read-only.
+    5. MFN/FBM/MERCHANT is pushable.
+    6. Unknown/blank fulfilment fails closed.
     """
     payload = payload or {}
     sku = (sku or payload.get('sku') or getattr(item, 'sku', None) or getattr(warehouse_stock, 'sku', None) or '').strip()
@@ -249,15 +253,7 @@ def marketplace_push_eligibility(store, *, sku=None, item=None, warehouse_stock=
     platform = (getattr(store, 'platform', None) or '').strip().lower()
     fulfillment_type = (getattr(store, 'fulfillment_type', None) or '').strip().upper()
 
-    if sku.upper().startswith('FBA-'):
-        return False, f'Amazon push blocked: SKU {sku} uses FBA- prefix'
-
-    if warehouse_stock is not None:
-        location = (getattr(warehouse_stock, 'location', None) or '').upper()
-        if 'FBA' in location:
-            return False, f'Amazon push blocked: warehouse location is FBA for SKU {sku}'
-
-    if platform in ('amazonfba', 'amazon_fba') or 'fba' in platform:
+    if platform in ('amazonfba', 'amazon_fba') or 'amazon_fba' in platform:
         return False, f'Amazon push blocked: store platform {getattr(store, "platform", None)} is read-only/FBA'
 
     if fulfillment_type == 'FBA' and not has_fbm_enabled(store):
@@ -277,15 +273,9 @@ def marketplace_push_eligibility(store, *, sku=None, item=None, warehouse_stock=
             from models import InventoryItem
             resolved_item = db.session.get(InventoryItem, payload.get('item_id'))
             sku = (getattr(resolved_item, 'sku', None) or '').strip()
-            if sku.upper().startswith('FBA-'):
-                return False, f'Amazon push blocked: SKU {sku} uses FBA- prefix'
 
         if resolved_warehouse_stock is None and sku:
             resolved_warehouse_stock = WarehouseStock.query.filter_by(sku=sku).first()
-            if resolved_warehouse_stock is not None:
-                location = (getattr(resolved_warehouse_stock, 'location', None) or '').upper()
-                if 'FBA' in location:
-                    return False, f'Amazon push blocked: warehouse location is FBA for SKU {sku}'
 
         if resolved_listing is None:
             if payload.get('listing_id'):
@@ -310,8 +300,10 @@ def marketplace_push_eligibility(store, *, sku=None, item=None, warehouse_stock=
 
     channel = getattr(resolved_listing, 'amazon_fulfillment_channel', None)
     classified = classify_fulfillment_channel(channel)
+
     if classified == 'FBA':
         return False, f'Amazon push blocked: fulfillment channel {channel} is FBA/read-only for SKU {sku}'
+
     if classified is None:
         return False, f'Amazon push blocked: fulfillment channel is unknown/blank for SKU {sku}'
 
