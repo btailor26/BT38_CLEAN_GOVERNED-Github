@@ -5,6 +5,7 @@ BT38 CLEAN AMAZON SP-API ADAPTER
 import json
 import os
 from datetime import datetime, timedelta
+import time
 
 from sp_api.api import Inventories
 from sp_api.base import Marketplaces
@@ -99,10 +100,21 @@ class AmazonSPAPIAdapter:
             if next_token:
                 kwargs["nextToken"] = next_token
 
-            response = self.client.get_inventory_summary_marketplace(**kwargs)
+            try:
+                response = self.client.get_inventory_summary_marketplace(**kwargs)
+            except Exception as exc:
+                message = str(exc)
+                if "QuotaExceeded" in message or "RequestThrottled" in message or "Throttled" in message:
+                    # Keep already fetched pages and let the next governed cycle continue later.
+                    break
+                raise
 
             payload = response.payload or {}
             rows.extend(payload.get("inventorySummaries") or [])
+
+            # Amazon SP-API inventory calls are quota limited. Pace page requests so
+            # full refresh does not hammer the endpoint.
+            time.sleep(2)
 
             pagination = payload.get("pagination") or {}
             next_token = (
