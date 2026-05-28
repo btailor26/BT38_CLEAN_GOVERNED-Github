@@ -1464,6 +1464,7 @@ def _push_one_listing(*, listing_id: int, quantity, actor: str, source: str) -> 
     result = submit_governed_marketplace_action(
         payload=payload,
         actor=actor,
+        actor_user=current_user if current_user and current_user.is_authenticated else None,
         approval_type=(approval or {}).get("approval_type"),
         approval_id=(approval or {}).get("approval_id"),
         dry_run=False,

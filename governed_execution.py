@@ -40,6 +40,7 @@ def submit_governed_marketplace_action(
     payload: Dict[str, Any],
     dry_run: bool = True,
     actor: str = "system",
+    actor_user = None,
     approval_type: str | None = None,
     approval_id: str | None = None,
 ) -> Dict[str, Any]:
@@ -78,7 +79,11 @@ def submit_governed_marketplace_action(
             "execution_started": False,
         }
 
-    fuse_guard = _check_fuse_box_authority(command, eligibility)
+    fuse_guard = _check_fuse_box_authority(
+        command,
+        eligibility,
+        actor_user=actor_user,
+    )
     if not fuse_guard.get("allowed"):
         return _blocked(
             command,
@@ -153,7 +158,11 @@ def _adapter_for(marketplace: str):
     return None
 
 
-def _check_fuse_box_authority(command: GovernedCommand, eligibility: Dict[str, Any]) -> Dict[str, Any]:
+def _check_fuse_box_authority(
+    command: GovernedCommand,
+    eligibility: Dict[str, Any],
+    actor_user=None,
+) -> Dict[str, Any]:
     """Ask the single SystemConfig fuse box before any live adapter execution.
 
     Block replacement scope:
@@ -163,15 +172,9 @@ def _check_fuse_box_authority(command: GovernedCommand, eligibility: Dict[str, A
     """
     from services.runtime_action_guard import is_runtime_action_allowed
 
-    actor_user = None
-    try:
-        from flask import has_request_context
-        from flask_login import current_user
-
-        if has_request_context() and current_user and getattr(current_user, "is_authenticated", False):
-            actor_user = current_user
-    except Exception:
-        actor_user = None
+    # Actor user is passed from governed routes directly.
+    # Do not rediscover user context here because runtime execution
+    # may run outside the original Flask request lifecycle.
 
     action_type = _runtime_action_type(command.action)
     store = eligibility.get("store") or _resolve_store(command.payload.get("store_id"))
