@@ -1059,6 +1059,19 @@ def governed_warehouse_page():
     elif listing_status_filter == "unlinked":
         listing_query = listing_query.filter(MarketplaceListing.warehouse_stock_id.is_(None))
 
+    # Apply view filters before count/pagination so searched FBA/FBM rows are not lost
+    # after slicing the mixed marketplace result set.
+    if view == "fba":
+        listing_query = listing_query.filter(
+            Store.platform.ilike("%amazon%"),
+            ~MarketplaceListing.normalized_amazon_fulfillment_channel.in_(["MFN", "FBM", "MERCHANT"]),
+        )
+    elif view == "fbm":
+        listing_query = listing_query.filter(
+            Store.platform.ilike("%amazon%"),
+            MarketplaceListing.normalized_amazon_fulfillment_channel.in_(["MFN", "FBM", "MERCHANT"]),
+        )
+
     total_matching_rows = listing_query.count()
     total_pages = max(1, (total_matching_rows + row_limit - 1) // row_limit)
     page = min(page, total_pages)
@@ -1232,9 +1245,9 @@ def governed_warehouse_page():
     elif view == "listings":
         rows = [row for row in rows if getattr(row, "marketplace_listing_id", None)]
     elif view == "fba":
-        rows = [row for row in rows if getattr(row, "is_fba", False)]
+        rows = rows
     elif view == "fbm":
-        rows = [row for row in rows if getattr(row, "is_fbm", False)]
+        rows = rows
     elif view == "groups":
         rows = [row for row in rows if getattr(row, "master_product_group_id", None) or getattr(row, "is_group_controlled", False)]
 
