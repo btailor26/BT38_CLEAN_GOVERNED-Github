@@ -87,11 +87,13 @@ class AmazonSPAPIAdapter:
         next_token = None
 
         while True:
+            # Full FBA truth refresh must not be restricted to a recent/change window.
+            # Light/recent sync can add a startDateTime mode later, but default inventory
+            # refresh must read the complete marketplace inventory summary.
             kwargs = {
                 "details": True,
                 "granularityType": "Marketplace",
                 "granularityId": (self.creds.get("marketplace_id") or "A1F83G8C2ARO7P"),
-                "startDateTime": (datetime.utcnow() - timedelta(days=30)).isoformat() + "Z",
             }
 
             if next_token:
