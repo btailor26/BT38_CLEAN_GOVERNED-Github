@@ -1367,10 +1367,14 @@ def governed_sku_dry_run():
 @governed_bp.post("/governed/actions/listings/<int:listing_id>/push")
 @login_required
 def governed_listing_push(listing_id: int):
-    body = dict(request.get_json(silent=True) or {})
+    """Listing push shortcut.
+
+    Request body quantity is intentionally ignored.
+    Governed push quantity must come from warehouse/listing truth only.
+    """
     result = _push_one_listing(
         listing_id=listing_id,
-        quantity=body.get("quantity"),
+        quantity=None,
         actor=_actor(),
         source="ui_listing_button",
     )
@@ -1380,36 +1384,21 @@ def governed_listing_push(listing_id: int):
 @governed_bp.post("/governed/actions/groups/<int:group_id>/push")
 @login_required
 def governed_group_push(group_id: int):
-    from extensions import db
-    from models import MarketplaceListing
+    """Group push shortcut.
 
-    body = dict(request.get_json(silent=True) or {})
-    listings = (
-        db.session.query(MarketplaceListing)
-        .filter(MarketplaceListing.master_product_group_id == group_id)
-        .filter(MarketplaceListing.is_active == True)  # noqa: E712
-        .order_by(MarketplaceListing.id)
-        .all()
+    Product linking/grouping remains relationship-only.
+    Quantity truth is resolved inside governed_push_execution.
+    Request body quantity is intentionally ignored.
+    """
+    from services.governed_push_execution import push_group_listings
+
+    result = push_group_listings(
+        group_id=group_id,
+        actor=_actor(),
+        source="ui_group_button",
+        actor_user=current_user if current_user and current_user.is_authenticated else None,
     )
-    results = [
-        _push_one_listing(
-            listing_id=listing.id,
-            quantity=body.get("quantity"),
-            actor=_actor(),
-            source="ui_group_button",
-        )
-        for listing in listings
-    ]
-    ok_count = sum(1 for item in results if item.get("ok"))
-    return jsonify({
-        "success": ok_count == len(results) and bool(results),
-        "ok": ok_count == len(results) and bool(results),
-        "governed": True,
-        "group_id": group_id,
-        "total": len(results),
-        "ok_count": ok_count,
-        "results": results,
-    }), 200
+    return jsonify(result), 200
 
 
 @governed_bp.get("/governed/actions/history")
@@ -1443,113 +1432,19 @@ def governed_action_history():
 
 
 def _push_one_listing(*, listing_id: int, quantity, actor: str, source: str) -> dict:
-    from extensions import db
-    from governed_execution import AMAZON_FBM_LIVE_APPROVAL_TYPE, submit_governed_marketplace_action
-    from models import MarketplaceListing, SyncLog
+    """Compatibility wrapper for existing governed callers.
 
-    listing = db.session.get(MarketplaceListing, listing_id)
-    if not listing:
-        return _blocked(f"Marketplace listing {listing_id} was not found.", listing_id=listing_id)
-    if not listing.store:
-        return _blocked("Marketplace listing has no store.", listing_id=listing_id)
-    if not listing.warehouse_stock:
-        return _blocked("Marketplace listing is not linked to warehouse stock.", listing_id=listing_id)
+    Quantity argument is ignored by design.
+    Governed push quantity must come from warehouse/listing truth only.
+    """
+    from services.governed_push_execution import push_marketplace_listing
 
-    platform = (listing.store.platform or "").strip().lower()
-    marketplace = "amazon" if "amazon" in platform else "ebay" if "ebay" in platform else platform
-    try:
-        push_quantity = listing.effective_quantity if quantity is None else int(quantity)
-    except (TypeError, ValueError):
-        return _blocked("Quantity must be an integer.", listing_id=listing_id, quantity=quantity)
-    sku = (listing.external_sku or listing.warehouse_stock.sku or "").strip()
-
-    payload = {
-        "marketplace": marketplace,
-        "action": "push_inventory",
-        "sku": sku,
-        "store_id": listing.store_id,
-        "listing_id": listing.id,
-        "external_listing_id": listing.external_listing_id,
-        "quantity": push_quantity,
-        # Push authority must use normalized live fulfillment state.
-        # Raw amazon_fulfillment_channel may still contain stale AFN values
-        # after convert-to-FBM operations.
-        "amazon_fulfillment_channel": (
-            listing.normalized_amazon_fulfillment_channel
-            or listing.amazon_fulfillment_channel
-            or "MFN"
-        ),
-        "source": source,
-    }
-    approval = {
-        "approved": True,
-        "approval_type": AMAZON_FBM_LIVE_APPROVAL_TYPE,
-        "source": source,
-        "approved_by": actor,
-        "approved_at": datetime.utcnow().isoformat(),
-        "scope": {
-            "sku": sku,
-            "store_id": listing.store_id,
-            "listing_id": listing.id,
-            "quantity": push_quantity,
-        },
-    }
-
-    result = submit_governed_marketplace_action(
-        payload=payload,
+    return push_marketplace_listing(
+        listing_id=listing_id,
         actor=actor,
+        source=source,
         actor_user=current_user if current_user and current_user.is_authenticated else None,
-        approval_type=(approval or {}).get("approval_type"),
-        approval_id=(approval or {}).get("approval_id"),
-        dry_run=False,
     )
-
-    ok = bool(result.get("ok") or result.get("success"))
-    listing.last_push_at = datetime.utcnow()
-    listing.last_push_quantity = push_quantity if ok else listing.last_push_quantity
-    listing.last_push_status = "success" if ok else "error"
-    listing.last_push_error = None if ok else str(result.get("reason") or result.get("failure_reason") or result)[:1000]
-    listing.push_attempts = 0 if ok else (listing.push_attempts or 0) + 1
-    listing.consecutive_failures = 0 if ok else (listing.consecutive_failures or 0) + 1
-
-    # If Amazon listing is now MFN/FBM, remove stale historical FBA/AFN read-only errors.
-    current_channel = str(
-        listing.normalized_amazon_fulfillment_channel
-        or listing.amazon_fulfillment_channel
-        or ""
-    ).strip().upper()
-    stale_error = str(listing.last_push_error or "").lower()
-    if (
-        current_channel in {"MFN", "FBM", "MERCHANT"}
-        and (
-            "fba/afn is read-only" in stale_error
-            or "no fba push path" in stale_error
-            or "read-only" in stale_error
-        )
-    ):
-        listing.last_push_error = None
-        listing.last_push_status = "pending"
-        listing.consecutive_failures = 0
-
-    db.session.add(SyncLog(
-        store_id=listing.store_id,
-        status="success" if ok else "error",
-        message=(
-            f"governed_push listing_id={listing.id} sku={sku} "
-            f"marketplace={marketplace} source={source} ok={ok}"
-        )[:500],
-        items_synced=1 if ok else 0,
-        created_at=datetime.utcnow(),
-    ))
-    db.session.commit()
-
-    result.update({
-        "ui_action_wired": True,
-        "grouping_layer_ready": True,
-        "audit_history_logged": True,
-        "listing_last_push_updated": True,
-    })
-    return result
 
 
 def _actor() -> str:
