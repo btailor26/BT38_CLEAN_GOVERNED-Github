@@ -1367,10 +1367,14 @@ def governed_sku_dry_run():
 @governed_bp.post("/governed/actions/listings/<int:listing_id>/push")
 @login_required
 def governed_listing_push(listing_id: int):
-    body = dict(request.get_json(silent=True) or {})
+    """Listing push shortcut.
+
+    Request body quantity is intentionally ignored.
+    Governed push quantity must come from warehouse/listing truth only.
+    """
     result = _push_one_listing(
         listing_id=listing_id,
-        quantity=body.get("quantity"),
+        quantity=None,
         actor=_actor(),
         source="ui_listing_button",
     )
