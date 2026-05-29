@@ -351,7 +351,7 @@ def run_governed_warehouse_sync(store_id=None, actor="manual-warehouse-sync", li
             "guard": sync_guard,
         }
 
-    from governed_routes import _push_one_listing
+    from services.governed_push_execution import push_marketplace_listing
 
     results = []
 
@@ -383,11 +383,11 @@ def run_governed_warehouse_sync(store_id=None, actor="manual-warehouse-sync", li
             continue
 
         try:
-            result = _push_one_listing(
+            result = push_marketplace_listing(
                 listing_id=listing.id,
-                quantity=None,
                 actor=actor,
                 source="governed_warehouse_sync",
+                actor_user=None,
             )
             if isinstance(result, dict):
                 result.setdefault("listing_id", listing.id)
