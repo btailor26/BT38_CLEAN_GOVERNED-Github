@@ -981,6 +981,15 @@ def governed_marketplace_webhook_intake(marketplace):
         payload=payload,
     )
 
+    notification_result = None
+    if allowed:
+        from services.governed_webhook_execution import process_marketplace_notification
+        notification_result = process_marketplace_notification(
+            marketplace=platform,
+            payload=payload,
+            actor=f"webhook_{platform}",
+        )
+
     return jsonify({
         "ok": True,
         "success": True,
@@ -989,7 +998,8 @@ def governed_marketplace_webhook_intake(marketplace):
         "status": status,
         "reason": reason,
         "system_log_id": row.id,
-        "message": "Webhook notification stored. Import refresh may run when webhook and import fuses allow it. Push is never started by webhook.",
+        "notification_result": _governed_json_safe(notification_result),
+        "message": "Webhook notification stored and routed through governed notification bridge when fuses allow it.",
     }), 200
 
 
@@ -2765,6 +2775,8 @@ def _governed_webhook_ingest(marketplace: str):
     event_payload = request.get_json(silent=True) or {}
     payload_keys = sorted(list(event_payload.keys())) if isinstance(event_payload, dict) else []
 
+    notification_result = None
+
     allowed = bool(worker_on and market_on and import_on and store is not None)
     import_result = None
     import_started = False
@@ -2789,6 +2801,14 @@ def _governed_webhook_ingest(marketplace: str):
             allowed = False
             reason = f"Webhook import refresh failed: {exc}"
             import_result = {"success": False, "error": str(exc)}
+
+    if allowed:
+        from services.governed_webhook_execution import process_marketplace_notification
+        notification_result = process_marketplace_notification(
+            marketplace=marketplace,
+            payload=event_payload,
+            actor=f"webhook_{marketplace}",
+        )
 
     if store is not None:
         db.session.add(SyncLog(
@@ -2824,6 +2844,7 @@ def _governed_webhook_ingest(marketplace: str):
         store_id=getattr(store, "id", None),
         payload_keys=payload_keys,
         import_result=_governed_json_safe(import_result) if import_result is not None else None,
+        notification_result=_governed_json_safe(notification_result) if notification_result is not None else None,
         reason=reason,
     ), 200
 
