@@ -60,21 +60,30 @@ def process_marketplace_notification(*, marketplace: str, payload: dict, actor: 
             warehouse_stock_id=stock.id,
         )
 
-    grouped = bool(
-        getattr(stock, "master_product_group_id", None)
-        or getattr(stock, "is_group_controlled", False)
-        or getattr(listing, "master_product_group_id", None)
-    )
+    group_context = _resolve_group_context(listing=listing, stock=stock)
+    grouped = bool(group_context.get("grouped"))
+    group_id = group_context.get("group_id")
 
     before_qty = int(getattr(stock, "available_quantity", 0) or 0)
 
     if grouped:
-        group_id = int(getattr(stock, "master_product_group_id", None) or getattr(listing, "master_product_group_id", None))
+        if not group_id:
+            return _log_result(
+                status="group_unresolved",
+                marketplace=marketplace,
+                event_type=event_type,
+                reason="DB says listing/stock is grouped but no group_id could be resolved.",
+                payload=payload,
+                listing_id=listing.id,
+                warehouse_stock_id=stock.id,
+                group_context=group_context,
+            )
+
         _apply_group_stock_change(stock.id, -quantity)
         db.session.commit()
 
         push_result = push_group_listings(
-            group_id=group_id,
+            group_id=int(group_id),
             actor=actor,
             source=f"webhook_{marketplace}_group_notification",
             actor_user=None,
@@ -84,11 +93,12 @@ def process_marketplace_notification(*, marketplace: str, payload: dict, actor: 
             status="group_processed",
             marketplace=marketplace,
             event_type=event_type,
-            reason="Grouped notification processed through group authority then warehouse truth.",
+            reason="Grouped notification resolved from DB, processed through group authority, then warehouse truth.",
             payload=payload,
             listing_id=listing.id,
             warehouse_stock_id=stock.id,
-            group_id=group_id,
+            group_id=int(group_id),
+            group_context=group_context,
             before_qty=before_qty,
             after_qty=int(getattr(stock, "available_quantity", 0) or 0),
             push_result=push_result,
@@ -116,6 +126,61 @@ def process_marketplace_notification(*, marketplace: str, payload: dict, actor: 
         after_qty=int(getattr(stock, "available_quantity", 0) or 0),
         push_result=push_result,
     )
+
+
+def _resolve_group_context(*, listing, stock) -> Dict[str, Any]:
+    """Resolve grouped/not-grouped from DB authority only.
+
+    Payload identifies the event.
+    DB relationship fields decide whether the event is grouped.
+    """
+    from extensions import db
+    from models import MarketplaceListing
+
+    listing_group_id = getattr(listing, "master_product_group_id", None)
+    stock_group_id = getattr(stock, "master_product_group_id", None)
+    stock_group_controlled = bool(getattr(stock, "is_group_controlled", False))
+
+    group_id = stock_group_id or listing_group_id
+
+    linked_group_members = []
+    linked_stock_members = []
+
+    if group_id:
+        linked_group_members = (
+            db.session.query(MarketplaceListing.id)
+            .filter(MarketplaceListing.master_product_group_id == int(group_id))
+            .filter(MarketplaceListing.is_active == True)  # noqa: E712
+            .all()
+        )
+
+    if getattr(stock, "id", None):
+        linked_stock_members = (
+            db.session.query(MarketplaceListing.id)
+            .filter(MarketplaceListing.warehouse_stock_id == int(stock.id))
+            .filter(MarketplaceListing.is_active == True)  # noqa: E712
+            .all()
+        )
+
+    grouped = bool(
+        group_id
+        or stock_group_controlled
+        or len(linked_group_members) > 1
+        or len(linked_stock_members) > 1
+    )
+
+    return {
+        "grouped": grouped,
+        "group_id": int(group_id) if group_id else None,
+        "listing_id": getattr(listing, "id", None),
+        "listing_group_id": int(listing_group_id) if listing_group_id else None,
+        "warehouse_stock_id": getattr(stock, "id", None),
+        "stock_group_id": int(stock_group_id) if stock_group_id else None,
+        "stock_is_group_controlled": stock_group_controlled,
+        "linked_group_member_count": len(linked_group_members),
+        "linked_stock_member_count": len(linked_stock_members),
+        "authority": "database_relationship_state",
+    }
 
 
 def _apply_group_stock_change(warehouse_stock_id: int, quantity_delta: int) -> None:
