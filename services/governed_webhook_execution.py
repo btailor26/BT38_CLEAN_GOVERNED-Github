@@ -1,13 +1,18 @@
 """BT38 governed webhook execution bridge.
 
-One clear path:
-notification -> grouped check -> warehouse truth -> governed_push_execution
+Step 1 notification wiring only.
+
+Three-step operating model:
+1. Notification = immediate awareness and DB/log classification.
+2. 15-minute light sync = verification/alignment.
+3. 8-hour full sync = reconciliation.
 
 Rules:
-- grouped SKU/listing = group-level notification
-- ungrouped SKU/listing = warehouse SKU-level notification
-- notification never calls marketplace adapters directly
-- marketplace propagation stays behind governed_push_execution/governed_execution
+- Existing stock-changing notification path is preserved.
+- Non-stock business notifications are classified and logged.
+- FBA pending is classified and logged, but does not change warehouse stock.
+- Notification never calls marketplace adapters directly.
+- No dashboard, route, sync, Product Linking, or adapter changes live here.
 """
 
 from __future__ import annotations
@@ -18,12 +23,13 @@ from typing import Any, Dict
 
 def process_marketplace_notification(*, marketplace: str, payload: dict, actor: str = "marketplace_webhook") -> Dict[str, Any]:
     from extensions import db
-    from models import MarketplaceListing, SystemLog, WarehouseStock
+    from models import MarketplaceListing
     from services.governed_push_execution import push_group_listings, push_marketplace_listing
 
     payload = dict(payload or {})
     marketplace = str(marketplace or payload.get("marketplace") or "").strip().lower()
     event_type = _event_type(payload)
+    business_event = _classify_business_event(event_type, payload)
 
     listing = _find_listing(MarketplaceListing, marketplace, payload)
     if not listing:
@@ -31,6 +37,7 @@ def process_marketplace_notification(*, marketplace: str, payload: dict, actor: 
             status="unresolved",
             marketplace=marketplace,
             event_type=event_type,
+            business_event=business_event,
             reason="Notification received but no marketplace listing could be matched.",
             payload=payload,
         )
@@ -41,6 +48,7 @@ def process_marketplace_notification(*, marketplace: str, payload: dict, actor: 
             status="unlinked",
             marketplace=marketplace,
             event_type=event_type,
+            business_event=business_event,
             reason="Notification matched listing but listing is not linked to warehouse stock.",
             payload=payload,
             listing_id=listing.id,
@@ -51,13 +59,16 @@ def process_marketplace_notification(*, marketplace: str, payload: dict, actor: 
 
     if not is_stock_event or quantity <= 0:
         return _log_result(
-            status="stored_no_stock_change",
+            status=f"{business_event}_stored",
             marketplace=marketplace,
             event_type=event_type,
-            reason="Notification stored but did not contain a confirmed stock-decrement event.",
+            business_event=business_event,
+            reason=_business_reason(business_event),
             payload=payload,
             listing_id=listing.id,
             warehouse_stock_id=stock.id,
+            stock_changed=False,
+            correction_started=False,
         )
 
     group_context = _resolve_group_context(listing=listing, stock=stock)
@@ -72,6 +83,7 @@ def process_marketplace_notification(*, marketplace: str, payload: dict, actor: 
                 status="group_unresolved",
                 marketplace=marketplace,
                 event_type=event_type,
+                business_event=business_event,
                 reason="DB says listing/stock is grouped but no group_id could be resolved.",
                 payload=payload,
                 listing_id=listing.id,
@@ -93,7 +105,8 @@ def process_marketplace_notification(*, marketplace: str, payload: dict, actor: 
             status="group_processed",
             marketplace=marketplace,
             event_type=event_type,
-            reason="Grouped notification resolved from DB, processed through group authority, then warehouse truth.",
+            business_event=business_event,
+            reason="Grouped stock-changing notification updated warehouse truth and triggered existing correction path.",
             payload=payload,
             listing_id=listing.id,
             warehouse_stock_id=stock.id,
@@ -101,6 +114,8 @@ def process_marketplace_notification(*, marketplace: str, payload: dict, actor: 
             group_context=group_context,
             before_qty=before_qty,
             after_qty=int(getattr(stock, "available_quantity", 0) or 0),
+            stock_changed=True,
+            correction_started=True,
             push_result=push_result,
         )
 
@@ -118,22 +133,21 @@ def process_marketplace_notification(*, marketplace: str, payload: dict, actor: 
         status="warehouse_processed",
         marketplace=marketplace,
         event_type=event_type,
-        reason="Ungrouped notification processed through warehouse authority.",
+        business_event=business_event,
+        reason="Ungrouped stock-changing notification updated warehouse truth and triggered existing correction path.",
         payload=payload,
         listing_id=listing.id,
         warehouse_stock_id=stock.id,
         before_qty=before_qty,
         after_qty=int(getattr(stock, "available_quantity", 0) or 0),
+        stock_changed=True,
+        correction_started=True,
         push_result=push_result,
     )
 
 
 def _resolve_group_context(*, listing, stock) -> Dict[str, Any]:
-    """Resolve grouped/not-grouped from DB authority only.
-
-    Payload identifies the event.
-    DB relationship fields decide whether the event is grouped.
-    """
+    """Resolve grouped/not-grouped from DB authority only."""
     from extensions import db
     from models import MarketplaceListing
 
@@ -271,10 +285,64 @@ def _event_type(payload: dict) -> str:
     ).strip().lower()
 
 
-def _is_stock_decrement_event(event_type: str, payload: dict) -> bool:
+def _classify_business_event(event_type: str, payload: dict) -> str:
     text = " ".join(str(v).lower() for v in _flatten_values(payload))
     combined = f"{event_type} {text}"
-    return any(word in combined for word in ["order", "sale", "sold", "transaction", "paid", "purchase"])
+
+    checks = [
+        ("fba_pending", ["fba pending", "afn pending", "pending fba", "pending inventory", "inbound pending"]),
+        ("fba_received", ["fba received", "afn received", "received by amazon", "inbound received"]),
+        ("fba_adjustment", ["fba adjustment", "inventory adjustment", "afn adjustment"]),
+        ("fba_lost", ["fba lost", "lost inventory", "inventory lost"]),
+        ("fba_damaged", ["fba damaged", "damaged inventory", "warehouse damaged"]),
+        ("fba_reimbursement", ["fba reimbursement", "reimbursement", "reimbursed"]),
+        ("customer_message", ["message", "buyer message", "customer message", "inbox", "unread"]),
+        ("return", ["return", "return request", "refund requested"]),
+        ("case", ["case", "dispute", "claim", "a-to-z", "chargeback"]),
+        ("listing_created", ["listing created", "item listed", "offer created", "new listing"]),
+        ("listing_removed", ["listing removed", "listing ended", "item ended", "offer deleted", "listing blocked", "suppressed"]),
+        ("payment_deferred", ["deferred", "reserve", "hold", "held", "pending payout"]),
+        ("payout", ["payout", "disbursement", "settlement", "payment released", "paid out"]),
+        ("tracking", ["tracking", "tracking uploaded", "shipment confirmed", "carrier"]),
+        ("delivery", ["delivered", "delivery confirmed"]),
+        ("policy", ["policy", "violation", "warning", "account health", "performance notification"]),
+        ("stock_decrement", ["order", "sale", "sold", "transaction", "paid", "purchase"]),
+    ]
+
+    for label, words in checks:
+        if any(word in combined for word in words):
+            return label
+
+    return "marketplace_notification"
+
+
+def _business_reason(business_event: str) -> str:
+    reasons = {
+        "fba_pending": "FBA pending notification stored. No warehouse stock change is made until confirmed by later sync/received/adjustment state.",
+        "fba_received": "FBA received notification stored for verification by light/full sync.",
+        "fba_adjustment": "FBA adjustment notification stored for verification by light/full sync.",
+        "fba_lost": "FBA lost notification stored for verification by light/full sync.",
+        "fba_damaged": "FBA damaged notification stored for verification by light/full sync.",
+        "fba_reimbursement": "FBA reimbursement notification stored for verification by light/full sync.",
+        "customer_message": "Customer message notification stored for Step 1 awareness.",
+        "return": "Return notification stored for Step 1 awareness.",
+        "case": "Case/dispute notification stored for Step 1 awareness.",
+        "listing_created": "Listing-created notification stored for Step 1 awareness.",
+        "listing_removed": "Listing removed/blocked/ended notification stored for Step 1 awareness.",
+        "payout": "Payout notification stored for Step 1 awareness.",
+        "payment_deferred": "Deferred/held payment notification stored for Step 1 awareness.",
+        "tracking": "Tracking notification stored for Step 1 awareness.",
+        "delivery": "Delivery notification stored for Step 1 awareness.",
+        "policy": "Policy/account-health notification stored for Step 1 awareness.",
+    }
+    return reasons.get(
+        business_event,
+        "Notification stored but did not contain a confirmed stock-decrement event.",
+    )
+
+
+def _is_stock_decrement_event(event_type: str, payload: dict) -> bool:
+    return _classify_business_event(event_type, payload) == "stock_decrement"
 
 
 def _extract_quantity(payload: dict) -> int:
@@ -338,9 +406,32 @@ def _log_result(**data) -> Dict[str, Any]:
     except Exception:
         db.session.rollback()
 
+    success_statuses = {
+        "group_processed",
+        "warehouse_processed",
+        "stock_decrement_stored",
+        "marketplace_notification_stored",
+        "customer_message_stored",
+        "return_stored",
+        "case_stored",
+        "listing_created_stored",
+        "listing_removed_stored",
+        "payout_stored",
+        "payment_deferred_stored",
+        "tracking_stored",
+        "delivery_stored",
+        "policy_stored",
+        "fba_pending_stored",
+        "fba_received_stored",
+        "fba_adjustment_stored",
+        "fba_lost_stored",
+        "fba_damaged_stored",
+        "fba_reimbursement_stored",
+    }
+
     return {
-        "ok": safe.get("status") in {"group_processed", "warehouse_processed", "stored_no_stock_change"},
-        "success": safe.get("status") in {"group_processed", "warehouse_processed", "stored_no_stock_change"},
+        "ok": safe.get("status") in success_statuses,
+        "success": safe.get("status") in success_statuses,
         "governed": True,
         **safe,
     }
