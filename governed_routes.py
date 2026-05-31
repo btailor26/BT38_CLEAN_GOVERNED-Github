@@ -1315,6 +1315,9 @@ def governed_warehouse_page():
             joinedload(MarketplaceListing.warehouse_stock),
         )
         .filter(MarketplaceListing.is_active == True)  # noqa: E712
+        # FBA Read Only quantity is shown as a shortcut from AmazonFBAInventory.
+        # Do not show generated "Amazon SKU ..." shadow rows as separate Master Stock listings.
+        .filter(~MarketplaceListing.title.ilike("Amazon SKU%"))
     )
 
     if q:
