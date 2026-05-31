@@ -1003,6 +1003,59 @@ def governed_marketplace_webhook_intake(marketplace):
     }), 200
 
 
+
+@governed_bp.get("/governed/audit/notifications")
+@login_required
+def governed_notification_audit():
+    """Read-only notification audit.
+
+    No sync.
+    No push.
+    No marketplace call.
+    No DB write.
+
+    Shows what marketplace notifications and governed webhook execution records
+    have actually reached Neon.
+    """
+    from extensions import db
+    from models import SystemLog
+
+    try:
+        limit = int(request.args.get("limit") or 100)
+    except Exception:
+        limit = 100
+    limit = max(1, min(limit, 500))
+
+    rows = (
+        db.session.query(SystemLog)
+        .filter(SystemLog.log_type.in_(["marketplace_webhook", "governed_webhook_execution"]))
+        .order_by(SystemLog.created_at.desc(), SystemLog.id.desc())
+        .limit(limit)
+        .all()
+    )
+
+    records = []
+    for row in rows:
+        records.append({
+            "id": row.id,
+            "log_type": row.log_type,
+            "message": row.message,
+            "details": row.details,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+        })
+
+    return jsonify({
+        "ok": True,
+        "success": True,
+        "governed": True,
+        "read_only": True,
+        "source": "Neon SystemLog",
+        "limit": limit,
+        "count": len(records),
+        "records": records,
+    }), 200
+
+
 @governed_bp.get("/shutdown-proof/status")
 def shutdown_proof_status():
     return jsonify({
