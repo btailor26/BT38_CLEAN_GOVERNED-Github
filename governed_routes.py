@@ -3275,6 +3275,54 @@ def governed_disabled_action(action: str = ""):
             from datetime import datetime
             listing.updated_at = datetime.utcnow()
 
+        # Same-SKU Amazon FBA shadow rows must not remain as separate active listings/groups.
+        # They are read-only quantity cache rows and cause duplicate Master Stock rows.
+        duplicate_shadow_count = 0
+        listing_sku = (getattr(listing, "external_sku", None) or "").strip()
+        listing_fnsku = (getattr(listing, "fnsku", None) or getattr(listing, "external_listing_id", None) or "").strip()
+
+        duplicate_query = db.session.query(MarketplaceListing).filter(
+            MarketplaceListing.id != listing.id,
+            MarketplaceListing.is_active == True,  # noqa: E712
+        )
+
+        if listing_sku:
+            duplicate_query = duplicate_query.filter(MarketplaceListing.external_sku == listing_sku)
+        elif listing_fnsku:
+            duplicate_query = duplicate_query.filter(
+                (MarketplaceListing.fnsku == listing_fnsku)
+                | (MarketplaceListing.external_listing_id == listing_fnsku)
+            )
+        else:
+            duplicate_query = duplicate_query.filter(False)
+
+        for duplicate in duplicate_query.all():
+            duplicate_title = (getattr(duplicate, "title", None) or "").strip().lower()
+            duplicate_channel = (getattr(duplicate, "normalized_amazon_fulfillment_channel", None) or "").strip().upper()
+            duplicate_platform = ((duplicate.store.platform if duplicate.store else "") or "").strip().lower()
+
+            is_amazon_fba_duplicate = (
+                "amazon" in duplicate_platform
+                and duplicate_channel not in ("MFN", "FBM", "MERCHANT")
+                and (
+                    duplicate_title.startswith("amazon sku")
+                    or not getattr(duplicate, "warehouse_stock_id", None)
+                    or getattr(duplicate, "warehouse_stock_id", None) != stock.id
+                )
+            )
+
+            if not is_amazon_fba_duplicate:
+                continue
+
+            duplicate.is_active = False
+            duplicate.status = "archived_fba_shadow_duplicate"
+            duplicate.warehouse_stock_id = stock.id
+            duplicate.master_product_group_id = group.id
+            if hasattr(duplicate, "updated_at"):
+                from datetime import datetime
+                duplicate.updated_at = datetime.utcnow()
+            duplicate_shadow_count += 1
+
         db.session.commit()
 
         return jsonify({
@@ -3285,7 +3333,8 @@ def governed_disabled_action(action: str = ""):
             "listing_id": listing.id,
             "warehouse_stock_id": stock.id,
             "group_id": group.id,
-            "message": "Listing linked through governed Phase 2 bridge.",
+            "archived_duplicate_shadow_rows": duplicate_shadow_count,
+            "message": "Listing linked through governed Phase 2 bridge. Same-SKU FBA shadow duplicates were archived.",
         }), 200
 
     if action == "unlink-listing" and request.method == "POST":
