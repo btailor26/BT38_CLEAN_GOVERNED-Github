@@ -73,7 +73,8 @@ def deactivate_fba_shadow_listing_duplicates():
     """
     rows = (
         db.session.query(MarketplaceListing)
-        .filter(MarketplaceListing.warehouse_stock_id.is_(None))
+        .join(Store, MarketplaceListing.store_id == Store.id)
+        .filter(Store.platform.ilike("%amazon%"))
         .filter(MarketplaceListing.title.ilike("Amazon SKU%"))
         .filter(MarketplaceListing.is_active == True)  # noqa: E712
         .all()
