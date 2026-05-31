@@ -2795,10 +2795,24 @@ def governed_webhook_amazon_ingest():
 def _governed_webhook_ingest(marketplace: str):
     """Governed webhook ingestion.
 
+    GET/HEAD = reachability check only.
+    POST = real marketplace notification processing.
     Webhook does not push directly.
     Webhook may trigger import/hydration only when webhook + import fuses allow it.
     The fuse box remains the authority.
     """
+    if request.method in {"GET", "HEAD"}:
+        return jsonify(
+            ok=True,
+            success=True,
+            governed=True,
+            marketplace=str(marketplace or "").strip().lower(),
+            read_only=True,
+            execution_started=False,
+            notification_processed=False,
+            message="Governed webhook endpoint is reachable. POST is required for notification processing.",
+        ), 200
+
     from app import db
     from models import Store, SyncLog, SystemConfig
 
