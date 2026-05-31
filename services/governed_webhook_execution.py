@@ -77,6 +77,35 @@ def process_marketplace_notification(*, marketplace: str, payload: dict, actor: 
 
     before_qty = int(getattr(stock, "available_quantity", 0) or 0)
 
+    order_intake = _create_or_update_marketplace_order_from_notification(
+        marketplace=marketplace,
+        event_type=event_type,
+        payload=payload,
+        listing=listing,
+        stock=stock,
+        quantity=quantity,
+    )
+
+    from services.governed_order_stock_mutation import mutate_warehouse_stock_from_order_line
+
+    mutation_result = mutate_warehouse_stock_from_order_line(
+        order_intake["order"],
+        source=f"webhook_{marketplace}_order_intake",
+    )
+
+    if mutation_result.get("success") and not mutation_result.get("skipped"):
+        order_intake["order"].status = "processed"
+        order_intake["order"].processed_at = datetime.utcnow()
+        order_intake["order"].error_message = None
+    elif mutation_result.get("reason") == "already_mutated":
+        order_intake["order"].status = "processed"
+        order_intake["order"].processed_at = order_intake["order"].processed_at or datetime.utcnow()
+    else:
+        order_intake["order"].status = "failed"
+        order_intake["order"].error_message = str(mutation_result.get("reason") or mutation_result)
+
+    db.session.commit()
+
     if grouped:
         if not group_id:
             return _log_result(
@@ -88,11 +117,11 @@ def process_marketplace_notification(*, marketplace: str, payload: dict, actor: 
                 payload=payload,
                 listing_id=listing.id,
                 warehouse_stock_id=stock.id,
+                order_id=order_intake.get("marketplace_order_id"),
+                order_intake=order_intake.get("result"),
+                stock_mutation=mutation_result,
                 group_context=group_context,
             )
-
-        _apply_group_stock_change(stock.id, -quantity)
-        db.session.commit()
 
         push_result = push_group_listings(
             group_id=int(group_id),
@@ -106,7 +135,7 @@ def process_marketplace_notification(*, marketplace: str, payload: dict, actor: 
             marketplace=marketplace,
             event_type=event_type,
             business_event=business_event,
-            reason="Grouped stock-changing notification updated warehouse truth and triggered existing correction path.",
+            reason="Grouped sale notification created MarketplaceOrder, updated stock through governed order mutation, and triggered existing group correction path.",
             payload=payload,
             listing_id=listing.id,
             warehouse_stock_id=stock.id,
@@ -114,13 +143,13 @@ def process_marketplace_notification(*, marketplace: str, payload: dict, actor: 
             group_context=group_context,
             before_qty=before_qty,
             after_qty=int(getattr(stock, "available_quantity", 0) or 0),
-            stock_changed=True,
+            stock_changed=bool(mutation_result.get("success") and not mutation_result.get("skipped")),
             correction_started=True,
+            order_id=order_intake.get("marketplace_order_id"),
+            order_intake=order_intake.get("result"),
+            stock_mutation=mutation_result,
             push_result=push_result,
         )
-
-    stock.available_quantity = max(0, before_qty - quantity)
-    db.session.commit()
 
     push_result = push_marketplace_listing(
         listing_id=listing.id,
@@ -134,16 +163,135 @@ def process_marketplace_notification(*, marketplace: str, payload: dict, actor: 
         marketplace=marketplace,
         event_type=event_type,
         business_event=business_event,
-        reason="Ungrouped stock-changing notification updated warehouse truth and triggered existing correction path.",
+        reason="Sale notification created MarketplaceOrder, updated stock through governed order mutation, and triggered existing listing correction path.",
         payload=payload,
         listing_id=listing.id,
         warehouse_stock_id=stock.id,
         before_qty=before_qty,
         after_qty=int(getattr(stock, "available_quantity", 0) or 0),
-        stock_changed=True,
+        stock_changed=bool(mutation_result.get("success") and not mutation_result.get("skipped")),
         correction_started=True,
+        order_id=order_intake.get("marketplace_order_id"),
+        order_intake=order_intake.get("result"),
+        stock_mutation=mutation_result,
         push_result=push_result,
     )
+
+
+def _create_or_update_marketplace_order_from_notification(*, marketplace: str, event_type: str, payload: dict, listing, stock, quantity: int) -> Dict[str, Any]:
+    """Create the MarketplaceOrder row required by the governed order stock mutation bridge."""
+    from extensions import db
+    from models import MarketplaceOrder
+
+    order_id = (
+        _deep_get(payload, "marketplace_order_id")
+        or _deep_get(payload, "order_id")
+        or _deep_get(payload, "orderId")
+        or _deep_get(payload, "order_number")
+        or _deep_get(payload, "orderNumber")
+        or _deep_get(payload, "amazonOrderId")
+        or _deep_get(payload, "ebayOrderId")
+    )
+
+    item_id = (
+        _deep_get(payload, "marketplace_order_item_id")
+        or _deep_get(payload, "order_item_id")
+        or _deep_get(payload, "orderItemId")
+        or _deep_get(payload, "line_item_id")
+        or _deep_get(payload, "lineItemId")
+        or _deep_get(payload, "transaction_id")
+        or _deep_get(payload, "transactionId")
+        or getattr(listing, "external_listing_id", None)
+    )
+
+    sku = (
+        _deep_get(payload, "sku")
+        or _deep_get(payload, "seller_sku")
+        or _deep_get(payload, "sellerSku")
+        or _deep_get(payload, "external_sku")
+        or getattr(listing, "external_sku", None)
+        or getattr(stock, "sku", None)
+    )
+
+    if not order_id:
+        import hashlib
+        import json
+        raw = json.dumps(payload or {}, sort_keys=True, default=str)
+        order_id = f"webhook-{marketplace}-{hashlib.sha1(raw.encode('utf-8')).hexdigest()[:16]}"
+
+    order_id = str(order_id)
+    item_id = str(item_id or order_id)
+    sku = str(sku or "").strip()
+
+    idempotency_key = f"{getattr(listing, 'store_id', None)}:{order_id}:{item_id}:{sku}"
+
+    order = (
+        db.session.query(MarketplaceOrder)
+        .filter(MarketplaceOrder.idempotency_key == idempotency_key)
+        .first()
+    )
+
+    created = False
+
+    if not order:
+        order = MarketplaceOrder(
+            store_id=getattr(listing, "store_id", None),
+            marketplace_order_id=order_id,
+            marketplace_order_item_id=item_id,
+            sku=sku,
+            warehouse_stock_id=getattr(stock, "id", None),
+            quantity=int(quantity or 1),
+            fulfillment_type="FBM",
+            status="pending",
+            idempotency_key=idempotency_key,
+        )
+        db.session.add(order)
+        created = True
+
+    order.store_id = getattr(listing, "store_id", None)
+    order.sku = sku
+    order.warehouse_stock_id = getattr(stock, "id", None)
+    order.quantity = int(quantity or 1)
+    order.updated_at = datetime.utcnow()
+
+    channel = (getattr(listing, "normalized_amazon_fulfillment_channel", None) or "").upper()
+    platform = ((listing.store.platform if getattr(listing, "store", None) else marketplace) or "").lower()
+    if "amazon" in platform and channel not in ("MFN", "FBM", "MERCHANT"):
+        order.fulfillment_type = "FBA"
+    else:
+        order.fulfillment_type = "FBM"
+
+    try:
+        unit_price = float(
+            _deep_get(payload, "unit_price")
+            or _deep_get(payload, "price")
+            or _deep_get(payload, "item_price")
+            or _deep_get(payload, "itemPrice")
+            or 0
+        )
+    except Exception:
+        unit_price = 0.0
+
+    order.unit_price = unit_price
+    order.line_total = unit_price * int(quantity or 1)
+
+    db.session.flush()
+
+    return {
+        "success": True,
+        "created": created,
+        "order": order,
+        "result": {
+            "created": created,
+            "id": order.id,
+            "marketplace_order_id": order.marketplace_order_id,
+            "sku": order.sku,
+            "quantity": order.quantity,
+            "warehouse_stock_id": order.warehouse_stock_id,
+            "idempotency_key": order.idempotency_key,
+        },
+        "marketplace_order_id": order.marketplace_order_id,
+    }
 
 
 def _resolve_group_context(*, listing, stock) -> Dict[str, Any]:
