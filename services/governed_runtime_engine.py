@@ -177,6 +177,26 @@ def run_governed_marketplace_import_refresh(store_id=None, source="governed_runt
                 "error": str(exc),
             })
 
+    order_import = None
+
+    try:
+        from services.governed_marketplace_order_import import (
+            run_governed_marketplace_order_import,
+        )
+
+        order_import = run_governed_marketplace_order_import(
+            store_id=store_id,
+            source=f"{source}_order_import",
+        )
+
+    except Exception as exc:
+        _safe_error("marketplace order import failed", exc)
+
+        order_import = {
+            "success": False,
+            "error": str(exc),
+        }
+
     order_stock_bridge = None
 
     try:
@@ -207,6 +227,7 @@ def run_governed_marketplace_import_refresh(store_id=None, source="governed_runt
         "push_started": False,
         "sync_started": False,
         "results": results,
+        "order_import": order_import,
         "order_stock_bridge": order_stock_bridge,
     }
 
