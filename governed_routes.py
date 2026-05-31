@@ -1189,6 +1189,82 @@ def governed_notification_match_preview():
     }), 200
 
 
+
+@governed_bp.get("/governed/audit/order-authority")
+@login_required
+def governed_order_authority_audit():
+    """Read-only order authority audit.
+
+    No sync.
+    No push.
+    No marketplace call.
+    No DB write.
+
+    Shows which order tables currently contain records so BT38 can identify
+    the true order authority path.
+    """
+    from extensions import db
+    from models import MarketplaceOrder, CanonicalOrderLine, SalesOrder, SalesOrderItem, MCFOrder
+
+    def safe_count(model):
+        try:
+            return db.session.query(model).count()
+        except Exception as exc:
+            return {"error": str(exc)}
+
+    def latest(model, fields, limit=10):
+        try:
+            rows = db.session.query(model).order_by(model.id.desc()).limit(limit).all()
+            output = []
+            for row in rows:
+                item = {}
+                for field in fields:
+                    value = getattr(row, field, None)
+                    if hasattr(value, "isoformat"):
+                        value = value.isoformat()
+                    item[field] = value
+                output.append(item)
+            return output
+        except Exception as exc:
+            return [{"error": str(exc)}]
+
+    return jsonify({
+        "ok": True,
+        "success": True,
+        "governed": True,
+        "read_only": True,
+        "counts": {
+            "MarketplaceOrder": safe_count(MarketplaceOrder),
+            "CanonicalOrderLine": safe_count(CanonicalOrderLine),
+            "SalesOrder": safe_count(SalesOrder),
+            "SalesOrderItem": safe_count(SalesOrderItem),
+            "MCFOrder": safe_count(MCFOrder),
+        },
+        "latest": {
+            "MarketplaceOrder": latest(MarketplaceOrder, [
+                "id", "store_id", "marketplace_order_id", "marketplace_order_item_id",
+                "sku", "warehouse_stock_id", "quantity", "carrier", "tracking_number",
+                "status", "created_at", "processed_at"
+            ]),
+            "CanonicalOrderLine": latest(CanonicalOrderLine, [
+                "id", "platform", "external_order_id", "settlement_id", "sku",
+                "quantity", "gross_amount", "total_amount", "status", "created_at"
+            ]),
+            "SalesOrder": latest(SalesOrder, [
+                "id", "order_number", "status", "created_at", "ship_date"
+            ]),
+            "SalesOrderItem": latest(SalesOrderItem, [
+                "id", "order_id", "sku", "quantity", "is_fulfilled", "created_at"
+            ]),
+            "MCFOrder": latest(MCFOrder, [
+                "id", "source_channel", "source_order_id", "seller_fulfillment_order_id",
+                "amazon_order_id", "status", "amazon_status", "carrier",
+                "tracking_number", "created_at"
+            ]),
+        },
+    }), 200
+
+
 @governed_bp.get("/shutdown-proof/status")
 def shutdown_proof_status():
     return jsonify({
