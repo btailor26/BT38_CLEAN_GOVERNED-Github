@@ -193,6 +193,10 @@ def run_governed_amazon_inventory_import(store_id=None):
             "listings": linked_listings,
         })
 
+    # FBA read-only quantity import must not leave active shadow MarketplaceListing rows.
+    # These rows appear as duplicate "Amazon SKU ..." entries on Master Stock.
+    shadow_cleanup = deactivate_fba_shadow_listing_duplicates()
+
     db.session.commit()
 
     return {
@@ -200,5 +204,6 @@ def run_governed_amazon_inventory_import(store_id=None):
         "governed": True,
         "truth_source": "AmazonFBAInventory",
         "warehouse_mutation": False,
+        "shadow_duplicates_archived": shadow_cleanup.get("cleaned", 0),
         "results": results,
     }
