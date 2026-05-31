@@ -1056,6 +1056,139 @@ def governed_notification_audit():
     }), 200
 
 
+
+@governed_bp.get("/governed/audit/notification-match")
+@login_required
+def governed_notification_match_preview():
+    """Read-only notification match preview.
+
+    No sync.
+    No push.
+    No marketplace call.
+    No DB write.
+    No stock change.
+
+    Shows which MarketplaceListing, WarehouseStock, and group a future
+    notification payload would match.
+    """
+    from extensions import db
+    from models import MarketplaceListing
+
+    listing_id = request.args.get("listing_id")
+    external_listing_id = request.args.get("external_listing_id")
+    sku = request.args.get("sku")
+    marketplace = (request.args.get("marketplace") or "").strip().lower()
+
+    query = db.session.query(MarketplaceListing)
+
+    if listing_id:
+        try:
+            query = query.filter(MarketplaceListing.id == int(listing_id))
+        except Exception:
+            return jsonify(ok=False, success=False, governed=True, read_only=True, error="Invalid listing_id"), 400
+    elif external_listing_id:
+        query = query.filter(MarketplaceListing.external_listing_id == str(external_listing_id))
+    elif sku:
+        query = query.filter(MarketplaceListing.external_sku == str(sku))
+    else:
+        return jsonify({
+            "ok": False,
+            "success": False,
+            "governed": True,
+            "read_only": True,
+            "error": "Provide listing_id, external_listing_id, or sku",
+        }), 400
+
+    if marketplace:
+        query = query.join(MarketplaceListing.store).filter_by(platform=marketplace)
+
+    listing = query.order_by(MarketplaceListing.id.asc()).first()
+
+    if not listing:
+        return jsonify({
+            "ok": True,
+            "success": True,
+            "governed": True,
+            "read_only": True,
+            "matched": False,
+            "message": "No MarketplaceListing matched this preview input.",
+            "input": {
+                "listing_id": listing_id,
+                "external_listing_id": external_listing_id,
+                "sku": sku,
+                "marketplace": marketplace,
+            },
+        }), 200
+
+    stock = listing.warehouse_stock
+    group_id = (
+        getattr(listing, "master_product_group_id", None)
+        or getattr(stock, "master_product_group_id", None) if stock else None
+    )
+
+    linked_group_count = 0
+    linked_stock_count = 0
+
+    if group_id:
+        linked_group_count = (
+            db.session.query(MarketplaceListing.id)
+            .filter(MarketplaceListing.master_product_group_id == int(group_id))
+            .filter(MarketplaceListing.is_active == True)  # noqa: E712
+            .count()
+        )
+
+    if stock:
+        linked_stock_count = (
+            db.session.query(MarketplaceListing.id)
+            .filter(MarketplaceListing.warehouse_stock_id == int(stock.id))
+            .filter(MarketplaceListing.is_active == True)  # noqa: E712
+            .count()
+        )
+
+    grouped = bool(
+        group_id
+        or (bool(getattr(stock, "is_group_controlled", False)) if stock else False)
+        or linked_group_count > 1
+        or linked_stock_count > 1
+    )
+
+    return jsonify({
+        "ok": True,
+        "success": True,
+        "governed": True,
+        "read_only": True,
+        "matched": True,
+        "authority": "database_relationship_state",
+        "route_would_be": "group" if grouped else "warehouse",
+        "listing": {
+            "id": listing.id,
+            "store_id": listing.store_id,
+            "platform": getattr(listing.store, "platform", None) if listing.store else None,
+            "store_name": getattr(listing.store, "name", None) if listing.store else None,
+            "external_sku": listing.external_sku,
+            "external_listing_id": listing.external_listing_id,
+            "title": getattr(listing, "title", None),
+            "master_product_group_id": listing.master_product_group_id,
+            "warehouse_stock_id": listing.warehouse_stock_id,
+        },
+        "warehouse": None if not stock else {
+            "id": stock.id,
+            "sku": stock.sku,
+            "title": getattr(stock, "product_name", None) or getattr(stock, "name", None),
+            "available_quantity": stock.available_quantity,
+            "sellable_quantity": stock.sellable_quantity,
+            "master_product_group_id": stock.master_product_group_id,
+            "is_group_controlled": bool(stock.is_group_controlled),
+        },
+        "group": {
+            "grouped": grouped,
+            "group_id": int(group_id) if group_id else None,
+            "linked_group_count": linked_group_count,
+            "linked_stock_count": linked_stock_count,
+        },
+    }), 200
+
+
 @governed_bp.get("/shutdown-proof/status")
 def shutdown_proof_status():
     return jsonify({
