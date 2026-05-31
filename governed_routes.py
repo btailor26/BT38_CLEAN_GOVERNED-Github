@@ -2996,136 +2996,14 @@ def governed_ebay_inventory_import():
 
 @governed_bp.route("/governed/webhooks/ebay", methods=["GET", "POST"])
 def governed_webhook_ebay_ingest():
-    return _governed_webhook_ingest("ebay")
+    """Compatibility route: eBay webhook uses the single governed webhook intake."""
+    return governed_marketplace_webhook_intake("ebay")
 
 
 @governed_bp.route("/governed/webhooks/amazon", methods=["GET", "POST"])
 def governed_webhook_amazon_ingest():
-    return _governed_webhook_ingest("amazon")
-
-
-def _governed_webhook_ingest(marketplace: str):
-    """Governed webhook ingestion.
-
-    GET/HEAD = reachability check only.
-    POST = real marketplace notification processing.
-    Webhook does not push directly.
-    Webhook may trigger import/hydration only when webhook + import fuses allow it.
-    The fuse box remains the authority.
-    """
-    if request.method in {"GET", "HEAD"}:
-        return jsonify(
-            ok=True,
-            success=True,
-            governed=True,
-            marketplace=str(marketplace or "").strip().lower(),
-            read_only=True,
-            execution_started=False,
-            notification_processed=False,
-            message="Governed webhook endpoint is reachable. POST is required for notification processing.",
-        ), 200
-
-    from app import db
-    from models import Store, SyncLog, SystemConfig
-
-    marketplace = str(marketplace or "").strip().lower()
-    enabled_key = f"webhook_{marketplace}_enabled"
-
-    def on(key):
-        row = SystemConfig.query.filter_by(key=key).first()
-        return str(row.value if row else "false").strip().lower() in {"1", "true", "yes", "on"}
-
-    worker_on = on("webhook_worker_enabled")
-    market_on = on(enabled_key)
-    import_on = (
-        on("import_enabled")
-        and on("runtime_import_enabled")
-        and on("marketplace_import_enabled")
-    )
-
-    store = (
-        Store.query
-        .filter(Store.platform.ilike(f"%{marketplace}%"))
-        .filter(Store.is_active == True)  # noqa: E712
-        .order_by(Store.id.asc())
-        .first()
-    )
-
-    event_payload = request.get_json(silent=True) or {}
-    payload_keys = sorted(list(event_payload.keys())) if isinstance(event_payload, dict) else []
-
-    notification_result = None
-
-    allowed = bool(worker_on and market_on and import_on and store is not None)
-    import_result = None
-    import_started = False
-    reason = "Webhook received and import refresh started."
-
-    if not worker_on or not market_on:
-        reason = "Webhook received but blocked by webhook fuses."
-    elif not import_on:
-        reason = "Webhook received but import fuses are OFF."
-    elif store is None:
-        reason = "Webhook received but no active matching marketplace store exists."
-
-    if allowed:
-        try:
-            from services.governed_runtime_engine import run_governed_marketplace_import_refresh
-            import_result = run_governed_marketplace_import_refresh(
-                store_id=store.id,
-                source=f"webhook_{marketplace}_import_refresh",
-            )
-            import_started = True
-        except Exception as exc:
-            allowed = False
-            reason = f"Webhook import refresh failed: {exc}"
-            import_result = {"success": False, "error": str(exc)}
-
-    if allowed:
-        from services.governed_webhook_execution import process_marketplace_notification
-        notification_result = process_marketplace_notification(
-            marketplace=marketplace,
-            payload=event_payload,
-            actor=f"webhook_{marketplace}",
-        )
-
-    if store is not None:
-        db.session.add(SyncLog(
-            store_id=store.id,
-            status="success" if allowed else "blocked",
-            message=(
-                f"governed_webhook_ingest marketplace={marketplace} "
-                f"store_id={store.id} worker_on={worker_on} marketplace_on={market_on} "
-                f"import_on={import_on} import_started={import_started} method={request.method}"
-            )[:500],
-            items_synced=0,
-            created_at=datetime.utcnow(),
-        ))
-        db.session.commit()
-
-    return jsonify(
-        ok=allowed,
-        success=allowed,
-        governed=True,
-        marketplace=marketplace,
-        phase="webhook_import_refresh",
-        event_logged=bool(store is not None),
-        execution_started=bool(import_started),
-        import_started=bool(import_started),
-        push_started=False,
-        sync_started=False,
-        worker_started=False,
-        settings={
-            "webhook_worker_enabled": worker_on,
-            enabled_key: market_on,
-            "import_enabled": import_on,
-        },
-        store_id=getattr(store, "id", None),
-        payload_keys=payload_keys,
-        import_result=_governed_json_safe(import_result) if import_result is not None else None,
-        notification_result=_governed_json_safe(notification_result) if notification_result is not None else None,
-        reason=reason,
-    ), 200
+    """Compatibility route: Amazon webhook uses the single governed webhook intake."""
+    return governed_marketplace_webhook_intake("amazon")
 
 
 @governed_bp.route("/governed-disabled", defaults={"action": ""}, methods=["GET", "POST"])
