@@ -1,100 +1,72 @@
 """
-BT38 GOVERNED AMAZON INVENTORY IMPORT
+BT38 GOVERNED AMAZON FBA INVENTORY IMPORT
 
-Single governed execution path.
+Single responsibility:
+- Import Amazon FBA/AFN truth into AmazonFBAInventory only.
 
-Authority rule:
-- AFN/FBA inventory imports into AmazonFBAInventory only.
-- FBA/AFN is read-only and must not create or mutate WarehouseStock.
-- MarketplaceListing may keep lightweight marketplace quantity/cache state.
-- Warehouse remains operational stock truth for FBM/MFN only.
+Rules:
+- FBA/AFN is read-only.
+- Do not create MarketplaceListing rows.
+- Do not create WarehouseStock rows.
+- Do not mutate warehouse stock.
+- Do not mutate groups.
+- Do not delete or archive existing listings.
+- Existing listing/warehouse/transfer authority remains separate.
 """
 
 from datetime import datetime
 
 from app import db
-from models import (
-    Store,
-    MarketplaceListing,
-    AmazonFBAInventory,
-    SyncLog,
-)
-
+from models import Store, MarketplaceListing, AmazonFBAInventory, SyncLog
 from backend.adapters.amazon_sp_api_adapter import AmazonSPAPIAdapter
 
 
-def _find_or_create_marketplace_listing(store, sku, channel, qty, asin=None, fnsku=None):
-    """
-    Lightweight marketplace listing cache.
+def _clean(value):
+    return str(value or "").strip()
 
-    Do not create or mutate WarehouseStock here.
-    FBA stock authority is AmazonFBAInventory.
-    """
-    external_listing_id = fnsku or sku or asin
 
-    listing = (
+def _normalise_channel(value):
+    channel = _clean(value).upper()
+
+    if channel in {"FBA", "AFN", "AMAZON", "AMAZON_FULFILLED"}:
+        return "AFN"
+
+    if channel in {"FBM", "MFN", "MERCHANT", "MERCHANT_FULFILLED"}:
+        return "MFN"
+
+    return "UNKNOWN"
+
+
+def _find_existing_listing(store, sku, asin=None, fnsku=None):
+    sku = _clean(sku)
+    asin = _clean(asin)
+    fnsku = _clean(fnsku)
+
+    query = (
         db.session.query(MarketplaceListing)
-        .filter(
-            MarketplaceListing.store_id == store.id,
-            MarketplaceListing.external_listing_id == external_listing_id,
-            MarketplaceListing.external_sku == sku,
-        )
-        .first()
-    )
-
-    if not listing:
-        listing = MarketplaceListing(
-            store_id=store.id,
-            external_listing_id=external_listing_id,
-            external_sku=sku,
-            title=f"Amazon SKU {sku}",
-            price=0.0,
-            currency="GBP",
-            is_active=True,
-        )
-        db.session.add(listing)
-
-    listing.asin = asin
-    listing.fnsku = fnsku
-    listing.amazon_fulfillment_channel = channel
-    listing.last_marketplace_qty = qty
-    listing.last_synced_at = datetime.utcnow()
-    listing.is_active = True
-
-    return listing
-
-def deactivate_fba_shadow_listing_duplicates():
-    """
-    FBA read-only rows belong in AmazonFBAInventory.
-    Old standalone MarketplaceListing shadow rows are duplicates when:
-    - warehouse_stock_id is NULL
-    - title starts with "Amazon SKU"
-    - fnsku/external_listing_id points to FNSKU
-    """
-    rows = (
-        db.session.query(MarketplaceListing)
-        .join(Store, MarketplaceListing.store_id == Store.id)
-        .filter(Store.platform.ilike("%amazon%"))
-        .filter(MarketplaceListing.title.ilike("Amazon SKU%"))
+        .filter(MarketplaceListing.store_id == store.id)
         .filter(MarketplaceListing.is_active == True)  # noqa: E712
-        .all()
     )
 
-    cleaned = 0
+    if sku:
+        listing = query.filter(MarketplaceListing.external_sku == sku).first()
+        if listing:
+            return listing
 
-    for row in rows:
-        row.is_active = False
-        row.status = "archived_fba_shadow_duplicate"
-        cleaned += 1
+    if fnsku:
+        listing = query.filter(
+            (MarketplaceListing.external_listing_id == fnsku)
+            | (MarketplaceListing.fnsku == fnsku)
+        ).first()
+        if listing:
+            return listing
 
-    db.session.commit()
+    if asin:
+        listing = query.filter(MarketplaceListing.asin == asin).first()
+        if listing:
+            return listing
 
-    return {
-        "success": True,
-        "governed": True,
-        "cleaned": cleaned,
-        "rule": "FBA read-only quantities live in AmazonFBAInventory only",
-    }
+    return None
 
 
 def run_governed_amazon_inventory_import(store_id=None):
@@ -114,62 +86,76 @@ def run_governed_amazon_inventory_import(store_id=None):
         inventory = adapter.get_inventory()
 
         imported = 0
-        linked_listings = 0
+        linked_existing_listings = 0
+        unlinked_fba_truth_rows = 0
+        afn_rows = 0
+        mfn_rows_seen = 0
+        unknown_channel_rows = 0
 
         for row in inventory:
-            sku = (row.get("seller_sku") or "").strip()
+            sku = _clean(row.get("seller_sku"))
             if not sku:
                 continue
 
-            qty = int(row.get("available_quantity") or 0)
-            # Fulfillment must come from Amazon truth.
-            # Never default missing fulfillment data to AFN/FBA because that can wrongly lock FBM stock.
-            channel = (row.get("fulfillment_channel") or "").strip().upper()
+            asin = _clean(row.get("asin"))
+            fnsku = _clean(row.get("fnsku"))
+            channel = _normalise_channel(row.get("fulfillment_channel"))
 
-            if channel in {"FBA", "AMAZON", "AMAZON_FULFILLED"}:
-                channel = "AFN"
-            elif channel in {"FBM", "MFN", "MERCHANT", "MERCHANT_FULFILLED"}:
-                channel = "MFN"
-            elif not channel:
-                channel = "UNKNOWN"
-            asin = row.get("asin")
-            fnsku = row.get("fnsku")
+            qty = int(row.get("available_quantity") or 0)
+            reserved = int(row.get("reserved_quantity") or 0)
+            inbound = int(row.get("inbound_quantity") or 0)
 
             inv = (
                 db.session.query(AmazonFBAInventory)
-                .filter(
-                    AmazonFBAInventory.seller_sku == sku
-                )
+                .filter(AmazonFBAInventory.seller_sku == sku)
                 .first()
             )
 
             if not inv:
-                inv = AmazonFBAInventory(
-                    seller_sku=sku,
-                )
+                inv = AmazonFBAInventory(seller_sku=sku)
                 db.session.add(inv)
 
             if hasattr(inv, "store_id"):
                 inv.store_id = store.id
 
             inv.available_quantity = qty
-
-            inv.reserved_quantity = int(
-                row.get("reserved_quantity") or 0
-            )
-
-            inv.inbound_quantity = int(
-                row.get("inbound_quantity") or 0
-            )
-
-            inv.asin = asin
-            inv.fnsku = fnsku
+            inv.reserved_quantity = reserved
+            inv.inbound_quantity = inbound
+            inv.asin = asin or None
+            inv.fnsku = fnsku or None
             inv.is_archived = False
             inv.updated_at = datetime.utcnow()
 
-            # FBA read-only import must update AmazonFBAInventory only.
-            # Do not create standalone MarketplaceListing shadow rows.
-            # Warehouse page reads FBA quantities by SKU/FNSKU shortcut overlay.
+            if channel == "AFN":
+                afn_rows += 1
+            elif channel == "MFN":
+                mfn_rows_seen += 1
+            else:
+                unknown_channel_rows += 1
+
+            existing_listing = _find_existing_listing(
+                store,
+                sku=sku,
+                asin=asin,
+                fnsku=fnsku,
+            )
+
+            if existing_listing:
+                linked_existing_listings += 1
+
+                # Visibility/cache only. No warehouse mutation.
+                if hasattr(existing_listing, "asin") and asin:
+                    existing_listing.asin = asin
+                if hasattr(existing_listing, "fnsku") and fnsku:
+                    existing_listing.fnsku = fnsku
+                if hasattr(existing_listing, "last_marketplace_qty"):
+                    existing_listing.last_marketplace_qty = qty
+                if hasattr(existing_listing, "last_synced_at"):
+                    existing_listing.last_synced_at = datetime.utcnow()
+                if hasattr(existing_listing, "updated_at"):
+                    existing_listing.updated_at = datetime.utcnow()
+            else:
+                unlinked_fba_truth_rows += 1
 
             imported += 1
 
@@ -181,7 +167,11 @@ def run_governed_amazon_inventory_import(store_id=None):
                 f"governed_amazon_inventory_import "
                 f"imported={imported} "
                 f"fba_truth_rows={imported} "
-                f"listings={linked_listings}"
+                f"linked_existing_listings={linked_existing_listings} "
+                f"unlinked_fba_truth_rows={unlinked_fba_truth_rows} "
+                f"afn_rows={afn_rows} "
+                f"mfn_rows_seen={mfn_rows_seen} "
+                f"unknown_channel_rows={unknown_channel_rows}"
             ),
             created_at=datetime.utcnow(),
         ))
@@ -191,12 +181,15 @@ def run_governed_amazon_inventory_import(store_id=None):
             "store": store.name,
             "imported": imported,
             "fba_truth_rows": imported,
-            "listings": linked_listings,
+            "linked_existing_listings": linked_existing_listings,
+            "unlinked_fba_truth_rows": unlinked_fba_truth_rows,
+            "afn_rows": afn_rows,
+            "mfn_rows_seen": mfn_rows_seen,
+            "unknown_channel_rows": unknown_channel_rows,
+            "created_marketplace_listings": 0,
+            "created_warehouse_stock": 0,
+            "warehouse_mutation": False,
         })
-
-    # FBA read-only quantity import must not leave active shadow MarketplaceListing rows.
-    # These rows appear as duplicate "Amazon SKU ..." entries on Master Stock.
-    shadow_cleanup = deactivate_fba_shadow_listing_duplicates()
 
     db.session.commit()
 
@@ -205,6 +198,7 @@ def run_governed_amazon_inventory_import(store_id=None):
         "governed": True,
         "truth_source": "AmazonFBAInventory",
         "warehouse_mutation": False,
-        "shadow_duplicates_archived": shadow_cleanup.get("cleaned", 0),
+        "created_marketplace_listings": 0,
+        "created_warehouse_stock": 0,
         "results": results,
     }
