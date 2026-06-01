@@ -4130,3 +4130,113 @@ def amazon_fba_stock():
         current_search=search,
         status_filter=status_filter
     )
+
+
+@governed_bp.get("/governed/audit/runtime-understanding")
+@login_required
+def governed_runtime_understanding_audit():
+    """Read-only engine understanding audit.
+
+    Shows what the runtime understands after sync:
+    - runtime state
+    - latest marketplace imports
+    - order reader status
+    - latest MarketplaceOrder rows
+    - whether stock can be expected to match sales
+    """
+    from flask import jsonify
+    from models import Store, SyncLog, MarketplaceOrder
+
+    try:
+        from services.governed_runtime_engine import get_governed_runtime_status
+        runtime = get_governed_runtime_status()
+    except Exception as exc:
+        runtime = {"error": str(exc)}
+
+    stores = []
+    for store in Store.query.order_by(Store.id).all():
+        latest_logs = (
+            SyncLog.query
+            .filter(SyncLog.store_id == store.id)
+            .order_by(SyncLog.created_at.desc(), SyncLog.id.desc())
+            .limit(8)
+            .all()
+        )
+
+        logs = []
+        order_reader_seen = False
+        order_reader_wired = False
+
+        for log in latest_logs:
+            msg = str(log.message or "")
+            if "governed_" in msg and "order_import" in msg:
+                order_reader_seen = True
+                if "reader not yet wired" not in msg:
+                    order_reader_wired = True
+
+            logs.append({
+                "id": log.id,
+                "status": log.status,
+                "items_synced": log.items_synced,
+                "message": msg,
+                "created_at": log.created_at.isoformat() if log.created_at else None,
+            })
+
+        stores.append({
+            "id": store.id,
+            "name": store.name,
+            "platform": store.platform,
+            "is_active": bool(getattr(store, "is_active", False)),
+            "store_mode": getattr(store, "store_mode", None),
+            "fba_import_enabled": bool(getattr(store, "fba_import_enabled", False)),
+            "fbm_sync_enabled": bool(getattr(store, "fbm_sync_enabled", False)),
+            "auto_push_enabled": bool(getattr(store, "auto_push_enabled", False)),
+            "last_sync": str(getattr(store, "last_sync", "") or ""),
+            "order_reader_seen": order_reader_seen,
+            "order_reader_wired": order_reader_wired,
+            "latest_logs": logs,
+        })
+
+    latest_orders = (
+        MarketplaceOrder.query
+        .order_by(MarketplaceOrder.created_at.desc(), MarketplaceOrder.id.desc())
+        .limit(20)
+        .all()
+    )
+
+    order_rows = [{
+        "id": row.id,
+        "store_id": row.store_id,
+        "marketplace_order_id": row.marketplace_order_id,
+        "marketplace_order_item_id": row.marketplace_order_item_id,
+        "sku": row.sku,
+        "quantity": row.quantity,
+        "warehouse_stock_id": row.warehouse_stock_id,
+        "status": row.status,
+        "processed_at": row.processed_at.isoformat() if row.processed_at else None,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+    } for row in latest_orders]
+
+    any_order_reader_wired = any(s["order_reader_wired"] for s in stores)
+
+    return jsonify({
+        "ok": True,
+        "success": True,
+        "governed": True,
+        "read_only": True,
+        "runtime": runtime,
+        "stores": stores,
+        "latest_marketplace_orders": order_rows,
+        "engine_understanding": {
+            "inventory_runtime_running": bool(runtime.get("engine_started")),
+            "order_import_path_exists": True,
+            "marketplace_order_reader_wired": any_order_reader_wired,
+            "can_sales_update_stock": any_order_reader_wired,
+            "truth": (
+                "Inventory/listing sync is running, but marketplace sales cannot update stock until a real Amazon/eBay order reader is wired."
+                if not any_order_reader_wired
+                else
+                "Marketplace order reader is wired; sales can create MarketplaceOrder rows for governed stock mutation."
+            ),
+        },
+    }), 200
