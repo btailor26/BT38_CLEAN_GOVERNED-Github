@@ -124,6 +124,8 @@ def run_governed_amazon_inventory_import(store_id=None):
             inv.asin = asin or None
             inv.fnsku = fnsku or None
             inv.is_archived = False
+            inv.last_synced_at = datetime.utcnow()
+            inv.last_sync_status = "success"
             inv.updated_at = datetime.utcnow()
 
             if channel == "AFN":
