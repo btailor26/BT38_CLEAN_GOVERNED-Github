@@ -87,7 +87,7 @@ class AmazonSPAPIAdapter:
         rows = []
         next_token = None
         page_count = 0
-        max_pages = 20
+        max_pages = int(os.getenv("AMAZON_INVENTORY_MAX_PAGES", "200"))
 
         while True:
             page_count += 1
