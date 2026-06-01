@@ -129,17 +129,25 @@ def run_governed_marketplace_import_refresh(store_id=None, source="governed_runt
                     continue
 
                 from services.governed_amazon_inventory_import import run_governed_amazon_inventory_import
+                from services.governed_amazon_listing_fulfillment_refresh import (
+                    run_governed_amazon_listing_fulfillment_refresh,
+                )
 
                 result = run_governed_amazon_inventory_import(store_id=store.id)
+                listing_fulfillment = run_governed_amazon_listing_fulfillment_refresh(
+                    store_id=store.id,
+                    max_pages=2,
+                )
                 _last_fba_import = datetime.utcnow()
 
                 results.append({
                     "store_id": store.id,
                     "store": store.name,
                     "platform": store.platform,
-                    "import_type": "amazon_fba_read_only",
+                    "import_type": "amazon_fba_read_only_plus_listing_fulfillment",
                     "success": True,
                     "result": result,
+                    "listing_fulfillment": listing_fulfillment,
                 })
                 continue
 
