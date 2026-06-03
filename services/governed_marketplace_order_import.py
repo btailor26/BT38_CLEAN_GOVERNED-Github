@@ -337,6 +337,181 @@ def _run_ebay_order_import(store: Store, *, source: str) -> dict[str, Any]:
     }
 
 
+
+def _amazon_credentials(store: Store) -> dict[str, Any]:
+    creds = _store_credentials(store)
+
+    credentials = {
+        "refresh_token": (
+            creds.get("refresh_token")
+            or os.getenv("AMAZON_REFRESH_TOKEN")
+            or os.getenv("SP_API_REFRESH_TOKEN")
+        ),
+        "lwa_app_id": (
+            creds.get("lwa_app_id")
+            or creds.get("lwa_client_id")
+            or creds.get("client_id")
+            or os.getenv("AMAZON_LWA_CLIENT_ID")
+            or os.getenv("AMAZON_LWA_APP_ID")
+            or os.getenv("SP_API_LWA_CLIENT_ID")
+        ),
+        "lwa_client_secret": (
+            creds.get("lwa_client_secret")
+            or creds.get("client_secret")
+            or os.getenv("AMAZON_LWA_CLIENT_SECRET")
+            or os.getenv("SP_API_LWA_CLIENT_SECRET")
+        ),
+    }
+
+    aws_access_key = (
+        creds.get("aws_access_key")
+        or creds.get("aws_access_key_id")
+        or os.getenv("AMAZON_AWS_ACCESS_KEY_ID")
+        or os.getenv("SP_API_AWS_ACCESS_KEY_ID")
+    )
+    aws_secret_key = (
+        creds.get("aws_secret_key")
+        or creds.get("aws_secret_access_key")
+        or os.getenv("AMAZON_AWS_SECRET_ACCESS_KEY")
+        or os.getenv("SP_API_AWS_SECRET_ACCESS_KEY")
+    )
+    role_arn = (
+        creds.get("role_arn")
+        or creds.get("aws_user_arn")
+        or os.getenv("AMAZON_AWS_ROLE_ARN")
+        or os.getenv("SP_API_ROLE_ARN")
+    )
+
+    if aws_access_key:
+        credentials["aws_access_key"] = aws_access_key
+    if aws_secret_key:
+        credentials["aws_secret_key"] = aws_secret_key
+    if role_arn:
+        credentials["role_arn"] = role_arn
+
+    missing = [
+        key for key in ("refresh_token", "lwa_app_id", "lwa_client_secret")
+        if not credentials.get(key)
+    ]
+    if missing:
+        raise RuntimeError(f"missing_amazon_credentials_for_order_import:{','.join(missing)}")
+
+    return credentials
+
+
+def _run_amazon_order_import(store: Store, *, source: str) -> dict[str, Any]:
+    from sp_api.api import Orders
+    from sp_api.base import Marketplaces
+
+    creds = _store_credentials(store)
+    marketplace_id = creds.get("marketplace_id") or "A1F83G8C2ARO7P"
+
+    client = Orders(
+        marketplace=Marketplaces.UK,
+        credentials=_amazon_credentials(store),
+    )
+
+    created_after = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat().replace("+00:00", "Z")
+
+    response = client.get_orders(
+        CreatedAfter=created_after,
+        MarketplaceIds=[marketplace_id],
+    )
+
+    payload = response.payload or {}
+    orders = payload.get("Orders") or []
+
+    imported = 0
+    created = 0
+    skipped = 0
+    unmatched = 0
+    line_results = []
+
+    allowed_statuses = {"UNSHIPPED", "PARTIALLYSHIPPED", "SHIPPED"}
+
+    for order in orders:
+        order_id = _text(order.get("AmazonOrderId"))
+        order_status = _text(order.get("OrderStatus")).upper()
+        fulfillment_channel = _text(order.get("FulfillmentChannel")).upper()
+
+        if order_status not in allowed_statuses:
+            skipped += 1
+            continue
+
+        try:
+            items_response = client.get_order_items(order_id)
+            items_payload = items_response.payload or {}
+            items = items_payload.get("OrderItems") or []
+        except Exception as exc:
+            skipped += 1
+            line_results.append({
+                "success": False,
+                "skipped": True,
+                "reason": "amazon_order_items_read_failed",
+                "order_id": order_id,
+                "error": str(exc),
+            })
+            continue
+
+        fulfillment_type = "FBA" if fulfillment_channel == "AFN" else "FBM"
+
+        for item in items:
+            sku = _text(item.get("SellerSKU"))
+            item_id = _text(item.get("OrderItemId")) or f"{order_id}:{sku}"
+            qty = _safe_int(item.get("QuantityOrdered"))
+
+            price_value = 0.0
+            item_price = item.get("ItemPrice") or {}
+            if isinstance(item_price, dict):
+                price_value = _safe_float(item_price.get("Amount"))
+
+            result = upsert_governed_marketplace_order_line(
+                store=store,
+                marketplace_order_id=order_id,
+                marketplace_order_item_id=item_id,
+                sku=sku,
+                quantity=qty,
+                unit_price=price_value,
+                fulfillment_type=fulfillment_type,
+                status="order",
+            )
+
+            line_results.append(result)
+
+            if result.get("success") and not result.get("skipped"):
+                imported += 1
+                if result.get("created"):
+                    created += 1
+                if not result.get("warehouse_stock_id"):
+                    unmatched += 1
+            else:
+                skipped += 1
+
+    _write_sync_log(
+        store,
+        status="success",
+        items_synced=imported,
+        message=(
+            f"governed_amazon_order_import imported={imported} "
+            f"created={created} skipped={skipped} unmatched={unmatched} "
+            f"source={source}"
+        ),
+    )
+    db.session.commit()
+
+    return {
+        "success": True,
+        "governed": True,
+        "marketplace": "amazon",
+        "source": source,
+        "orders_seen": len(orders),
+        "imported": imported,
+        "created": created,
+        "skipped": skipped,
+        "unmatched": unmatched,
+        "results": line_results[:50],
+    }
+
 def run_governed_marketplace_order_import(store_id=None, source: str = "governed_marketplace_order_import") -> dict[str, Any]:
     stores = (
         Store.query
@@ -355,11 +530,29 @@ def run_governed_marketplace_order_import(store_id=None, source: str = "governed
         platform = str(store.platform or "").strip().lower()
 
         if "amazon" in platform:
+            try:
+                order_import = _run_amazon_order_import(store, source=source)
+            except Exception as exc:
+                db.session.rollback()
+                _write_sync_log(
+                    store,
+                    status="error",
+                    items_synced=0,
+                    message=f"governed_amazon_order_import failed: {exc}",
+                )
+                db.session.commit()
+                order_import = {
+                    "success": False,
+                    "governed": True,
+                    "marketplace": "amazon",
+                    "error": str(exc),
+                }
+
             results.append({
                 "store_id": store.id,
                 "store": store.name,
                 "platform": store.platform,
-                "order_import": _not_wired(store, "amazon"),
+                "order_import": order_import,
             })
             continue
 
