@@ -3340,6 +3340,93 @@ def governed_product_linking_repair_sync_now():
 
 
 
+
+@governed_bp.post("/governed/warehouse/<int:stock_id>/archive")
+def governed_warehouse_archive_stock(stock_id: int):
+    """Governed warehouse archive action.
+
+    Soft archive only:
+    - no hard delete
+    - no marketplace push
+    - blocked if active marketplace listings still depend on this warehouse row
+    - preserves transfer/history records
+    """
+    from datetime import datetime
+    from flask import jsonify
+    from extensions import db
+    from models import WarehouseStock, MarketplaceListing, MarketplaceOrder, AmazonFBAInventory
+
+    stock = db.session.get(WarehouseStock, stock_id)
+    if stock is None:
+        return jsonify(
+            ok=False,
+            success=False,
+            governed=True,
+            execution_blocked=True,
+            reason="Warehouse stock was not found.",
+            warehouse_stock_id=stock_id,
+        ), 404
+
+    active_listings = (
+        db.session.query(MarketplaceListing)
+        .filter(
+            MarketplaceListing.warehouse_stock_id == stock.id,
+            MarketplaceListing.is_active == True,  # noqa: E712
+        )
+        .count()
+    )
+
+    active_orders = (
+        db.session.query(MarketplaceOrder)
+        .filter(
+            MarketplaceOrder.warehouse_stock_id == stock.id,
+            MarketplaceOrder.processed_at.is_(None),
+        )
+        .count()
+    )
+
+    active_fba_rows = (
+        db.session.query(AmazonFBAInventory)
+        .filter(
+            AmazonFBAInventory.warehouse_stock_id == stock.id,
+            AmazonFBAInventory.is_active == True,  # noqa: E712
+            AmazonFBAInventory.is_archived == False,  # noqa: E712
+        )
+        .count()
+    )
+
+    if active_listings or active_orders or active_fba_rows:
+        return jsonify(
+            ok=False,
+            success=False,
+            governed=True,
+            execution_blocked=True,
+            reason="Warehouse stock still has active marketplace/order/FBA references and cannot be archived safely.",
+            warehouse_stock_id=stock.id,
+            active_listings=active_listings,
+            active_orders=active_orders,
+            active_fba_rows=active_fba_rows,
+        ), 409
+
+    stock.is_active = False
+    stock.is_archived = True
+    stock.is_deleted = True
+    stock.deleted_at = datetime.utcnow()
+    stock.updated_at = datetime.utcnow()
+
+    db.session.commit()
+
+    return jsonify(
+        ok=True,
+        success=True,
+        governed=True,
+        action="warehouse_archive",
+        warehouse_stock_id=stock.id,
+        sku=stock.sku,
+        archived=True,
+        reason="Warehouse stock soft-archived. No marketplace push executed. Transfer/history records preserved.",
+    ), 200
+
 @governed_bp.post("/governed/warehouse/stock-transfer/convert-to-fbm")
 def governed_warehouse_stock_transfer_convert_to_fbm():
     """Governed warehouse action: convert a warehouse row to FBM operational control.
