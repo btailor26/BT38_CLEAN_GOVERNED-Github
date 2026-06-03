@@ -130,16 +130,23 @@ def governed_group_propagate_quantity(group_id: int):
             "result": result,
         })
 
-    db.session.add(SyncLog(
-        store_id=None,
-        status="success" if failed == 0 else "error",
-        message=(
-            f"governed_group_propagation group_id={group_id} "
-            f"pushed={pushed} skipped={skipped} failed={failed} dry_run={dry_run}"
-        )[:500],
-        items_synced=pushed,
-        created_at=datetime.utcnow(),
-    ))
+    sync_store_id = None
+    for listing in listings:
+        if getattr(listing, "store_id", None):
+            sync_store_id = listing.store_id
+            break
+
+    if sync_store_id is not None:
+        db.session.add(SyncLog(
+            store_id=sync_store_id,
+            status="success" if failed == 0 else "error",
+            message=(
+                f"governed_group_propagation group_id={group_id} "
+                f"pushed={pushed} skipped={skipped} failed={failed} dry_run={dry_run}"
+            )[:500],
+            items_synced=pushed,
+            created_at=datetime.utcnow(),
+        ))
     db.session.commit()
 
     return jsonify({
