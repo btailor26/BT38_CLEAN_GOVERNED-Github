@@ -3269,6 +3269,9 @@ def governed_disabled_action(action: str = ""):
         remaining_group_members = 0
         old_stock_is_group_controlled = None
 
+        old_stock = None
+        warehouse_group_released = False
+
         if old_stock_id:
             old_stock = db.session.get(WarehouseStock, int(old_stock_id))
             old_stock_is_group_controlled = bool(getattr(old_stock, "is_group_controlled", False)) if old_stock else None
@@ -3287,6 +3290,21 @@ def governed_disabled_action(action: str = ""):
                 .count()
             )
 
+        # Release warehouse group-control only when unlink leaves no active marketplace members.
+        # This is explicit governed unlink cleanup, not automatic title/quantity inference.
+        if (
+            old_stock is not None
+            and old_group_id
+            and remaining_stock_members == 0
+            and remaining_group_members == 0
+            and getattr(old_stock, "master_product_group_id", None) == int(old_group_id)
+        ):
+            old_stock.master_product_group_id = None
+            old_stock.is_group_controlled = False
+            if hasattr(old_stock, "updated_at"):
+                old_stock.updated_at = listing.updated_at
+            warehouse_group_released = True
+
         db.session.commit()
 
         return jsonify({
@@ -3302,7 +3320,8 @@ def governed_disabled_action(action: str = ""):
             "old_stock_is_group_controlled": old_stock_is_group_controlled,
             "warehouse_review_required": bool(old_stock_id and remaining_stock_members == 0),
             "group_review_required": bool(old_group_id and remaining_group_members <= 1),
-            "message": "Listing unlinked through governed Phase 2 bridge. Warehouse/group state returned for review.",
+            "warehouse_group_released": warehouse_group_released,
+            "message": "Listing unlinked through governed Phase 2 bridge. Empty warehouse group-control released when safe.",
         }), 200
 
     if action == "product-linking-link" and request.method == "POST":
