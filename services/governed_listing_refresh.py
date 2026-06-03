@@ -129,23 +129,37 @@ def refresh_governed_listing_from_snapshot(
     if getattr(store, "is_active", False) is not True:
         return _blocked("store is not active")
 
+    listing = MarketplaceListing.query.filter_by(
+        store_id=store.id,
+        external_listing_id=external_listing_id,
+        external_sku=sku,
+    ).first()
+
     warehouse_stock = None
+
     if warehouse_stock_id is not None:
         warehouse_stock = db.session.get(WarehouseStock, warehouse_stock_id)
         if warehouse_stock is None:
             return _blocked("missing warehouse stock")
+
+    elif listing is not None and getattr(listing, "warehouse_stock_id", None):
+        # Existing grouped/linked listing already has warehouse authority.
+        # Preserve that authority even when marketplace SKU and warehouse SKU differ.
+        warehouse_stock = db.session.get(WarehouseStock, listing.warehouse_stock_id)
+        if warehouse_stock is None:
+            return _blocked("missing linked warehouse stock")
+
+        target_location = _warehouse_location_for_fulfillment(fulfillment)
+        if getattr(warehouse_stock, "location", None) != target_location:
+            warehouse_stock.location = target_location
+            warehouse_stock.updated_at = datetime.utcnow()
+
     else:
         warehouse_stock = _find_or_create_warehouse_stock_for_listing(
             sku=sku,
             title=title,
             fulfillment=fulfillment,
         )
-
-    listing = MarketplaceListing.query.filter_by(
-        store_id=store.id,
-        external_listing_id=external_listing_id,
-        external_sku=sku,
-    ).first()
 
     created = False
     if listing is None:
