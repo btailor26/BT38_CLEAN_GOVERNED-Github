@@ -172,9 +172,32 @@
       return;
     }
 
+    if (value === 'archive') {
+      if (!confirm('Archive ' + selected.length + ' selected warehouse row(s)? This is a soft archive only.')) {
+        if (select) select.value = '';
+        return;
+      }
+
+      try {
+        const results = await Promise.allSettled(selected.map(function (cb) {
+          const row = cb.closest('tr');
+          const stockId = rowStockId(row);
+          return postJson('/governed/warehouse/' + encodeURIComponent(stockId) + '/archive', {}, 'warehouse-archive-shortcut');
+        }));
+
+        const passed = results.filter(function (result) { return result.status === 'fulfilled'; }).length;
+        const failed = results.length - passed;
+        alert('Governed archive complete. Archived: ' + passed + '. Failed: ' + failed + '.');
+        window.location.reload();
+      } finally {
+        if (select) select.value = '';
+      }
+      return;
+    }
+
     if (value !== 'push') {
       if (select) select.value = '';
-      await guardedDisabled('Only governed Push and Transfer are enabled on this page. Other actions remain blocked until approved.');
+      await guardedDisabled('Only governed Push, Transfer and Archive are enabled on this page. Other actions remain blocked until approved.');
       return;
     }
 
