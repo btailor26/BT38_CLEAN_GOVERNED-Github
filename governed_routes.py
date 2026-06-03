@@ -3050,11 +3050,42 @@ def governed_disabled_action(action: str = ""):
         return db.session.get(WarehouseStock, stock_id_int)
 
     def ensure_group_for_stock(stock):
+        """Resolve one group authority for Product Linking.
+
+        Product Linking is relationship-only. WarehouseStock is stock truth.
+        If active listings already linked to this warehouse stock have a group,
+        reuse that group instead of creating a duplicate group.
+        """
         if not stock:
             return None
+
         if getattr(stock, "master_product_group_id", None):
             group = db.session.get(MasterProductGroup, int(stock.master_product_group_id))
             if group:
+                return group
+
+        existing_listing_group_id = (
+            db.session.query(MarketplaceListing.master_product_group_id)
+            .filter(MarketplaceListing.is_active == True)  # noqa: E712
+            .filter(MarketplaceListing.warehouse_stock_id == stock.id)
+            .filter(MarketplaceListing.master_product_group_id.isnot(None))
+            .order_by(MarketplaceListing.updated_at.desc(), MarketplaceListing.id.desc())
+            .limit(1)
+            .scalar()
+        )
+
+        if existing_listing_group_id:
+            group = db.session.get(MasterProductGroup, int(existing_listing_group_id))
+            if group:
+                stock.master_product_group_id = group.id
+                stock.is_group_controlled = True
+                if hasattr(stock, "group_controlled_at") and not stock.group_controlled_at:
+                    from datetime import datetime
+                    stock.group_controlled_at = datetime.utcnow()
+                if hasattr(stock, "updated_at"):
+                    from datetime import datetime
+                    stock.updated_at = datetime.utcnow()
+                group.updated_at = getattr(stock, "updated_at", None) or group.updated_at
                 return group
 
         group = MasterProductGroup(
