@@ -1081,7 +1081,7 @@ function showAdjustPushModal(warehouseId, sku, name, currentQty) {
 
 async function fetchGroupMembersPreview(warehouseId) {
     try {
-        const response = await fetch(`/governed-disabled/group-push-preview/${warehouseId}`);
+        const response = await fetch(`/governed/actions/group-push-preview/${warehouseId}`);
         const data = await response.json();
         
         const container = document.getElementById('groupMembersPreview');
@@ -1113,7 +1113,7 @@ async function executeGroupPush() {
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Pushing...';
     
     try {
-        const response = await fetch('/governed-disabled/group-push', {
+        const response = await fetch('/governed/actions/group-push', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
