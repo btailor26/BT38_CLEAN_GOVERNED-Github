@@ -124,15 +124,64 @@ def push_marketplace_listing(*, listing_id: int, actor: str, source: str, actor_
 
 def push_group_listings(*, group_id: int, actor: str, source: str, actor_user=None) -> Dict[str, Any]:
     from extensions import db
-    from models import MarketplaceListing
+    from models import MarketplaceListing, WarehouseStock
 
-    listings = (
+    group_id = int(group_id)
+
+    # Warehouse is the authority.
+    # A grouped shortcut must push every active listing attached to the grouped warehouse,
+    # even if an individual MarketplaceListing is missing master_product_group_id.
+    warehouse_ids = [
+        row.id
+        for row in (
+            db.session.query(WarehouseStock)
+            .filter(WarehouseStock.master_product_group_id == group_id)
+            .filter(WarehouseStock.is_active == True)  # noqa: E712
+            .all()
+        )
+    ]
+
+    direct_group_listing_ids = [
+        row.id
+        for row in (
+            db.session.query(MarketplaceListing)
+            .filter(MarketplaceListing.master_product_group_id == group_id)
+            .filter(MarketplaceListing.is_active == True)  # noqa: E712
+            .all()
+        )
+    ]
+
+    query = (
         db.session.query(MarketplaceListing)
-        .filter(MarketplaceListing.master_product_group_id == int(group_id))
         .filter(MarketplaceListing.is_active == True)  # noqa: E712
-        .order_by(MarketplaceListing.id)
-        .all()
     )
+
+    if warehouse_ids and direct_group_listing_ids:
+        listings = (
+            query
+            .filter(
+                (MarketplaceListing.warehouse_stock_id.in_(warehouse_ids))
+                | (MarketplaceListing.id.in_(direct_group_listing_ids))
+            )
+            .order_by(MarketplaceListing.id)
+            .all()
+        )
+    elif warehouse_ids:
+        listings = (
+            query
+            .filter(MarketplaceListing.warehouse_stock_id.in_(warehouse_ids))
+            .order_by(MarketplaceListing.id)
+            .all()
+        )
+    elif direct_group_listing_ids:
+        listings = (
+            query
+            .filter(MarketplaceListing.id.in_(direct_group_listing_ids))
+            .order_by(MarketplaceListing.id)
+            .all()
+        )
+    else:
+        listings = []
 
     results: List[Dict[str, Any]] = [
         push_marketplace_listing(
@@ -150,10 +199,13 @@ def push_group_listings(*, group_id: int, actor: str, source: str, actor_user=No
         "success": ok_count == len(results) and bool(results),
         "ok": ok_count == len(results) and bool(results),
         "governed": True,
-        "group_id": int(group_id),
+        "group_id": group_id,
+        "warehouse_ids": warehouse_ids,
+        "direct_group_listing_ids": direct_group_listing_ids,
         "total": len(results),
         "ok_count": ok_count,
         "warehouse_truth_quantity_used": True,
+        "warehouse_authority_resolution": True,
         "request_quantity_ignored": True,
         "results": results,
     }
