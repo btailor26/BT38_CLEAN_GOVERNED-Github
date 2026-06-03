@@ -967,10 +967,15 @@ function renderWarehouseProducts(products) {
                             ${listing.is_pushable ? '<span class="badge bg-success">Pushable</span>' : '<span class="badge bg-light text-dark border">Not pushable</span>'}
                         </div>
                         <div class="small fw-semibold text-truncate" title="${escapeHtml(titleText)}">${escapeHtml(titleText)}</div>
-                        <div class="small text-muted">
-                            SKU: <code>${escapeHtml(skuText)}</code>
+                        <div class="small text-muted d-flex flex-wrap align-items-center gap-1">
+                            <span>SKU: <code>${escapeHtml(skuText)}</code></span>
                             <span class="mx-1">|</span>
-                            ID: <code>${escapeHtml(externalIdText)}</code>
+                            <span>ID: <code>${escapeHtml(externalIdText)}</code></span>
+                            <button class="btn btn-link btn-sm p-0 ms-1 text-danger"
+                                    onclick="unlinkListing(${listing.id}, '${escapeJs(skuText)}')"
+                                    title="Unlink this marketplace listing from the warehouse/group">
+                                <i data-feather="x" class="feather-sm"></i>
+                            </button>
                         </div>
                     </div>`;
             });
@@ -1035,6 +1040,14 @@ function renderProductLinkingPagination() {
             </div>
         </div>
     `;
+}
+
+function escapeJs(text) {
+    return String(text || '')
+        .replace(/\\/g, '\\\\')
+        .replace(/'/g, "\\'")
+        .replace(/\n/g, ' ')
+        .replace(/\r/g, ' ');
 }
 
 function escapeHtml(text) {
