@@ -3258,11 +3258,34 @@ def governed_disabled_action(action: str = ""):
 
         old_stock_id = listing.warehouse_stock_id
         old_group_id = listing.master_product_group_id
+
         listing.warehouse_stock_id = None
         listing.master_product_group_id = None
         if hasattr(listing, "updated_at"):
             from datetime import datetime
             listing.updated_at = datetime.utcnow()
+
+        remaining_stock_members = 0
+        remaining_group_members = 0
+        old_stock_is_group_controlled = None
+
+        if old_stock_id:
+            old_stock = db.session.get(WarehouseStock, int(old_stock_id))
+            old_stock_is_group_controlled = bool(getattr(old_stock, "is_group_controlled", False)) if old_stock else None
+            remaining_stock_members = (
+                db.session.query(MarketplaceListing)
+                .filter(MarketplaceListing.is_active == True)  # noqa: E712
+                .filter(MarketplaceListing.warehouse_stock_id == int(old_stock_id))
+                .count()
+            )
+
+        if old_group_id:
+            remaining_group_members = (
+                db.session.query(MarketplaceListing)
+                .filter(MarketplaceListing.is_active == True)  # noqa: E712
+                .filter(MarketplaceListing.master_product_group_id == int(old_group_id))
+                .count()
+            )
 
         db.session.commit()
 
@@ -3274,7 +3297,12 @@ def governed_disabled_action(action: str = ""):
             "listing_id": listing.id,
             "old_warehouse_stock_id": old_stock_id,
             "old_group_id": old_group_id,
-            "message": "Listing unlinked through governed Phase 2 bridge.",
+            "remaining_stock_members": remaining_stock_members,
+            "remaining_group_members": remaining_group_members,
+            "old_stock_is_group_controlled": old_stock_is_group_controlled,
+            "warehouse_review_required": bool(old_stock_id and remaining_stock_members == 0),
+            "group_review_required": bool(old_group_id and remaining_group_members <= 1),
+            "message": "Listing unlinked through governed Phase 2 bridge. Warehouse/group state returned for review.",
         }), 200
 
     if action == "product-linking-link" and request.method == "POST":
