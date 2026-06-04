@@ -12,6 +12,80 @@ except Exception:
 governed_group_propagation_bp = Blueprint("governed_group_propagation", __name__)
 
 
+@governed_group_propagation_bp.post("/governed/groups/<int:group_id>/unlink")
+def governed_group_unlink_listing(group_id: int):
+    """Governed unlink for Product Linking group rows.
+
+    This is warehouse/group relationship cleanup only.
+    It does not push, sync, import, or call marketplaces.
+    """
+    from extensions import db
+    from models import MarketplaceListing, WarehouseStock
+
+    body = dict(request.get_json(silent=True) or {})
+    listing_id = body.get("listing_id")
+    warehouse_stock_id = body.get("warehouse_stock_id")
+
+    try:
+        listing_id = int(listing_id)
+    except (TypeError, ValueError):
+        return jsonify(_blocked("listing_id must be provided as an integer.", group_id=group_id)), 400
+
+    listing = db.session.get(MarketplaceListing, listing_id)
+    if not listing:
+        return jsonify(_blocked("Marketplace listing was not found.", group_id=group_id, listing_id=listing_id)), 404
+
+    current_warehouse_stock_id = getattr(listing, "warehouse_stock_id", None)
+    current_group_id = getattr(listing, "master_product_group_id", None)
+
+    if warehouse_stock_id not in (None, ""):
+        try:
+            warehouse_stock_id = int(warehouse_stock_id)
+        except (TypeError, ValueError):
+            return jsonify(_blocked("warehouse_stock_id must be an integer when provided.", group_id=group_id)), 400
+
+    if current_group_id not in (None, group_id) and current_warehouse_stock_id != warehouse_stock_id:
+        return jsonify(_blocked(
+            "Listing does not belong to this governed group or warehouse.",
+            group_id=group_id,
+            listing_id=listing_id,
+            current_group_id=current_group_id,
+            current_warehouse_stock_id=current_warehouse_stock_id,
+        )), 409
+
+    listing.warehouse_stock_id = None
+    listing.master_product_group_id = None
+
+    if warehouse_stock_id:
+        remaining = (
+            db.session.query(MarketplaceListing)
+            .filter(MarketplaceListing.is_active == True)  # noqa: E712
+            .filter(MarketplaceListing.warehouse_stock_id == warehouse_stock_id)
+            .filter(MarketplaceListing.id != listing_id)
+            .count()
+        )
+
+        stock = db.session.get(WarehouseStock, warehouse_stock_id)
+        if stock and remaining == 0:
+            if hasattr(stock, "master_product_group_id") and getattr(stock, "master_product_group_id", None) == group_id:
+                stock.master_product_group_id = None
+            if hasattr(stock, "is_group_controlled"):
+                stock.is_group_controlled = False
+
+    db.session.commit()
+
+    return jsonify({
+        "success": True,
+        "ok": True,
+        "governed": True,
+        "message": "Listing unlinked from warehouse/group authority.",
+        "listing_id": listing_id,
+        "group_id": group_id,
+        "warehouse_stock_id": warehouse_stock_id,
+    }), 200
+
+
+
 @governed_group_propagation_bp.post("/governed/groups/<int:group_id>/propagate-quantity")
 def governed_group_propagate_quantity(group_id: int):
     """Propagate warehouse truth quantity to pushable marketplace listings.
