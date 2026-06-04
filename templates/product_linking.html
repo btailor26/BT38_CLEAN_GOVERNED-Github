@@ -1239,7 +1239,7 @@ function filterFlatListings() {
             const container = document.getElementById('unlinkedListingsList');
             container.innerHTML = '<div class="text-center py-3"><div class="spinner-border spinner-border-sm" role="status"></div> Searching...</div>';
             
-            const response = await fetch(`/governed/product-linking/search-all-listings?search=${encodeURIComponent(searchText)}&exclude_warehouse=${currentWarehouseId}&limit=100`);
+            const response = await fetch(`/governed/product-linking/search-all-listings?search=${encodeURIComponent(searchText)}&exclude_warehouse=${currentWarehouseId}&limit=20`);
             const data = await response.json();
             
             if (data.success && data.listings) {
