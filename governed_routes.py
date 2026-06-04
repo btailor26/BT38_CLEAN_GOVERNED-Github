@@ -2217,7 +2217,93 @@ def governed_product_linking_data_compat():
 
 @governed_bp.get("/governed/product-linking/search-all-listings")
 def governed_product_linking_search_all_listings_compat():
-    return governed_product_linking_data_compat()
+    """Lightweight marketplace listing search for Product Linking modal.
+
+    Read-only. No push, sync, import, repair, or mutation.
+    """
+    from extensions import db
+    from models import MarketplaceListing
+    from sqlalchemy import or_
+
+    search = (request.args.get("search") or request.args.get("q") or "").strip()
+    exclude_warehouse_raw = request.args.get("exclude_warehouse")
+    limit_raw = request.args.get("limit") or 20
+
+    try:
+        limit = int(limit_raw)
+    except Exception:
+        limit = 20
+    limit = max(1, min(limit, 20))
+
+    exclude_warehouse_id = None
+    if exclude_warehouse_raw not in (None, "", "0", "null", "None"):
+        try:
+            exclude_warehouse_id = int(exclude_warehouse_raw)
+        except Exception:
+            exclude_warehouse_id = None
+
+    query = db.session.query(MarketplaceListing).filter(
+        MarketplaceListing.is_active == True  # noqa: E712
+    )
+
+    if exclude_warehouse_id is not None:
+        query = query.filter(or_(
+            MarketplaceListing.warehouse_stock_id.is_(None),
+            MarketplaceListing.warehouse_stock_id != exclude_warehouse_id,
+        ))
+
+    if search:
+        like = f"%{search}%"
+        query = query.filter(or_(
+            MarketplaceListing.external_sku.ilike(like),
+            MarketplaceListing.title.ilike(like),
+            MarketplaceListing.external_listing_id.ilike(like),
+            MarketplaceListing.asin.ilike(like),
+            MarketplaceListing.fnsku.ilike(like),
+            MarketplaceListing.barcode.ilike(like),
+            MarketplaceListing.parent_item_id.ilike(like),
+            MarketplaceListing.external_parent_id.ilike(like),
+            MarketplaceListing.variation_sku_map.ilike(like),
+        ))
+    else:
+        query = query.filter(MarketplaceListing.warehouse_stock_id.is_(None))
+
+    rows = query.order_by(MarketplaceListing.id.desc()).limit(limit).all()
+
+    listings = []
+    for listing in rows:
+        store = getattr(listing, "store", None)
+        listings.append({
+            "id": listing.id,
+            "external_sku": listing.external_sku,
+            "sku": listing.external_sku,
+            "title": listing.title,
+            "external_listing_id": listing.external_listing_id,
+            "external_id": listing.external_listing_id,
+            "asin": listing.asin,
+            "fnsku": listing.fnsku,
+            "warehouse_stock_id": listing.warehouse_stock_id,
+            "master_product_group_id": listing.master_product_group_id,
+            "store_id": listing.store_id,
+            "store_name": store.name if store else "",
+            "platform": store.platform if store else getattr(listing, "platform", ""),
+            "amazon_fulfillment_channel": listing.amazon_fulfillment_channel,
+            "fulfillment": listing.amazon_fulfillment_channel,
+            "is_fba": bool(getattr(listing, "is_fba", False)),
+            "is_pushable": bool(getattr(listing, "is_pushable", False)),
+        })
+
+    return jsonify({
+        "success": True,
+        "ok": True,
+        "governed": True,
+        "read_only": True,
+        "mode": "listing_search",
+        "search_term": search,
+        "limit": limit,
+        "count": len(listings),
+        "listings": listings,
+    }), 200
 
 
 @governed_bp.get("/governed/product-linking/search-warehouse")
