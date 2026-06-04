@@ -3181,6 +3181,46 @@ def governed_disabled_action(action: str = ""):
 
         group = ensure_group_for_stock(stock)
 
+        # Unified Product Linking authority:
+        # The live UI calls link-listing-to-warehouse, so this path must also
+        # merge existing group ownership into ONE MasterProductGroup.
+        # Rule:
+        # - standalone warehouse rows update from warehouse only
+        # - grouped rows update from group authority only
+        # - one physical product must not split across competing group IDs
+        merge_group_ids = set()
+        if getattr(stock, "master_product_group_id", None):
+            merge_group_ids.add(int(stock.master_product_group_id))
+        if getattr(listing, "master_product_group_id", None):
+            merge_group_ids.add(int(listing.master_product_group_id))
+
+        if merge_group_ids:
+            from datetime import datetime
+
+            for merge_group_id in sorted(merge_group_ids):
+                linked_stocks = (
+                    db.session.query(WarehouseStock)
+                    .filter(WarehouseStock.master_product_group_id == merge_group_id)
+                    .all()
+                )
+                for linked_stock in linked_stocks:
+                    linked_stock.master_product_group_id = group.id
+                    linked_stock.is_group_controlled = True
+                    if hasattr(linked_stock, "updated_at"):
+                        linked_stock.updated_at = datetime.utcnow()
+
+                linked_listings = (
+                    db.session.query(MarketplaceListing)
+                    .filter(MarketplaceListing.master_product_group_id == merge_group_id)
+                    .all()
+                )
+                for linked_listing in linked_listings:
+                    linked_listing.master_product_group_id = group.id
+                    if linked_listing.id == listing.id:
+                        linked_listing.warehouse_stock_id = stock.id
+                    if hasattr(linked_listing, "updated_at"):
+                        linked_listing.updated_at = datetime.utcnow()
+
         listing.warehouse_stock_id = stock.id
         listing.master_product_group_id = group.id
         if hasattr(listing, "updated_at"):
@@ -3259,6 +3299,9 @@ def governed_disabled_action(action: str = ""):
         old_stock_id = listing.warehouse_stock_id
         old_group_id = listing.master_product_group_id
 
+        # Unlinked listing rule:
+        # if a marketplace listing is detached from warehouse authority,
+        # it must not keep any group authority either.
         listing.warehouse_stock_id = None
         listing.master_product_group_id = None
         if hasattr(listing, "updated_at"):
