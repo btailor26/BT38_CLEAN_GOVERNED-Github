@@ -735,14 +735,22 @@
                     <i data-feather="check-circle" class="feather-sm me-1"></i>
                     <strong>Push warehouse quantity to ALL linked FBM marketplaces.</strong>
                     <br><br>
-                    Quantity: <span id="adjustPushCurrentQty" class="fw-bold fs-5">0</span> units will be pushed.
+                    <label for="adjustPushQuantity" class="form-label mb-1">Warehouse quantity</label>
+                    <input type="number"
+                           class="form-control form-control-sm"
+                           id="adjustPushQuantity"
+                           min="0"
+                           step="1"
+                           value="0">
+                    <div class="small text-muted mt-1">
+                        Save updates warehouse/group quantity. Push sends that saved quantity to linked marketplaces.
+                    </div>
                 </div>
                 
                 <div id="groupMembersPreview" class="mb-3">
                     <small class="text-muted">Loading group members...</small>
                 </div>
                 
-                <input type="hidden" id="adjustPushQuantity" value="0">
                 <input type="hidden" id="adjustPushWarehouseId" value="">
             </div>
             <div class="modal-footer">
@@ -1092,7 +1100,6 @@ function showAdjustPushModal(warehouseId, groupId, sku, name, currentQty) {
     document.getElementById('adjustPushSku').textContent = sku;
     document.getElementById('adjustPushName').textContent = name || '';
     document.getElementById('adjustPushQuantity').value = currentQty;
-    document.getElementById('adjustPushCurrentQty').textContent = currentQty;
     document.getElementById('adjustPushWarehouseId').value = warehouseId;
 
     let groupInput = document.getElementById('adjustPushGroupId');
