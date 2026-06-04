@@ -290,7 +290,12 @@
                                         </div>
                                     </td>
                                     <td>
-                                        <span class="badge bg-dark fs-6">{{ product.quantity }}</span>
+                                        <button type="button"
+                                                class="btn btn-sm p-0 border-0 bg-transparent"
+                                                onclick="showAdjustPushModal({{ product.id }}, {{ product.master_product_group_id or 'null' }}, '{{ product.sku|e }}', '{{ product.name|e|truncate(30) }}', {{ product.quantity }})"
+                                                title="Edit warehouse quantity then push group">
+                                            <span class="badge bg-dark fs-6">{{ product.quantity }}</span>
+                                        </button>
                                     </td>
                                     <!-- Status Column -->
                                     <td>
@@ -991,7 +996,14 @@ function renderWarehouseProducts(products) {
                         </div>
                     </div>
                 </td>
-                <td><span class="badge bg-dark fs-6">${product.quantity}</span></td>
+                <td>
+                    <button type="button"
+                            class="btn btn-sm p-0 border-0 bg-transparent"
+                            onclick="showAdjustPushModal(${product.id}, ${product.master_product_group_id || 'null'}, '${escapeHtml(product.sku)}', '${escapeHtml(product.name || '')}', ${product.quantity})"
+                            title="Edit warehouse quantity then push group">
+                        <span class="badge bg-dark fs-6">${product.quantity}</span>
+                    </button>
+                </td>
                 <td>${statusBadge}${groupLabel}</td>
                 <td>${linkBtn}</td>
                 <td>${listingsHtml || '<small class="text-muted">No listings linked</small>'}</td>
