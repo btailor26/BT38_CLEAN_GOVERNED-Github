@@ -3334,6 +3334,106 @@ def governed_disabled_action(action: str = ""):
     return blocked("This legacy action is disabled until a governed bridge is approved.")
 
 
+@governed_bp.post("/governed/product-linking/merge-warehouse-group")
+def governed_product_linking_merge_warehouse_group():
+    """Governed Product Linking merge.
+
+    Creates/reuses ONE MasterProductGroup and attaches all selected warehouse rows
+    to that same group. No marketplace push. No quantity change. No delete/archive.
+    """
+    from datetime import datetime
+    from flask import jsonify, request
+    from extensions import db
+    from models import MasterProductGroup, WarehouseStock, MarketplaceListing
+
+    body = request.get_json(silent=True) or {}
+    stock_ids = body.get("warehouse_stock_ids") or body.get("stock_ids") or []
+    target_group_id = body.get("target_group_id")
+
+    try:
+        stock_ids = [int(x) for x in stock_ids if x is not None]
+    except Exception:
+        return jsonify(ok=False, success=False, governed=True, message="Invalid warehouse_stock_ids."), 400
+
+    stock_ids = list(dict.fromkeys(stock_ids))
+
+    if len(stock_ids) < 2:
+        return jsonify(ok=False, success=False, governed=True, message="Select at least two warehouse rows to merge into one group."), 400
+
+    stocks = (
+        db.session.query(WarehouseStock)
+        .filter(WarehouseStock.id.in_(stock_ids))
+        .filter(WarehouseStock.is_active == True)  # noqa: E712
+        .filter(WarehouseStock.is_deleted == False)  # noqa: E712
+        .all()
+    )
+
+    if len(stocks) != len(stock_ids):
+        return jsonify(ok=False, success=False, governed=True, message="One or more warehouse rows were not found or are inactive."), 404
+
+    group = None
+    if target_group_id:
+        group = db.session.get(MasterProductGroup, int(target_group_id))
+
+    if group is None:
+        existing_group_ids = [
+            int(s.master_product_group_id)
+            for s in stocks
+            if getattr(s, "master_product_group_id", None)
+        ]
+        if existing_group_ids:
+            group = db.session.get(MasterProductGroup, existing_group_ids[0])
+
+    if group is None:
+        primary = stocks[0]
+        group = MasterProductGroup(
+            display_title=(primary.product_name or primary.group_title or primary.sku or "Untitled Master Group")[:500],
+            display_image_url=getattr(primary, "image_url", None),
+        )
+        db.session.add(group)
+        db.session.flush()
+
+    moved_stock_ids = []
+    moved_listing_ids = []
+
+    for stock in stocks:
+        stock.master_product_group_id = group.id
+        stock.is_group_controlled = True
+        if hasattr(stock, "group_controlled_at") and not stock.group_controlled_at:
+            stock.group_controlled_at = datetime.utcnow()
+        if hasattr(stock, "updated_at"):
+            stock.updated_at = datetime.utcnow()
+        moved_stock_ids.append(stock.id)
+
+        linked_listings = (
+            db.session.query(MarketplaceListing)
+            .filter(MarketplaceListing.is_active == True)  # noqa: E712
+            .filter(MarketplaceListing.warehouse_stock_id == stock.id)
+            .all()
+        )
+
+        for listing in linked_listings:
+            listing.master_product_group_id = group.id
+            if hasattr(listing, "updated_at"):
+                listing.updated_at = datetime.utcnow()
+            moved_listing_ids.append(listing.id)
+
+    group.updated_at = datetime.utcnow()
+    db.session.commit()
+
+    return jsonify(
+        ok=True,
+        success=True,
+        governed=True,
+        action="merge_warehouse_group",
+        group_id=group.id,
+        warehouse_stock_ids=moved_stock_ids,
+        marketplace_listing_ids=moved_listing_ids,
+        message="Selected warehouse rows merged into one governed product group. No marketplace push executed.",
+    ), 200
+
+
+
 @governed_bp.post("/governed/product-linking/repair/reset-failures")
 def governed_product_linking_repair_reset_failures():
     from flask import jsonify
