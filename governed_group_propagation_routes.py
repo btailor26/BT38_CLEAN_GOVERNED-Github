@@ -25,20 +25,86 @@ def governed_group_propagate_quantity(group_id: int):
     """
     from extensions import db
     from governed_execution import AMAZON_FBM_LIVE_APPROVAL_TYPE, submit_governed_marketplace_action
-    from models import MarketplaceListing, MasterProductGroup, SyncLog
+    from models import MarketplaceListing, MasterProductGroup, SyncLog, WarehouseStock
+    from sqlalchemy import or_
 
     body = dict(request.get_json(silent=True) or {})
     dry_run = bool(body.get("dry_run", False))
     requested_quantity = body.get("quantity")
+    requested_warehouse_stock_id = body.get("warehouse_stock_id")
+
+    target_quantity = None
+    if requested_quantity is not None:
+        try:
+            target_quantity = int(requested_quantity)
+        except (TypeError, ValueError):
+            return jsonify(_blocked("quantity must be an integer when provided.", group_id=group_id)), 400
+        if target_quantity < 0:
+            return jsonify(_blocked("quantity cannot be negative.", group_id=group_id)), 400
 
     group = db.session.get(MasterProductGroup, group_id)
     if not group:
         return jsonify(_blocked("Master product group was not found.", group_id=group_id)), 404
 
-    listings = (
+    target_warehouse_stock_ids = set()
+
+    if requested_warehouse_stock_id not in (None, ""):
+        try:
+            target_warehouse_stock_ids.add(int(requested_warehouse_stock_id))
+        except (TypeError, ValueError):
+            return jsonify(_blocked("warehouse_stock_id must be an integer when provided.", group_id=group_id)), 400
+
+    existing_group_listings = (
         db.session.query(MarketplaceListing)
         .filter(MarketplaceListing.master_product_group_id == group_id)
         .filter(MarketplaceListing.is_active == True)  # noqa: E712
+        .all()
+    )
+
+    for listing in existing_group_listings:
+        if getattr(listing, "warehouse_stock_id", None):
+            target_warehouse_stock_ids.add(int(listing.warehouse_stock_id))
+
+    if target_warehouse_stock_ids:
+        attached_listings = (
+            db.session.query(MarketplaceListing)
+            .filter(MarketplaceListing.is_active == True)  # noqa: E712
+            .filter(MarketplaceListing.warehouse_stock_id.in_(target_warehouse_stock_ids))
+            .all()
+        )
+
+        for listing in attached_listings:
+            if getattr(listing, "master_product_group_id", None) != group_id:
+                listing.master_product_group_id = group_id
+
+        warehouse_rows = (
+            db.session.query(WarehouseStock)
+            .filter(WarehouseStock.id.in_(target_warehouse_stock_ids))
+            .all()
+        )
+
+        for stock in warehouse_rows:
+            if hasattr(stock, "master_product_group_id"):
+                stock.master_product_group_id = group_id
+            if hasattr(stock, "is_group_controlled"):
+                stock.is_group_controlled = True
+
+            if target_quantity is not None:
+                stock_columns = set(stock.__table__.columns.keys())
+                for col in ("sellable_quantity", "available_quantity", "quantity"):
+                    if col in stock_columns:
+                        setattr(stock, col, target_quantity)
+
+        db.session.flush()
+
+    listing_filters = [MarketplaceListing.master_product_group_id == group_id]
+    if target_warehouse_stock_ids:
+        listing_filters.append(MarketplaceListing.warehouse_stock_id.in_(target_warehouse_stock_ids))
+
+    listings = (
+        db.session.query(MarketplaceListing)
+        .filter(MarketplaceListing.is_active == True)  # noqa: E712
+        .filter(or_(*listing_filters))
         .order_by(MarketplaceListing.id)
         .all()
     )
@@ -62,13 +128,10 @@ def governed_group_propagate_quantity(group_id: int):
             })
             continue
 
-        if requested_quantity is None:
+        if target_quantity is None:
             quantity = listing.effective_quantity
         else:
-            try:
-                quantity = int(requested_quantity)
-            except (TypeError, ValueError):
-                return jsonify(_blocked("quantity must be an integer when provided.", group_id=group_id)), 400
+            quantity = target_quantity
 
         sku = (listing.external_sku or (listing.warehouse_stock.sku if listing.warehouse_stock else "") or "").strip()
         marketplace = classification["marketplace"]
