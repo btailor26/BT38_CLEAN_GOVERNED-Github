@@ -972,7 +972,7 @@ function renderWarehouseProducts(products) {
                             <span class="mx-1">|</span>
                             <span>ID: <code>${escapeHtml(externalIdText)}</code></span>
                             <button class="btn btn-link btn-sm p-0 ms-1 text-danger"
-                                    onclick="unlinkListing(${listing.id}, '${escapeJs(skuText)}')"
+                                    onclick="unlinkListing(${listing.id}, '${escapeJs(skuText)}', false, ${listing.master_product_group_id || 'null'}, ${listing.warehouse_stock_id || 'null'})"
                                     title="Unlink this marketplace listing from the warehouse/group">
                                 <i data-feather="x" class="feather-sm"></i>
                             </button>
@@ -1672,43 +1672,56 @@ async function linkListingToWarehouse(listingId, warehouseId, listingSku, wareho
 }
 
 // Unlink a marketplace listing from its warehouse product (removes product_mapping row)
-async function unlinkListing(listingId, listingSku, userConfirmed = false) {
+async function unlinkListing(listingId, listingSku, userConfirmed = false, groupId = null, warehouseStockId = null) {
     // Initial confirmation (basic unlink warning)
     if (!userConfirmed && !confirm(`Are you sure you want to unlink ${listingSku}? It will no longer sync inventory automatically.`)) {
         return;
     }
-    
+
     try {
-        const response = await fetch('/governed-disabled/unlink-listing', {
+        const useGroupUnlink = !!groupId;
+        const url = useGroupUnlink
+            ? `/governed/groups/${encodeURIComponent(groupId)}/unlink`
+            : '/governed-disabled/unlink-listing';
+
+        const payload = useGroupUnlink
+            ? {
+                listing_id: listingId,
+                warehouse_stock_id: warehouseStockId,
+                user_confirmed: userConfirmed
+            }
+            : {
+                listing_id: listingId,
+                user_confirmed: userConfirmed
+            };
+
+        const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                listing_id: listingId,
-                user_confirmed: userConfirmed
-            })
+            body: JSON.stringify(payload)
         });
-        
+
         const data = await response.json();
-        
+
         // [GROUP_BLOCK] Backend requires additional confirmation for group-controlled SKUs
         if (data.requires_confirmation && data.is_group_controlled) {
             const groupConfirmMsg = `WARNING: ${listingSku} is part of a GROUP-CONTROLLED warehouse.\n\n` +
                 `${data.message}\n\n` +
                 `Remaining group members: ${data.remaining_members}\n\n` +
                 `This action cannot be undone automatically. Continue?`;
-            
+
             if (confirm(groupConfirmMsg)) {
                 console.log('[GROUP_UNLINK] User confirmed unlinking from group', {listingId, listingSku});
-                return unlinkListing(listingId, listingSku, true);
+                return unlinkListing(listingId, listingSku, true, groupId, warehouseStockId);
             } else {
                 console.log('[GROUP_UNLINK] User cancelled unlinking from group');
                 return;
             }
         }
-        
-        if (data.success) {
+
+        if (data.success || data.ok) {
             alert(`Successfully unlinked ${listingSku}`);
             window.location.reload();
         } else {
