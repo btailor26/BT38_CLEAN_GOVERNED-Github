@@ -243,20 +243,46 @@ def mutate_warehouse_stock_from_order_line(line: Any, source: str = "governed_or
     )
 
     db.session.add(ledger)
+
+    group_id = getattr(stock, "master_product_group_id", None)
+    is_group_controlled = bool(getattr(stock, "is_group_controlled", False))
+    should_reconcile_group = bool(group_id and is_group_controlled)
+
     db.session.commit()
+
+    group_reconcile_result = None
+    if should_reconcile_group:
+        try:
+            from services.governed_push_execution import push_group_listings
+
+            group_reconcile_result = push_group_listings(
+                group_id=int(group_id),
+                actor="system_order_stock_mutation",
+                source="order_stock_mutation_group_reconcile",
+            )
+        except Exception as exc:
+            group_reconcile_result = {
+                "success": False,
+                "ok": False,
+                "error": str(exc),
+                "group_id": group_id,
+                "source": "order_stock_mutation_group_reconcile",
+            }
 
     return {
         "success": True,
         "skipped": False,
         "sku": stock.sku,
         "warehouse_stock_id": stock.id,
-        "group_id": getattr(stock, "master_product_group_id", None),
-        "is_group_controlled": bool(getattr(stock, "is_group_controlled", False)),
+        "group_id": group_id,
+        "is_group_controlled": is_group_controlled,
         "quantity": qty,
         "available_before": before_available,
         "available_after": after_available,
         "affected_listings": len(linked),
         "reference_id": key,
+        "group_reconcile_triggered": should_reconcile_group,
+        "group_reconcile_result": group_reconcile_result,
     }
 
 
