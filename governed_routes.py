@@ -552,7 +552,7 @@ def governed_product_linking_page():
         current_platform="all",
         current_store="all",
         current_show_linked="all",
-        async_load=False
+        async_load=True
     )
 
 
