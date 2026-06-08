@@ -315,6 +315,7 @@ def _classify_listing(listing) -> dict:
             "skip": True,
             "reason": "Amazon FBA/AFN is read-only. MCF may use FBA stock, but propagation must not push FBA quantity.",
         }
+
     if not listing.warehouse_stock:
         return {
             "marketplace": marketplace,
@@ -322,7 +323,11 @@ def _classify_listing(listing) -> dict:
             "skip": True,
             "reason": "Listing is not linked to warehouse stock, so warehouse truth quantity cannot be propagated.",
         }
-    if not listing.is_pushable:
+
+    is_group_child = bool(getattr(listing, "master_product_group_id", None))
+    is_non_amazon_group_child = bool(is_group_child and not is_amazon)
+
+    if not listing.is_pushable and not is_non_amazon_group_child:
         return {
             "marketplace": marketplace,
             "is_fba": False,
