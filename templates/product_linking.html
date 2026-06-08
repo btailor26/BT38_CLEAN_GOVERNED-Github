@@ -957,7 +957,7 @@ function renderWarehouseProducts(products) {
             ? `<div class="small text-success mt-1">Group ID: ${product.master_product_group_id || 'auto'}</div>`
             : '';
         if (product.listings) {
-            product.listings.forEach(listing => {
+            (product.listings||[]).forEach(listing => {
                 const isPrimary = listing.is_primary;
                 const platformText = listing.platform || 'Unknown';
                 const platformLower = String(platformText).toLowerCase();
@@ -1131,7 +1131,7 @@ function renderGroupMembersPreview(warehouseId) {
     }
 
     let html = '<div class="small"><strong>Will push warehouse truth to:</strong><ul class="mb-0 ps-3">';
-    product.listings.forEach(l => {
+    (product.listings||[]).forEach(l => {
         const platform = l.platform || 'Unknown';
         const badge = platform.toLowerCase().includes('amazon') ? 'bg-warning text-dark' : 'bg-primary';
         const pushable = l.is_pushable ? '' : ' <span class="text-muted">(not pushable)</span>';
