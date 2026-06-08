@@ -294,7 +294,7 @@
                                                 class="btn btn-sm p-0 border-0 bg-transparent"
                                                 onclick="showAdjustPushModal({{ product.id }}, {{ product.master_product_group_id or 'null' }}, '{{ product.sku|e }}', '{{ product.name|e|truncate(30) }}', {{ product.quantity }})"
                                                 title="Edit warehouse quantity then push group">
-                                            <span class="badge bg-dark fs-6">{{ product.quantity }}</span>
+                                            <span class="badge bg-dark fs-6"></span>
                                         </button>
                                     </td>
                                     <!-- Status Column -->
@@ -995,6 +995,7 @@ function renderWarehouseProducts(products) {
         }
         
         const fbaListingForStock = (product.listings || []).find(listing => listing.is_fba && listing.fba_available_quantity !== null && listing.fba_available_quantity !== undefined);
+const displayStockQuantity = fbaListingForStock ? fbaListingForStock.fba_available_quantity : product.quantity;
         const displayStockQuantity = fbaListingForStock ? fbaListingForStock.fba_available_quantity : product.quantity;
 
         html += `
