@@ -984,6 +984,7 @@ function renderWarehouseProducts(products) {
                             <span>SKU: <code>${escapeHtml(skuText)}</code></span>
                             <span class="mx-1">|</span>
                             <span>ID: <code>${escapeHtml(externalIdText)}</code></span>
+                            ${listing.is_fba ? `<span class="mx-1">|</span><span class="text-info fw-semibold">FBA: ${listing.fba_available_quantity ?? 0}</span>` : ''}
                             <button class="btn btn-link btn-sm p-0 ms-1 text-danger"
                                     onclick="unlinkListing(${listing.id}, '${escapeJs(skuText)}', false, ${listing.master_product_group_id || 'null'}, ${listing.warehouse_stock_id || 'null'})"
                                     title="Unlink this marketplace listing from the warehouse/group">
