@@ -2022,7 +2022,7 @@ def governed_product_linking_data_compat():
     It is read-only and does not push, sync, repair, or mutate marketplace state.
     """
     from extensions import db
-    from models import WarehouseStock, MarketplaceListing, AmazonFBAInventory
+    from models import WarehouseStock, MarketplaceListing, AmazonFBAInventory, AmazonFBAInventory
     from sqlalchemy import or_
 
     search = (request.args.get("search") or request.args.get("q") or "").strip()
@@ -2366,7 +2366,7 @@ def governed_product_linking_diagnostics_compat(warehouse_id: int):
     Read-only. No repair, no sync, no push.
     """
     from extensions import db
-    from models import WarehouseStock, MarketplaceListing
+    from models import WarehouseStock, MarketplaceListing, AmazonFBAInventory
 
     stock = db.session.get(WarehouseStock, warehouse_id)
     linked = (
@@ -3677,7 +3677,7 @@ def governed_warehouse_archive_stock(stock_id: int):
     from datetime import datetime
     from flask import jsonify
     from extensions import db
-    from models import WarehouseStock, MarketplaceListing, MarketplaceOrder, AmazonFBAInventory
+    from models import WarehouseStock, MarketplaceListing, AmazonFBAInventory, MarketplaceOrder, AmazonFBAInventory
 
     stock = db.session.get(WarehouseStock, stock_id)
     if stock is None:
