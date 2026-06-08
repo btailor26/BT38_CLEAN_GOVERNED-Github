@@ -2022,7 +2022,7 @@ def governed_product_linking_data_compat():
     It is read-only and does not push, sync, repair, or mutate marketplace state.
     """
     from extensions import db
-    from models import WarehouseStock, MarketplaceListing
+    from models import WarehouseStock, MarketplaceListing, AmazonFBAInventory
     from sqlalchemy import or_
 
     search = (request.args.get("search") or request.args.get("q") or "").strip()
@@ -2124,10 +2124,56 @@ def governed_product_linking_data_compat():
     else:
         listing_rows = []
 
+    fba_qty_by_sku = {}
+    fba_qty_by_fnsku = {}
+
+    fba_skus = {
+        str(getattr(listing, "external_sku", "") or "").strip()
+        for listing in listing_rows
+        if bool(getattr(listing, "is_fba", False))
+        and str(getattr(listing, "external_sku", "") or "").strip()
+    }
+
+    fba_fnskus = {
+        str(getattr(listing, "fnsku", "") or "").strip()
+        for listing in listing_rows
+        if bool(getattr(listing, "is_fba", False))
+        and str(getattr(listing, "fnsku", "") or "").strip()
+    }
+
+    if fba_skus or fba_fnskus:
+        fba_rows = (
+            db.session.query(AmazonFBAInventory)
+            .filter(
+                or_(
+                    AmazonFBAInventory.seller_sku.in_(list(fba_skus) or ["__BT38_NO_SKU__"]),
+                    AmazonFBAInventory.fnsku.in_(list(fba_fnskus) or ["__BT38_NO_FNSKU__"]),
+                )
+            )
+            .all()
+        )
+
+        for row in fba_rows:
+            qty = int(getattr(row, "available_quantity", 0) or 0)
+            if getattr(row, "seller_sku", None):
+                fba_qty_by_sku[str(row.seller_sku).strip()] = qty
+            if getattr(row, "fnsku", None):
+                fba_qty_by_fnsku[str(row.fnsku).strip()] = qty
+
     listings_by_stock = {}
     unlinked_listings = []
 
     for listing in listing_rows:
+        listing_is_fba = bool(getattr(listing, "is_fba", False))
+        listing_sku = str(getattr(listing, "external_sku", "") or "").strip()
+        listing_fnsku = str(getattr(listing, "fnsku", "") or "").strip()
+
+        fba_available_quantity = None
+        if listing_is_fba:
+            fba_available_quantity = fba_qty_by_sku.get(listing_sku)
+            if fba_available_quantity is None:
+                fba_available_quantity = fba_qty_by_fnsku.get(listing_fnsku)
+
         listing_payload = {
             "id": listing.id,
             "external_sku": listing.external_sku,
@@ -2143,9 +2189,10 @@ def governed_product_linking_data_compat():
             "store_name": listing.store.name if listing.store else "",
             "platform": listing.store.platform if listing.store else getattr(listing, "platform", ""),
             "amazon_fulfillment_channel": listing.amazon_fulfillment_channel,
-            "is_fba": bool(getattr(listing, "is_fba", False)),
+            "is_fba": listing_is_fba,
             "is_pushable": bool(getattr(listing, "is_pushable", False)),
             "effective_quantity": getattr(listing, "effective_quantity", 0),
+            "fba_available_quantity": fba_available_quantity,
         }
 
         if listing.warehouse_stock_id:
