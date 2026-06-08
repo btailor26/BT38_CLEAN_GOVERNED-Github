@@ -3331,26 +3331,19 @@ def governed_disabled_action(action: str = ""):
             from datetime import datetime
 
             for merge_group_id in sorted(merge_group_ids):
-                linked_stocks = (
-                    db.session.query(WarehouseStock)
-                    .filter(WarehouseStock.master_product_group_id == merge_group_id)
-                    .all()
-                )
-                for linked_stock in linked_stocks:
-                    linked_stock.master_product_group_id = group.id
-                    linked_stock.is_group_controlled = True
-                    if hasattr(linked_stock, "updated_at"):
-                        linked_stock.updated_at = datetime.utcnow()
 
                 linked_listings = (
                     db.session.query(MarketplaceListing)
                     .filter(MarketplaceListing.master_product_group_id == merge_group_id)
                     .all()
                 )
+
                 for linked_listing in linked_listings:
                     linked_listing.master_product_group_id = group.id
+
                     if linked_listing.id == listing.id:
                         linked_listing.warehouse_stock_id = stock.id
+
                     if hasattr(linked_listing, "updated_at"):
                         linked_listing.updated_at = datetime.utcnow()
 
