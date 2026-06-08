@@ -1561,6 +1561,25 @@ class MarketplaceListing(db.Model):
     @property
     def is_pushable(self):
         """
+        Determines if this listing can be pushed:
+        - FBA / AFN = read-only (never pushed)
+        - Non-FBA listings in a warehouse group = pushable
+        - Legacy push_state/consecutive_failures rules still apply
+        """
+        platform = (self.store.platform or "").strip().lower() if self.store else ""
+        ch = self.normalized_amazon_fulfillment_channel
+
+        # FBA / AFN listings are never pushable
+        if "amazon" in platform and (ch or "").upper() in ("FBA", "AFN"):
+            return False
+
+        # Otherwise, legacy rules
+        return self.push_state in ["active"] and self.consecutive_failures < 5
+
+
+    @property
+    def is_pushable(self):
+        """
         FBA / AFN = read-only
         Non-FBA listings in warehouse group = pushable
         Legacy push_state/consecutive_failures rules apply
