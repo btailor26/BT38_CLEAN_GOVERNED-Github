@@ -1178,21 +1178,11 @@ async function executeGroupPush() {
             return;
         }
 
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Pushing...';
-
-        const response = await fetch(`/governed/actions/groups/${groupId}/push`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                warehouse_stock_id: parseInt(warehouseId)
-            })
-        });
-
-        const data = await response.json();
+        const data = quantityData;
 
         if (data.success || data.ok) {
             bootstrap.Modal.getInstance(document.getElementById('adjustPushModal')).hide();
-            alert(`Warehouse quantity saved and group push completed.\n\nListings checked: ${data.total || 0}\nSuccessful: ${data.ok_count || 0}`);
+            alert(`Warehouse quantity saved and group push completed.\n\nListings checked: ${data.total_listings || data.total || 0}\nPushed: ${data.pushed || data.ok_count || 0}\nSkipped: ${data.skipped || 0}\nFailed: ${data.failed || 0}`);
             loadProductLinkingData(productLinkingPage);
         } else {
             alert('Push error: ' + (data.error || data.reason || data.message || 'Unknown error'));
