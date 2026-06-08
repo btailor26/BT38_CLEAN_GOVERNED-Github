@@ -294,7 +294,7 @@
                                                 class="btn btn-sm p-0 border-0 bg-transparent"
                                                 onclick="showAdjustPushModal({{ product.id }}, {{ product.master_product_group_id or 'null' }}, '{{ product.sku|e }}', '{{ product.name|e|truncate(30) }}', {{ product.quantity }})"
                                                 title="Edit warehouse quantity then push group">
-                                            <span class="badge bg-dark fs-6">{{ product.quantity }}</span>
+                                            <span class="badge bg-dark fs-6"></span>
                                         </button>
                                     </td>
                                     <!-- Status Column -->
@@ -957,7 +957,7 @@ function renderWarehouseProducts(products) {
             ? `<div class="small text-success mt-1">Group ID: ${product.master_product_group_id || 'auto'}</div>`
             : '';
         if (product.listings) {
-            product.listings.forEach(listing => {
+            (product.listings||[]).forEach(listing => {
                 const isPrimary = listing.is_primary;
                 const platformText = listing.platform || 'Unknown';
                 const platformLower = String(platformText).toLowerCase();
@@ -995,6 +995,7 @@ function renderWarehouseProducts(products) {
         }
         
         const fbaListingForStock = (product.listings || []).find(listing => listing.is_fba && listing.fba_available_quantity !== null && listing.fba_available_quantity !== undefined);
+const displayStockQuantity = fbaListingForStock ? fbaListingForStock.fba_available_quantity : product.quantity;
         const displayStockQuantity = fbaListingForStock ? fbaListingForStock.fba_available_quantity : product.quantity;
 
         html += `
@@ -1012,7 +1013,7 @@ function renderWarehouseProducts(products) {
                             class="btn btn-sm p-0 border-0 bg-transparent"
                             onclick="showAdjustPushModal(${product.id}, ${product.master_product_group_id || 'null'}, '${escapeHtml(product.sku)}', '${escapeHtml(product.name || '')}', ${displayStockQuantity})"
                             title="Edit warehouse quantity then push group">
-                        <span class="badge bg-dark fs-6">${displayStockQuantity}</span>
+                        <span class="badge bg-dark fs-6"></span>
                     </button>
                 </td>
                 <td>${statusBadge}${groupLabel}</td>
@@ -1040,6 +1041,8 @@ function renderWarehouseProducts(products) {
     `;
     
     document.getElementById('warehouseDataContainer').innerHTML = html;
+document.getElementById('warehouseLoadingState').classList.add('d-none');
+document.getElementById('warehouseDataContainer').classList.remove('d-none');
 }
 
 function renderProductLinkingPagination() {
@@ -1131,7 +1134,7 @@ function renderGroupMembersPreview(warehouseId) {
     }
 
     let html = '<div class="small"><strong>Will push warehouse truth to:</strong><ul class="mb-0 ps-3">';
-    product.listings.forEach(l => {
+    (product.listings||[]).forEach(l => {
         const platform = l.platform || 'Unknown';
         const badge = platform.toLowerCase().includes('amazon') ? 'bg-warning text-dark' : 'bg-primary';
         const pushable = l.is_pushable ? '' : ' <span class="text-muted">(not pushable)</span>';
