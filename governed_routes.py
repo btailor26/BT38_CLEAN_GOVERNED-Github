@@ -2225,9 +2225,22 @@ def governed_product_linking_data_compat():
         else:
             unlinked_listings.append(listing_payload)
 
+    listings_by_group = {}
+    for grouped_items in listings_by_stock.values():
+        for item in grouped_items:
+            group_id = item.get("master_product_group_id")
+            if group_id:
+                listings_by_group.setdefault(int(group_id), []).append(item)
+
     warehouse_products = []
     for stock in stock_rows:
-        linked = listings_by_stock.get(stock.id, [])
+        stock_group_id = getattr(stock, "master_product_group_id", None)
+
+        if stock_group_id:
+            linked = listings_by_group.get(int(stock_group_id), [])
+        else:
+            linked = listings_by_stock.get(stock.id, [])
+
         platforms = sorted({str(item.get("platform") or "").strip() for item in linked if item.get("platform")})
         warehouse_products.append({
             "id": stock.id,
