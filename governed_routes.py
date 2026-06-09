@@ -2174,6 +2174,28 @@ def governed_product_linking_data_compat():
             if fba_available_quantity is None:
                 fba_available_quantity = fba_qty_by_fnsku.get(listing_fnsku)
 
+        listing_platform = listing.store.platform if listing.store else getattr(listing, "platform", "")
+        listing_channel = str(getattr(listing, "normalized_amazon_fulfillment_channel", None) or listing.amazon_fulfillment_channel or "").upper()
+        listing_is_amazon = "amazon" in str(listing_platform).lower()
+        listing_is_ebay = "ebay" in str(listing_platform).lower()
+        listing_is_fbm = listing_is_amazon and listing_channel in ("MFN", "FBM", "MERCHANT")
+
+        if listing_is_fba:
+            push_status = "read_only"
+            push_status_label = "FBA read-only"
+            push_status_reason = "Amazon controls FBA/AFN stock. Group push skips this listing."
+            listing_pushable = False
+        elif listing_is_fbm or listing_is_ebay:
+            push_status = "pushable"
+            push_status_label = "Pushable"
+            push_status_reason = "Seller-controlled marketplace stock can be updated from warehouse truth."
+            listing_pushable = True
+        else:
+            push_status = "not_pushable"
+            push_status_label = "Not pushable"
+            push_status_reason = "Listing is not eligible for governed marketplace push."
+            listing_pushable = False
+
         listing_payload = {
             "id": listing.id,
             "external_sku": listing.external_sku,
@@ -2187,10 +2209,13 @@ def governed_product_linking_data_compat():
             "master_product_group_id": listing.master_product_group_id,
             "store_id": listing.store_id,
             "store_name": listing.store.name if listing.store else "",
-            "platform": listing.store.platform if listing.store else getattr(listing, "platform", ""),
+            "platform": listing_platform,
             "amazon_fulfillment_channel": listing.amazon_fulfillment_channel,
             "is_fba": listing_is_fba,
-            "is_pushable": bool(getattr(listing, "is_pushable", False)),
+            "is_pushable": listing_pushable,
+            "push_status": push_status,
+            "push_status_label": push_status_label,
+            "push_status_reason": push_status_reason,
             "effective_quantity": getattr(listing, "effective_quantity", 0),
             "fba_available_quantity": fba_available_quantity,
         }
@@ -2320,6 +2345,29 @@ def governed_product_linking_search_all_listings_compat():
     listings = []
     for listing in rows:
         store = getattr(listing, "store", None)
+        listing_platform = store.platform if store else getattr(listing, "platform", "")
+        listing_channel = str(getattr(listing, "normalized_amazon_fulfillment_channel", None) or listing.amazon_fulfillment_channel or "").upper()
+        listing_is_fba = bool(getattr(listing, "is_fba", False))
+        listing_is_amazon = "amazon" in str(listing_platform).lower()
+        listing_is_ebay = "ebay" in str(listing_platform).lower()
+        listing_is_fbm = listing_is_amazon and listing_channel in ("MFN", "FBM", "MERCHANT")
+
+        if listing_is_fba:
+            push_status = "read_only"
+            push_status_label = "FBA read-only"
+            push_status_reason = "Amazon controls FBA/AFN stock. Group push skips this listing."
+            listing_pushable = False
+        elif listing_is_fbm or listing_is_ebay:
+            push_status = "pushable"
+            push_status_label = "Pushable"
+            push_status_reason = "Seller-controlled marketplace stock can be updated from warehouse truth."
+            listing_pushable = True
+        else:
+            push_status = "not_pushable"
+            push_status_label = "Not pushable"
+            push_status_reason = "Listing is not eligible for governed marketplace push."
+            listing_pushable = False
+
         listings.append({
             "id": listing.id,
             "external_sku": listing.external_sku,
@@ -2333,11 +2381,14 @@ def governed_product_linking_search_all_listings_compat():
             "master_product_group_id": listing.master_product_group_id,
             "store_id": listing.store_id,
             "store_name": store.name if store else "",
-            "platform": store.platform if store else getattr(listing, "platform", ""),
+            "platform": listing_platform,
             "amazon_fulfillment_channel": listing.amazon_fulfillment_channel,
             "fulfillment": listing.amazon_fulfillment_channel,
-            "is_fba": bool(getattr(listing, "is_fba", False)),
-            "is_pushable": bool(getattr(listing, "is_pushable", False)),
+            "is_fba": listing_is_fba,
+            "is_pushable": listing_pushable,
+            "push_status": push_status,
+            "push_status_label": push_status_label,
+            "push_status_reason": push_status_reason,
         })
 
     return jsonify({
