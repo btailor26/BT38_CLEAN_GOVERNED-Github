@@ -3401,53 +3401,79 @@ def governed_disabled_action(action: str = ""):
         listing.warehouse_stock_id = stock.id
         listing.master_product_group_id = group.id
 
-        # FBA-led groups must follow the same single-authority pattern as FBM groups:
-        # one warehouse stock controls the group, marketplace listings are children.
-        # If the selected authority stock is FBA-led, do not allow a non-FBA child
-        # warehouse row to become a second group-controlled authority.
+        # FBA-led groups must follow the same relationship pattern as working FBM groups:
+        # every active listing attached to a grouped stock belongs to the group,
+        # every stock used by a grouped listing belongs to the group,
+        # and exactly one warehouse stock remains the group authority.
+        #
+        # This is local relationship repair only. It does not push, import, sync,
+        # change quantities, or alter marketplace state. FBA/AFN remains read-only.
+        from datetime import datetime
+
+        now = datetime.utcnow()
+        target_stock_ids = {int(stock.id)}
+
         group_listings_for_authority = (
             db.session.query(MarketplaceListing)
             .filter(MarketplaceListing.master_product_group_id == group.id)
             .filter(MarketplaceListing.is_active == True)  # noqa: E712
             .all()
         )
+
+        for group_listing in group_listings_for_authority:
+            if getattr(group_listing, "warehouse_stock_id", None):
+                target_stock_ids.add(int(group_listing.warehouse_stock_id))
+
+        attached_listings = (
+            db.session.query(MarketplaceListing)
+            .filter(MarketplaceListing.is_active == True)  # noqa: E712
+            .filter(MarketplaceListing.warehouse_stock_id.in_(list(target_stock_ids)))
+            .all()
+        )
+
+        for attached_listing in attached_listings:
+            attached_listing.master_product_group_id = group.id
+            if getattr(attached_listing, "warehouse_stock_id", None):
+                target_stock_ids.add(int(attached_listing.warehouse_stock_id))
+            if hasattr(attached_listing, "updated_at"):
+                attached_listing.updated_at = now
+
+        candidate_listings_by_id = {
+            int(item.id): item
+            for item in list(group_listings_for_authority) + list(attached_listings)
+        }
+
+        def is_read_only_fba_listing(item):
+            platform = ((item.store.platform if item.store else "") or "").strip().lower()
+            channel = (getattr(item, "normalized_amazon_fulfillment_channel", None) or "").strip().upper()
+            return bool(getattr(item, "is_fba", False)) or (
+                "amazon" in platform and channel not in ("MFN", "FBM", "MERCHANT")
+            )
+
         fba_authority_stock_ids = {
             int(item.warehouse_stock_id)
-            for item in group_listings_for_authority
-            if bool(getattr(item, "is_fba", False)) and getattr(item, "warehouse_stock_id", None)
+            for item in candidate_listings_by_id.values()
+            if is_read_only_fba_listing(item) and getattr(item, "warehouse_stock_id", None)
         }
 
         if fba_authority_stock_ids:
             authority_stock_id = sorted(fba_authority_stock_ids)[0]
-            authority_stock = db.session.get(WarehouseStock, authority_stock_id)
-            if authority_stock:
-                authority_stock.master_product_group_id = group.id
-                authority_stock.is_group_controlled = True
-                if hasattr(authority_stock, "updated_at"):
-                    authority_stock.updated_at = datetime.utcnow()
+        else:
+            authority_stock_id = int(stock.id)
 
-            child_stock_ids = {
-                int(item.warehouse_stock_id)
-                for item in group_listings_for_authority
-                if not bool(getattr(item, "is_fba", False))
-                and getattr(item, "warehouse_stock_id", None)
-                and int(item.warehouse_stock_id) != authority_stock_id
-            }
+        group_stocks = (
+            db.session.query(WarehouseStock)
+            .filter(WarehouseStock.id.in_(list(target_stock_ids)))
+            .all()
+        )
 
-            if child_stock_ids:
-                child_stocks = (
-                    db.session.query(WarehouseStock)
-                    .filter(WarehouseStock.id.in_(child_stock_ids))
-                    .all()
-                )
-                for child_stock in child_stocks:
-                    if getattr(child_stock, "master_product_group_id", None) == group.id:
-                        # Preserve the child warehouse row inside the group for display/link integrity,
-                        # but do not allow it to become the stock authority.
-                        child_stock.master_product_group_id = group.id
-                        child_stock.is_group_controlled = False
-                        if hasattr(child_stock, "updated_at"):
-                            child_stock.updated_at = datetime.utcnow()
+        for group_stock in group_stocks:
+            group_stock.master_product_group_id = group.id
+            group_stock.is_group_controlled = int(group_stock.id) == authority_stock_id
+            if group_stock.is_group_controlled and hasattr(group_stock, "group_controlled_at") and not group_stock.group_controlled_at:
+                group_stock.group_controlled_at = now
+            if hasattr(group_stock, "updated_at"):
+                group_stock.updated_at = now
 
         if hasattr(listing, "updated_at"):
             from datetime import datetime
