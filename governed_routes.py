@@ -3463,12 +3463,13 @@ def governed_disabled_action(action: str = ""):
                     .all()
                 )
                 for child_stock in child_stocks:
-                    # Enforce the child warehouse row inside the group for display/link integrity,
-                    # but never allow it to become the stock authority.
-                    child_stock.master_product_group_id = group.id
-                    child_stock.is_group_controlled = False
-                    if hasattr(child_stock, "updated_at"):
-                        child_stock.updated_at = datetime.utcnow()
+                    if getattr(child_stock, "master_product_group_id", None) == group.id:
+                        # Preserve the child warehouse row inside the group for display/link integrity,
+                        # but do not allow it to become the stock authority.
+                        child_stock.master_product_group_id = group.id
+                        child_stock.is_group_controlled = False
+                        if hasattr(child_stock, "updated_at"):
+                            child_stock.updated_at = datetime.utcnow()
 
         if hasattr(listing, "updated_at"):
             from datetime import datetime
