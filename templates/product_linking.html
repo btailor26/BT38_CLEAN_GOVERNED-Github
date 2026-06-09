@@ -976,8 +976,11 @@ function renderWarehouseProducts(products) {
                                 ${isPrimary ? '<i data-feather="star" class="feather-xs me-1"></i>' : ''}
                                 ${escapeHtml(platformText)}
                             </span>
-                            ${listing.is_fba ? '<span class="badge bg-secondary">FBA read-only</span>' : ''}
-                            ${listing.is_pushable ? '<span class="badge bg-success">Pushable</span>' : '<span class="badge bg-light text-dark border">Not pushable</span>'}
+                            ${listing.push_status === 'read_only'
+                                ? '<span class="badge bg-secondary" title="' + escapeHtml(listing.push_status_reason || '') + '">FBA read-only</span>'
+                                : (listing.push_status === 'pushable'
+                                    ? '<span class="badge bg-success" title="' + escapeHtml(listing.push_status_reason || '') + '">Pushable</span>'
+                                    : '<span class="badge bg-light text-dark border" title="' + escapeHtml(listing.push_status_reason || '') + '">Not pushable</span>')}
                         </div>
                         <div class="small fw-semibold text-truncate" title="${escapeHtml(titleText)}">${escapeHtml(titleText)}</div>
                         <div class="small text-muted d-flex flex-wrap align-items-center gap-1">
