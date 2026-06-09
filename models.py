@@ -1561,42 +1561,34 @@ class MarketplaceListing(db.Model):
     @property
     def is_pushable(self):
         """
-        Determines if this listing can be pushed:
-        - FBA / AFN = read-only (never pushed)
-        - Non-FBA listings in a warehouse group = pushable
-        - Legacy push_state/consecutive_failures rules still apply
+        Governed marketplace push eligibility.
+
+        Rules:
+        - Amazon FBA / AFN is read-only and never pushed from warehouse stock.
+        - Amazon FBM / MFN / MERCHANT is pushable when active and sync is enabled.
+        - eBay / non-Amazon listings are pushable when active and sync is enabled.
+        - push_state must not block valid grouped FBM/eBay rows that are pending reconcile.
         """
         platform = (self.store.platform or "").strip().lower() if self.store else ""
-        ch = self.normalized_amazon_fulfillment_channel
+        channel = str(
+            self.normalized_amazon_fulfillment_channel
+            or self.amazon_fulfillment_channel
+            or ""
+        ).strip().upper()
 
-        # FBA / AFN listings are never pushable
-        if "amazon" in platform and (ch or "").upper() in ("FBA", "AFN"):
+        if not self.is_active:
             return False
 
-        # Otherwise, legacy rules
-        return self.push_state in ["active"] and self.consecutive_failures < 5
-
-
-    @property
-    def is_pushable(self):
-        """
-        FBA / AFN = read-only
-        Non-FBA listings in warehouse group = pushable
-        Legacy push_state/consecutive_failures rules apply
-        """
-        platform = (self.store.platform or "").strip().lower() if self.store else ""
-        ch = self.normalized_amazon_fulfillment_channel
-
-        # FBA / AFN are read-only
-        if "amazon" in platform and ch.upper() in ("AFN", "FBA"):
+        if self.sync_quantity is False:
             return False
 
-        # Non-FBA linked to warehouse group
-        if self.master_product_group_id and not self.is_fba:
-            return self.push_state in ["active"] and (self.consecutive_failures or 0) < 5
+        if (self.consecutive_failures or 0) >= 5:
+            return False
 
-        # Default legacy rule
-        return self.push_state in ["active"] and (self.consecutive_failures or 0) < 5
+        if "amazon" in platform and channel in ("FBA", "AFN"):
+            return False
+
+        return True
 
 
     
