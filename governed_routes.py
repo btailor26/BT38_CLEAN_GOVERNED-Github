@@ -2113,11 +2113,23 @@ def governed_product_linking_data_compat():
     stock_rows = stock_query.order_by(WarehouseStock.id.desc()).offset(offset).limit(per_page).all()
 
     stock_ids_on_page = [stock.id for stock in stock_rows]
+    group_ids_on_page = [
+        int(stock.master_product_group_id)
+        for stock in stock_rows
+        if getattr(stock, "master_product_group_id", None)
+    ]
+
+    listing_filters = []
     if stock_ids_on_page:
+        listing_filters.append(MarketplaceListing.warehouse_stock_id.in_(stock_ids_on_page))
+    if group_ids_on_page:
+        listing_filters.append(MarketplaceListing.master_product_group_id.in_(group_ids_on_page))
+
+    if listing_filters:
         listing_rows = (
             db.session.query(MarketplaceListing)
             .filter(MarketplaceListing.is_active == True)  # noqa: E712
-            .filter(MarketplaceListing.warehouse_stock_id.in_(stock_ids_on_page))
+            .filter(or_(*listing_filters))
             .order_by(MarketplaceListing.id.desc())
             .all()
         )
