@@ -2244,14 +2244,59 @@ def governed_product_linking_data_compat():
             if group_id:
                 listings_by_group.setdefault(int(group_id), []).append(item)
 
+    group_ids_for_display = sorted({
+        int(stock.master_product_group_id)
+        for stock in stock_rows
+        if getattr(stock, "master_product_group_id", None)
+    })
+
+    authority_stock_by_group = {}
+    if group_ids_for_display:
+        authority_stocks = (
+            db.session.query(WarehouseStock)
+            .filter(WarehouseStock.master_product_group_id.in_(group_ids_for_display))
+            .filter(WarehouseStock.is_group_controlled == True)  # noqa: E712
+            .all()
+        )
+        for authority_stock in authority_stocks:
+            group_id = int(authority_stock.master_product_group_id)
+            authority_stock_by_group.setdefault(group_id, authority_stock)
+
+    authority_skus = {
+        str(getattr(stock, "sku", "") or "").strip()
+        for stock in authority_stock_by_group.values()
+        if str(getattr(stock, "sku", "") or "").strip()
+    }
+
+    authority_fba_qty_by_sku = {}
+    if authority_skus:
+        authority_fba_rows = (
+            db.session.query(AmazonFBAInventory)
+            .filter(AmazonFBAInventory.seller_sku.in_(list(authority_skus)))
+            .all()
+        )
+        for row in authority_fba_rows:
+            seller_sku = str(getattr(row, "seller_sku", "") or "").strip()
+            if seller_sku:
+                authority_fba_qty_by_sku[seller_sku] = int(getattr(row, "available_quantity", 0) or 0)
+
     warehouse_products = []
     for stock in stock_rows:
         stock_group_id = getattr(stock, "master_product_group_id", None)
 
+        authority_stock = None
         if stock_group_id:
+            authority_stock = authority_stock_by_group.get(int(stock_group_id))
             linked = listings_by_group.get(int(stock_group_id), [])
         else:
             linked = listings_by_stock.get(stock.id, [])
+
+        quantity_source_stock = authority_stock or stock
+        quantity_source_sku = str(getattr(quantity_source_stock, "sku", "") or "").strip()
+        display_quantity = authority_fba_qty_by_sku.get(quantity_source_sku)
+
+        if display_quantity is None:
+            display_quantity = int(getattr(quantity_source_stock, "sellable_quantity", 0) or 0)
 
         platforms = sorted({str(item.get("platform") or "").strip() for item in linked if item.get("platform")})
         warehouse_products.append({
@@ -2264,9 +2309,9 @@ def governed_product_linking_data_compat():
             "group_title": stock.group_title,
             "master_product_group_id": stock.master_product_group_id,
             "is_group_controlled": bool(getattr(stock, "is_group_controlled", False)),
-            "quantity": getattr(stock, "sellable_quantity", 0),
-            "available_quantity": getattr(stock, "sellable_quantity", 0),
-            "sellable_quantity": getattr(stock, "sellable_quantity", 0),
+            "quantity": display_quantity,
+            "available_quantity": display_quantity,
+            "sellable_quantity": display_quantity,
             "linked_count": len(linked),
             "platforms": platforms,
             "listings": linked,
