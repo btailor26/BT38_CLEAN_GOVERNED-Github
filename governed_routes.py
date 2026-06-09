@@ -3393,12 +3393,21 @@ def governed_disabled_action(action: str = ""):
                     linked_listing.master_product_group_id = group.id
 
                     if linked_listing.id == listing.id:
-                        linked_listing.warehouse_stock_id = stock.id
+                        linked_listing_is_fba = bool(getattr(linked_listing, "is_fba", False))
+                        linked_listing_existing_stock_id = getattr(linked_listing, "warehouse_stock_id", None)
+
+                        if linked_listing_is_fba or not linked_listing_existing_stock_id:
+                            linked_listing.warehouse_stock_id = stock.id
 
                     if hasattr(linked_listing, "updated_at"):
                         linked_listing.updated_at = datetime.utcnow()
 
-        listing.warehouse_stock_id = stock.id
+        listing_is_fba = bool(getattr(listing, "is_fba", False))
+        listing_existing_stock_id = getattr(listing, "warehouse_stock_id", None)
+
+        if listing_is_fba or not listing_existing_stock_id:
+            listing.warehouse_stock_id = stock.id
+
         listing.master_product_group_id = group.id
 
         # FBA-led groups must follow the same single-authority pattern as FBM groups:
