@@ -1109,7 +1109,16 @@ function showAdjustPushModal(warehouseId, groupId, sku, name, currentQty, isFbaG
     const qtyInput = document.getElementById('adjustPushQuantity');
     qtyInput.value = currentQty;
 
-    if (isFbaGroup) {
+    const productForModal = (allWarehouseProducts || []).find(p =>
+        String(p.id) === String(warehouseId) ||
+        String(p.master_product_group_id || '') === String(groupId || '')
+    );
+    const groupHasFba = Boolean(isFbaGroup) || Boolean(
+        productForModal &&
+        (productForModal.listings || []).some(l => l.is_fba || String(l.amazon_fulfillment_channel || '').toUpperCase() === 'AFN')
+    );
+
+    if (groupHasFba) {
         qtyInput.setAttribute('readonly', 'readonly');
         qtyInput.classList.add('bg-light');
         qtyInput.setAttribute('title', 'FBA quantity is read-only and cannot be edited.');
