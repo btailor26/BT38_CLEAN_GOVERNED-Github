@@ -135,9 +135,15 @@ def governed_group_propagate_quantity(group_id: int):
         .all()
     )
 
+    group_has_fba_authority = False
     for listing in existing_group_listings:
         if getattr(listing, "warehouse_stock_id", None):
             target_warehouse_stock_ids.add(int(listing.warehouse_stock_id))
+
+        platform = ((listing.store.platform if listing.store else "") or "").strip().lower()
+        channel = (getattr(listing, "normalized_amazon_fulfillment_channel", None) or "").strip().upper()
+        if bool(getattr(listing, "is_fba", False)) or ("amazon" in platform and channel not in ("MFN", "FBM", "MERCHANT")):
+            group_has_fba_authority = True
 
     if target_warehouse_stock_ids:
         attached_listings = (
@@ -163,7 +169,7 @@ def governed_group_propagate_quantity(group_id: int):
             if hasattr(stock, "is_group_controlled"):
                 stock.is_group_controlled = True
 
-            if target_quantity is not None:
+            if target_quantity is not None and not group_has_fba_authority:
                 stock_columns = set(stock.__table__.columns.keys())
                 for col in ("sellable_quantity", "available_quantity", "quantity"):
                     if col in stock_columns:
@@ -202,7 +208,7 @@ def governed_group_propagate_quantity(group_id: int):
             })
             continue
 
-        if target_quantity is None:
+        if target_quantity is None or group_has_fba_authority:
             quantity = listing.effective_quantity
         else:
             quantity = target_quantity
