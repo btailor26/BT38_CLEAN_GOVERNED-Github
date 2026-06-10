@@ -1013,7 +1013,7 @@ function renderWarehouseProducts(products) {
                 <td>
                     <button type="button"
                             class="btn btn-sm p-0 border-0 bg-transparent"
-                            onclick="showAdjustPushModal(${product.id}, ${product.master_product_group_id || 'null'}, '${escapeHtml(product.sku)}', '${escapeHtml(product.name || '')}', ${displayStockQuantity})"
+                            onclick="showAdjustPushModal(${product.id}, ${product.master_product_group_id || 'null'}, '${escapeHtml(product.sku)}', '${escapeHtml(product.name || '')}', ${displayStockQuantity}, Boolean(fbaListingForStock))"
                             title="Edit warehouse quantity then push group">
                         <span class="badge bg-dark fs-6">${displayStockQuantity}</span>
                     </button>
