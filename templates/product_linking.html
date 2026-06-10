@@ -1209,7 +1209,7 @@ async function executeGroupPush() {
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Updating...';
 
     try {
-        const quantityResponse = await fetch(`/governed/actions/groups/${groupId}/push`, {
+        const quantityResponse = await fetch(`/governed/groups/${groupId}/propagate-quantity`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
