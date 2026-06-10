@@ -755,7 +755,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" id="adjustPushBtn" class="btn btn-primary" onclick="executeGroupPush()">
+                <button type="button" id="adjustPushBtn" class="btn btn-primary">
                     <i data-feather="send" class="feather-sm me-1"></i>Push Now
                 </button>
             </div>
@@ -1093,6 +1093,13 @@ document.addEventListener('DOMContentLoaded', function() {
         document.getElementById('warehouseLoadingState').classList.add('d-none');
         document.getElementById('warehouseDataContainer').classList.remove('d-none');
     }
+});
+
+document.addEventListener('click', function(e) {
+    const btn = e.target && e.target.closest ? e.target.closest('#adjustPushBtn') : null;
+    if (!btn) return;
+    e.preventDefault();
+    executeGroupPush();
 });
 
 // ==========================================
