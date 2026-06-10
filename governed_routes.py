@@ -2252,27 +2252,60 @@ def governed_product_linking_data_compat():
         else:
             unlinked_listings.append(listing_payload)
 
-    group_ids_with_linked_rows = {
-        int(getattr(stock, "master_product_group_id"))
-        for stock in stock_rows
-        if getattr(stock, "master_product_group_id", None)
-        and listings_by_stock.get(stock.id, [])
-    }
+    # Product Linking display is one row per relationship group, not one row per
+    # warehouse stock. Multiple warehouse rows that share the same
+    # master_product_group_id must render as one Product Group with all linked listings.
+    grouped_stock_rows = {}
+    ungrouped_stock_rows = []
+
+    for stock in stock_rows:
+        stock_group_id = getattr(stock, "master_product_group_id", None)
+        if stock_group_id:
+            grouped_stock_rows.setdefault(int(stock_group_id), []).append(stock)
+        else:
+            ungrouped_stock_rows.append(stock)
+
+    display_stock_rows = []
+
+    for group_id, group_stocks in grouped_stock_rows.items():
+        def stock_has_fba_listing(stock):
+            return any(
+                bool(item.get("is_fba")) or str(item.get("amazon_fulfillment_channel") or "").upper() in ("AFN", "FBA")
+                for item in listings_by_stock.get(stock.id, [])
+            )
+
+        def stock_linked_count(stock):
+            return len(listings_by_stock.get(stock.id, []))
+
+        # Prefer FBA authority row for FBA-led groups, otherwise prefer the row with listings.
+        authority_stock = sorted(
+            group_stocks,
+            key=lambda stock: (
+                0 if stock_has_fba_listing(stock) else 1,
+                -stock_linked_count(stock),
+                int(stock.id),
+            )
+        )[0]
+        display_stock_rows.append(authority_stock)
+
+        merged_linked = []
+        seen_listing_ids = set()
+        for group_stock in group_stocks:
+            for item in listings_by_stock.get(group_stock.id, []):
+                item_id = int(item.get("id")) if item.get("id") is not None else None
+                if item_id is not None and item_id in seen_listing_ids:
+                    continue
+                if item_id is not None:
+                    seen_listing_ids.add(item_id)
+                merged_linked.append(item)
+
+        listings_by_stock[authority_stock.id] = merged_linked
+
+    display_stock_rows.extend(ungrouped_stock_rows)
 
     warehouse_products = []
-    for stock in stock_rows:
+    for stock in display_stock_rows:
         linked = listings_by_stock.get(stock.id, [])
-
-        # If a group already has a warehouse row with listings attached, do not render
-        # empty sibling warehouse rows as separate Product Groups.
-        # This keeps FBA-led groups visible once while preserving the underlying relationship.
-        stock_group_id = getattr(stock, "master_product_group_id", None)
-        if (
-            stock_group_id
-            and not linked
-            and int(stock_group_id) in group_ids_with_linked_rows
-        ):
-            continue
 
         platforms = sorted({str(item.get("platform") or "").strip() for item in linked if item.get("platform")})
         warehouse_products.append({
