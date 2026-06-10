@@ -1026,7 +1026,7 @@ function renderWarehouseProducts(products) {
                         <button class="btn btn-outline-secondary" onclick="showDiagnostics(${product.id}, '${escapeHtml(product.sku)}')" title="Diagnostics">
                             <i data-feather="activity" class="feather-xs"></i>
                         </button>
-                        <button class="btn btn-outline-primary" onclick="showAdjustPushModal(${product.id}, ${product.master_product_group_id || 'null'}, '${escapeHtml(product.sku)}', '${escapeHtml(product.name || '')}', ${displayStockQuantity}, Boolean(fbaListingForStock))" title="Push">
+                        <button class="btn btn-outline-primary" onclick="executeDirectGroupPush(${product.master_product_group_id || 'null'}, ${product.id})" title="Push grouped marketplaces">
                             <i data-feather="upload-cloud" class="feather-xs"></i>
                         </button>
                     </div>
@@ -1158,6 +1158,35 @@ function renderGroupMembersPreview(warehouseId) {
     });
     html += '</ul></div>';
     container.innerHTML = html;
+}
+
+async function executeDirectGroupPush(groupId, warehouseId) {
+    if (!groupId) {
+        alert('This warehouse row is not linked to a governed group yet.');
+        return;
+    }
+
+    try {
+        const response = await fetch(`/governed/actions/groups/${groupId}/push`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                warehouse_stock_id: parseInt(warehouseId)
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success || data.ok) {
+            alert(`Group push completed.\n\nListings checked: ${data.total_listings || data.total || 0}\nPushed: ${data.pushed || data.ok_count || 0}\nSkipped: ${data.skipped || 0}\nFailed: ${data.failed || 0}`);
+            loadProductLinkingData(productLinkingPage);
+        } else {
+            alert('Push error: ' + (data.error || data.reason || data.message || 'Unknown error'));
+        }
+    } catch (error) {
+        alert('Push error: ' + error.message);
+        console.error('Direct Group Push error:', error);
+    }
 }
 
 async function executeGroupPush() {
