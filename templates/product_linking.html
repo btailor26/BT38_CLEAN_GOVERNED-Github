@@ -755,7 +755,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" id="adjustPushBtn" class="btn btn-primary">
+                <button type="button" id="adjustPushBtn" class="btn btn-primary" onclick="executeGroupPush()">
                     <i data-feather="send" class="feather-sm me-1"></i>Push Now
                 </button>
             </div>
@@ -1013,7 +1013,7 @@ function renderWarehouseProducts(products) {
                 <td>
                     <button type="button"
                             class="btn btn-sm p-0 border-0 bg-transparent"
-                            onclick="showAdjustPushModal(${product.id}, ${product.master_product_group_id || 'null'}, '${escapeHtml(product.sku)}', '${escapeHtml(product.name || '')}', ${displayStockQuantity}, Boolean(fbaListingForStock))"
+                            onclick="showAdjustPushModal(${product.id}, ${product.master_product_group_id || 'null'}, '${escapeHtml(product.sku)}', '${escapeHtml(product.name || '')}', ${displayStockQuantity})"
                             title="Edit warehouse quantity then push group">
                         <span class="badge bg-dark fs-6">${displayStockQuantity}</span>
                     </button>
@@ -1026,7 +1026,7 @@ function renderWarehouseProducts(products) {
                         <button class="btn btn-outline-secondary" onclick="showDiagnostics(${product.id}, '${escapeHtml(product.sku)}')" title="Diagnostics">
                             <i data-feather="activity" class="feather-xs"></i>
                         </button>
-                        <button class="btn btn-outline-primary" onclick="showAdjustPushModal(${product.id}, ${product.master_product_group_id || 'null'}, '${escapeHtml(product.sku)}', '${escapeHtml(product.name || '')}', ${displayStockQuantity}, Boolean(fbaListingForStock))" title="Adjust quantity and push grouped marketplaces">
+                        <button class="btn btn-outline-primary" onclick="showAdjustPushModal(${product.id}, ${product.master_product_group_id || 'null'}, '${escapeHtml(product.sku)}', '${escapeHtml(product.name || '')}', ${displayStockQuantity})" title="Push">
                             <i data-feather="upload-cloud" class="feather-xs"></i>
                         </button>
                     </div>
@@ -1095,33 +1095,17 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-document.addEventListener('click', function(e) {
-    const btn = e.target && e.target.closest ? e.target.closest('#adjustPushBtn') : null;
-    if (!btn) return;
-    e.preventDefault();
-    executeGroupPush();
-});
-
 // ==========================================
 // ADJUST & PUSH - Main Control Center
 // ==========================================
 
-function showAdjustPushModal(warehouseId, groupId, sku, name, currentQty, isFbaGroup=false) {
+function showAdjustPushModal(warehouseId, groupId, sku, name, currentQty) {
     adjustPushWarehouseId = warehouseId;
     adjustPushGroupId = groupId || null;
 
     document.getElementById('adjustPushSku').textContent = sku;
     document.getElementById('adjustPushName').textContent = name || '';
-    const qtyInput = document.getElementById('adjustPushQuantity');
-    qtyInput.value = currentQty;
-
-    if (isFbaGroup) {
-        qtyInput.setAttribute('readonly', 'readonly');
-        qtyInput.setAttribute('title', 'FBA quantity is read-only. Group push will only update non-FBA marketplaces.');
-    } else {
-        qtyInput.removeAttribute('readonly');
-        qtyInput.removeAttribute('title');
-    }
+    document.getElementById('adjustPushQuantity').value = currentQty;
     document.getElementById('adjustPushWarehouseId').value = warehouseId;
 
     let groupInput = document.getElementById('adjustPushGroupId');
@@ -1648,7 +1632,7 @@ async function searchWarehouseForLinking() {
 // Link a marketplace listing to a warehouse product
 async function linkListingToWarehouse(listingId, warehouseId, listingSku, warehouseSku, userConfirmed = false) {
     try {
-        const response = await fetch('/governed/product-linking/link-listing-to-warehouse', {
+        const response = await fetch('/governed-disabled/link-listing-to-warehouse', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
