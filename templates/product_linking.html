@@ -1026,7 +1026,7 @@ function renderWarehouseProducts(products) {
                         <button class="btn btn-outline-secondary" onclick="showDiagnostics(${product.id}, '${escapeHtml(product.sku)}')" title="Diagnostics">
                             <i data-feather="activity" class="feather-xs"></i>
                         </button>
-                        <button class="btn btn-outline-primary" onclick="showAdjustPushModal(${product.id}, ${product.master_product_group_id || 'null'}, '${escapeHtml(product.sku)}', '${escapeHtml(product.name || '')}', ${displayStockQuantity})" title="Push">
+                        <button class="btn btn-outline-primary" onclick="showAdjustPushModal(${product.id}, ${product.master_product_group_id || 'null'}, '${escapeHtml(product.sku)}', '${escapeHtml(product.name || '')}', ${displayStockQuantity}, Boolean(fbaListingForStock))" title="Push">
                             <i data-feather="upload-cloud" class="feather-xs"></i>
                         </button>
                     </div>
@@ -1099,13 +1099,26 @@ document.addEventListener('DOMContentLoaded', function() {
 // ADJUST & PUSH - Main Control Center
 // ==========================================
 
-function showAdjustPushModal(warehouseId, groupId, sku, name, currentQty) {
+function showAdjustPushModal(warehouseId, groupId, sku, name, currentQty, isFbaGroup=false) {
     adjustPushWarehouseId = warehouseId;
     adjustPushGroupId = groupId || null;
 
     document.getElementById('adjustPushSku').textContent = sku;
     document.getElementById('adjustPushName').textContent = name || '';
-    document.getElementById('adjustPushQuantity').value = currentQty;
+
+    const qtyInput = document.getElementById('adjustPushQuantity');
+    qtyInput.value = currentQty;
+
+    if (isFbaGroup) {
+        qtyInput.setAttribute('readonly', 'readonly');
+        qtyInput.classList.add('bg-light');
+        qtyInput.setAttribute('title', 'FBA quantity is read-only and cannot be edited.');
+    } else {
+        qtyInput.removeAttribute('readonly');
+        qtyInput.classList.remove('bg-light');
+        qtyInput.removeAttribute('title');
+    }
+
     document.getElementById('adjustPushWarehouseId').value = warehouseId;
 
     let groupInput = document.getElementById('adjustPushGroupId');
