@@ -1592,8 +1592,10 @@ class MarketplaceListing(db.Model):
             return False
 
         # Non-FBA linked to warehouse group
+        # pending_group_reconcile means the grouped listing is waiting for this governed group push.
+        # It must be allowed through the group propagation path, not skipped before reconciliation.
         if self.master_product_group_id and not self.is_fba:
-            return self.push_state in ["active"] and (self.consecutive_failures or 0) < 5
+            return self.push_state in ["active", "pending_group_reconcile"] and (self.consecutive_failures or 0) < 5
 
         # Default legacy rule
         return self.push_state in ["active"] and (self.consecutive_failures or 0) < 5
