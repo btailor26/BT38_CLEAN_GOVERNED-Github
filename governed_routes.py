@@ -2252,9 +2252,28 @@ def governed_product_linking_data_compat():
         else:
             unlinked_listings.append(listing_payload)
 
+    group_ids_with_linked_rows = {
+        int(getattr(stock, "master_product_group_id"))
+        for stock in stock_rows
+        if getattr(stock, "master_product_group_id", None)
+        and listings_by_stock.get(stock.id, [])
+    }
+
     warehouse_products = []
     for stock in stock_rows:
         linked = listings_by_stock.get(stock.id, [])
+
+        # If a group already has a warehouse row with listings attached, do not render
+        # empty sibling warehouse rows as separate Product Groups.
+        # This keeps FBA-led groups visible once while preserving the underlying relationship.
+        stock_group_id = getattr(stock, "master_product_group_id", None)
+        if (
+            stock_group_id
+            and not linked
+            and int(stock_group_id) in group_ids_with_linked_rows
+        ):
+            continue
+
         platforms = sorted({str(item.get("platform") or "").strip() for item in linked if item.get("platform")})
         warehouse_products.append({
             "id": stock.id,
