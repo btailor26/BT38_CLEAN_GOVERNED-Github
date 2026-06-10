@@ -3190,6 +3190,17 @@ def governed_webhook_amazon_ingest():
     return governed_marketplace_webhook_intake("amazon")
 
 
+
+@governed_bp.post("/governed/product-linking/link-listing-to-warehouse")
+def governed_product_linking_link_listing_to_warehouse():
+    """One clear governed Product Linking path.
+
+    Keeps the existing proven relationship authority block,
+    but moves the frontend direction away from /governed-disabled.
+    No marketplace push. No FBM change. No rewrite.
+    """
+    return governed_disabled_action("link-listing-to-warehouse")
+
 @governed_bp.route("/governed-disabled", defaults={"action": ""}, methods=["GET", "POST"])
 @governed_bp.route("/governed-disabled/<path:action>", methods=["GET", "POST"])
 def governed_disabled_action(action: str = ""):

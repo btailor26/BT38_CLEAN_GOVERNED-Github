@@ -1641,7 +1641,7 @@ async function searchWarehouseForLinking() {
 // Link a marketplace listing to a warehouse product
 async function linkListingToWarehouse(listingId, warehouseId, listingSku, warehouseSku, userConfirmed = false) {
     try {
-        const response = await fetch('/governed-disabled/link-listing-to-warehouse', {
+        const response = await fetch('/governed/product-linking/link-listing-to-warehouse', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
