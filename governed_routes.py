@@ -2112,6 +2112,33 @@ def governed_product_linking_data_compat():
 
     stock_rows = stock_query.order_by(WarehouseStock.id.desc()).offset(offset).limit(per_page).all()
 
+    # Product Linking groups must be shown as full relationships.
+    # If search finds one warehouse row in a group, include every active warehouse row
+    # in that same group before building listing_rows.
+    # This keeps FBA-led groups from appearing half-linked in the UI.
+    matched_group_ids = {
+        int(getattr(stock, "master_product_group_id"))
+        for stock in stock_rows
+        if getattr(stock, "master_product_group_id", None)
+    }
+
+    if matched_group_ids:
+        group_stock_rows = (
+            db.session.query(WarehouseStock)
+            .filter(WarehouseStock.is_active == True)  # noqa: E712
+            .filter(WarehouseStock.is_deleted == False)  # noqa: E712
+            .filter(WarehouseStock.master_product_group_id.in_(list(matched_group_ids)))
+            .all()
+        )
+
+        stock_by_id = {int(stock.id): stock for stock in stock_rows}
+        for stock in group_stock_rows:
+            stock_by_id[int(stock.id)] = stock
+        stock_rows = list(stock_by_id.values())
+
+        total_stock = max(total_stock, len(stock_rows))
+        total_pages_stock = max(1, (total_stock + per_page - 1) // per_page)
+
     stock_ids_on_page = [stock.id for stock in stock_rows]
     if stock_ids_on_page:
         listing_rows = (
