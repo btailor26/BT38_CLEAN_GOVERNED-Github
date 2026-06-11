@@ -247,16 +247,35 @@ def _run_light_reconcile_cycle():
 
     order_import = None
     try:
+        from models import Store
         from services.governed_marketplace_order_import import (
             run_governed_marketplace_order_import,
         )
 
-        order_import = run_governed_marketplace_order_import(
-            source=f"{source}_order_import",
+        ebay_store = (
+            Store.query
+            .filter(Store.is_active == True)  # noqa: E712
+            .filter(Store.store_mode == "live")
+            .filter(Store.platform.ilike("%ebay%"))
+            .order_by(Store.id)
+            .first()
         )
 
+        if ebay_store:
+            order_import = run_governed_marketplace_order_import(
+                store_id=ebay_store.id,
+                source=f"{source}_ebay_order_import",
+            )
+        else:
+            order_import = {
+                "success": True,
+                "governed": True,
+                "skipped": True,
+                "reason": "no_live_ebay_store_found",
+            }
+
     except Exception as exc:
-        _safe_error("15-minute marketplace order import failed", exc)
+        _safe_error("15-minute eBay order import failed", exc)
         order_import = {
             "success": False,
             "error": str(exc),
@@ -282,7 +301,7 @@ def _run_light_reconcile_cycle():
 
     _last_light_reconcile = datetime.utcnow()
     _safe_log(
-        f"15-minute light reconcile order-only complete "
+        f"15-minute light reconcile eBay-order-only complete "
         f"order_import={order_import} order_stock_bridge={order_stock_bridge}"
     )
 
@@ -290,6 +309,7 @@ def _run_light_reconcile_cycle():
         "success": True,
         "governed": True,
         "source": source,
+        "amazon_order_import_started": False,
         "marketplace_import_refresh_started": False,
         "order_import": order_import,
         "order_stock_bridge": order_stock_bridge,
