@@ -243,9 +243,57 @@ def run_governed_marketplace_import_refresh(store_id=None, source="governed_runt
 def _run_light_reconcile_cycle():
     global _last_light_reconcile
 
-    run_governed_marketplace_import_refresh(source="light_reconcile_15m")
+    source = "light_reconcile_15m"
+
+    order_import = None
+    try:
+        from services.governed_marketplace_order_import import (
+            run_governed_marketplace_order_import,
+        )
+
+        order_import = run_governed_marketplace_order_import(
+            source=f"{source}_order_import",
+        )
+
+    except Exception as exc:
+        _safe_error("15-minute marketplace order import failed", exc)
+        order_import = {
+            "success": False,
+            "error": str(exc),
+        }
+
+    order_stock_bridge = None
+    try:
+        from services.governed_order_stock_mutation import (
+            mutate_recent_marketplace_order_lines,
+        )
+
+        order_stock_bridge = mutate_recent_marketplace_order_lines(
+            limit=100,
+            source=f"{source}_order_stock_bridge",
+        )
+
+    except Exception as exc:
+        _safe_error("15-minute order stock bridge failed", exc)
+        order_stock_bridge = {
+            "success": False,
+            "error": str(exc),
+        }
+
     _last_light_reconcile = datetime.utcnow()
-    _safe_log("15-minute light reconcile import refresh complete")
+    _safe_log(
+        f"15-minute light reconcile order-only complete "
+        f"order_import={order_import} order_stock_bridge={order_stock_bridge}"
+    )
+
+    return {
+        "success": True,
+        "governed": True,
+        "source": source,
+        "marketplace_import_refresh_started": False,
+        "order_import": order_import,
+        "order_stock_bridge": order_stock_bridge,
+    }
 
 
 def _run_full_sync_cycle():
