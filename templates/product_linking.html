@@ -1013,7 +1013,7 @@ function renderWarehouseProducts(products) {
                 <td>
                     <button type="button"
                             class="btn btn-sm p-0 border-0 bg-transparent"
-                            onclick="showAdjustPushModal(${product.id}, ${product.master_product_group_id || 'null'}, '${escapeJs(product.sku)}', '${escapeJs(product.name || '')}', ${displayStockQuantity}, Boolean(fbaListingForStock))"
+                            onclick="showAdjustPushModal(${product.id}, ${product.master_product_group_id || 'null'}, '${escapeHtml(product.sku)}', '${escapeHtml(product.name || '')}', ${displayStockQuantity}, Boolean(fbaListingForStock))"
                             title="Edit warehouse quantity then push group">
                         <span class="badge bg-dark fs-6">${displayStockQuantity}</span>
                     </button>
@@ -1026,7 +1026,7 @@ function renderWarehouseProducts(products) {
                         <button class="btn btn-outline-secondary" onclick="showDiagnostics(${product.id}, '${escapeHtml(product.sku)}')" title="Diagnostics">
                             <i data-feather="activity" class="feather-xs"></i>
                         </button>
-                        <button class="btn btn-outline-primary" onclick="showAdjustPushModal(${product.id}, ${product.master_product_group_id || 'null'}, '${escapeJs(product.sku)}', '${escapeJs(product.name || '')}', ${displayStockQuantity}, Boolean(fbaListingForStock))" title="Push">
+                        <button class="btn btn-outline-primary" onclick="showAdjustPushModal(${product.id}, ${product.master_product_group_id || 'null'}, '${escapeHtml(product.sku)}', '${escapeHtml(product.name || '')}', ${displayStockQuantity}, Boolean(fbaListingForStock))" title="Push">
                             <i data-feather="upload-cloud" class="feather-xs"></i>
                         </button>
                     </div>
