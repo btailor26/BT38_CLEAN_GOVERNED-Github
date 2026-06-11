@@ -2308,6 +2308,26 @@ def governed_product_linking_data_compat():
         linked = listings_by_stock.get(stock.id, [])
 
         platforms = sorted({str(item.get("platform") or "").strip() for item in linked if item.get("platform")})
+
+        is_fba_group = any(
+            bool(item.get("is_fba"))
+            or str(item.get("amazon_fulfillment_channel") or "").upper() in ("AFN", "FBA")
+            for item in linked
+        )
+
+        fba_authority_quantity = None
+        if is_fba_group:
+            for item in linked:
+                if item.get("fba_available_quantity") is not None:
+                    fba_authority_quantity = item.get("fba_available_quantity")
+                    break
+
+        display_quantity = (
+            fba_authority_quantity
+            if fba_authority_quantity is not None
+            else getattr(stock, "sellable_quantity", 0)
+        )
+
         warehouse_products.append({
             "id": stock.id,
             "sku": stock.sku,
@@ -2318,9 +2338,11 @@ def governed_product_linking_data_compat():
             "group_title": stock.group_title,
             "master_product_group_id": stock.master_product_group_id,
             "is_group_controlled": bool(getattr(stock, "is_group_controlled", False)),
-            "quantity": getattr(stock, "sellable_quantity", 0),
-            "available_quantity": getattr(stock, "sellable_quantity", 0),
-            "sellable_quantity": getattr(stock, "sellable_quantity", 0),
+            "is_fba_group": is_fba_group,
+            "fba_authority_quantity": fba_authority_quantity,
+            "quantity": display_quantity,
+            "available_quantity": display_quantity,
+            "sellable_quantity": display_quantity,
             "linked_count": len(linked),
             "platforms": platforms,
             "listings": linked,
