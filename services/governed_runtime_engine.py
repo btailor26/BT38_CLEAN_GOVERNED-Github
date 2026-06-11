@@ -243,16 +243,7 @@ def run_governed_marketplace_import_refresh(store_id=None, source="governed_runt
 def _run_light_reconcile_cycle():
     global _last_light_reconcile
 
-    # 15-minute light reconcile must never call live marketplace APIs.
-    # It is an internal heartbeat/check only. Full marketplace imports are reserved
-    # for approved manual actions, marketplace notifications, or the 8-hour full sync.
-    return {
-        "success": True,
-        "governed": True,
-        "source": "light_reconcile_15m",
-        "marketplace_calls_started": False,
-        "reason": "light_reconcile_internal_only",
-    }
+    run_governed_marketplace_import_refresh(source="light_reconcile_15m")
     _last_light_reconcile = datetime.utcnow()
     _safe_log("15-minute light reconcile import refresh complete")
 
