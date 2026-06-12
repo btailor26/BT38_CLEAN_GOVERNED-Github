@@ -23,6 +23,12 @@ _started = False
 _started_at = None
 _status_lock = threading.Lock()
 
+_runtime_lock_handle = None
+_RUNTIME_LOCK_PATH = os.getenv(
+    "BT38_GOVERNED_RUNTIME_LOCK",
+    "/tmp/bt38_governed_runtime_engine.lock",
+)
+
 _last_full_sync = None
 _last_light_reconcile = None
 _last_marketplace_import = None
@@ -359,6 +365,42 @@ def _engine_loop(app):
         time.sleep(30)
 
 
+def _acquire_runtime_owner_lock() -> bool:
+    """
+    Ensures only one OS process owns the governed runtime engine.
+
+    Gunicorn may run multiple web workers.
+    One-off audit scripts may import app.py.
+    Neither should create duplicate governed runtime engines.
+    """
+    global _runtime_lock_handle
+
+    if _runtime_lock_handle is not None:
+        return True
+
+    try:
+        import fcntl
+
+        handle = open(_RUNTIME_LOCK_PATH, "w", encoding="utf-8")
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        handle.seek(0)
+        handle.truncate()
+        handle.write(f"pid={os.getpid()} started_at={datetime.utcnow().isoformat()}Z\n")
+        handle.flush()
+
+        _runtime_lock_handle = handle
+        _safe_log(f"Governed runtime owner lock acquired path={_RUNTIME_LOCK_PATH}")
+        return True
+
+    except BlockingIOError:
+        _safe_log("Governed runtime engine already owned by another process")
+        return False
+
+    except Exception as exc:
+        _safe_error("Governed runtime owner lock failed", exc)
+        return False
+
+
 def start_governed_runtime_engine(app):
     """
     Starts the governed runtime engine once per process.
@@ -375,6 +417,9 @@ def start_governed_runtime_engine(app):
         enabled = _truthy(os.getenv("ENABLE_GOVERNED_RUNTIME_ENGINE", "true"), True)
         if not enabled:
             _safe_log("ENABLE_GOVERNED_RUNTIME_ENGINE is OFF")
+            return False
+
+        if not _acquire_runtime_owner_lock():
             return False
 
         _started = True
