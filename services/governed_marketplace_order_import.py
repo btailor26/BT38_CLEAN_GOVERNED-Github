@@ -400,8 +400,21 @@ def _amazon_credentials(store: Store) -> dict[str, Any]:
 
 
 def _run_amazon_order_import(store: Store, *, source: str) -> dict[str, Any]:
+    """
+    Amazon order verification path.
+
+    This is used by the 15-minute light reconcile as a safety net for missed
+    marketplace events. It must not re-scan 7 days of Amazon orders every cycle.
+
+    Rules:
+    - Webhook remains the immediate path.
+    - 15-minute reconcile verifies recent/missed Amazon orders only.
+    - Existing imported orders are skipped before get_order_items().
+    - get_order_items() is only called for new order IDs.
+    """
     from sp_api.api import Orders
     from sp_api.base import Marketplaces
+    from models import MarketplaceOrder
 
     creds = _store_credentials(store)
     marketplace_id = creds.get("marketplace_id") or "A1F83G8C2ARO7P"
@@ -411,7 +424,9 @@ def _run_amazon_order_import(store: Store, *, source: str) -> dict[str, Any]:
         credentials=_amazon_credentials(store),
     )
 
-    created_after = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat().replace("+00:00", "Z")
+    # Keep the 15-minute verifier lightweight. Use a short safety window so
+    # missed webhooks are recovered without re-reading the same 7 days forever.
+    created_after = (datetime.now(timezone.utc) - timedelta(hours=2)).isoformat().replace("+00:00", "Z")
 
     response = client.get_orders(
         CreatedAfter=created_after,
@@ -425,20 +440,39 @@ def _run_amazon_order_import(store: Store, *, source: str) -> dict[str, Any]:
     created = 0
     skipped = 0
     unmatched = 0
+    existing_skipped = 0
+    item_read_attempts = 0
     line_results = []
 
-    allowed_statuses = {"UNSHIPPED", "PARTIALLYSHIPPED", "SHIPPED"}
+    allowed_statuses = {"UNSHIPPED", "PARTIALLYSHIPPED", "SHIPPED", "PENDING"}
 
     for order in orders:
         order_id = _text(order.get("AmazonOrderId"))
         order_status = _text(order.get("OrderStatus")).upper()
         fulfillment_channel = _text(order.get("FulfillmentChannel")).upper()
 
+        if not order_id:
+            skipped += 1
+            continue
+
         if order_status not in allowed_statuses:
             skipped += 1
             continue
 
+        existing_order = (
+            MarketplaceOrder.query
+            .filter(MarketplaceOrder.store_id == store.id)
+            .filter(MarketplaceOrder.marketplace_order_id == order_id)
+            .first()
+        )
+
+        if existing_order:
+            existing_skipped += 1
+            skipped += 1
+            continue
+
         try:
+            item_read_attempts += 1
             items_response = client.get_order_items(order_id)
             items_payload = items_response.payload or {}
             items = items_payload.get("OrderItems") or []
@@ -473,7 +507,7 @@ def _run_amazon_order_import(store: Store, *, source: str) -> dict[str, Any]:
                 quantity=qty,
                 unit_price=price_value,
                 fulfillment_type=fulfillment_type,
-                status="order",
+                status="pending" if order_status == "PENDING" else "order",
             )
 
             line_results.append(result)
@@ -493,8 +527,9 @@ def _run_amazon_order_import(store: Store, *, source: str) -> dict[str, Any]:
         items_synced=imported,
         message=(
             f"governed_amazon_order_import imported={imported} "
-            f"created={created} skipped={skipped} unmatched={unmatched} "
-            f"source={source}"
+            f"created={created} skipped={skipped} existing_skipped={existing_skipped} "
+            f"item_read_attempts={item_read_attempts} unmatched={unmatched} "
+            f"window_hours=2 source={source}"
         ),
     )
     db.session.commit()
@@ -504,13 +539,17 @@ def _run_amazon_order_import(store: Store, *, source: str) -> dict[str, Any]:
         "governed": True,
         "marketplace": "amazon",
         "source": source,
+        "window_hours": 2,
         "orders_seen": len(orders),
         "imported": imported,
         "created": created,
         "skipped": skipped,
+        "existing_skipped": existing_skipped,
+        "item_read_attempts": item_read_attempts,
         "unmatched": unmatched,
         "results": line_results[:50],
     }
+
 
 def run_governed_marketplace_order_import(store_id=None, source: str = "governed_marketplace_order_import") -> dict[str, Any]:
     stores = (
