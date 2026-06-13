@@ -332,8 +332,14 @@ def _acquire_runtime_owner_lock() -> bool:
     try:
         import fcntl
 
-        handle = open(_RUNTIME_LOCK_PATH, "w", encoding="utf-8")
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        handle = open(_RUNTIME_LOCK_PATH, "a+", encoding="utf-8")
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            handle.close()
+            _safe_log("Governed runtime engine already owned by another process")
+            return False
+
         handle.seek(0)
         handle.truncate()
         handle.write(f"pid={os.getpid()} started_at={datetime.utcnow().isoformat()}Z\n")
@@ -342,10 +348,6 @@ def _acquire_runtime_owner_lock() -> bool:
         _runtime_lock_handle = handle
         _safe_log(f"Governed runtime owner lock acquired path={_RUNTIME_LOCK_PATH}")
         return True
-
-    except BlockingIOError:
-        _safe_log("Governed runtime engine already owned by another process")
-        return False
 
     except Exception as exc:
         _safe_error("Governed runtime owner lock failed", exc)
