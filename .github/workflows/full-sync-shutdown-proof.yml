@@ -33,7 +33,7 @@ jobs:
 
       - name: Show Python import path and guard import
         run: |
-          python - <<'PY'
+          uv run python - <<'PY'
           import os, sys
           print('cwd=', os.getcwd())
           print('PYTHONPATH=', os.environ.get('PYTHONPATH'))
@@ -51,7 +51,7 @@ jobs:
 
       - name: Compile shutdown branch files
         run: |
-          python -m py_compile \
+          uv run python -m py_compile \
             app.py \
             routes.py \
             models.py \
@@ -76,7 +76,7 @@ jobs:
 
       - name: Run shutdown proof tests
         run: |
-          python -m pytest -v \
+          uv run python -m pytest -v \
             tests/test_shutdown_http_guard.py \
             tests/test_old_sync_paths_shutdown.py \
             tests/test_governed_execution_skeleton.py \
