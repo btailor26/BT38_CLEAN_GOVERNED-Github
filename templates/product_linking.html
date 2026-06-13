@@ -1198,7 +1198,15 @@ async function executeGroupPush() {
             return;
         }
 
-        const data = quantityData;
+        const pushResponse = await fetch(`/governed/actions/groups/${groupId}/push`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                source: 'product_linking_push_now_button'
+            })
+        });
+
+        const data = await pushResponse.json();
 
         if (data.success || data.ok) {
             bootstrap.Modal.getInstance(document.getElementById('adjustPushModal')).hide();
