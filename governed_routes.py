@@ -3706,11 +3706,13 @@ def governed_disabled_action(action: str = ""):
             and remaining_group_members == 0
             and getattr(old_stock, "master_product_group_id", None) == int(old_group_id)
         ):
-            old_stock.master_product_group_id = None
-            old_stock.is_group_controlled = False
+            # BT38 group protection:
+            # Do not clear warehouse group authority automatically when one listing is unlinked.
+            # FBA and FBM grouped stock must stay grouped unless the user explicitly removes
+            # the warehouse stock from the group through the approved group action.
             if hasattr(old_stock, "updated_at"):
                 old_stock.updated_at = listing.updated_at
-            warehouse_group_released = True
+            warehouse_group_released = False
 
         db.session.commit()
 
