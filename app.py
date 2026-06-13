@@ -612,21 +612,21 @@ if IS_STAGING:
     print("  ⚠️  Push/write operations are BLOCKED by default")
 print("="*60)
 
-# Startup marketplace safety report.
-# This is informational only: it performs no imports/calls to marketplace service
-# clients and starts no workers, schedulers, queue consumers, or push loops.
+# Startup governed runtime safety report.
+# Marketplace execution is controlled by SystemConfig fuse-box settings and the
+# governed runtime engine. Legacy workers/dispatchers remain retired.
 print("\n" + "="*60)
-print("MARKETPLACE STARTUP SAFETY — SHUTDOWN ONLY")
+print("MARKETPLACE STARTUP SAFETY — GOVERNED RUNTIME")
 print("="*60)
 print(f"Environment: {APP_ENV.upper()}")
 print(f"Admin Dashboard: /admin/system-activity")
 print("Runtime status:")
-print("  [OK] No marketplace execution starts on app boot")
-print("  [OK] No workers, schedulers, queue consumers, or order-import ticks start on app boot")
-print("  [OK] FBA/AFN is read-only; no FBA push path is started")
-print("  [OK] FBM/MFN push is controlled by the governed fuse-box path")
-print("  [OK] eBay push/import is controlled by the governed fuse-box path")
-print("  [OK] Amazon/eBay API error tables remain reporting-only at startup")
+print("  [OK] Governed runtime may start when ENABLE_GOVERNED_RUNTIME_ENGINE is enabled")
+print("  [OK] 15-minute reconcile is controlled by scheduler_enabled + reconcile_15m_enabled")
+print("  [OK] 8-hour hydration is controlled by sync_enabled + sync_worker_enabled")
+print("  [OK] Legacy sync_dispatcher workers remain retired and are not part of the governed path")
+print("  [OK] FBA/AFN remains read-only")
+print("  [OK] FBM/MFN push remains controlled by the governed fuse-box path")
 print("  [OK] System Activity remains available for audit/reporting")
 print("="*60 + "\n")
 
