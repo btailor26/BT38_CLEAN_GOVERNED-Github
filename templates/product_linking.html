@@ -755,7 +755,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" id="adjustPushBtn" class="btn btn-primary" onclick="executeGroupPush()">
+                <button type="button" id="adjustPushBtn" class="btn btn-primary">
                     <i data-feather="send" class="feather-sm me-1"></i>Push Now
                 </button>
             </div>
@@ -1084,6 +1084,18 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+
+// Direct Push Now button binding
+document.addEventListener('DOMContentLoaded', function() {
+    const pushBtn = document.getElementById('adjustPushBtn');
+    if (pushBtn) {
+        pushBtn.addEventListener('click', function(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            executeGroupPush();
+        });
+    }
+});
 
 // Load data when page is ready
 document.addEventListener('DOMContentLoaded', function() {
