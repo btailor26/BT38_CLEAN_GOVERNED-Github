@@ -37,14 +37,14 @@ jobs:
 
       - name: Compile warehouse visibility files
         run: |
-          python -m py_compile \
+          uv run python -m py_compile \
             amazon_service_live_patch.py \
             backend/adapters/amazon_sp_api_adapter.py \
             governed_routes.py
 
       - name: Prove Amazon constructor uses lwa_client_id
         run: |
-          python - <<'PY'
+          uv run python - <<'PY'
           from pathlib import Path
           adapter = Path('backend/adapters/amazon_sp_api_adapter.py').read_text(encoding='utf-8')
           live_patch = Path('amazon_service_live_patch.py').read_text(encoding='utf-8')
@@ -57,7 +57,7 @@ jobs:
 
       - name: Prove warehouse eBay variation visibility wiring
         run: |
-          python - <<'PY'
+          uv run python - <<'PY'
           from pathlib import Path
           route = Path('governed_routes.py').read_text(encoding='utf-8')
           template = Path('templates/warehouse.html').read_text(encoding='utf-8')
