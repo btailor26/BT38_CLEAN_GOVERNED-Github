@@ -1190,7 +1190,7 @@ async function executeGroupPush() {
     }
 
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Pushing...';
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Updating...';
 
     try {
         const quantityResponse = await fetch(`/governed/groups/${groupId}/propagate-quantity`, {
@@ -1209,39 +1209,15 @@ async function executeGroupPush() {
         });
 
         const quantityText = await quantityResponse.text();
-        let quantityData = {};
-        try {
-            quantityData = quantityText ? JSON.parse(quantityText) : {};
-        } catch (error) {
-            throw new Error('Quantity save returned non-JSON response. Status: ' + quantityResponse.status);
-        }
-
-        if (!quantityResponse.ok || (!quantityData.success && !quantityData.ok)) {
-            throw new Error(quantityData.error || quantityData.reason || quantityData.message || 'Quantity save failed.');
-        }
-
-        const pushResponse = await fetch(`/governed/actions/groups/${groupId}/push`, {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-BT38-Shortcut': 'product_linking_push_now_button'
-            },
-            body: JSON.stringify({
-                source: 'product_linking_push_now_button'
-            })
-        });
-
-        const pushText = await pushResponse.text();
         let data = {};
         try {
-            data = pushText ? JSON.parse(pushText) : {};
+            data = quantityText ? JSON.parse(quantityText) : {};
         } catch (error) {
-            throw new Error('Group push returned non-JSON response. Status: ' + pushResponse.status);
+            throw new Error('Quantity update returned non-JSON response. Status: ' + quantityResponse.status);
         }
 
-        if (!pushResponse.ok || (!data.success && !data.ok)) {
-            throw new Error(data.error || data.reason || data.message || 'Group push failed.');
+        if (!quantityResponse.ok || (!data.success && !data.ok)) {
+            throw new Error(data.error || data.reason || data.message || 'Quantity update failed.');
         }
 
         bootstrap.Modal.getInstance(document.getElementById('adjustPushModal')).hide();
