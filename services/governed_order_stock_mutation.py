@@ -288,26 +288,24 @@ def mutate_warehouse_stock_from_order_line(line: Any, source: str = "governed_or
 
 def mutate_recent_marketplace_order_lines(limit: int = 100, source: str = "governed_order_bridge") -> dict[str, Any]:
     """
-    Best-effort governed bridge for existing order-line tables.
+    Governed marketplace order bridge.
 
-    Supports whichever order-line models exist in the current schema:
-    - CanonicalOrderLine
-    - MarketplaceOrder
-    - SalesOrderItem
+    MarketplaceOrder is the marketplace authority.
 
-    Does not push to marketplaces.
+    Webhook/order import paths create MarketplaceOrder rows.
+    This bridge mutates warehouse stock from MarketplaceOrder only.
+    It does not mix CanonicalOrderLine or SalesOrderItem into marketplace stock authority.
+    It does not push directly; group/listing reconcile remains governed.
     """
 
-    from models import CanonicalOrderLine, MarketplaceOrder, SalesOrderItem
+    from models import MarketplaceOrder
 
-    candidates = []
-
-    for model in (CanonicalOrderLine, MarketplaceOrder, SalesOrderItem):
-        try:
-            rows = model.query.order_by(model.id.desc()).limit(limit).all()
-            candidates.extend(rows)
-        except Exception:
-            continue
+    candidates = (
+        MarketplaceOrder.query
+        .order_by(MarketplaceOrder.id.desc())
+        .limit(limit)
+        .all()
+    )
 
     results = []
     mutated = 0
@@ -326,11 +324,13 @@ def mutate_recent_marketplace_order_lines(limit: int = 100, source: str = "gover
         "success": True,
         "governed": True,
         "source": source,
+        "authority": "MarketplaceOrder",
         "checked": len(candidates),
         "mutated": mutated,
         "skipped": skipped,
         "results": results[:50],
     }
+
 
 def replay_failed_grouped_marketplace_orders(limit: int = 100, source: str = "governed_failed_order_replay") -> dict[str, Any]:
     """
