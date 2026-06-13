@@ -2267,6 +2267,42 @@ def governed_product_linking_data_compat():
 
     display_stock_rows = []
 
+    # When search matches a marketplace listing that already belongs to a governed group,
+    # do not let an old ungrouped warehouse SKU shortcut row override the real relationship row.
+    # Example: Amazon SKU search may match an orphan warehouse row, while the live listing
+    # is actually attached to the grouped eBay/Amazon authority stock row.
+    if search and matching_listing_stock_ids and grouped_stock_rows:
+        grouped_stock_ids = {
+            int(stock.id)
+            for group_stocks in grouped_stock_rows.values()
+            for stock in group_stocks
+            if getattr(stock, "id", None) is not None
+        }
+
+        grouped_listing_skus = {
+            str(item.get("sku") or item.get("external_sku") or "").strip().lower()
+            for stock_id in grouped_stock_ids
+            for item in listings_by_stock.get(stock_id, [])
+            if str(item.get("sku") or item.get("external_sku") or "").strip()
+        }
+
+        def is_stale_orphan_stock(stock):
+            stock_sku = str(getattr(stock, "sku", "") or "").strip().lower()
+            if not stock_sku:
+                return False
+            if stock_sku not in grouped_listing_skus:
+                return False
+            if getattr(stock, "master_product_group_id", None):
+                return False
+            if listings_by_stock.get(stock.id):
+                return False
+            return True
+
+        ungrouped_stock_rows = [
+            stock for stock in ungrouped_stock_rows
+            if not is_stale_orphan_stock(stock)
+        ]
+
     for group_id, group_stocks in grouped_stock_rows.items():
         def stock_has_fba_listing(stock):
             return any(
