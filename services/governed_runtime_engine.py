@@ -377,12 +377,7 @@ def start_governed_runtime_engine(app):
         _started_at = datetime.utcnow()
 
     try:
-        try:
-            from sync_dispatcher import start_dispatcher
-            start_dispatcher()
-            _safe_log("Governed dispatcher starter called")
-        except Exception as exc:
-            _safe_error("Dispatcher starter failed", exc)
+        _safe_log("Governed runtime owns 15-minute reconcile and 8-hour hydration; legacy dispatcher not started")
 
         thread = threading.Thread(
             target=_engine_loop,
