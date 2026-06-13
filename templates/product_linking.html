@@ -1178,45 +1178,65 @@ async function executeGroupPush() {
     }
 
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Updating...';
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Pushing...';
 
     try {
         const quantityResponse = await fetch(`/governed/groups/${groupId}/propagate-quantity`, {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-BT38-Shortcut': 'product_linking_push_now_button'
+            },
             body: JSON.stringify({
                 warehouse_stock_id: parseInt(warehouseId),
                 quantity: qty,
-                update_warehouse_first: true
+                update_warehouse_first: true,
+                source: 'product_linking_push_now_button'
             })
         });
 
-        const quantityData = await quantityResponse.json();
+        const quantityText = await quantityResponse.text();
+        let quantityData = {};
+        try {
+            quantityData = quantityText ? JSON.parse(quantityText) : {};
+        } catch (error) {
+            throw new Error('Quantity save returned non-JSON response. Status: ' + quantityResponse.status);
+        }
 
-        if (!quantityData.success && !quantityData.ok) {
-            alert('Quantity update error: ' + (quantityData.error || quantityData.reason || quantityData.message || 'Unknown error'));
-            return;
+        if (!quantityResponse.ok || (!quantityData.success && !quantityData.ok)) {
+            throw new Error(quantityData.error || quantityData.reason || quantityData.message || 'Quantity save failed.');
         }
 
         const pushResponse = await fetch(`/governed/actions/groups/${groupId}/push`, {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-BT38-Shortcut': 'product_linking_push_now_button'
+            },
             body: JSON.stringify({
                 source: 'product_linking_push_now_button'
             })
         });
 
-        const data = await pushResponse.json();
-
-        if (data.success || data.ok) {
-            bootstrap.Modal.getInstance(document.getElementById('adjustPushModal')).hide();
-            alert(`Warehouse quantity saved and group push completed.\n\nListings checked: ${data.total_listings || data.total || 0}\nPushed: ${data.pushed || data.ok_count || 0}\nSkipped: ${data.skipped || 0}\nFailed: ${data.failed || 0}`);
-            loadProductLinkingData(productLinkingPage);
-        } else {
-            alert('Push error: ' + (data.error || data.reason || data.message || 'Unknown error'));
+        const pushText = await pushResponse.text();
+        let data = {};
+        try {
+            data = pushText ? JSON.parse(pushText) : {};
+        } catch (error) {
+            throw new Error('Group push returned non-JSON response. Status: ' + pushResponse.status);
         }
+
+        if (!pushResponse.ok || (!data.success && !data.ok)) {
+            throw new Error(data.error || data.reason || data.message || 'Group push failed.');
+        }
+
+        bootstrap.Modal.getInstance(document.getElementById('adjustPushModal')).hide();
+        alert(`Warehouse quantity saved and group push completed.\n\nListings checked: ${data.total_listings || data.total || 0}\nPushed: ${data.pushed || data.ok_count || 0}\nSkipped: ${data.skipped || 0}\nFailed: ${data.failed || 0}`);
+        loadProductLinkingData(productLinkingPage);
     } catch (error) {
-        alert('Error: ' + error.message);
+        alert('Push error: ' + error.message);
         console.error('Group Push error:', error);
     } finally {
         btn.disabled = false;
