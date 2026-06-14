@@ -194,13 +194,10 @@ def push_group_listings(*, group_id: int, actor: str, source: str, actor_user=No
     ]
 
     ok_count = sum(1 for item in results if item.get("ok") or item.get("success"))
-    skipped_count = len([r for r in results if r.get("skipped")])
-
-    pushable_count = len(results) - skipped_count
 
     return {
-        "success": pushable_count > 0 and ok_count == pushable_count,
-        "ok": pushable_count > 0 and ok_count == pushable_count,
+        "success": ok_count == len(results) and bool(results),
+        "ok": ok_count == len(results) and bool(results),
         "governed": True,
         "group_id": group_id,
         "warehouse_ids": warehouse_ids,
