@@ -1095,11 +1095,21 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-document.addEventListener('click', function(e) {
-    const btn = e.target && e.target.closest ? e.target.closest('#adjustPushBtn') : null;
-    if (!btn) return;
-    e.preventDefault();
-    executeGroupPush();
+document.addEventListener('click', function(event) {
+    const button = event.target.closest('.js-adjust-push');
+    if (!button) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    showAdjustPushModal(
+        parseInt(button.dataset.warehouseId || '0', 10),
+        button.dataset.groupId ? parseInt(button.dataset.groupId, 10) : null,
+        button.dataset.sku || '',
+        button.dataset.name || '',
+        parseInt(button.dataset.quantity || '0', 10),
+        button.dataset.isFbaGroup === 'true'
+    );
 });
 
 // ==========================================
@@ -1180,7 +1190,7 @@ async function executeGroupPush() {
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Updating...';
 
     try {
-        const quantityResponse = await fetch(`/governed/groups/${groupId}/propagate-quantity`, {
+        const quantityResponse = await fetch(`/governed/actions/groups/${groupId}/push`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
