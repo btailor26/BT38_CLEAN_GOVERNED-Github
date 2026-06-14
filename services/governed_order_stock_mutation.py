@@ -19,7 +19,7 @@ from app import db
 from models import MarketplaceListing, WarehouseStock, StockLedgerEntry
 
 
-SALE_TYPES = {"order", "sale", "sold", "payment", "completed", "paid"}
+SALE_TYPES = {"order", "sale", "sold", "payment", "completed", "paid", "pending", "unshipped", "partiallyshipped"}
 RETURN_TYPES = {"refund", "return", "returned", "cancelled", "canceled"}
 
 
