@@ -292,7 +292,7 @@
                                     <td>
                                         <button type="button"
                                                 class="btn btn-sm p-0 border-0 bg-transparent"
-                                                onclick="showAdjustPushModal({{ product.id }}, {{ product.master_product_group_id or 'null' }}, '{{ product.sku|e }}', '{{ product.name|e|truncate(30) }}', {{ product.quantity }}, {{ 'true' if product.listings and (product.listings | selectattr('is_fba') | list | length > 0) else 'false' }})"
+                                                onclick="showAdjustPushModal({{ product.id }}, {{ product.master_product_group_id or 'null' }}, '{{ product.sku|e }}', '{{ product.name|e|truncate(30) }}', {{ product.quantity }})"
                                                 title="Edit warehouse quantity then push group">
                                             <span class="badge bg-dark fs-6">{{ product.quantity }}</span>
                                         </button>
@@ -365,7 +365,7 @@
                                         <div class="btn-group btn-group-sm" role="group">
                                             <!-- Adjust & Push Button (PRIMARY ACTION) -->
                                             <button class="btn btn-primary" 
-                                                    onclick="showAdjustPushModal({{ product.id }}, {{ product.master_product_group_id or 'null' }}, '{{ product.sku|e }}', '{{ product.name|e|truncate(30) }}', {{ product.quantity }}, {{ 'true' if product.listings and (product.listings | selectattr('is_fba') | list | length > 0) else 'false' }})"
+                                                    onclick="showAdjustPushModal({{ product.id }}, {{ product.master_product_group_id or 'null' }}, '{{ product.sku|e }}', '{{ product.name|e|truncate(30) }}', {{ product.quantity }})"
                                                     data-bs-toggle="tooltip" data-bs-placement="top"
                                                     title="Adjust & Push - Change quantity and push to all linked marketplaces">
                                                 <i data-feather="sliders" class="feather-sm"></i>
@@ -997,10 +997,8 @@ function renderWarehouseProducts(products) {
             });
         }
         
-        const isFbaGroup = Boolean(product.is_fba_group);
-        const displayStockQuantity = product.fba_authority_quantity !== null && product.fba_authority_quantity !== undefined
-            ? product.fba_authority_quantity
-            : product.quantity;
+        const fbaListingForStock = (product.listings || []).find(listing => listing.is_fba && listing.fba_available_quantity !== null && listing.fba_available_quantity !== undefined);
+        const displayStockQuantity = fbaListingForStock ? fbaListingForStock.fba_available_quantity : product.quantity;
 
         html += `
             <tr data-group-id="${product.id}" data-group-name="${escapeHtml(product.group_name)}" data-sku="${escapeHtml(product.sku)}">
@@ -1014,13 +1012,8 @@ function renderWarehouseProducts(products) {
                 </td>
                 <td>
                     <button type="button"
-                            class="btn btn-sm p-0 border-0 bg-transparent js-adjust-push"
-                            data-warehouse-id="${product.id}"
-                            data-group-id="${product.master_product_group_id || ''}"
-                            data-sku="${escapeHtml(product.sku)}"
-                            data-name="${escapeHtml(product.name || '')}"
-                            data-quantity="${displayStockQuantity}"
-                            data-is-fba-group="${isFbaGroup ? 'true' : 'false'}"
+                            class="btn btn-sm p-0 border-0 bg-transparent"
+                            onclick="showAdjustPushModal(${product.id}, ${product.master_product_group_id || 'null'}, '${escapeHtml(product.sku)}', '${escapeHtml(product.name || '')}', ${displayStockQuantity}, Boolean(fbaListingForStock))"
                             title="Edit warehouse quantity then push group">
                         <span class="badge bg-dark fs-6">${displayStockQuantity}</span>
                     </button>
@@ -1033,15 +1026,7 @@ function renderWarehouseProducts(products) {
                         <button class="btn btn-outline-secondary" onclick="showDiagnostics(${product.id}, '${escapeHtml(product.sku)}')" title="Diagnostics">
                             <i data-feather="activity" class="feather-xs"></i>
                         </button>
-                        <button type="button"
-                                class="btn btn-outline-primary js-adjust-push"
-                                data-warehouse-id="${product.id}"
-                                data-group-id="${product.master_product_group_id || ''}"
-                                data-sku="${escapeHtml(product.sku)}"
-                                data-name="${escapeHtml(product.name || '')}"
-                                data-quantity="${displayStockQuantity}"
-                                data-is-fba-group="${isFbaGroup ? 'true' : 'false'}"
-                                title="Push">
+                        <button class="btn btn-outline-primary" onclick="showAdjustPushModal(${product.id}, ${product.master_product_group_id || 'null'}, '${escapeHtml(product.sku)}', '${escapeHtml(product.name || '')}', ${displayStockQuantity}, Boolean(fbaListingForStock))" title="Adjust quantity and push grouped marketplaces">
                             <i data-feather="upload-cloud" class="feather-xs"></i>
                         </button>
                     </div>
@@ -1098,39 +1083,6 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
-// Direct Push Now button binding
-document.addEventListener('DOMContentLoaded', function() {
-    const pushBtn = document.getElementById('adjustPushBtn');
-    if (pushBtn) {
-        pushBtn.addEventListener('click', function(event) {
-            event.preventDefault();
-            event.stopPropagation();
-            executeGroupPush();
-        });
-    }
-});
-
-// Delegated Product Linking row push button binding.
-// This avoids fragile inline onclick JavaScript in dynamically rendered rows.
-document.addEventListener('click', function(event) {
-    const button = event.target.closest('.js-adjust-push');
-    if (!button) {
-        return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-
-    showAdjustPushModal(
-        parseInt(button.dataset.warehouseId || '0', 10),
-        button.dataset.groupId ? parseInt(button.dataset.groupId, 10) : null,
-        button.dataset.sku || '',
-        button.dataset.name || '',
-        parseInt(button.dataset.quantity || '0', 10),
-        button.dataset.isFbaGroup === 'true'
-    );
-});
-
 // Load data when page is ready
 document.addEventListener('DOMContentLoaded', function() {
     if (asyncLoadEnabled) {
@@ -1143,6 +1095,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
+document.addEventListener('click', function(e) {
+    const btn = e.target && e.target.closest ? e.target.closest('#adjustPushBtn') : null;
+    if (!btn) return;
+    e.preventDefault();
+    executeGroupPush();
+});
+
 // ==========================================
 // ADJUST & PUSH - Main Control Center
 // ==========================================
@@ -1153,22 +1112,16 @@ function showAdjustPushModal(warehouseId, groupId, sku, name, currentQty, isFbaG
 
     document.getElementById('adjustPushSku').textContent = sku;
     document.getElementById('adjustPushName').textContent = name || '';
-
     const qtyInput = document.getElementById('adjustPushQuantity');
     qtyInput.value = currentQty;
 
-    const groupHasFba = Boolean(isFbaGroup);
-
-    if (groupHasFba) {
+    if (isFbaGroup) {
         qtyInput.setAttribute('readonly', 'readonly');
-        qtyInput.classList.add('bg-light');
-        qtyInput.setAttribute('title', 'FBA quantity is read-only and cannot be edited.');
+        qtyInput.setAttribute('title', 'FBA quantity is read-only. Group push will only update non-FBA marketplaces.');
     } else {
         qtyInput.removeAttribute('readonly');
-        qtyInput.classList.remove('bg-light');
         qtyInput.removeAttribute('title');
     }
-
     document.getElementById('adjustPushWarehouseId').value = warehouseId;
 
     let groupInput = document.getElementById('adjustPushGroupId');
@@ -1227,38 +1180,34 @@ async function executeGroupPush() {
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Updating...';
 
     try {
-        const quantityResponse = await fetch(`/governed/actions/groups/${groupId}/push`, {
+        const quantityResponse = await fetch(`/governed/groups/${groupId}/propagate-quantity`, {
             method: 'POST',
-            credentials: 'same-origin',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-BT38-Shortcut': 'product_linking_push_now_button'
-            },
+            headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
                 warehouse_stock_id: parseInt(warehouseId),
                 quantity: qty,
-                update_warehouse_first: true,
-                source: 'product_linking_push_now_button'
+                update_warehouse_first: true
             })
         });
 
-        const quantityText = await quantityResponse.text();
-        let data = {};
-        try {
-            data = quantityText ? JSON.parse(quantityText) : {};
-        } catch (error) {
-            throw new Error('Quantity update returned non-JSON response. Status: ' + quantityResponse.status);
+        const quantityData = await quantityResponse.json();
+
+        if (!quantityData.success && !quantityData.ok) {
+            alert('Quantity update error: ' + (quantityData.error || quantityData.reason || quantityData.message || 'Unknown error'));
+            return;
         }
 
-        if (!quantityResponse.ok || (!data.success && !data.ok)) {
-            throw new Error(data.error || data.reason || data.message || 'Quantity update failed.');
-        }
+        const data = quantityData;
 
-        bootstrap.Modal.getInstance(document.getElementById('adjustPushModal')).hide();
-        alert(`Warehouse quantity saved and group push completed.\n\nListings checked: ${data.total_listings || data.total || 0}\nPushed: ${data.pushed || data.ok_count || 0}\nSkipped: ${data.skipped || 0}\nFailed: ${data.failed || 0}`);
-        loadProductLinkingData(productLinkingPage);
+        if (data.success || data.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('adjustPushModal')).hide();
+            alert(`Warehouse quantity saved and group push completed.\n\nListings checked: ${data.total_listings || data.total || 0}\nPushed: ${data.pushed || data.ok_count || 0}\nSkipped: ${data.skipped || 0}\nFailed: ${data.failed || 0}`);
+            loadProductLinkingData(productLinkingPage);
+        } else {
+            alert('Push error: ' + (data.error || data.reason || data.message || 'Unknown error'));
+        }
     } catch (error) {
-        alert('Push error: ' + error.message);
+        alert('Error: ' + error.message);
         console.error('Group Push error:', error);
     } finally {
         btn.disabled = false;
@@ -1699,7 +1648,7 @@ async function searchWarehouseForLinking() {
 // Link a marketplace listing to a warehouse product
 async function linkListingToWarehouse(listingId, warehouseId, listingSku, warehouseSku, userConfirmed = false) {
     try {
-        const response = await fetch('/governed-disabled/link-listing-to-warehouse', {
+        const response = await fetch('/governed/product-linking/link-listing-to-warehouse', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -2156,4 +2105,106 @@ document.addEventListener('DOMContentLoaded', function() {
 </style>
 {% endblock %}
 
+
+<script id="bt38GovernedLegacyTemplateQuarantine">
+(function(){
+  function disabled(name){
+    if (window.bt38GovernedDisabledAction) {
+      return window.bt38GovernedDisabledAction(name);
+    }
+    alert((name || "This legacy action") + " is disabled until wired to a governed route.");
+    return false;
+  }
+
+  const blockedFunctions = [
+    "saveNewLink",
+    "saveAmazonFbmLink",
+    "saveAmazonFbaLink",
+    "saveEbayLink",
+    "bulkPushSelected",
+    "bulkDiagnostics",
+    "bulkRepairLinks",
+    "bulkUngroup",
+    "executeMerge",
+    "executeReassign",
+    "repairResetFailures",
+    "repairRebuildLinks",
+    "repairCreateMissingSKUs",
+    "repairSyncNow",
+    "fixAllIssues",
+    "ungroupProduct",
+    "markNotSameProduct",
+    "repairLinks"
+  ];
+
+  blockedFunctions.forEach(function(name){
+    window[name] = function(){
+      return disabled(name);
+    };
+  });
+})();
+</script>
+
+
+
+<script id="bt38GovernedBlockedActionCleaner">
+(function(){
+  const blockedUrlParts = [
+    "/governed/product-linking/repair",
+    "/governed/product-linking/bulk-action",
+    "/governed/warehouse/"
+  ];
+
+  function isBlockedActionUrl(url){
+    url = String(url || "");
+    if (url.includes("/governed/warehouse/") && url.includes("/upload-image")) return true;
+    return blockedUrlParts.some(part => url.includes(part));
+  }
+
+  document.addEventListener("click", function(e){
+    const el = e.target && e.target.closest ? e.target.closest("button,a,input[type='submit']") : null;
+    if (!el) return;
+
+    const text = (el.innerText || el.value || el.title || "").toLowerCase();
+    const riskyText = [
+      "repair",
+      "reset",
+      "rebuild",
+      "create missing",
+      "sync now",
+      "bulk push",
+      "bulk repair",
+      "bulk merge",
+      "bulk reassign",
+      "bulk ungroup",
+      "upload image"
+    ];
+
+    if (riskyText.some(t => text.includes(t))) {
+      e.preventDefault();
+      e.stopPropagation();
+      alert("This action is disabled until the governed workflow is fully approved.");
+      return false;
+    }
+  }, true);
+
+  const originalFetch = window.fetch;
+  window.fetch = function(input, init){
+    const url = typeof input === "string" ? input : (input && input.url);
+    if (isBlockedActionUrl(url)) {
+      return Promise.resolve(new Response(JSON.stringify({
+        success:false,
+        ok:false,
+        governed:true,
+        blocked:true,
+        message:"This governed action is disabled until the workflow is approved."
+      }), {
+        status:409,
+        headers:{"Content-Type":"application/json"}
+      }));
+    }
+    return originalFetch.apply(this, arguments);
+  };
+})();
+</script>
 
