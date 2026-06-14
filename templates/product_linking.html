@@ -1014,8 +1014,13 @@ function renderWarehouseProducts(products) {
                 </td>
                 <td>
                     <button type="button"
-                            class="btn btn-sm p-0 border-0 bg-transparent"
-                            onclick="showAdjustPushModal(${product.id}, ${product.master_product_group_id || 'null'}, '${escapeJs(product.sku)}', '${escapeJs(product.name || '')}', ${displayStockQuantity}, isFbaGroup)"
+                            class="btn btn-sm p-0 border-0 bg-transparent js-adjust-push"
+                            data-warehouse-id="${product.id}"
+                            data-group-id="${product.master_product_group_id || ''}"
+                            data-sku="${escapeHtml(product.sku)}"
+                            data-name="${escapeHtml(product.name || '')}"
+                            data-quantity="${displayStockQuantity}"
+                            data-is-fba-group="${isFbaGroup ? 'true' : 'false'}"
                             title="Edit warehouse quantity then push group">
                         <span class="badge bg-dark fs-6">${displayStockQuantity}</span>
                     </button>
@@ -1028,7 +1033,15 @@ function renderWarehouseProducts(products) {
                         <button class="btn btn-outline-secondary" onclick="showDiagnostics(${product.id}, '${escapeHtml(product.sku)}')" title="Diagnostics">
                             <i data-feather="activity" class="feather-xs"></i>
                         </button>
-                        <button class="btn btn-outline-primary" onclick="showAdjustPushModal(${product.id}, ${product.master_product_group_id || 'null'}, '${escapeJs(product.sku)}', '${escapeJs(product.name || '')}', ${displayStockQuantity}, isFbaGroup)" title="Push">
+                        <button type="button"
+                                class="btn btn-outline-primary js-adjust-push"
+                                data-warehouse-id="${product.id}"
+                                data-group-id="${product.master_product_group_id || ''}"
+                                data-sku="${escapeHtml(product.sku)}"
+                                data-name="${escapeHtml(product.name || '')}"
+                                data-quantity="${displayStockQuantity}"
+                                data-is-fba-group="${isFbaGroup ? 'true' : 'false'}"
+                                title="Push">
                             <i data-feather="upload-cloud" class="feather-xs"></i>
                         </button>
                     </div>
@@ -1095,6 +1108,27 @@ document.addEventListener('DOMContentLoaded', function() {
             executeGroupPush();
         });
     }
+});
+
+// Delegated Product Linking row push button binding.
+// This avoids fragile inline onclick JavaScript in dynamically rendered rows.
+document.addEventListener('click', function(event) {
+    const button = event.target.closest('.js-adjust-push');
+    if (!button) {
+        return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    showAdjustPushModal(
+        parseInt(button.dataset.warehouseId || '0', 10),
+        button.dataset.groupId ? parseInt(button.dataset.groupId, 10) : null,
+        button.dataset.sku || '',
+        button.dataset.name || '',
+        parseInt(button.dataset.quantity || '0', 10),
+        button.dataset.isFbaGroup === 'true'
+    );
 });
 
 // Load data when page is ready
