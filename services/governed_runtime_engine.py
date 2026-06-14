@@ -48,9 +48,9 @@ def _truthy(value, default=False):
 
 def _config_on(key: str, default: bool = False) -> bool:
     try:
-        from models import SystemConfig
+        from models import SystemSetting
 
-        row = SystemConfig.query.filter_by(key=key).first()
+        row = SystemSetting.query.filter_by(key=key).first()
         if not row:
             return default
         return _truthy(row.value, default)
@@ -217,11 +217,57 @@ def run_governed_marketplace_import_refresh(store_id=None, source="governed_runt
 def _run_light_reconcile_cycle():
     global _last_light_reconcile
 
-    result = run_governed_marketplace_import_refresh(source="light_reconcile_15m")
-    _last_light_reconcile = datetime.utcnow()
-    _safe_log(f"15-minute light reconcile import refresh complete result={result}")
+    source = "light_reconcile_15m"
 
-    return result
+    order_import = None
+    try:
+        from services.governed_marketplace_order_import import (
+            run_governed_marketplace_order_import,
+        )
+
+        order_import = run_governed_marketplace_order_import(
+            source=f"{source}_order_import",
+        )
+
+    except Exception as exc:
+        _safe_error("15-minute marketplace order import failed", exc)
+        order_import = {
+            "success": False,
+            "error": str(exc),
+        }
+
+    order_stock_bridge = None
+    try:
+        from services.governed_order_stock_mutation import (
+            mutate_recent_marketplace_order_lines,
+        )
+
+        order_stock_bridge = mutate_recent_marketplace_order_lines(
+            limit=100,
+            source=f"{source}_order_stock_bridge",
+        )
+
+    except Exception as exc:
+        _safe_error("15-minute order stock bridge failed", exc)
+        order_stock_bridge = {
+            "success": False,
+            "error": str(exc),
+        }
+
+    _last_light_reconcile = datetime.utcnow()
+    _safe_log(
+        f"15-minute light reconcile order-only complete "
+        f"order_import={order_import} order_stock_bridge={order_stock_bridge}"
+    )
+
+    return {
+        "success": True,
+        "governed": True,
+        "source": source,
+        "marketplace_import_refresh_started": False,
+        "order_import": order_import,
+        "order_stock_bridge": order_stock_bridge,
+    }
 
 def _run_full_sync_cycle():
     global _last_full_sync
@@ -247,14 +293,14 @@ def _engine_loop(app):
                 now = datetime.utcnow()
 
                 if _last_light_reconcile is None or (now - _last_light_reconcile).total_seconds() >= LIGHT_RECONCILE_SECONDS:
-                    if _config_on("scheduler_enabled", False) and _config_on("reconcile_15m_enabled", False):
+                    if _config_on("scheduler_enabled", True) and _config_on("reconcile_15m_enabled", True):
                         _run_light_reconcile_cycle()
                     else:
                         _safe_log("15-minute reconcile skipped by fuse box")
                         _last_light_reconcile = now
 
                 if _last_full_sync is None or (now - _last_full_sync).total_seconds() >= FULL_SYNC_SECONDS:
-                    if _config_on("sync_enabled", False) and _config_on("sync_worker_enabled", False):
+                    if _config_on("sync_enabled", True) and _config_on("sync_worker_enabled", True):
                         _run_full_sync_cycle()
                     else:
                         _safe_log("8-hour full cycle skipped by fuse box")
