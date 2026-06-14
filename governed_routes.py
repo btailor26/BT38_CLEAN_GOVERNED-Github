@@ -3609,6 +3609,20 @@ def governed_disabled_action(action: str = ""):
         else:
             authority_stock_id = int(stock.id)
 
+        # Group 45 rule:
+        # every active grouped listing keeps its own warehouse row,
+        # but every warehouse row used by the group must also belong to the same group.
+        # This keeps FBA separate/read-only, keeps eBay/FBM separate/pushable,
+        # and prevents half-linked groups where a listing has group_id but its stock row does not.
+        for grouped_listing in (
+            db.session.query(MarketplaceListing)
+            .filter(MarketplaceListing.master_product_group_id == group.id)
+            .filter(MarketplaceListing.is_active == True)  # noqa: E712
+            .all()
+        ):
+            if getattr(grouped_listing, "warehouse_stock_id", None):
+                target_stock_ids.add(int(grouped_listing.warehouse_stock_id))
+
         group_stocks = (
             db.session.query(WarehouseStock)
             .filter(WarehouseStock.id.in_(list(target_stock_ids)))
@@ -3617,8 +3631,8 @@ def governed_disabled_action(action: str = ""):
 
         for group_stock in group_stocks:
             group_stock.master_product_group_id = group.id
-            group_stock.is_group_controlled = int(group_stock.id) == authority_stock_id
-            if group_stock.is_group_controlled and hasattr(group_stock, "group_controlled_at") and not group_stock.group_controlled_at:
+            group_stock.is_group_controlled = True
+            if hasattr(group_stock, "group_controlled_at") and not group_stock.group_controlled_at:
                 group_stock.group_controlled_at = now
             if hasattr(group_stock, "updated_at"):
                 group_stock.updated_at = now
