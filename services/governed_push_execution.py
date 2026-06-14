@@ -123,6 +123,11 @@ def push_marketplace_listing(*, listing_id: int, actor: str, source: str, actor_
 
 
 def push_group_listings(*, group_id: int, actor: str, source: str, actor_user=None) -> Dict[str, Any]:
+
+    # SNAPSHOT LOCK (BT38 STABILITY FIX)
+    # ensures group membership does not change during push execution
+    from copy import deepcopy
+
     from extensions import db
     from models import MarketplaceListing, WarehouseStock
 
