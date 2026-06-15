@@ -246,7 +246,7 @@
                             </thead>
                             <tbody>
                                 {% for product in warehouse_products %}
-                                {% set has_listings =  || '<small class="text-muted">No listings linked</small>'}</td>
+                                {% set has_listings = product.listings and product.listings|length > 0 %}</td>
                 <td>
                     <div class="btn-group btn-group-sm">
                         <button class="btn btn-outline-secondary" onclick="showDiagnostics(${product.id}, '${escapeHtml(product.sku)}')" title="Diagnostics">
