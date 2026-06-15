@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+
+{% block title %}Master Stock{% endblock %}
+
+{% block content %}
+
+<div class="bt38-enterprise-stock">
+
+  <!-- HEADER -->
+  <div class="bt38-stock-header">
+
+    <div>
+      <h1>Master Stock</h1>
+
+      <div class="bt38-subtitle">
+        Warehouse Truth
+      </div>
+
+      <p>
+        One page to manage your inventory, listings, stock operations and warehouse actions.
+      </p>
+    </div>
+
+    <div class="bt38-top-actions">
+      
+<button
+    type="button"
+    class="btn btn-primary"
+    id="governedWarehouseSyncBtn"
+>
+    Sync Now
+</button>
+
+    </div>
+
+  </div>
+
+  <!-- OPERATIONAL TABS -->
+  <div class="bt38-operational-tabs">
+
+    <button class="active">Master Stock</button>
+    <button>FBA Read Only</button>
+    <button>Group View</button>
+    <button>Listings</button>
+    <button>Orders</button>
+    <button>Stock Transfer</button>
+
+  </div>
+
+  <!-- FILTER BAR -->
+  <form method="get" action="/warehouse" class="bt38-filter-bar bt38-filter-bar-governed" id="bt38WarehouseSearchForm">
+    <div class="bt38-search-wrap">
+      <input
+        type="text"
+        name="q"
+        value="{{ search_query or '' }}"
+        placeholder="Search by SKU, Product, ASIN, FNSKU..."
+      >
+      <button type="submit" class="bt38-search-btn">Search</button>
+    </div>
+
+    <select name="marketplace" onchange="this.form.submit()">
+      <option value="all" {% if not marketplace_filter or marketplace_filter == 'all' %}selected{% endif %}>Marketplace</option>
+      <option value="amazon" {% if marketplace_filter == 'amazon' %}selected{% endif %}>Amazon</option>
+      <option value="ebay" {% if marketplace_filter == 'ebay' %}selected{% endif %}>eBay</option>
+      <option value="shopify" {% if marketplace_filter == 'shopify' %}selected{% endif %}>Shopify</option>
+      <option value="tiktok" {% if marketplace_filter == 'tiktok' %}selected{% endif %}>TikTok</option>
+    </select>
+
+    <select name="status" onchange="this.form.submit()">
+      <option value="all" {% if not status_filter or status_filter == 'all' %}selected{% endif %}>Status</option>
+      <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
+      <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Inactive</option>
+      <option value="blocked" {% if status_filter == 'blocked' %}selected{% endif %}>Blocked</option>
+    </select>
+
+    <select name="group" onchange="this.form.submit()">
+      <option value="all" {% if not group_filter or group_filter == 'all' %}selected{% endif %}>Group</option>
+      <option value="grouped" {% if group_filter == 'grouped' %}selected{% endif %}>Grouped</option>
+      <option value="ungrouped" {% if group_filter == 'ungrouped' %}selected{% endif %}>Ungrouped</option>
+    </select>
+
+    <select name="listing_status" onchange="this.form.submit()">
+      <option value="all" {% if not listing_status_filter or listing_status_filter == 'all' %}selected{% endif %}>Listing Status</option>
+      <option value="linked" {% if listing_status_filter == 'linked' %}selected{% endif %}>Linked</option>
+      <option value="unlinked" {% if listing_status_filter == 'unlinked' %}selected{% endif %}>Unlinked</option>
+    </select>
+
+    <input type="hidden" name="view" value="{{ active_view or 'all' }}">
+    <input type="hidden" name="per_page" value="{{ per_page or 15 }}">
+  </form>
+
+  <!-- KPI ROW -->
+  <div class="bt38-kpi-row">
+
+    <div class="bt38-kpi-card">
+      <span>Total SKUs</span>
+      <strong>{{ stats.total_skus if stats else 0 }}</strong>
+      <small>All Marketplaces</small>
+    </div>
+
+    <div class="bt38-kpi-card">
+      <span>Available Units</span>
+      <strong>{{ stats.total_available if stats else 0 }}</strong>
+      <small>Warehouse Available</small>
+    </div>
+
+    <div class="bt38-kpi-card">
+      <span>Low Stock</span>
+      <strong>{{ stats.low_stock_count if stats else 0 }}</strong>
+      <small>Needs Attention</small>
+    </div>
+
+    <div class="bt38-kpi-card">
+      <span>Warehouse Status</span>
+      <strong>Live</strong>
+      <small>Operational</small>
+    </div>
+
+    <div class="bt38-kpi-card">
+      <span>Listings</span>
+      <strong>1,156</strong>
+      <small>Across marketplaces</small>
+    </div>
+
+    <div class="bt38-kpi-card">
+      <span>Inventory Value</span>
+      <strong>£183k</strong>
+      <small>Estimated value</small>
+    </div>
+
+  </div>
+
+  <!-- TABLE -->
+  <div class="bt38-table-shell">
+
+    <div class="bt38-table-topbar">
+
+      <div class="bt38-table-count">
+        {{ warehouse_items.total if warehouse_items else 0 }} items
+      </div>
+
+      <div class="bt38-table-controls">
+
+        <button class="bt38-export-btn">
+          Export
+        </button>
+
+        <select>
+          <option>50</option>
+        </select>
+
+      </div>
+
+    </div>
+
+    <div class="bt38-table-scroll">
+
+      <table class="bt38-stock-table">
+
+        <thead>
+          <tr>
+            <th></th>
+            <th>SKU / FNSKU</th>
+            <th>Shipping Source</th><th>Group Source</th>
+            <th>Marketplace</th>
+            <th>Qty</th>
+            <th>Listing Status</th>
+            <th>Price</th>
+            <th>Warehouse</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+
+        <tbody>
+
+        {% for item in warehouse_items.items %}
+
+            <tr
+              data-item-id="{{ item.inventory_item_id or item.item_id or item.id }}"
+              data-stock-id="{{ item.id }}"
+              data-listing-id="{{ item.marketplace_listing_id if item.marketplace_listing_id else '' }}"
+              data-sku="{{ item.sku }}"
+              data-group-id="{{ item.master_product_group_id or "" }}"
+              data-platform="{{ item.platform or '' }}"
+              data-channel="{% if item.is_fba %}FBA{% elif item.is_fbm %}FBM{% else %}{{ item.platform or '' }}{% endif %}"
+              data-status="{{ item.listing_status or item.status or '' }}"
+              data-marketplace="{{ item.location or "" }}"
+            >
+
+            <td>
+              <input type="checkbox" class="bt38-row-select" onchange="bt38UpdateActionBar()">
+            </td>
+
+            <td>
+
+              <div class="bt38-product-row">
+
+                <div class="bt38-product-image">
+                  {% if item.image_url %}
+                    <img src="{{ item.image_url }}">
+                  {% else %}
+                    <div class="bt38-placeholder-img"></div>
+                  {% endif %}
+                </div>
+
+                <div>
+
+                  <div class="bt38-meta bt38-product-label">
+                    PRODUCT TITLE
+                  </div>
+
+                  <div class="bt38-product-title"
+                   ondblclick="window.location.href='/warehouse?q={{ item.sku|urlencode }}'">
+                    {{ item.product_name or item.title or item.group_title or item.sku or 'Untitled Product' }}
+                  </div>
+
+
+                  <div class="bt38-meta">
+                    SKU: {{ item.sku }}

@@ -327,7 +327,7 @@
                                                     {{ listing.external_sku }}
                                                 </small>
                                                 <button class="btn btn-link btn-sm p-0 ms-1 text-danger" 
-                                                        onclick="executeAction({{ listing.id }}, 'unlink')"
+                                                        onclick="unlinkListing({{ listing.id }}, '{{ listing.external_sku|e }}')"
                                                         title="Unlink">
                                                     <i data-feather="x" class="feather-sm"></i>
                                                 </button>
@@ -415,7 +415,7 @@
                                                                     <i data-feather="edit-2" class="feather-xs"></i>
                                                                 </a>
                                                                 <button class="btn btn-outline-danger" 
-                                                                        onclick="executeAction({{ listing.id }}, 'unlink')"
+                                                                        onclick="unlinkListing({{ listing.id }}, '{{ listing.external_sku|e }}')"
                                                                         title="Unlink">
                                                                     <i data-feather="x" class="feather-xs"></i>
                                                                 </button>
@@ -671,7 +671,7 @@
                 
                 <input type="hidden" id="adjustPushWarehouseId" value="">
             </div>
-                <button type="button" id="adjustPushBtn" onclick="executeGroupPush()" class="btn btn-primary">
+                <button type="button" id="adjustPushBtn" class="btn btn-primary">
                     <i data-feather="send" class="feather-sm me-1"></i>Push Now
                 </button>
             </div>
@@ -893,7 +893,7 @@ function renderWarehouseProducts(products) {
                             <span class="mx-1">|</span>
                             <span>ID: <code>${escapeHtml(externalIdText)}</code></span>
                             <button class="btn btn-link btn-sm p-0 ms-1 text-danger"
-                                    onclick="executeAction({{ listing.id }}, 'unlink')"
+                                    onclick="unlinkListing(${listing.id}, '${escapeJs(skuText)}', false, ${listing.master_product_group_id || 'null'}, ${listing.warehouse_stock_id || 'null'})"
                                     title="Unlink this marketplace listing from the warehouse/group">
                                 <i data-feather="x" class="feather-sm"></i>
                             </button>
@@ -1412,6 +1412,31 @@ function renderListingsInModal(listings, warehouseId, warehouseSku) {
     feather.replace();
 }
 
+function selectWarehouseForListing(listingId, listingSku, listingTitle, platform, storeName, externalId, fulfillment) {
+    currentListingId = listingId;
+    
+    // Find the listing in our data to get all details
+    const listing = allUnlinkedListings.find(l => l.id == listingId);
+    
+    document.getElementById('targetListingTitle').textContent = listing ? listing.title : listingTitle;
+    document.getElementById('targetListingSku').textContent = listing ? (listing.external_sku || '-') : listingSku;
+    document.getElementById('targetListingStore').textContent = listing ? listing.store_name : (storeName || '-');
+    document.getElementById('targetListingExternalId').textContent = listing ? (listing.external_listing_id || '-') : (externalId || '-');
+    
+    // Platform badge
+    const platformBadge = document.getElementById('targetListingPlatform');
+    const platformName = listing ? listing.platform : (platform || 'Unknown');
+    platformBadge.textContent = platformName;
+    platformBadge.className = 'badge ' + (platformName.toLowerCase() === 'ebay' ? 'bg-warning text-dark' : 'bg-primary');
+    
+    // Fulfillment badge
+    const fulfillmentBadge = document.getElementById('targetListingFulfillment');
+    const fulfillmentValue = listing ? listing.amazon_fulfillment_channel : fulfillment;
+    if (fulfillmentValue) {
+        fulfillmentBadge.style.display = '';
+        fulfillmentBadge.textContent = fulfillmentValue === 'AFN' ? 'FBA' : 'FBM';
+        fulfillmentBadge.className = 'badge ' + (fulfillmentValue === 'AFN' ? 'bg-info' : 'bg-secondary');
+    } else {
         fulfillmentBadge.style.display = 'none';
     }
     
@@ -1908,7 +1933,7 @@ function showUnlinkModal(warehouseId, warehouseSku) {
                     <code>${l.sku}</code>
                     <small class="text-muted ms-2">${l.title || ''}</small>
                 </div>
-                <button class="btn btn-sm btn-danger" onclick="executeAction({{ listing.id }}, 'unlink')">
+                <button class="btn btn-sm btn-danger" onclick="unlinkListing(${l.id}, '${l.sku}')">
                     <i data-feather="x" class="feather-sm"></i> Unlink
                 </button>
             </div>
@@ -2042,48 +2067,5 @@ document.addEventListener('DOMContentLoaded', function() {
     return originalFetch.apply(this, arguments);
   };
 })();
-</script>
-
-
-<script>
-    if (action === 'unlink') {
-        return unlinkListing(id);
-    }
-}
-</script>
-
-
-<script>
-            body: JSON.stringify({ id, action })
-        });
-    }
-
-    if (action === 'unlink') {
-        return fetch('/governed/groups/' + id + '/unlink', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'}
-        });
-    }
-}
-</script>
-
-
-<script>
-function executeAction(id, action) {
-    if (action === 'link') {
-        return fetch('/governed/product-linking/link-listing-to-warehouse', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ id, action })
-        });
-    }
-
-    if (action === 'unlink') {
-        return fetch('/governed/groups/' + id + '/unlink', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'}
-        });
-    }
-}
 </script>
 

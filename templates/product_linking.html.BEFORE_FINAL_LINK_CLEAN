@@ -327,7 +327,7 @@
                                                     {{ listing.external_sku }}
                                                 </small>
                                                 <button class="btn btn-link btn-sm p-0 ms-1 text-danger" 
-                                                        onclick="executeAction({{ listing.id }}, 'unlink')"
+                                                        onclick="executeAction(this.dataset.id, 'unlink')"
                                                         title="Unlink">
                                                     <i data-feather="x" class="feather-sm"></i>
                                                 </button>
@@ -415,7 +415,7 @@
                                                                     <i data-feather="edit-2" class="feather-xs"></i>
                                                                 </a>
                                                                 <button class="btn btn-outline-danger" 
-                                                                        onclick="executeAction({{ listing.id }}, 'unlink')"
+                                                                        onclick="executeAction(this.dataset.id, 'unlink')"
                                                                         title="Unlink">
                                                                     <i data-feather="x" class="feather-xs"></i>
                                                                 </button>
@@ -671,7 +671,7 @@
                 
                 <input type="hidden" id="adjustPushWarehouseId" value="">
             </div>
-                <button type="button" id="adjustPushBtn" onclick="executeGroupPush()" class="btn btn-primary">
+                <button type="button" id="adjustPushBtn" class="btn btn-primary">
                     <i data-feather="send" class="feather-sm me-1"></i>Push Now
                 </button>
             </div>
@@ -893,7 +893,7 @@ function renderWarehouseProducts(products) {
                             <span class="mx-1">|</span>
                             <span>ID: <code>${escapeHtml(externalIdText)}</code></span>
                             <button class="btn btn-link btn-sm p-0 ms-1 text-danger"
-                                    onclick="executeAction({{ listing.id }}, 'unlink')"
+                                    onclick="executeAction(this.dataset.id, 'unlink')"
                                     title="Unlink this marketplace listing from the warehouse/group">
                                 <i data-feather="x" class="feather-sm"></i>
                             </button>
@@ -1908,7 +1908,7 @@ function showUnlinkModal(warehouseId, warehouseSku) {
                     <code>${l.sku}</code>
                     <small class="text-muted ms-2">${l.title || ''}</small>
                 </div>
-                <button class="btn btn-sm btn-danger" onclick="executeAction({{ listing.id }}, 'unlink')">
+                <button class="btn btn-sm btn-danger" onclick="executeAction(this.dataset.id, 'unlink')">
                     <i data-feather="x" class="feather-sm"></i> Unlink
                 </button>
             </div>
@@ -2046,43 +2046,12 @@ document.addEventListener('DOMContentLoaded', function() {
 
 
 <script>
-    if (action === 'unlink') {
-        return unlinkListing(id);
-    }
-}
-</script>
-
-
-<script>
-            body: JSON.stringify({ id, action })
-        });
-    }
-
-    if (action === 'unlink') {
-        return fetch('/governed/groups/' + id + '/unlink', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'}
-        });
-    }
-}
-</script>
-
-
-<script>
 function executeAction(id, action) {
     if (action === 'link') {
-        return fetch('/governed/product-linking/link-listing-to-warehouse', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ id, action })
-        });
+        return linkListingToWarehouse(id);
     }
-
     if (action === 'unlink') {
-        return fetch('/governed/groups/' + id + '/unlink', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'}
-        });
+        return unlinkListing(id);
     }
 }
 </script>
