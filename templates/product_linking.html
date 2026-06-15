@@ -327,7 +327,7 @@
                                                     {{ listing.external_sku }}
                                                 </small>
                                                 <button class="btn btn-link btn-sm p-0 ms-1 text-danger" 
-                                                        onclick="executeAction({{ listing.id }}, 'unlink')"
+                                                        onclick="executeAction(${listing.id}, 'unlink')"
                                                         title="Unlink">
                                                     <i data-feather="x" class="feather-sm"></i>
                                                 </button>
@@ -415,7 +415,7 @@
                                                                     <i data-feather="edit-2" class="feather-xs"></i>
                                                                 </a>
                                                                 <button class="btn btn-outline-danger" 
-                                                                        onclick="executeAction({{ listing.id }}, 'unlink')"
+                                                                        onclick="executeAction(${listing.id}, 'unlink')"
                                                                         title="Unlink">
                                                                     <i data-feather="x" class="feather-xs"></i>
                                                                 </button>
@@ -893,7 +893,7 @@ function renderWarehouseProducts(products) {
                             <span class="mx-1">|</span>
                             <span>ID: <code>${escapeHtml(externalIdText)}</code></span>
                             <button class="btn btn-link btn-sm p-0 ms-1 text-danger"
-                                    onclick="executeAction({{ listing.id }}, 'unlink')"
+                                    onclick="executeAction(${listing.id}, 'unlink')"
                                     title="Unlink this marketplace listing from the warehouse/group">
                                 <i data-feather="x" class="feather-sm"></i>
                             </button>
@@ -1908,7 +1908,7 @@ function showUnlinkModal(warehouseId, warehouseSku) {
                     <code>${l.sku}</code>
                     <small class="text-muted ms-2">${l.title || ''}</small>
                 </div>
-                <button class="btn btn-sm btn-danger" onclick="executeAction({{ listing.id }}, 'unlink')">
+                <button class="btn btn-sm btn-danger" onclick="executeAction(${listing.id}, 'unlink')">
                     <i data-feather="x" class="feather-sm"></i> Unlink
                 </button>
             </div>
