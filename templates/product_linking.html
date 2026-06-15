@@ -862,44 +862,6 @@ function renderWarehouseProducts(products) {
             ? `<div class="small text-success mt-1">Group ID: ${product.master_product_group_id || 'auto'}</div>`
             : '';
         if (product.listings) {
-            product.listings.forEach(listing => {
-                const isPrimary = listing.is_primary;
-                const platformText = listing.platform || 'Unknown';
-                const platformLower = String(platformText).toLowerCase();
-                const platformBadge = platformLower.includes('amazon')
-                    ? 'bg-info'
-                    : (platformLower.includes('ebay') ? 'bg-warning text-dark' : 'bg-dark');
-                const titleText = listing.title || 'No title';
-                const skuText = listing.external_sku || listing.sku || '-';
-                const externalIdText = listing.external_listing_id || listing.external_id || listing.asin || '-';
-
-                listingsHtml += `
-                    <div class="d-block mb-2 p-2 border rounded ${isPrimary ? 'bg-success bg-opacity-25 border-success' : 'bg-light'}">
-                        <div class="d-flex align-items-center gap-1 mb-1">
-                            <span class="badge ${platformBadge}">
-                                ${platformLower.includes('amazon') ? '<i data-feather="lock" class="feather-xs me-1"></i>' : ''}
-                                ${isPrimary ? '<i data-feather="star" class="feather-xs me-1"></i>' : ''}
-                                ${escapeHtml(platformText)}
-                            </span>
-                            ${listing.push_status === 'read_only'
-                                ? '<span class="badge bg-secondary" title="' + escapeHtml(listing.push_status_reason || '') + '">FBA read-only</span>'
-                                : (listing.push_status === 'pushable'
-                                    ? '<span class="badge bg-success" title="' + escapeHtml(listing.push_status_reason || '') + '">Pushable</span>'
-                                    : '<span class="badge bg-light text-dark border" title="' + escapeHtml(listing.push_status_reason || '') + '">Not pushable</span>')}
-                        </div>
-                        <div class="small fw-semibold text-truncate" title="${escapeHtml(titleText)}">${escapeHtml(titleText)}</div>
-                        <div class="small text-muted d-flex flex-wrap align-items-center gap-1">
-                            <span>SKU: <code>${escapeHtml(skuText)}</code></span>
-                            <span class="mx-1">|</span>
-                            <span>ID: <code>${escapeHtml(externalIdText)}</code></span>
-                            <button class="btn btn-link btn-sm p-0 ms-1 text-danger"
-                                    onclick="executeAction(${listing.id}, 'unlink')"
-                                    title="Unlink this marketplace listing from the warehouse/group">
-                                <i data-feather="x" class="feather-sm"></i>
-                            </button>
-                        </div>
-                    </div>`;
-            });
         }
         
         const fbaListingForStock = (product.listings || []).find(listing => listing.is_fba && listing.fba_available_quantity !== null && listing.fba_available_quantity !== undefined);
@@ -1054,12 +1016,6 @@ function renderGroupMembersPreview(warehouseId) {
     }
 
     let html = '<div class="small"><strong>Will push warehouse truth to:</strong><ul class="mb-0 ps-3">';
-    product.listings.forEach(l => {
-        const platform = l.platform || 'Unknown';
-        const badge = platform.toLowerCase().includes('amazon') ? 'bg-warning text-dark' : 'bg-primary';
-        const pushable = l.is_pushable ? '' : ' <span class="text-muted">(not pushable)</span>';
-        html += `<li><span class="badge ${badge} me-1">${escapeHtml(platform)}</span> ${escapeHtml(l.sku || l.external_sku || l.external_id || '')} (${escapeHtml(l.store_name || '')})${pushable}</li>`;
-    });
     html += '</ul></div>';
     container.innerHTML = html;
 }
