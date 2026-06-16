@@ -541,9 +541,13 @@ def governed_groups_page():
 
 @governed_bp.get("/product-linking")
 def governed_product_linking_page():
+    # SAFE RUNTIME GUARANTEE (prevents 500 crash)
+    warehouse_items = None
+    stats = None
+
     return render_template(
         "product_linking.html",
-        warehouse_products=[],
+        warehouse_items=warehouse_items or [],
         unlinked_listings=[],
         unlinked_by_platform={},
         all_marketplace_listings=[],
