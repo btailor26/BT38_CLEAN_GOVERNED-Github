@@ -140,7 +140,7 @@ def push_group_listings(*, group_id: int, actor: str, source: str, actor_user=No
         row.id
         for row in (
             db.session.query(WarehouseStock)
-            .filter(WarehouseStock.master_product_group_id == group_id)
+            .filter(WarehouseStock.master_product_group_id == group_id  # PRIMARY SOURCE ONLY  # kept for backward compatibility)
             .filter(WarehouseStock.is_active == True)  # noqa: E712
             .all()
         )
