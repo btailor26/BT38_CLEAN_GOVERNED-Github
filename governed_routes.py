@@ -547,7 +547,7 @@ def governed_product_linking_page():
 
     return render_template(
         "product_linking.html",
-        warehouse_products=[],
+        warehouse_items=warehouse_items or [],
         unlinked_listings=[],
         unlinked_by_platform={},
         all_marketplace_listings=[],
