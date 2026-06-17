@@ -38,7 +38,9 @@ def push_marketplace_listing(*, listing_id: int, actor: str, source: str, actor_
         # Quantity authority:
         # never trust request-body quantity here.
         # Marketplace push quantity must be derived from the linked listing/warehouse policy.
-        push_quantity = int(listing.effective_quantity or 0)
+        # HARD RULE: warehouse is the only truth
+warehouse = listing.warehouse_stock
+push_quantity = int(getattr(warehouse, 'quantity', 0) or 0)
     except Exception:
         return _blocked("Unable to derive governed push quantity from warehouse/listing truth.", listing_id=listing_id)
 
