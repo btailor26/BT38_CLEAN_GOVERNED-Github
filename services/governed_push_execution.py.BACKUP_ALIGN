@@ -1,41 +1,4 @@
 
-
-# ==========================================================
-# BT38 GLOBAL BEHAVIOUR CONTRACT (NO DECISION AUTHORITY)
-# ==========================================================
-
-# WAREHOUSE = ONLY SOURCE OF TRUTH
-# - defines group_id
-# - defines FBM/FBA state
-# - defines stock quantity
-
-# WEBHOOK = EVENT RECEIVER ONLY
-# - accepts marketplace events
-# - does NOT classify FBM/FBA
-# - does NOT modify group logic
-
-# STOCK TRANSFER = MOVEMENT LAYER ONLY
-# - updates quantities
-# - does NOT assign business rules
-
-# LISTING REFRESH = READ ONLY SYNC
-# - mirrors marketplace state
-# - does NOT override warehouse
-
-# PUSH ENGINE = EXECUTOR ONLY
-# - executes push when instructed
-# - NEVER decides eligibility
-
-# UI = DISPLAY ONLY
-# - shows warehouse truth
-# - no calculations or overrides
-
-# RULE OF SYSTEM:
-# If a layer is not WAREHOUSE → it must NOT make decisions
-# ==========================================================
-
-
-
 # =========================
 # BT38 SINGLE PUSH AUTHORITY
 # =========================
