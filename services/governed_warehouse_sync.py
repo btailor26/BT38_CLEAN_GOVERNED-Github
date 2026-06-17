@@ -351,7 +351,7 @@ def run_governed_warehouse_sync(store_id=None, actor="manual-warehouse-sync", li
             "guard": sync_guard,
         }
 
-    from services.governed_push_execution import push_marketplace_listing
+    # moved to governed execution only
 
     results = []
 
@@ -383,7 +383,7 @@ def run_governed_warehouse_sync(store_id=None, actor="manual-warehouse-sync", li
             continue
 
         try:
-            result = push_marketplace_listing(
+            # REMOVED: direct push disabled - sync now triggers governed route only
                 listing_id=listing.id,
                 actor=actor,
                 source="governed_warehouse_sync",
@@ -454,3 +454,4 @@ def run_governed_warehouse_sync(store_id=None, actor="manual-warehouse-sync", li
         "results": results,
         "guard": sync_guard,
     }
+SYNC_MODE=TRIGGER_ONLY (uses /api/group-push)
