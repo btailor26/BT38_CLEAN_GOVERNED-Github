@@ -1,53 +1,4 @@
 
-
-# ==========================================================
-# BT38 GLOBAL BEHAVIOUR CONTRACT (NO DECISION AUTHORITY)
-# ==========================================================
-
-# WAREHOUSE = ONLY SOURCE OF TRUTH
-# - defines group_id
-# - defines FBM/FBA state
-# - defines stock quantity
-
-# WEBHOOK = EVENT RECEIVER ONLY
-# - accepts marketplace events
-# - does NOT classify FBM/FBA
-# - does NOT modify group logic
-
-# STOCK TRANSFER = MOVEMENT LAYER ONLY
-# - updates quantities
-# - does NOT assign business rules
-
-# LISTING REFRESH = READ ONLY SYNC
-# - mirrors marketplace state
-# - does NOT override warehouse
-
-# PUSH ENGINE = EXECUTOR ONLY
-# - executes push when instructed
-# - NEVER decides eligibility
-
-# UI = DISPLAY ONLY
-# - shows warehouse truth
-# - no calculations or overrides
-
-# RULE OF SYSTEM:
-# If a layer is not WAREHOUSE → it must NOT make decisions
-# ==========================================================
-
-
-
-# ===============================
-# PRODUCT LINKING SHORTCUT MODE
-# ===============================
-# RULE: Product linking is relationship only
-# NO push logic here
-# Push is a shortcut trigger only
-
-def product_linking_push_shortcut(listing):
-    return getattr(listing, "warehouse_stock_id", None) is not None
-
-
-
 # BT38 ALIGNMENT RULE: SINGLE PUSH AUTHORITY
 def bt38_push_fbm_only(listing, is_fba, is_fbm):
     # FBA = NEVER MUTATION TARGET
@@ -1063,6 +1014,7 @@ def governed_marketplace_webhook_intake(marketplace):
         "reason": reason,
         "system_log_id": row.id,
         "notification_result": _governed_json_safe(notification_result),
+        "message": "Webhook notification stored and routed through governed notification bridge when fuses allow it.",
     }), 200
 
 
@@ -1460,8 +1412,8 @@ def governed_warehouse_page():
         platform_lower = platform.lower()
         channel = (listing.normalized_amazon_fulfillment_channel or "").upper()
         is_amazon = "amazon" in platform_lower
-        product_linking_push_shortcut(listing)
-        product_linking_push_shortcut(listing)
+        is_fbm = is_amazon and channel in ("MFN", "FBM", "MERCHANT")
+        is_fba = is_amazon and not is_fbm
         location = f"{platform} {'FBA' if is_fba else 'FBM'}" if is_amazon else platform
 
         is_ebay_variation_child = bool(
@@ -1516,8 +1468,8 @@ def governed_warehouse_page():
             group_title=stock.group_title if stock else None,
             barcode=listing.fnsku or listing.barcode or (stock.barcode if stock else None),
             mcf_group_source=bool(is_fba),
-            product_linking_push_shortcut(listing)
-            product_linking_push_shortcut(listing)
+            is_fba=bool(is_fba),
+            is_fbm=bool(is_fbm),
             is_group_controlled=bool(stock.is_group_controlled) if stock else False,
             is_ebay_variation_child=is_ebay_variation_child,
             parent_item_id=getattr(listing, "parent_item_id", None),
@@ -1593,8 +1545,8 @@ def governed_warehouse_page():
                 group_title=stock.group_title,
                 barcode=stock.barcode,
                 mcf_group_source=False,
-                product_linking_push_shortcut(listing)
-                product_linking_push_shortcut(listing)
+                is_fba=False,
+                is_fbm=False,
                 is_group_controlled=bool(stock.is_group_controlled),
                 available_quantity=stock.sellable_quantity,
                 price=0,
@@ -1906,7 +1858,7 @@ def _patch_warehouse_phase1_ui(html: str, stats, search_query: str, active_view:
       if (state.is_fba) {{
         statusCell.textContent = 'FBA Locked';
         statusCell.title = state.reason || 'FBA read-only';
-      }} else if (product_linking_push_shortcut(listing)) {{
+      }} else if (state.is_pushable) {{
         statusCell.textContent = 'Governed Pushable';
         statusCell.title = state.reason || 'Governed pushable';
       }} else if (state.action_state === 'blocked') {{
@@ -1930,7 +1882,7 @@ def _patch_warehouse_phase1_ui(html: str, stats, search_query: str, active_view:
       if (state.is_fba) {{
         btn.title = 'FBA read-only';
         btn.setAttribute('aria-disabled', 'true');
-      }} else if (product_linking_push_shortcut(listing)) {{
+      }} else if (state.is_pushable) {{
         btn.title = 'Governed pushable receiver';
       }} else {{
         btn.title = state.reason || 'Not pushable';
@@ -2077,33 +2029,417 @@ def governed_amazon_inventory_hydration_manual_run():
 
 
 
-
 @governed_bp.get("/governed/product-linking/data")
 def governed_product_linking_data_compat():
-    from extensions import db
-    from models import WarehouseStock, MarketplaceListing
+    """Governed compatibility endpoint for old product-linking data calls.
 
-    warehouse_products = db.session.query(WarehouseStock).all()
-    listings = db.session.query(MarketplaceListing).all()
+    This keeps the frontend inside the governed namespace.
+    It is read-only and does not push, sync, repair, or mutate marketplace state.
+    """
+    from extensions import db
+    from models import WarehouseStock, MarketplaceListing, AmazonFBAInventory
+    from sqlalchemy import or_
+
+    search = (request.args.get("search") or request.args.get("q") or "").strip()
+    limit_raw = request.args.get("limit") or request.args.get("per_page") or 25
+    page_raw = request.args.get("page") or 1
+
+    try:
+        per_page = int(limit_raw)
+    except Exception:
+        per_page = 50
+
+    try:
+        page = int(page_raw)
+    except Exception:
+        page = 1
+
+    per_page = max(1, min(per_page, 100))
+    page = max(1, page)
+    offset = (page - 1) * per_page
+
+    stock_query = db.session.query(WarehouseStock).filter(
+        WarehouseStock.is_active == True,  # noqa: E712
+        WarehouseStock.is_deleted == False,  # noqa: E712
+    )
+
+    listing_query = db.session.query(MarketplaceListing).filter(
+        MarketplaceListing.is_active == True  # noqa: E712
+    )
+
+    if search:
+        like = f"%{search}%"
+
+        matching_listing_stock_ids = [
+            row[0]
+            for row in (
+                db.session.query(MarketplaceListing.warehouse_stock_id)
+                .filter(MarketplaceListing.is_active == True)  # noqa: E712
+                .filter(MarketplaceListing.warehouse_stock_id.isnot(None))
+                .filter(or_(
+                    MarketplaceListing.external_sku.ilike(like),
+                    MarketplaceListing.title.ilike(like),
+                    MarketplaceListing.external_listing_id.ilike(like),
+                    MarketplaceListing.asin.ilike(like),
+                    MarketplaceListing.fnsku.ilike(like),
+                    MarketplaceListing.barcode.ilike(like),
+                    MarketplaceListing.parent_item_id.ilike(like),
+                    MarketplaceListing.external_parent_id.ilike(like),
+                    MarketplaceListing.variation_sku_map.ilike(like),
+                ))
+                .distinct()
+                .all()
+            )
+            if row[0] is not None
+        ]
+
+        stock_search_clauses = [
+            WarehouseStock.sku.ilike(like),
+            WarehouseStock.product_name.ilike(like),
+            WarehouseStock.barcode.ilike(like),
+            WarehouseStock.group_title.ilike(like),
+        ]
+
+        if matching_listing_stock_ids:
+            stock_search_clauses.append(WarehouseStock.id.in_(matching_listing_stock_ids))
+
+        stock_query = stock_query.filter(or_(*stock_search_clauses))
+
+        listing_query = listing_query.filter(or_(
+            MarketplaceListing.external_sku.ilike(like),
+            MarketplaceListing.title.ilike(like),
+            MarketplaceListing.external_listing_id.ilike(like),
+            MarketplaceListing.asin.ilike(like),
+            MarketplaceListing.fnsku.ilike(like),
+            MarketplaceListing.barcode.ilike(like),
+            MarketplaceListing.parent_item_id.ilike(like),
+            MarketplaceListing.external_parent_id.ilike(like),
+            MarketplaceListing.variation_sku_map.ilike(like),
+        ))
+
+    total_stock = stock_query.count()
+    total_listings = listing_query.count()
+    total_pages_stock = max(1, (total_stock + per_page - 1) // per_page)
+
+    if page > total_pages_stock:
+        page = total_pages_stock
+        offset = (page - 1) * per_page
+
+    stock_rows = stock_query.order_by(WarehouseStock.id.desc()).offset(offset).limit(per_page).all()
+
+    # Product Linking groups must be shown as full relationships.
+    # If search finds one warehouse row in a group, include every active warehouse row
+    # in that same group before building listing_rows.
+    # This keeps FBA-led groups from appearing half-linked in the UI.
+    matched_group_ids = {
+        int(getattr(stock, "master_product_group_id"))
+        for stock in stock_rows
+        if getattr(stock, "master_product_group_id", None)
+    }
+
+    if matched_group_ids:
+        group_stock_rows = (
+            db.session.query(WarehouseStock)
+            .filter(WarehouseStock.is_active == True)  # noqa: E712
+            .filter(WarehouseStock.is_deleted == False)  # noqa: E712
+            .filter(WarehouseStock.master_product_group_id.in_(list(matched_group_ids)))
+            .all()
+        )
+
+        stock_by_id = {int(stock.id): stock for stock in stock_rows}
+        for stock in group_stock_rows:
+            stock_by_id[int(stock.id)] = stock
+        stock_rows = list(stock_by_id.values())
+
+        total_stock = max(total_stock, len(stock_rows))
+        total_pages_stock = max(1, (total_stock + per_page - 1) // per_page)
+
+    stock_ids_on_page = [stock.id for stock in stock_rows]
+    if stock_ids_on_page:
+        listing_rows = (
+            db.session.query(MarketplaceListing)
+            .filter(MarketplaceListing.is_active == True)  # noqa: E712
+            .filter(MarketplaceListing.warehouse_stock_id.in_(stock_ids_on_page))
+            .order_by(MarketplaceListing.id.desc())
+            .all()
+        )
+    else:
+        listing_rows = []
+
+    fba_qty_by_sku = {}
+    fba_qty_by_fnsku = {}
+
+    fba_skus = {
+        str(getattr(listing, "external_sku", "") or "").strip()
+        for listing in listing_rows
+        if bool(getattr(listing, "is_fba", False))
+        and str(getattr(listing, "external_sku", "") or "").strip()
+    }
+
+    fba_fnskus = {
+        str(getattr(listing, "fnsku", "") or "").strip()
+        for listing in listing_rows
+        if bool(getattr(listing, "is_fba", False))
+        and str(getattr(listing, "fnsku", "") or "").strip()
+    }
+
+    if fba_skus or fba_fnskus:
+        fba_rows = (
+            db.session.query(AmazonFBAInventory)
+            .filter(
+                or_(
+                    AmazonFBAInventory.seller_sku.in_(list(fba_skus) or ["__BT38_NO_SKU__"]),
+                    AmazonFBAInventory.fnsku.in_(list(fba_fnskus) or ["__BT38_NO_FNSKU__"]),
+                )
+            )
+            .all()
+        )
+
+        for row in fba_rows:
+            qty = int(getattr(row, "available_quantity", 0) or 0)
+            if getattr(row, "seller_sku", None):
+                fba_qty_by_sku[str(row.seller_sku).strip()] = qty
+            if getattr(row, "fnsku", None):
+                fba_qty_by_fnsku[str(row.fnsku).strip()] = qty
+
+    listings_by_stock = {}
+    unlinked_listings = []
+
+    for listing in listing_rows:
+        listing_is_fba = bool(getattr(listing, "is_fba", False))
+        listing_sku = str(getattr(listing, "external_sku", "") or "").strip()
+        listing_fnsku = str(getattr(listing, "fnsku", "") or "").strip()
+
+        fba_available_quantity = None
+        if listing_is_fba:
+            fba_available_quantity = fba_qty_by_sku.get(listing_sku)
+            if fba_available_quantity is None:
+                fba_available_quantity = fba_qty_by_fnsku.get(listing_fnsku)
+
+        listing_platform = listing.store.platform if listing.store else getattr(listing, "platform", "")
+        listing_channel = str(getattr(listing, "normalized_amazon_fulfillment_channel", None) or listing.amazon_fulfillment_channel or "").upper()
+        listing_is_amazon = "amazon" in str(listing_platform).lower()
+        listing_is_ebay = "ebay" in str(listing_platform).lower()
+        listing_is_fbm = listing_is_amazon and listing_channel in ("MFN", "FBM", "MERCHANT")
+
+        if listing_is_fba:
+            push_status = "read_only"
+            push_status_label = "FBA read-only"
+            push_status_reason = "Amazon controls FBA/AFN stock. Group push skips this listing."
+            listing_pushable = False
+        elif listing_is_fbm or listing_is_ebay:
+            push_status = "pushable"
+            push_status_label = "Pushable"
+            push_status_reason = "Seller-controlled marketplace stock can be updated from warehouse truth."
+            listing_pushable = True
+        else:
+            push_status = "not_pushable"
+            push_status_label = "Not pushable"
+            push_status_reason = "Listing is not eligible for governed marketplace push."
+            listing_pushable = False
+
+        listing_payload = {
+            "id": listing.id,
+            "external_sku": listing.external_sku,
+            "sku": listing.external_sku,
+            "title": listing.title,
+            "external_listing_id": listing.external_listing_id,
+            "external_id": listing.external_listing_id,
+            "asin": listing.asin,
+            "fnsku": listing.fnsku,
+            "warehouse_stock_id": listing.warehouse_stock_id,
+            "master_product_group_id": listing.master_product_group_id,
+            "store_id": listing.store_id,
+            "store_name": listing.store.name if listing.store else "",
+            "platform": listing_platform,
+            "amazon_fulfillment_channel": listing.amazon_fulfillment_channel,
+            "
+            "is_pushable": listing_pushable,
+            "push_status": push_status,
+            "push_status_label": push_status_label,
+            "push_status_reason": push_status_reason,
+            "effective_quantity": getattr(listing, "effective_quantity", 0),
+            "fba_available_quantity": fba_available_quantity,
+        }
+
+        if listing.warehouse_stock_id:
+            listings_by_stock.setdefault(listing.warehouse_stock_id, []).append(listing_payload)
+        else:
+            unlinked_listings.append(listing_payload)
+
+    # Product Linking display is one row per relationship group, not one row per
+    # warehouse stock. Multiple warehouse rows that share the same
+    # master_product_group_id must render as one Product Group with all linked listings.
+    grouped_stock_rows = {}
+    ungrouped_stock_rows = []
+
+    for stock in stock_rows:
+        stock_group_id = getattr(stock, "master_product_group_id", None)
+        if stock_group_id:
+            grouped_stock_rows.setdefault(int(stock_group_id), []).append(stock)
+        else:
+            ungrouped_stock_rows.append(stock)
+
+    display_stock_rows = []
+
+    # When search matches a marketplace listing that already belongs to a governed group,
+    # do not let an old ungrouped warehouse SKU shortcut row override the real relationship row.
+    # Example: Amazon SKU search may match an orphan warehouse row, while the live listing
+    # is actually attached to the grouped eBay/Amazon authority stock row.
+    if search and matching_listing_stock_ids and grouped_stock_rows:
+        grouped_stock_ids = {
+            int(stock.id)
+            for group_stocks in grouped_stock_rows.values()
+            for stock in group_stocks
+            if getattr(stock, "id", None) is not None
+        }
+
+        grouped_listing_skus = {
+            str(item.get("sku") or item.get("external_sku") or "").strip().lower()
+            for stock_id in grouped_stock_ids
+            for item in listings_by_stock.get(stock_id, [])
+            if str(item.get("sku") or item.get("external_sku") or "").strip()
+        }
+
+        def is_stale_orphan_stock(stock):
+            stock_sku = str(getattr(stock, "sku", "") or "").strip().lower()
+            if not stock_sku:
+                return False
+            if stock_sku not in grouped_listing_skus:
+                return False
+            if getattr(stock, "master_product_group_id", None):
+                return False
+            if listings_by_stock.get(stock.id):
+                return False
+            return True
+
+        ungrouped_stock_rows = [
+            stock for stock in ungrouped_stock_rows
+            if not is_stale_orphan_stock(stock)
+        ]
+
+    for group_id, group_stocks in grouped_stock_rows.items():
+        def stock_has_fba_listing(stock):
+            return any(
+                bool(item.get("is_fba")) or str(item.get("amazon_fulfillment_channel") or "").upper() in ("AFN", "FBA")
+                for item in listings_by_stock.get(stock.id, [])
+            )
+
+        def stock_linked_count(stock):
+            return len(listings_by_stock.get(stock.id, []))
+
+        # Prefer FBA authority row for FBA-led groups, otherwise prefer the row with listings.
+        authority_stock = sorted(
+            group_stocks,
+            key=lambda stock: (
+                0 if stock_has_fba_listing(stock) else 1,
+                -stock_linked_count(stock),
+                int(stock.id),
+            )
+        )[0]
+        display_stock_rows.append(authority_stock)
+
+        merged_linked = []
+        seen_listing_ids = set()
+        for group_stock in group_stocks:
+            for item in listings_by_stock.get(group_stock.id, []):
+                item_id = int(item.get("id")) if item.get("id") is not None else None
+                if item_id is not None and item_id in seen_listing_ids:
+                    continue
+                if item_id is not None:
+                    seen_listing_ids.add(item_id)
+                merged_linked.append(item)
+
+        listings_by_stock[authority_stock.id] = merged_linked
+
+    display_stock_rows.extend(ungrouped_stock_rows)
+
+    warehouse_products = []
+    for stock in display_stock_rows:
+        linked = listings_by_stock.get(stock.id, [])
+
+        platforms = sorted({str(item.get("platform") or "").strip() for item in linked if item.get("platform")})
+
+        is_fba_group = any(
+            bool(item.get("is_fba"))
+            or str(item.get("amazon_fulfillment_channel") or "").upper() in ("AFN", "FBA")
+            for item in linked
+        )
+
+        fba_authority_quantity = None
+        if is_fba_group:
+            for item in linked:
+                if item.get("fba_available_quantity") is not None:
+                    fba_authority_quantity = item.get("fba_available_quantity")
+                    break
+
+        display_quantity = (
+            fba_authority_quantity
+            if fba_authority_quantity is not None
+            else getattr(stock, "sellable_quantity", 0)
+        )
+
+        warehouse_products.append({
+            "id": stock.id,
+            "sku": stock.sku,
+            "name": stock.product_name,
+            "product_name": stock.product_name,
+            "group_name": stock.group_title or stock.product_name or stock.sku,
+            "barcode": stock.barcode,
+            "group_title": stock.group_title,
+            "master_product_group_id": stock.master_product_group_id,
+            "is_group_controlled": bool(getattr(stock, "is_group_controlled", False)),
+            "is_fba_group": is_fba_group,
+            "fba_authority_quantity": fba_authority_quantity,
+            "quantity": display_quantity,
+            "available_quantity": display_quantity,
+            "sellable_quantity": display_quantity,
+            "linked_count": len(linked),
+            "platforms": platforms,
+            "listings": linked,
+        })
+
+    unlinked_by_platform = {}
+    for item in unlinked_listings:
+        platform = item.get("platform") or "Unknown"
+        unlinked_by_platform.setdefault(platform, []).append(item)
 
     return jsonify({
-        "warehouse_products": [
-            {
-                "id": w.id,
-                "product_name": getattr(w, "product_name", ""),
-                "quantity": getattr(w, "quantity", 0),
-                "warehouse_stock_id": w.id
-            } for w in warehouse_products
-        ],
+        "success": True,
+        "ok": True,
+        "governed": True,
+        "read_only": True,
+        "truth_source": "WarehouseStock",
+        "mode": "grouping_index",
+        "search_term": search,
+        "page": page,
+        "per_page": per_page,
+        "total_stock": total_stock,
+        "total_listings": total_listings,
+        "total_pages": total_pages_stock,
+        "has_prev": page > 1,
+        "has_next": page < total_pages_stock,
+        "prev_page": max(1, page - 1),
+        "next_page": min(total_pages_stock, page + 1),
+        "warehouse_products": warehouse_products,
+        "unlinked_listings": unlinked_listings,
+        "unlinked_by_platform": unlinked_by_platform,
+        "all_marketplace_listings": [
+            item
+            for grouped in listings_by_stock.values()
+            for item in grouped
+        ] + unlinked_listings,
+        "all_stores": [],
+        "warehouse": warehouse_products,
         "listings": [
-            {
-                "id": l.id,
-                "title": getattr(l, "title", ""),
-                "warehouse_stock_id": getattr(l, "warehouse_stock_id", None)
-            } for l in listings
-        ],
-        "mode": "relationship_only"
+            item
+            for grouped in listings_by_stock.values()
+            for item in grouped
+        ] + unlinked_listings,
     })
+
+
+@governed_bp.get("/governed/product-linking/search-all-listings")
 def governed_product_linking_search_all_listings_compat():
     """Lightweight marketplace listing search for Product Linking modal.
 
@@ -2163,10 +2499,10 @@ def governed_product_linking_search_all_listings_compat():
         store = getattr(listing, "store", None)
         listing_platform = store.platform if store else getattr(listing, "platform", "")
         listing_channel = str(getattr(listing, "normalized_amazon_fulfillment_channel", None) or listing.amazon_fulfillment_channel or "").upper()
-        product_linking_push_shortcut(listing)
+        listing_is_fba = bool(getattr(listing, "is_fba", False))
         listing_is_amazon = "amazon" in str(listing_platform).lower()
         listing_is_ebay = "ebay" in str(listing_platform).lower()
-        product_linking_push_shortcut(listing)
+        listing_is_fbm = listing_is_amazon and listing_channel in ("MFN", "FBM", "MERCHANT")
 
         if listing_is_fba:
             push_status = "read_only"
@@ -2201,7 +2537,7 @@ def governed_product_linking_search_all_listings_compat():
             "amazon_fulfillment_channel": listing.amazon_fulfillment_channel,
             "fulfillment": listing.amazon_fulfillment_channel,
             "
-            "False  # REMOVED_DECISION_LAYER": bool(product_linking_push_shortcut(listing)),
+            "is_pushable": listing_pushable,
             "push_status": push_status,
             "push_status_label": push_status_label,
             "push_status_reason": push_status_reason,
@@ -2220,11 +2556,14 @@ def governed_product_linking_search_all_listings_compat():
     }), 200
 
 
+@governed_bp.get("/governed/product-linking/search-warehouse")
 def governed_product_linking_search_warehouse_compat():
     data_response = governed_product_linking_data_compat()
     return data_response
 
 
+@governed_bp.get("/governed/product-linking/diagnostics/<int:warehouse_id>")
+def governed_product_linking_diagnostics_compat(warehouse_id: int):
     """Safe governed diagnostic shell.
 
     Read-only. No repair, no sync, no push.
@@ -2258,9 +2597,11 @@ def governed_product_linking_search_warehouse_compat():
             }
             for l in linked
         ],
+        "message": "Governed diagnostics are read-only. Repair actions are blocked until explicitly governed.",
     })
 
 
+@governed_bp.post("/governed/product-linking/repair/<int:warehouse_id>")
 def governed_product_linking_repair_compat(warehouse_id: int):
     """Safe governed repair shell.
 
@@ -2287,7 +2628,7 @@ def governed_product_linking_bulk_action_compat():
         "ok": False,
         "governed": True,
         "bulk_blocked": True,
-        "mode": "linking_only",
+        "message": "Governed bulk product-linking action is not enabled yet.",
     }), 409
 
 
@@ -3015,6 +3356,7 @@ def governed_product_linking_link_listing_to_warehouse():
 @governed_bp.route("/governed-disabled", defaults={"action": ""}, methods=["GET", "POST"])
 @governed_bp.route("/governed-disabled/<path:action>", methods=["GET", "POST"])
 def governed_disabled_action(action: str = ""):
+    """Phase 2 governed bridge for old product-linking frontend calls.
 
     This is not a second execution authority.
     It only translates old frontend paths into governed product-linking/group behavior.
@@ -3038,6 +3380,7 @@ def governed_disabled_action(action: str = ""):
             "success": False,
             "ok": False,
             "governed": True,
+            "legacy_bridge": True,
             "execution_blocked": True,
             "action": action,
             "method": request.method,
@@ -3124,7 +3467,7 @@ def governed_disabled_action(action: str = ""):
             platform = (listing.store.platform if listing.store else listing.platform or "").strip()
             channel = (listing.normalized_amazon_fulfillment_channel or "").upper()
             is_amazon = "amazon" in platform.lower()
-            product_linking_push_shortcut(listing)
+            is_fba = is_amazon and channel not in ("MFN", "FBM", "MERCHANT")
             preview.append({
                 "listing_id": listing.id,
                 "sku": listing.external_sku,
@@ -3133,7 +3476,7 @@ def governed_disabled_action(action: str = ""):
                 "store_name": listing.store.name if listing.store else None,
                 "quantity": listing.effective_quantity,
                 "is_fba": bool(is_fba),
-                "pushable": bool(# REMOVED_LEGACY_LOGIC and product_linking_push_shortcut(listing)),
+                "pushable": bool((not is_fba) and listing.is_pushable),
             })
         return preview
 
@@ -3148,6 +3491,7 @@ def governed_disabled_action(action: str = ""):
             "success": True,
             "ok": True,
             "governed": True,
+            "legacy_bridge": True,
             "preview_only": True,
             "warehouse_stock_id": stock.id,
             "group_id": stock.master_product_group_id,
@@ -3366,10 +3710,12 @@ def governed_disabled_action(action: str = ""):
             "success": True,
             "ok": True,
             "governed": True,
+            "legacy_bridge": True,
             "listing_id": listing.id,
             "warehouse_stock_id": stock.id,
             "group_id": group.id,
             "archived_duplicate_shadow_rows": duplicate_shadow_count,
+            "message": "Listing linked through governed Phase 2 bridge. Same-SKU FBA shadow duplicates were archived.",
         }), 200
 
     if action == "unlink-listing" and request.method == "POST":
@@ -3437,6 +3783,7 @@ def governed_disabled_action(action: str = ""):
             "success": True,
             "ok": True,
             "governed": True,
+            "legacy_bridge": True,
             "listing_id": listing.id,
             "old_warehouse_stock_id": old_stock_id,
             "old_group_id": old_group_id,
@@ -3446,6 +3793,7 @@ def governed_disabled_action(action: str = ""):
             "warehouse_review_required": bool(old_stock_id and remaining_stock_members == 0),
             "group_review_required": bool(old_group_id and remaining_group_members <= 1),
             "warehouse_group_released": warehouse_group_released,
+            "message": "Listing unlinked through governed Phase 2 bridge. Empty warehouse group-control released when safe.",
         }), 200
 
     if action == "product-linking-link" and request.method == "POST":
@@ -3455,8 +3803,10 @@ def governed_disabled_action(action: str = ""):
             action_supported=False,
         )
 
+    return blocked("This legacy action is disabled until a governed bridge is approved.")
 
 
+@governed_bp.post("/governed/product-linking/merge-warehouse-group")
 def governed_product_linking_merge_warehouse_group():
     """Governed Product Linking merge.
 
@@ -3556,6 +3906,7 @@ def governed_product_linking_merge_warehouse_group():
 
 
 
+@governed_bp.post("/governed/product-linking/repair/reset-failures")
 def governed_product_linking_repair_reset_failures():
     from flask import jsonify
     return jsonify({
@@ -3568,6 +3919,7 @@ def governed_product_linking_repair_reset_failures():
     }), 409
 
 
+@governed_bp.post("/governed/product-linking/repair/rebuild-link")
 def governed_product_linking_repair_rebuild_link():
     from flask import jsonify
     return jsonify({
@@ -3580,6 +3932,7 @@ def governed_product_linking_repair_rebuild_link():
     }), 409
 
 
+@governed_bp.post("/governed/product-linking/repair/create-missing-sku")
 def governed_product_linking_repair_create_missing_sku():
     from flask import jsonify
     return jsonify({
@@ -3592,6 +3945,7 @@ def governed_product_linking_repair_create_missing_sku():
     }), 409
 
 
+@governed_bp.post("/governed/product-linking/repair/sync-now")
 def governed_product_linking_repair_sync_now():
     from flask import jsonify
     return jsonify({
@@ -3599,6 +3953,7 @@ def governed_product_linking_repair_sync_now():
         "ok": False,
         "governed": True,
         "execution_blocked": True,
+        "action": "sync-now",
         "message": "This governed repair action is disabled until approved."
     }), 409
 

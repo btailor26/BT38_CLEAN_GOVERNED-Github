@@ -1,41 +1,4 @@
 
-
-# ==========================================================
-# BT38 GLOBAL BEHAVIOUR CONTRACT (NO DECISION AUTHORITY)
-# ==========================================================
-
-# WAREHOUSE = ONLY SOURCE OF TRUTH
-# - defines group_id
-# - defines FBM/FBA state
-# - defines stock quantity
-
-# WEBHOOK = EVENT RECEIVER ONLY
-# - accepts marketplace events
-# - does NOT classify FBM/FBA
-# - does NOT modify group logic
-
-# STOCK TRANSFER = MOVEMENT LAYER ONLY
-# - updates quantities
-# - does NOT assign business rules
-
-# LISTING REFRESH = READ ONLY SYNC
-# - mirrors marketplace state
-# - does NOT override warehouse
-
-# PUSH ENGINE = EXECUTOR ONLY
-# - executes push when instructed
-# - NEVER decides eligibility
-
-# UI = DISPLAY ONLY
-# - shows warehouse truth
-# - no calculations or overrides
-
-# RULE OF SYSTEM:
-# If a layer is not WAREHOUSE → it must NOT make decisions
-# ==========================================================
-
-
-
 # =========================
 # BT38 SINGLE PUSH AUTHORITY
 # =========================
@@ -98,9 +61,7 @@ def push_marketplace_listing(*, listing_id: int, actor: str, source: str, actor_
         # Quantity authority:
         # never trust request-body quantity here.
         # Marketplace push quantity must be derived from the linked listing/warehouse policy.
-        # HARD RULE: warehouse is the only truth
-warehouse = listing.warehouse_stock
-push_quantity = int(getattr(warehouse, 'quantity', 0) or 0)
+        push_quantity = int(listing.effective_quantity or 0)
     except Exception:
         return _blocked("Unable to derive governed push quantity from warehouse/listing truth.", listing_id=listing_id)
 
