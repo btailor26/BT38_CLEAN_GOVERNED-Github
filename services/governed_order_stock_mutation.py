@@ -253,7 +253,7 @@ def mutate_warehouse_stock_from_order_line(line: Any, source: str = "governed_or
     group_reconcile_result = None
     if should_reconcile_group:
         try:
-            from services.governed_push_execution import push_group_listings
+            from services.governed_push_gateway import push_execution_gateway as push_group_listings
 
                 group_id=int(group_id),
                 actor="system_order_stock_mutation",
