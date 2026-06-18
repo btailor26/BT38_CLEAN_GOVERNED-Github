@@ -2025,7 +2025,7 @@ def governed_product_linking_data_compat():
     from models import WarehouseStock, MarketplaceListing, AmazonFBAInventory
     from sqlalchemy import or_
 
-    search = (request.args.get("search") or request.args.get("q") or "").strip()
+    search = (request.args.get("search") or request.args.get("q") or "").lstrip("+").strip()
     limit_raw = request.args.get("limit") or request.args.get("per_page") or 25
     page_raw = request.args.get("page") or 1
 
@@ -2434,7 +2434,7 @@ def governed_product_linking_search_all_listings_compat():
     from models import MarketplaceListing
     from sqlalchemy import or_
 
-    search = (request.args.get("search") or request.args.get("q") or "").strip()
+    search = (request.args.get("search") or request.args.get("q") or "").lstrip("+").strip()
     exclude_warehouse_raw = request.args.get("exclude_warehouse")
     limit_raw = request.args.get("limit") or 20
 
