@@ -351,7 +351,7 @@ def run_governed_warehouse_sync(store_id=None, actor="manual-warehouse-sync", li
             "guard": sync_guard,
         }
 
-    from services.governed_push_gateway import push_execution_gateway as push_marketplace_listing
+    from services.governed_push_gateway import push_execution_gateway_DISABLED as push_marketplace_listing
 
     results = []
 

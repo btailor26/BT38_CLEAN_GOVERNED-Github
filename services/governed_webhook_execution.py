@@ -123,7 +123,7 @@ def process_marketplace_notification(*, marketplace: str, payload: dict, actor: 
                 group_context=group_context,
             )
 
-        push_result = push_execution_gateway(push_group_listings, 
+        push_result = push_execution_gateway_DISABLED(push_group_listings, 
             group_id=int(group_id),
             actor=actor,
             source=f"webhook_{marketplace}_group_notification",
