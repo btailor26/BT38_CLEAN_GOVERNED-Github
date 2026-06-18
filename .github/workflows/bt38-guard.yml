@@ -1,0 +1,42 @@
+name: BT38 Push Guard
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python Syntax Check
+        run: |
+          python -m py_compile $(git ls-files "*.py")
+
+      - name: Block Direct Push Calls
+        run: |
+          if grep -R "push_marketplace_listing(" services/; then
+            echo "❌ DIRECT PUSH DETECTED - BLOCKED"
+            exit 1
+          fi
+
+          if grep -R "push_group_listings(" services/; then
+            echo "❌ DIRECT GROUP PUSH DETECTED - BLOCKED"
+            exit 1
+          fi
+
+      - name: Ensure Gateway Exists
+        run: |
+          test -f services/governed_push_gateway.py
+
+      - name: Block Gateway Bypass
+        run: |
+          if grep -R "push_marketplace_listing(" services/governed_push_execution.py; then
+            echo "❌ BYPASS DETECTED IN EXECUTION LAYER"
+            exit 1
+          fi
+
+      - name: Success
+        run: echo "BT38 PUSH SYSTEM VALID"
