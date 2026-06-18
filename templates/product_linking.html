@@ -755,7 +755,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" id="adjustPushBtn" class="btn btn-primary">
+                <button type="button" id="adjustPushBtn_DISABLED" class="btn btn-primary">
                     <i data-feather="send" class="feather-sm me-1"></i>Push Now
                 </button>
             </div>
@@ -1099,7 +1099,7 @@ document.addEventListener('click', function(e) {
     const btn = e.target && e.target.closest ? e.target.closest('#adjustPushBtn') : null;
     if (!btn) return;
     e.preventDefault();
-    executeGroupPush();
+    executeGroupPush_DISABLED();
 });
 
 // ==========================================
@@ -1160,7 +1160,7 @@ function renderGroupMembersPreview(warehouseId) {
     container.innerHTML = html;
 }
 
-async function executeGroupPush() {
+async function executeGroupPush_DISABLED() {
     const warehouseId = document.getElementById('adjustPushWarehouseId').value;
     const groupId = document.getElementById('adjustPushGroupId') ? document.getElementById('adjustPushGroupId').value : '';
     const qty = parseInt(document.getElementById('adjustPushQuantity').value, 10);
