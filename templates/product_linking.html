@@ -1198,6 +1198,18 @@ async function executeGroupPush() {
         }
 
         const data = quantityData;
+        
+        // FINAL PUSH COMPLETION STEP (GOVERNED)
+        if (quantityData && quantityData.success) {
+            await fetch(`/governed/actions/listings/${groupId}/push`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    warehouse_stock_id: parseInt(warehouseId),
+                    source: "product_linking_button"
+                })
+            });
+        }
 
         if (data.success || data.ok) {
             bootstrap.Modal.getInstance(document.getElementById('adjustPushModal')).hide();
