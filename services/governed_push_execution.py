@@ -16,7 +16,7 @@ from datetime import datetime
 from typing import Any, Dict, List
 
 
-def push_marketplace_listing(*, listing_id: int, actor: str, source: str, actor_user=None) -> Dict[str, Any]:
+def push_execution_gateway(push_marketplace_listing, *, listing_id: int, actor: str, source: str, actor_user=None) -> Dict[str, Any]:
     from extensions import db
     from governed_execution import AMAZON_FBM_LIVE_APPROVAL_TYPE, submit_governed_marketplace_action
     from models import MarketplaceListing, SyncLog
@@ -184,7 +184,7 @@ def push_group_listings(*, group_id: int, actor: str, source: str, actor_user=No
         listings = []
 
     results: List[Dict[str, Any]] = [
-        push_marketplace_listing(
+        push_execution_gateway(push_marketplace_listing, 
             listing_id=listing.id,
             actor=actor,
             source=source,

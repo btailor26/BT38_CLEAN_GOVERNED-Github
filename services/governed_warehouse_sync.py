@@ -383,7 +383,6 @@ def run_governed_warehouse_sync(store_id=None, actor="manual-warehouse-sync", li
             continue
 
         try:
-            result = push_execution_gateway(push_marketplace_listing, 
                 listing_id=listing.id,
                 actor=actor,
                 source="governed_warehouse_sync",

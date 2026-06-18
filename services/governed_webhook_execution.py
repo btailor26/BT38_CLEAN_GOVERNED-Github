@@ -151,7 +151,6 @@ def process_marketplace_notification(*, marketplace: str, payload: dict, actor: 
             push_result=push_result,
         )
 
-    push_result = push_execution_gateway(push_marketplace_listing, 
         listing_id=listing.id,
         actor=actor,
         source=f"webhook_{marketplace}_warehouse_notification",
