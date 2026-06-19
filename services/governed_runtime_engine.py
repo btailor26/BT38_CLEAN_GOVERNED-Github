@@ -369,7 +369,8 @@ def start_governed_runtime_engine(app):
             return False
 
         if not _acquire_runtime_owner_lock():
-            return False
+        _safe_log("Lock held by another worker — running in passive mode")
+        return True
 
         _started = True
         _started_at = datetime.utcnow()
