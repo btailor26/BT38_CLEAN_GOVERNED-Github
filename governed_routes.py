@@ -2256,7 +2256,8 @@ def governed_product_linking_data_compat():
     # warehouse stock. Multiple warehouse rows that share the same
     # master_product_group_id must render as one Product Group with all linked listings.
     grouped_stock_rows = {}
-    ungrouped_stock_rows = []
+    \1
+ungrouped_stock_rows = []  # LOCKED: prevent re-materialisation
 
     for stock in stock_rows:
         stock_group_id = getattr(stock, "master_product_group_id", None)
