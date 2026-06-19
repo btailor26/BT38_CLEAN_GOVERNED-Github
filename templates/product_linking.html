@@ -2219,5 +2219,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
 <script>
 </script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const btn = document.getElementById("adjustPushBtn");
+    if (!btn) return;
+    btn.onclick = function (e) {
+        e.preventDefault();
+        executeGroupPush();
+    };
+});
+</script>
 </script>
 
