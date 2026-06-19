@@ -368,9 +368,11 @@ def start_governed_runtime_engine(app):
             _safe_log("ENABLE_GOVERNED_RUNTIME_ENGINE is OFF")
             return False
 
-        if not _acquire_runtime_owner_lock():
-        _safe_log("Lock held by another worker — running in passive mode")
-        return True
+        
+lock_acquired = _acquire_runtime_owner_lock()
+
+    if not lock_acquired:
+        _safe_log("Lock held by another worker — continuing in shared mode")
 
         _started = True
         _started_at = datetime.utcnow()
