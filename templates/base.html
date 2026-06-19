@@ -210,15 +210,8 @@
     );
   }
 
-  window.fetch = function(input, init){
-    const url = (typeof input === "string") ? input : (input?.url || "");
-    const method = (init?.method || "GET").toUpperCase();
+  /* FETCH OVERRIDE DISABLED - GOVERNED FLOW HANDLED BY JS ONLY */
 
-    // KEEP SAFE PASS-THROUGH FOR ALL GOVERNED ROUTES (NO INTERCEPTS)
-    if (url.startsWith("/governed/")) return originalFetch(input, init);
-
-    return originalFetch(input, init);
-  }
     if (url.startsWith("/governed/")) return originalFetch(input, init);
 
     const listingPush = url.match(/^\/api\/listings\/(\d+)\/push$/);
