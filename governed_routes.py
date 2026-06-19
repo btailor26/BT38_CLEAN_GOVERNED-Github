@@ -2338,16 +2338,16 @@ def governed_product_linking_data_compat():
         listings_by_stock[authority_stock.id] = merged_linked
 
     ungrouped_stock_rows = [
-    stock for stock in ungrouped_stock_rows
-    if not any(
-        str(getattr(stock, "sku", "") or "").strip().lower()
-        == str(item.get("sku") or item.get("external_sku") or "").strip().lower()
-        for authority_stock in display_stock_rows
-        for item in listings_by_stock.get(authority_stock.id, [])
-    )
-]
+        stock for stock in ungrouped_stock_rows
+        if not any(
+            str(getattr(stock, "sku", "") or "").strip().lower()
+            == str(item.get("sku") or item.get("external_sku") or "").strip().lower()
+            for authority_stock in display_stock_rows
+            for item in listings_by_stock.get(authority_stock.id, [])
+        )
+    ]
 
-display_stock_rows.extend(ungrouped_stock_rows)
+    display_stock_rows.extend(ungrouped_stock_rows)
 
     warehouse_products = []
     for stock in display_stock_rows:
