@@ -751,7 +751,8 @@
                     <small class="text-muted">Loading group members...</small>
                 </div>
                 
-                <input type="hidden" id="adjustPushWarehouseId" value="">
+                
+>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -1095,30 +1096,11 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
-document.addEventListener('click', function(e) {
-    const btn = e.target && e.target.closest ? e.target.closest('#adjustPushBtn') : null;
-    if (!btn || btn.disabled) return;
-    e.preventDefault();
-    executeGroupPush();
-});
-
 // ==========================================
 // ADJUST & PUSH - Main Control Center
 // ==========================================
 
-function showAdjustPushModal(warehouseId, groupId, sku, name, currentQty, isFbaGroup=false) {
-    adjustPushWarehouseId = warehouseId;
-    adjustPushGroupId = groupId || null;
-
-    document.getElementById('adjustPushSku').textContent = sku;
-    document.getElementById('adjustPushName').textContent = name || '';
-    const qtyInput = document.getElementById('adjustPushQuantity');
-    qtyInput.value = currentQty;
-
-    if (isFbaGroup) {
-        qtyInput.setAttribute('readonly', 'readonly');
-        qtyInput.setAttribute('title', 'FBA quantity is read-only. Group push will only update non-FBA marketplaces.');
-    } else {
+else {
         qtyInput.removeAttribute('readonly');
         qtyInput.removeAttribute('title');
     }
@@ -1158,6 +1140,22 @@ function renderGroupMembersPreview(warehouseId) {
     });
     html += '</ul></div>';
     container.innerHTML = html;
+}
+
+}
+});
+
+}
+});
+
+function showAdjustPushModal(warehouseId, groupId, sku, name, currentQty, isFbaGroup=false) {
+    adjustPushWarehouseId = warehouseId;
+    
+
+    document.getElementById("adjustPushWarehouseId").value = warehouseId;
+
+    const groupField = document.getElementById("adjustPushGroupId");
+    if (groupField) groupField.value = groupId || "";
 }
 
 async function executeGroupPush() {
@@ -2218,5 +2216,8 @@ document.addEventListener('DOMContentLoaded', function() {
     return originalFetch.apply(this, arguments);
   };
 })();
+
+<script>
+</script>
 </script>
 
