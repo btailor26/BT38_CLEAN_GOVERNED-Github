@@ -104,7 +104,7 @@
     if (!listingId || listingId === '0') {
       return Promise.reject(new Error('Missing marketplace listing id for ' + (sku || 'this row') + '.'));
     }
-    return postJson('/governed/actions/warehouse/propagate-from-ui', {}, 'warehouse-single-push-shortcut');
+    return postJson('/governed/groups//propagate-quantity', {}, 'warehouse-single-push-shortcut');
   }
 
   function saveGovernedQuantity(row, quantity) {
