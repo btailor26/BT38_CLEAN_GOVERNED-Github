@@ -38,9 +38,7 @@ def push_marketplace_listing(*, listing_id: int, actor: str, source: str, actor_
         # Quantity authority:
         # never trust request-body quantity here.
         # Marketplace push quantity must be derived from the linked listing/warehouse policy.
-        # HARD RULE: warehouse is the only truth
-warehouse = listing.warehouse_stock
-push_quantity = int(getattr(warehouse, 'quantity', 0) or 0)
+        push_quantity = int(listing.effective_quantity or 0)
     except Exception:
         return _blocked("Unable to derive governed push quantity from warehouse/listing truth.", listing_id=listing_id)
 
@@ -125,11 +123,6 @@ push_quantity = int(getattr(warehouse, 'quantity', 0) or 0)
 
 
 def push_group_listings(*, group_id: int, actor: str, source: str, actor_user=None) -> Dict[str, Any]:
-
-    # SNAPSHOT LOCK (BT38 STABILITY FIX)
-    # ensures group membership does not change during push execution
-    from copy import deepcopy
-
     from extensions import db
     from models import MarketplaceListing, WarehouseStock
 
@@ -152,7 +145,7 @@ def push_group_listings(*, group_id: int, actor: str, source: str, actor_user=No
         row.id
         for row in (
             db.session.query(MarketplaceListing)
-            .filter(MarketplaceListing.warehouse_stock_id.in_(warehouse_ids))
+            .filter(MarketplaceListing.master_product_group_id == group_id)
             .filter(MarketplaceListing.is_active == True)  # noqa: E712
             .all()
         )
@@ -197,64 +190,12 @@ def push_group_listings(*, group_id: int, actor: str, source: str, actor_user=No
             source=source,
             actor_user=actor_user,
         )
-        
-    results: List[Dict[str, Any]] = []
-    skipped_results: List[Dict[str, Any]] = []
+        for listing in listings
+    ]
 
-    for listing in listings:
-
-        # SINGLE AUTHORITY RULE (GROUP 45 STANDARD)
-        is_fba = (
-            bool(getattr(listing, "is_fba", False)) or
-            str(getattr(listing, "amazon_fulfillment_channel", "")).upper() in {"FBA", "AFN"}
-        )
-
-        # FBA NEVER ENTERS PUSH PIPELINE
-        if is_fba:
-            skipped_results.append({
-                "success": True,
-                "ok": True,
-                "skipped": True,
-                "skip_reason": "group45_fba_read_only",
-                "listing_id": listing.id,
-                "sku": getattr(listing, "external_sku", None),
-                "warehouse_stock_id": getattr(listing, "warehouse_stock_id", None),
-                "is_fba": True,
-            })
-            continue
-
-        # ONLY NON-FBA PUSH PATH
-        result = push_marketplace_listing(
-            listing_id=listing.id,
-            actor=actor,
-            source=source,
-            actor_user=actor_user,
-        )
-
-        results.append(result)
-
-    ok_count = sum(1 for r in results if r.get("ok") or r.get("success"))
-    skipped_count = len(skipped_results)
-    pushable_count = len(results)
+    ok_count = sum(1 for item in results if item.get("ok") or item.get("success"))
 
     return {
-        "success": pushable_count > 0 and ok_count == pushable_count,
-        "ok": pushable_count > 0 and ok_count == pushable_count,
-        "governed": True,
-        "group_id": group_id,
-
-        # GROUP 45 AUTHORITY METRICS
-        "push_targets": pushable_count,
-        "skipped": skipped_count,
-        "ok_count": ok_count,
-
-        "results": results + skipped_results,
-
-        # HARD GUARANTEE FLAG
-        "group45_single_path": True,
-        "fba_never_pushed": True,
-    }
-return {
         "success": ok_count == len(results) and bool(results),
         "ok": ok_count == len(results) and bool(results),
         "governed": True,
