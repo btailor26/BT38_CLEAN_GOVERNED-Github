@@ -541,23 +541,19 @@ def governed_groups_page():
 
 @governed_bp.get("/product-linking")
 def governed_product_linking_page():
-    # SAFE RUNTIME GUARANTEE (prevents 500 crash)
-    warehouse_items = None
-    stats = None
-
-    return render_template(
-        "product_linking.html",
-        warehouse_items=warehouse_items or [],
-        unlinked_listings=[],
-        unlinked_by_platform={},
-        all_marketplace_listings=[],
-        all_stores=[],
-        current_search="",
-        current_platform="all",
-        current_store="all",
-        current_show_linked="all",
-        async_load=True
-    )
+    context = _build_warehouse_items_context()
+    context.update({
+        "unlinked_listings": [],
+        "unlinked_by_platform": {},
+        "all_marketplace_listings": [],
+        "all_stores": [],
+        "current_search": context["search_query"],
+        "current_platform": context["marketplace_filter"] or "all",
+        "current_store": "all",
+        "current_show_linked": context["listing_status_filter"] or "all",
+        "async_load": True,
+    })
+    return render_template("product_linking.html", **context)
 
 
 @governed_bp.get("/inventory")
@@ -1279,17 +1275,8 @@ def shutdown_proof_status():
     })
 
 
-@governed_bp.get("/warehouse")
-@login_required
-def governed_warehouse_page():
-    """Governed Master Stock UI.
-
-    Speed-safe route:
-    - no marketplace execution
-    - no old routes
-    - eager-loads relationships to avoid N+1 queries
-    - limits initial render size
-    """
+def _build_warehouse_items_context():
+    """Build the governed warehouse data feed shared by /warehouse and /product-linking."""
     from extensions import db
     from models import MarketplaceListing, WarehouseStock, Store, AmazonFBAInventory
     from sqlalchemy import or_
@@ -1609,21 +1596,41 @@ def governed_warehouse_page():
         next_page=min(total_pages, page + 1),
     )
 
-    html = render_template(
-        "warehouse.html",
-        warehouse_items=warehouse_items,
-        stats=stats,
-        search_query=q,
-        active_view=view,
-        per_page=row_limit,
-        page=page,
-        pagination=pagination,
-        marketplace_filter=marketplace_filter,
-        status_filter=status_filter,
-        group_filter=group_filter,
-        listing_status_filter=listing_status_filter,
+    return {
+        "warehouse_items": warehouse_items,
+        "stats": stats,
+        "search_query": q,
+        "active_view": view,
+        "per_page": row_limit,
+        "page": page,
+        "pagination": pagination,
+        "marketplace_filter": marketplace_filter,
+        "status_filter": status_filter,
+        "group_filter": group_filter,
+        "listing_status_filter": listing_status_filter,
+    }
+
+
+@governed_bp.get("/warehouse")
+@login_required
+def governed_warehouse_page():
+    """Governed Master Stock UI.
+
+    Speed-safe route:
+    - no marketplace execution
+    - no old routes
+    - eager-loads relationships to avoid N+1 queries
+    - limits initial render size
+    """
+    context = _build_warehouse_items_context()
+
+    html = render_template("warehouse.html", **context)
+    return _patch_warehouse_phase1_ui(
+        html,
+        context["stats"],
+        context["search_query"],
+        context["active_view"],
     )
-    return _patch_warehouse_phase1_ui(html, stats, q, view)
 
 
 @governed_bp.post("/governed/actions/sku/dry-run")
