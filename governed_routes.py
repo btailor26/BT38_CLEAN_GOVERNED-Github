@@ -39,31 +39,6 @@ governed_bp = Blueprint("governed", __name__)
 # =========================================================
 # BT38 SAFE RECOVERY: warehouse context builder
 # =========================================================
-def _build_warehouse_items_context():
-    from types import SimpleNamespace
-    from models import WarehouseStock
-
-    # SINGLE SOURCE OF TRUTH: warehouse stock
-    rows = (
-        WarehouseStock.query
-        .filter(WarehouseStock.is_active == True)
-        .filter(WarehouseStock.is_deleted == False)
-        .order_by(WarehouseStock.id.desc())
-        .all()
-    )
-
-    warehouse_items = SimpleNamespace(
-        items=rows,
-        total=len(rows),
-        visible=len(rows)
-    )
-
-    return {
-        "warehouse_items": warehouse_items,
-        "search_query": "",
-        "marketplace_filter": None,
-        "listing_status_filter": None
-    }
 
 
 @governed_bp.route("/logout")
@@ -1430,7 +1405,7 @@ def shutdown_proof_status():
     })
 
 
-# FIXED_INVALID_DEF_REMOVED
+def _build_warehouse_items_context():
     """Build the governed warehouse data feed shared by /warehouse and /product-linking."""
     from extensions import db
     from models import MarketplaceListing, WarehouseStock, Store, AmazonFBAInventory
