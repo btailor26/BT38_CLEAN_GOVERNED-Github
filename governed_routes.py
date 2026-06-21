@@ -539,9 +539,113 @@ def governed_groups_page():
     return render_template("groups.html")
 
 
+def _collapse_product_linking_group_rows(context):
+    """Product Linking display only.
+
+    Shows grouped products as one source row with child marketplace members underneath.
+    No database changes. No relinking. No push engine changes. Warehouse page is unchanged.
+    """
+    warehouse_items = context.get("warehouse_items")
+    rows = list(getattr(warehouse_items, "items", []) or [])
+
+    collapsed = []
+    seen_group_ids = set()
+
+    def member_score(member, authority_stock_sku):
+        sku = str(member.get("sku") or "").strip()
+        platform = str(member.get("platform") or "").lower()
+        stock_sku = str(authority_stock_sku or "").strip()
+
+        # FBA always stays top because FBA is the stock/quantity authority.
+        if member.get("is_fba"):
+            return 100
+
+        # Stock transferred from FBA but now FBM keeps the FBA-prefixed Amazon source row.
+        if "amazon" in platform and sku.upper().startswith("FBA-"):
+            return 90
+
+        # For normal FBM/eBay groups, the marketplace SKU matching warehouse stock is the source row.
+        if stock_sku and sku == stock_sku:
+            return 80
+
+        return 10
+
+    def select_source_member(row, linked):
+        authority_stock_sku = getattr(row, "authority_stock_sku", None)
+        if not linked:
+            return None
+
+        return sorted(
+            linked,
+            key=lambda item: (
+                member_score(item, authority_stock_sku),
+                int(item.get("listing_id") or 0),
+            ),
+            reverse=True,
+        )[0]
+
+    for row in rows:
+        group_id = getattr(row, "master_product_group_id", None)
+        linked = list(getattr(row, "linked_group_listings", []) or [])
+
+        if group_id and len(linked) > 1:
+            key = int(group_id)
+            if key in seen_group_ids:
+                continue
+
+            seen_group_ids.add(key)
+            source = select_source_member(row, linked)
+
+            if source:
+                row.marketplace_listing_id = source.get("listing_id")
+                row.sku = source.get("sku") or row.sku
+                row.external_sku = source.get("sku") or getattr(row, "external_sku", None)
+                row.title = source.get("title") or getattr(row, "title", None)
+                row.product_name = source.get("title") or getattr(row, "product_name", None)
+                row.store_name = source.get("store_name") or getattr(row, "store_name", None)
+                row.platform = source.get("platform") or getattr(row, "platform", None)
+                row.external_listing_id = source.get("external_listing_id")
+                row.fnsku = source.get("fnsku")
+                row.price = source.get("price") or getattr(row, "price", 0)
+
+                source_platform = str(source.get("platform") or "")
+                source_fulfillment = str(source.get("fulfillment") or "").upper()
+                source_is_amazon = "amazon" in source_platform.lower()
+                source_is_fba = bool(source.get("is_fba"))
+                source_is_fbm = bool(source.get("is_fbm"))
+
+                row.is_fba = source_is_fba
+                row.is_fbm = source_is_fbm
+                row.mcf_group_source = source_is_fba
+                row.is_group_controlled = True
+                row.location = (
+                    f"{source_platform} FBA"
+                    if source_is_amazon and source_is_fba
+                    else f"{source_platform} FBM"
+                    if source_is_amazon
+                    else source_platform
+                )
+
+                if source.get("stock_sellable_quantity") is not None:
+                    row.available_quantity = int(source.get("stock_sellable_quantity") or 0)
+
+            row.group_member_count = len(linked)
+            collapsed.append(row)
+            continue
+
+        collapsed.append(row)
+
+    if warehouse_items is not None:
+        warehouse_items.items = collapsed
+        warehouse_items.visible = len(collapsed)
+        warehouse_items.total = len(collapsed)
+
+    return context
+
+
 @governed_bp.get("/product-linking")
 def governed_product_linking_page():
-    context = _build_warehouse_items_context()
+    context = _collapse_product_linking_group_rows(_build_warehouse_items_context())
     context.update({
         "unlinked_listings": [],
         "unlinked_by_platform": {},
@@ -1398,13 +1502,31 @@ def _build_warehouse_items_context():
         for member in group_member_rows:
             store = getattr(member, "store", None)
             gid = int(member.master_product_group_id)
+            member_platform = store.platform if store else ""
+            member_channel = str(
+                getattr(member, "normalized_amazon_fulfillment_channel", None)
+                or getattr(member, "amazon_fulfillment_channel", None)
+                or ""
+            ).upper()
+            member_is_amazon = "amazon" in str(member_platform).lower()
+            member_is_fba = bool(member_is_amazon and member_channel not in ("MFN", "FBM", "MERCHANT"))
+            member_stock = getattr(member, "warehouse_stock", None)
+
             group_members_by_group_id.setdefault(gid, []).append({
                 "listing_id": member.id,
                 "sku": member.external_sku,
                 "title": member.title,
                 "store_name": store.name if store else "",
-                "platform": store.platform if store else "",
+                "platform": member_platform,
                 "warehouse_stock_id": member.warehouse_stock_id,
+                "external_listing_id": member.external_listing_id,
+                "fnsku": member.fnsku,
+                "price": member.price,
+                "fulfillment": member_channel,
+                "is_fba": member_is_fba,
+                "is_fbm": bool(member_is_amazon and member_channel in ("MFN", "FBM", "MERCHANT")),
+                "stock_sku": getattr(member_stock, "sku", None),
+                "stock_sellable_quantity": getattr(member_stock, "sellable_quantity", None),
             })
 
     for listing in listing_rows:
@@ -1503,6 +1625,7 @@ def _build_warehouse_items_context():
             external_sku=listing.external_sku,
             asin=listing.asin,
             fnsku=listing.fnsku,
+            authority_stock_sku=stock.sku if stock else None,
             linked_group_listings=group_members_by_group_id.get(
                 int(listing.master_product_group_id),
                 []
@@ -1564,6 +1687,7 @@ def _build_warehouse_items_context():
                 external_sku=None,
                 asin=None,
                 fnsku=None,
+                authority_stock_sku=stock.sku,
                 linked_group_listings=group_members_by_group_id.get(
                     int(stock.master_product_group_id),
                     []
