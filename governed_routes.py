@@ -645,7 +645,7 @@ def _collapse_product_linking_group_rows(context):
 
 @governed_bp.get("/product-linking")
 def governed_product_linking_page():
-    context = _collapse_product_linking_group_rows(_build_warehouse_items_context())
+    context = _collapse_product_linking_group_rows(_collapse_product_linking_group_rows(_build_warehouse_items_context()))
     context.update({
         "unlinked_listings": [],
         "unlinked_by_platform": {},
