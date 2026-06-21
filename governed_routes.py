@@ -645,6 +645,19 @@ def _collapse_product_linking_group_rows(context):
 
 @governed_bp.get("/product-linking")
 def governed_product_linking_page():
+
+    # BT38 FIX: ensure grouped view is default for Product Linking
+    from flask import request
+    from werkzeug.datastructures import MultiDict
+
+    try:
+        if not request.args.get("group"):
+            args = dict(request.args) if request.args else {}
+            args["group"] = "grouped"
+            request.args = MultiDict(args)
+    except Exception:
+        pass
+
     context = _collapse_product_linking_group_rows(_build_warehouse_items_context())
     context.update({
         "unlinked_listings": [],
