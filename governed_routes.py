@@ -1787,7 +1787,19 @@ def shutdown_proof_status():
         except Exception:
             pass
 
+    # BT38 BACKWARD COMPATIBILITY FIX
     stats = SimpleNamespace(
+        total_skus=total_skus,
+        total_available=total_available,
+        low_stock_count=low_stock_count,
+        listing_count=listing_count,
+        inventory_value=round(float(inventory_value), 2),
+
+        # legacy compatibility for templates/routes
+        total=total_skus,
+        active=total_available,
+        low_stock=low_stock_count,
+    )
         total_skus=total_skus,
         total_available=total_available,
         low_stock_count=low_stock_count,
