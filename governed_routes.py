@@ -1800,12 +1800,6 @@ def shutdown_proof_status():
         active=total_available,
         low_stock=low_stock_count,
     )
-        total_skus=total_skus,
-        total_available=total_available,
-        low_stock_count=low_stock_count,
-        listing_count=listing_count,
-        inventory_value=round(float(inventory_value), 2),
-    )
 
     warehouse_items = SimpleNamespace(items=rows, total=total_matching_rows, visible=len(rows))
     pagination = SimpleNamespace(
