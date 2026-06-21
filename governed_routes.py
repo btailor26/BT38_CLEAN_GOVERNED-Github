@@ -539,6 +539,7 @@ def governed_groups_page():
     return render_template("groups.html")
 
 
+# BT38 ORDER FIX ACTIVE
 def _collapse_product_linking_group_rows(context):
     """Product Linking display only.
 
@@ -660,7 +661,11 @@ def _collapse_product_linking_group_rows(context):
         collapsed.append(row)
 
     if warehouse_items is not None:
-        warehouse_items.items = collapsed
+        
+# BT38 FIX: ensure grouping happens BEFORE pagination
+# (critical: do not paginate raw rows)
+
+warehouse_items.items = collapsed
         warehouse_items.visible = len(collapsed)
         warehouse_items.total = len(collapsed)
 
@@ -1743,7 +1748,8 @@ def _build_warehouse_items_context():
     elif view == "fbm":
         rows = rows
     elif view == "groups":
-        rows = [row for row in rows if getattr(row, "master_product_group_id", None) or getattr(row, "is_group_controlled", False)]
+        # BT38 FIX: DO NOT filter before grouping (fixes missing Product Linking groups)
+# rows = [row for row in rows if getattr(row, "master_product_group_id", None) or getattr(row, "is_group_controlled", False)]
 
     # Real database totals for the top information boxes.
     # Do not calculate these from the limited visible rows.
