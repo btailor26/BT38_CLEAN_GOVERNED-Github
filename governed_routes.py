@@ -1379,6 +1379,34 @@ def _build_warehouse_items_context():
     rows = []
     linked_stock_ids = set()
 
+    group_ids_for_rows = {
+        int(x.master_product_group_id)
+        for x in listing_rows
+        if getattr(x, "master_product_group_id", None)
+    }
+
+    group_members_by_group_id = {}
+    if group_ids_for_rows:
+        group_member_rows = (
+            db.session.query(MarketplaceListing)
+            .options(joinedload(MarketplaceListing.store))
+            .filter(MarketplaceListing.master_product_group_id.in_(list(group_ids_for_rows)))
+            .filter(MarketplaceListing.is_active == True)  # noqa: E712
+            .all()
+        )
+
+        for member in group_member_rows:
+            store = getattr(member, "store", None)
+            gid = int(member.master_product_group_id)
+            group_members_by_group_id.setdefault(gid, []).append({
+                "listing_id": member.id,
+                "sku": member.external_sku,
+                "title": member.title,
+                "store_name": store.name if store else "",
+                "platform": store.platform if store else "",
+                "warehouse_stock_id": member.warehouse_stock_id,
+            })
+
     for listing in listing_rows:
         stock = listing.warehouse_stock
         if stock:
@@ -1475,6 +1503,10 @@ def _build_warehouse_items_context():
             external_sku=listing.external_sku,
             asin=listing.asin,
             fnsku=listing.fnsku,
+            linked_group_listings=group_members_by_group_id.get(
+                int(listing.master_product_group_id),
+                []
+            ) if getattr(listing, "master_product_group_id", None) else [],
         ))
 
     if len(rows) < row_limit:
@@ -1532,6 +1564,10 @@ def _build_warehouse_items_context():
                 external_sku=None,
                 asin=None,
                 fnsku=None,
+                linked_group_listings=group_members_by_group_id.get(
+                    int(stock.master_product_group_id),
+                    []
+                ) if getattr(stock, "master_product_group_id", None) else [],
             ))
 
             if len(rows) >= row_limit:
