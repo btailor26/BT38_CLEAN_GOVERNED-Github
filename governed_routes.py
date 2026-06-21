@@ -1,3 +1,4 @@
+from __future__ import annotations
 
 # BT38 SAFETY PATCH: enforce template-safe defaults
 def _ensure_template_safety(context: dict):
@@ -19,7 +20,6 @@ def _ensure_template_safety(context: dict):
     return context
 
 
-from __future__ import annotations
 
 from datetime import datetime
 from types import SimpleNamespace
