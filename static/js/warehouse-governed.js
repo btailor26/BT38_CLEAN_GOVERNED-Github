@@ -323,8 +323,85 @@
   window.bt38ClearSelection = clearSelection;
   window.bt38ChooseAction = chooseAction;
   window.bt38OpenRowAction = openRowAction;
+  async function openGroupProduct(button) {
+    const row = button && button.closest ? button.closest('tr') : null;
+    if (!row) return false;
+
+    const stockId = rowStockId(row);
+    const sku = rowSku(row);
+
+    if (!stockId || stockId === '0') {
+      alert('Missing warehouse stock id for ' + (sku || 'this row') + '.');
+      return false;
+    }
+
+    const search = prompt('Enter SKU or listing ID to group with ' + (sku || 'this SKU') + ':', '');
+    if (search === null) return false;
+
+    const query = search.trim();
+    if (!query) {
+      alert('Enter a SKU or listing ID.');
+      return false;
+    }
+
+    try {
+      setButtonState(button, 'Searching...');
+
+      const response = await fetch('/governed/product-linking/search-all-listings?search=' + encodeURIComponent(query) + '&exclude_warehouse=' + encodeURIComponent(stockId) + '&limit=10', {
+        method: 'GET',
+        credentials: 'include',
+        headers: { 'Accept': 'application/json' }
+      });
+
+      const data = await response.json().catch(function () { return {}; });
+      const listings = data.listings || data.results || [];
+
+      if (!response.ok || !listings.length) {
+        alert('No matching marketplace listings found for: ' + query);
+        resetButton(button);
+        return false;
+      }
+
+      const options = listings.map(function (listing, index) {
+        return (index + 1) + '. ' + (listing.sku || listing.external_sku || '') + ' — ' + (listing.title || listing.external_listing_id || 'Untitled');
+      }).join('\n');
+
+      const choice = prompt('Select listing number to group with ' + (sku || 'this SKU') + ':\n\n' + options, '1');
+      if (choice === null) {
+        resetButton(button);
+        return false;
+      }
+
+      const selectedIndex = parseInt(choice, 10) - 1;
+      const selected = listings[selectedIndex];
+
+      if (!selected || !selected.id) {
+        alert('Invalid selection.');
+        resetButton(button);
+        return false;
+      }
+
+      setButtonState(button, 'Linking...');
+
+      const result = await postJson('/governed/product-linking/link-listing-to-warehouse', {
+        listing_id: selected.id,
+        warehouse_stock_id: stockId
+      }, 'product-linking-group-product-shortcut');
+
+      alert(result.message || 'Product linked to group.');
+      window.location.reload();
+      return false;
+    } catch (err) {
+      console.error(err);
+      alert(err.message || 'Group Product action failed.');
+      resetButton(button);
+      return false;
+    }
+  }
+
   window.bt38PushGovernedListing = pushGovernedListing;
   window.bt38ConvertRowToFbm = convertRowToFbm;
+  window.bt38OpenGroupProduct = openGroupProduct;
   window.runGovernedWarehouseSync = runGovernedWarehouseSync;
 
   document.addEventListener('DOMContentLoaded', function () {
