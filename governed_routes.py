@@ -15,6 +15,36 @@ except Exception:
 
 governed_bp = Blueprint("governed", __name__)
 
+# =========================================================
+# BT38 SAFE RECOVERY: warehouse context builder
+# =========================================================
+def _build_warehouse_items_context_safe():
+    from types import SimpleNamespace
+    from models import WarehouseStock
+
+    # SINGLE SOURCE OF TRUTH: warehouse stock
+    rows = (
+        WarehouseStock.query
+        .filter(WarehouseStock.is_active == True)
+        .filter(WarehouseStock.is_deleted == False)
+        .order_by(WarehouseStock.id.desc())
+        .all()
+    )
+
+    warehouse_items = SimpleNamespace(
+        items=rows,
+        total=len(rows),
+        visible=len(rows)
+    )
+
+    return {
+        "warehouse_items": warehouse_items,
+        "search_query": "",
+        "marketplace_filter": None,
+        "listing_status_filter": None
+    }
+
+
 @governed_bp.route("/logout")
 @login_required
 def logout():
@@ -645,7 +675,7 @@ def _collapse_product_linking_group_rows(context):
 
 @governed_bp.get("/product-linking")
 def governed_product_linking_page():
-    context = _collapse_product_linking_group_rows(_build_warehouse_items_context())
+    context = _collapse_product_linking_group_rows(_build_warehouse_items_context_safe())
     context.update({
         "unlinked_listings": [],
         "unlinked_by_platform": {},
@@ -1782,7 +1812,7 @@ def governed_warehouse_page():
     - eager-loads relationships to avoid N+1 queries
     - limits initial render size
     """
-    context = _grouped = _collapse_product_linking_group_rows(_build_warehouse_items_context())
+    context = _grouped = _collapse_product_linking_group_rows(_build_warehouse_items_context_safe())
 
     html = render_template("warehouse.html", **context)
     return _patch_warehouse_phase1_ui(
