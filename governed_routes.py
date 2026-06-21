@@ -18,7 +18,7 @@ governed_bp = Blueprint("governed", __name__)
 # =========================================================
 # BT38 SAFE RECOVERY: warehouse context builder
 # =========================================================
-def _build_warehouse_items_context_safe():
+def _build_warehouse_items_context():
     from types import SimpleNamespace
     from models import WarehouseStock
 
@@ -675,7 +675,7 @@ def _collapse_product_linking_group_rows(context):
 
 @governed_bp.get("/product-linking")
 def governed_product_linking_page():
-    context = _collapse_product_linking_group_rows(_build_warehouse_items_context_safe())
+    context = _collapse_product_linking_group_rows(_build_warehouse_items_context())
     context.update({
         "unlinked_listings": [],
         "unlinked_by_platform": {},
@@ -1812,7 +1812,7 @@ def governed_warehouse_page():
     - eager-loads relationships to avoid N+1 queries
     - limits initial render size
     """
-    context = _grouped = _collapse_product_linking_group_rows(_build_warehouse_items_context_safe())
+    context = _grouped = _collapse_product_linking_group_rows(_build_warehouse_items_context())
 
     html = render_template("warehouse.html", **context)
     return _patch_warehouse_phase1_ui(
