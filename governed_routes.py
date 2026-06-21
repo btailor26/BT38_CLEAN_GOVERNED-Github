@@ -630,8 +630,32 @@ def _collapse_product_linking_group_rows(context):
                     row.available_quantity = int(source.get("stock_sellable_quantity") or 0)
 
             row.group_member_count = len(linked)
-            collapsed.append(row)
+            
+        # BT38 FINAL FIX: ensure group_id always survives to template
+        try:
+            gid = getattr(row, "master_product_group_id", None)
+            row.group_id = gid
+
+            if hasattr(row, "linked_group_listings"):
+                for linked in row.linked_group_listings:
+                    linked.group_id = gid
+        except Exception:
+            pass
+
+        collapsed.append(row)
             continue
+
+        
+        # BT38 FINAL FIX: ensure group_id always survives to template
+        try:
+            gid = getattr(row, "master_product_group_id", None)
+            row.group_id = gid
+
+            if hasattr(row, "linked_group_listings"):
+                for linked in row.linked_group_listings:
+                    linked.group_id = gid
+        except Exception:
+            pass
 
         collapsed.append(row)
 
