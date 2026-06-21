@@ -1,3 +1,24 @@
+
+# BT38 SAFETY PATCH: enforce template-safe defaults
+def _ensure_template_safety(context: dict):
+    context = context or {}
+
+    context.setdefault("search_query", "")
+    context.setdefault("marketplace_filter", "all")
+    context.setdefault("status_filter", "all")
+    context.setdefault("group_filter", "all")
+    context.setdefault("listing_status_filter", "all")
+    context.setdefault("active_view", "all")
+    context.setdefault("per_page", 15)
+    context.setdefault("pagination", None)
+
+    if "warehouse_items" not in context or context["warehouse_items"] is None:
+        from types import SimpleNamespace
+        context["warehouse_items"] = SimpleNamespace(items=[], total=0, visible=0)
+
+    return context
+
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -687,7 +708,7 @@ def governed_product_linking_page():
         "current_show_linked": context["listing_status_filter"] or "all",
         "async_load": True,
     })
-    return render_template("product_linking.html", **context)
+    return render_template("product_linking.html", **_ensure_template_safety(context))
 
 
 @governed_bp.get("/inventory")
