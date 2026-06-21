@@ -645,6 +645,17 @@ def _collapse_product_linking_group_rows(context):
 
 @governed_bp.get("/product-linking")
 def governed_product_linking_page():
+
+    # BT38 FIX: force full dataset for Product Linking grouping
+    from flask import request
+
+    try:
+        args = request.args.to_dict()
+        args["per_page"] = 200
+        request.args = request.args.__class__(args)
+    except Exception:
+        pass
+
     context = _collapse_product_linking_group_rows(_build_warehouse_items_context())
     context.update({
         "unlinked_listings": [],
