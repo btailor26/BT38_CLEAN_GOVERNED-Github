@@ -304,20 +304,20 @@ def _engine_loop(app):
     global _last_full_sync, _last_light_reconcile
 
     _safe_log("Engine loop started")
-    _runtime_status_set("engine_started", "true")
-    _runtime_status_stamp("engine_started_at")
-    _runtime_status_stamp("heartbeat")
 
     while True:
         try:
             with app.app_context():
+                if not _config_on("runtime_engine_started", False):
+                    _runtime_status_set("engine_started", "true")
+                    _runtime_status_stamp("engine_started_at")
+                _runtime_status_stamp("heartbeat")
                 if _config_on("read_only_mode", False):
                     _safe_log("Runtime paused: read_only_mode ON")
                     time.sleep(60)
                     continue
 
                 now = datetime.utcnow()
-                _runtime_status_stamp("heartbeat")
 
                 if _last_light_reconcile is None or (now - _last_light_reconcile).total_seconds() >= LIGHT_RECONCILE_SECONDS:
                     if _config_on("scheduler_enabled", True) and _config_on("reconcile_15m_enabled", True):
