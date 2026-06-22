@@ -363,7 +363,6 @@ def _apply_group_stock_change(warehouse_stock_id: int, quantity_delta: int) -> N
     stock = db.session.get(WarehouseStock, int(warehouse_stock_id))
     if stock:
         before = int(getattr(stock, "available_quantity", 0) or 0)
-        stock.available_quantity = max(0, before + int(quantity_delta))
 
 
 def _find_listing(MarketplaceListing, marketplace: str, payload: dict):
