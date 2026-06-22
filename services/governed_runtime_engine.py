@@ -258,22 +258,20 @@ def _run_light_reconcile_cycle():
         }
 
     order_stock_bridge = None
-    try:
-        from services.governed_order_stock_mutation import (
-            mutate_recent_marketplace_order_lines,
-        )
-
-        order_stock_bridge = mutate_recent_marketplace_order_lines(
-            limit=100,
-            source=f"{source}_order_stock_bridge",
-        )
-
-    except Exception as exc:
-        _safe_error("15-minute order stock bridge failed", exc)
-        order_stock_bridge = {
-            "success": False,
-            "error": str(exc),
-        }
+    # Safety lock:
+    # Do not automatically mutate warehouse stock from recent marketplace orders
+    # inside the 15-minute runtime loop.
+    #
+    # Reason:
+    # The bridge reads the latest MarketplaceOrder rows and can reduce
+    # WarehouseStock.available_quantity. That is too risky for an automatic
+    # background cycle until strict new/unprocessed/order-date rules are proven.
+    order_stock_bridge = {
+        "success": True,
+        "skipped": True,
+        "reason": "automatic_order_stock_mutation_disabled",
+        "source": f"{source}_order_stock_bridge",
+    }
 
     _last_light_reconcile = datetime.utcnow()
     _runtime_status_stamp("last_light_reconcile")
