@@ -48,14 +48,35 @@ def _truthy(value, default=False):
 
 def _config_on(key: str, default: bool = False) -> bool:
     try:
-        from models import SystemSetting
+        from models import SystemConfig
 
-        row = SystemSetting.query.filter_by(key=key).first()
+        row = SystemConfig.query.filter_by(key=key).first()
         if not row:
             return default
         return _truthy(row.value, default)
     except Exception:
         return default
+
+
+def _runtime_status_set(key: str, value) -> None:
+    try:
+        from extensions import db
+        from models import SystemConfig
+
+        full_key = f"runtime_{key}"
+        row = SystemConfig.query.filter_by(key=full_key).first()
+        if row is None:
+            row = SystemConfig(key=full_key, value=str(value))
+            db.session.add(row)
+        else:
+            row.value = str(value)
+        db.session.commit()
+    except Exception as exc:
+        _safe_error(f"runtime status persist failed key={key}", exc)
+
+
+def _runtime_status_stamp(key: str) -> None:
+    _runtime_status_set(key, datetime.utcnow().isoformat() + "Z")
 
 
 def _safe_log(message: str):
@@ -255,6 +276,7 @@ def _run_light_reconcile_cycle():
         }
 
     _last_light_reconcile = datetime.utcnow()
+    _runtime_status_stamp("last_light_reconcile")
     _safe_log(
         f"15-minute light reconcile order-only complete "
         f"order_import={order_import} order_stock_bridge={order_stock_bridge}"
@@ -274,6 +296,7 @@ def _run_full_sync_cycle():
 
     run_governed_marketplace_import_refresh(source="full_sync_8h_import_first")
     _last_full_sync = datetime.utcnow()
+    _runtime_status_stamp("last_full_sync")
     _safe_log("8-hour full cycle import refresh complete")
 
 
@@ -281,6 +304,9 @@ def _engine_loop(app):
     global _last_full_sync, _last_light_reconcile
 
     _safe_log("Engine loop started")
+    _runtime_status_set("engine_started", "true")
+    _runtime_status_stamp("engine_started_at")
+    _runtime_status_stamp("heartbeat")
 
     while True:
         try:
@@ -291,6 +317,7 @@ def _engine_loop(app):
                     continue
 
                 now = datetime.utcnow()
+                _runtime_status_stamp("heartbeat")
 
                 if _last_light_reconcile is None or (now - _last_light_reconcile).total_seconds() >= LIGHT_RECONCILE_SECONDS:
                     if _config_on("scheduler_enabled", True) and _config_on("reconcile_15m_enabled", True):
