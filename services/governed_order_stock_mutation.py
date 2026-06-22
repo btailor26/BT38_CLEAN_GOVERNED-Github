@@ -250,24 +250,13 @@ def mutate_warehouse_stock_from_order_line(line: Any, source: str = "governed_or
 
     db.session.commit()
 
-    group_reconcile_result = None
-    if should_reconcile_group:
-        try:
-            from services.governed_push_execution import push_group_listings
-
-            group_reconcile_result = push_group_listings(
-                group_id=int(group_id),
-                actor="system_order_stock_mutation",
-                source="order_stock_mutation_group_reconcile",
-            )
-        except Exception as exc:
-            group_reconcile_result = {
-                "success": False,
-                "ok": False,
-                "error": str(exc),
-                "group_id": group_id,
-                "source": "order_stock_mutation_group_reconcile",
-            }
+    group_reconcile_result = {
+        "success": True,
+        "skipped": True,
+        "reason": "warehouse_stock_mutation_does_not_push_directly",
+        "group_id": group_id,
+        "source": "warehouse_stock_mutation",
+    }
 
     return {
         "success": True,
