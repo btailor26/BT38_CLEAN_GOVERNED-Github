@@ -59,7 +59,7 @@
       <button type="submit" class="bt38-search-btn">Search</button>
     </div>
 
-    <select name="marketplace" onchange="this.form.submit()">
+    <select name="marketplace" onchange="bt38SetFilter(this.name, this.value)">
       <option value="all" {% if not marketplace_filter or marketplace_filter == 'all' %}selected{% endif %}>Marketplace</option>
       <option value="amazon" {% if marketplace_filter == 'amazon' %}selected{% endif %}>Amazon</option>
       <option value="ebay" {% if marketplace_filter == 'ebay' %}selected{% endif %}>eBay</option>
@@ -67,20 +67,20 @@
       <option value="tiktok" {% if marketplace_filter == 'tiktok' %}selected{% endif %}>TikTok</option>
     </select>
 
-    <select name="status" onchange="this.form.submit()">
+    <select name="status" onchange="bt38SetFilter(this.name, this.value)">
       <option value="all" {% if not status_filter or status_filter == 'all' %}selected{% endif %}>Status</option>
       <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
       <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Inactive</option>
       <option value="blocked" {% if status_filter == 'blocked' %}selected{% endif %}>Blocked</option>
     </select>
 
-    <select name="group" onchange="this.form.submit()">
+    <select name="group" onchange="bt38SetFilter(this.name, this.value)">
       <option value="all" {% if not group_filter or group_filter == 'all' %}selected{% endif %}>Group</option>
       <option value="grouped" {% if group_filter == 'grouped' %}selected{% endif %}>Grouped</option>
       <option value="ungrouped" {% if group_filter == 'ungrouped' %}selected{% endif %}>Ungrouped</option>
     </select>
 
-    <select name="listing_status" onchange="this.form.submit()">
+    <select name="listing_status" onchange="bt38SetFilter(this.name, this.value)">
       <option value="all" {% if not listing_status_filter or listing_status_filter == 'all' %}selected{% endif %}>Listing Status</option>
       <option value="linked" {% if listing_status_filter == 'linked' %}selected{% endif %}>Linked</option>
       <option value="unlinked" {% if listing_status_filter == 'unlinked' %}selected{% endif %}>Unlinked</option>
@@ -394,7 +394,7 @@ onclick="window.location.href='/warehouse?view=groups&q={{ item.sku|urlencode }}
       <input type="hidden" name="listing_status" value="{{ listing_status_filter or 'all' }}">
       <input type="hidden" name="page" value="1">
       <label for="bt38ResultsPerPageSelect">Results per page:</label>
-      <select id="bt38ResultsPerPageSelect" name="per_page" onchange="this.form.submit()">
+      <select id="bt38ResultsPerPageSelect" name="per_page" onchange="bt38SetFilter(this.name, this.value)">
         <option value="15" {% if (per_page or 15)|int == 15 %}selected{% endif %}>15</option>
         <option value="25" {% if (per_page or 15)|int == 25 %}selected{% endif %}>25</option>
         <option value="50" {% if (per_page or 15)|int == 50 %}selected{% endif %}>50</option>

@@ -229,7 +229,7 @@ class InventoryDashboard {
                 if (type === 'sync') {
                     await this.updateSyncStatus();
                 } else if (type === 'page') {
-                    window.location.reload();
+                    bt38UpdateStateOnly();
                 }
                 
                 // Show success feedback
@@ -1396,7 +1396,7 @@ async function releaseFromGroup(button, itemId, itemSku) {
             
             // Reload page to show updated grouping
             setTimeout(() => {
-                window.location.reload();
+                bt38UpdateStateOnly();
             }, 1000);
         } else {
             throw new Error(data.error || 'Failed to release item from group');

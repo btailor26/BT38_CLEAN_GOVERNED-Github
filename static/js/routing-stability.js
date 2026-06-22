@@ -194,7 +194,7 @@
         },
 
         retryLoad: function() {
-            window.location.reload();
+            bt38UpdateStateOnly();
         },
 
         goToDashboard: function() {
