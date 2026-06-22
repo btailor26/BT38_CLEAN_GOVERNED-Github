@@ -128,6 +128,417 @@ onclick="window.location.href='/warehouse?view=groups&q={{ item.sku|urlencode }}
 }
 @media (max-width: 900px){ .bt38-filter-bar-governed{ grid-template-columns:1fr 1fr !important; } .bt38-filter-bar-governed .bt38-search-wrap{ grid-column:1 / -1 !important; }
 } </style> {% block scripts %}
+
+<!-- BT38 PRODUCT LINKING FEATURE ALIGNMENT ONLY -->
+<div class="modal fade" id="linkListingModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title mb-0">Group Product</h5>
+          <small class="text-muted">Search and link marketplace SKUs to this warehouse product.</small>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="plWarehouseId">
+        <input type="hidden" id="plWarehouseSku">
+        <input type="hidden" id="plGroupId">
+        <div class="mb-2">
+          <strong id="plCurrentSku">SKU</strong>
+          <div class="text-muted small" id="plCurrentName"></div>
+        </div>
+        <div class="input-group mb-3">
+          <input type="text" id="plSearchInput" class="form-control" placeholder="Search SKU, title, ASIN, FNSKU or listing ID">
+          <button type="button" class="btn btn-primary" id="plSearchBtn">Search</button>
+        </div>
+        <div id="plSearchResults" class="list-group small"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="adjustPushModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <div>
+          <h5 class="modal-title mb-0">Push Group</h5>
+          <small class="text-muted">Push linked group from warehouse truth.</small>
+        </div>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="adjustPushWarehouseId">
+        <input type="hidden" id="adjustPushGroupId">
+        <div class="mb-2">
+          <strong id="adjustPushSku">SKU</strong>
+          <div class="text-muted small" id="adjustPushName"></div>
+        </div>
+        <label class="form-label">Warehouse quantity</label>
+        <input type="number" class="form-control" id="adjustPushQuantity" readonly>
+        <div id="adjustPushMembers" class="small text-muted mt-3"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="adjustPushBtn" class="btn btn-primary">Push Now</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  window.BT38 = window.BT38 || {};
+  window.BT38.state = window.BT38.state || { page: null, cache: {}, session: { allowFetch: false } };
+  window.BT38.state.cache = window.BT38.state.cache || {};
+  window.BT38.state.cache.productLinking = window.BT38.state.cache.productLinking || {
+    loaded: true,
+    rows: [],
+    groups: {},
+    searchCache: {},
+    dirty: false,
+    lastActionAt: null
+  };
+
+  function enableActionFetch() {
+    if (window.BT38.enableFetch) window.BT38.enableFetch();
+  }
+
+  function disableActionFetch() {
+    if (window.BT38.disableFetch) window.BT38.disableFetch();
+  }
+
+  async function bt38Fetch(url, options) {
+    enableActionFetch();
+    try {
+      if (window.BT38.fetch) {
+        return await window.BT38.fetch(url, options || {}, "product-linking-user-action");
+      }
+      return await fetch(url, options || {});
+    } finally {
+      disableActionFetch();
+    }
+  }
+
+  window.bt38UpdateActionBar = function() {
+    const selected = document.querySelectorAll(".bt38-row-select:checked").length;
+    const bar = document.getElementById("bt38FloatingActionBar");
+    const count = document.getElementById("bt38SelectedCount");
+
+    if (count) count.textContent = String(selected);
+    if (bar) bar.hidden = selected === 0;
+  };
+
+  window.bt38ClearSelection = function() {
+    document.querySelectorAll(".bt38-row-select:checked").forEach(function(box) {
+      box.checked = false;
+    });
+    window.bt38UpdateActionBar();
+  };
+
+  window.bt38ChooseAction = function(action) {
+    if (!action) return;
+
+    if (action === "push") {
+      const selected = document.querySelector(".bt38-row-select:checked");
+      const row = selected ? selected.closest("tr") : null;
+
+      if (!row) {
+        alert("Select a grouped row first.");
+        return;
+      }
+
+      const groupId = row.dataset.groupId || "";
+      if (!groupId) {
+        alert("This row is not grouped yet. Use Group Product first.");
+        return;
+      }
+
+      window.bt38OpenRowAction(row.querySelector(".bt38-action-btn") || row);
+      return;
+    }
+
+    alert("This Product Linking action is not enabled here yet.");
+  };
+
+  function getRowFromButton(button) {
+    return button ? button.closest("tr") : null;
+  }
+
+  function rowData(row) {
+    return {
+      stockId: parseInt(row?.dataset.stockId || row?.dataset.itemId || "0", 10),
+      listingId: parseInt(row?.dataset.listingId || "0", 10),
+      sku: row?.dataset.sku || "",
+      groupId: row?.dataset.groupId || "",
+      platform: row?.dataset.platform || "",
+      marketplace: row?.dataset.marketplace || "",
+      channel: row?.dataset.channel || "",
+      qty: parseInt((row?.querySelector(".bt38-cell-action span, .bt38-qty-locked span") || {}).textContent || "0", 10) || 0,
+      name: (row?.querySelector(".bt38-product-title") || {}).textContent?.trim() || ""
+    };
+  }
+
+  function escapeHtml(value) {
+    return String(value || "").replace(/[&<>"']/g, function (c) {
+      return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c];
+    });
+  }
+
+  function showModal(id) {
+    const el = document.getElementById(id);
+    if (!el || !window.bootstrap) return;
+    bootstrap.Modal.getOrCreateInstance(el).show();
+  }
+
+  function hideModal(id) {
+    const el = document.getElementById(id);
+    if (!el || !window.bootstrap) return;
+    const modal = bootstrap.Modal.getInstance(el);
+    if (modal) modal.hide();
+  }
+
+  window.bt38OpenGroupProduct = function(button) {
+    const data = rowData(getRowFromButton(button));
+    if (!data.stockId) {
+      alert("No warehouse stock ID found for this row.");
+      return;
+    }
+
+    document.getElementById("plWarehouseId").value = data.stockId;
+    document.getElementById("plWarehouseSku").value = data.sku;
+    document.getElementById("plGroupId").value = data.groupId || "";
+    document.getElementById("plCurrentSku").textContent = data.sku || "SKU";
+    document.getElementById("plCurrentName").textContent = data.name || "";
+    document.getElementById("plSearchInput").value = data.sku || "";
+    document.getElementById("plSearchResults").innerHTML = "";
+
+    showModal("linkListingModal");
+  };
+
+  window.bt38OpenRowAction = function(button) {
+    const data = rowData(getRowFromButton(button));
+    if (!data.groupId) {
+      window.bt38OpenGroupProduct(button);
+      return;
+    }
+
+    document.getElementById("adjustPushWarehouseId").value = data.stockId || "";
+    document.getElementById("adjustPushGroupId").value = data.groupId || "";
+    document.getElementById("adjustPushSku").textContent = data.sku || "SKU";
+    document.getElementById("adjustPushName").textContent = data.name || "";
+    document.getElementById("adjustPushQuantity").value = data.qty || 0;
+    document.getElementById("adjustPushMembers").textContent = "Group ID: " + data.groupId;
+
+    showModal("adjustPushModal");
+  };
+
+  async function searchProductLinkingListings() {
+    const searchInput = document.getElementById("plSearchInput");
+    const results = document.getElementById("plSearchResults");
+    const warehouseId = document.getElementById("plWarehouseId").value;
+    const query = (searchInput.value || "").trim();
+
+    if (!query) {
+      results.innerHTML = '<div class="text-muted">Enter a SKU or title to search.</div>';
+      return;
+    }
+
+    const cacheKey = warehouseId + "::" + query.toLowerCase();
+    const cache = window.BT38.state.cache.productLinking.searchCache;
+
+    if (cache[cacheKey]) {
+      renderSearchResults(cache[cacheKey]);
+      return;
+    }
+
+    results.innerHTML = '<div class="text-muted">Searching...</div>';
+
+    const response = await bt38Fetch("/governed/product-linking/search-all-listings?search=" + encodeURIComponent(query) + "&exclude_warehouse=" + encodeURIComponent(warehouseId) + "&limit=20", {
+      method: "GET",
+      headers: {"Accept": "application/json"}
+    });
+
+    if (!response || !response.ok) {
+      results.innerHTML = '<div class="text-danger">Search failed.</div>';
+      return;
+    }
+
+    const payload = await response.json();
+    const listings = payload.listings || payload.results || payload.items || [];
+    cache[cacheKey] = listings;
+    renderSearchResults(listings);
+  }
+
+  function renderSearchResults(listings) {
+    const results = document.getElementById("plSearchResults");
+    const warehouseId = document.getElementById("plWarehouseId").value;
+    const warehouseSku = document.getElementById("plWarehouseSku").value;
+
+    if (!listings.length) {
+      results.innerHTML = '<div class="text-muted">No matching listings found.</div>';
+      return;
+    }
+
+    results.innerHTML = listings.map(function(listing) {
+      const listingId = listing.id || listing.listing_id || listing.marketplace_listing_id;
+      const sku = listing.external_sku || listing.sku || listing.external_listing_id || "";
+      const title = listing.title || listing.product_name || "Marketplace listing";
+      const platform = listing.platform || listing.store_name || listing.marketplace || "Marketplace";
+      return '<button type="button" class="list-group-item list-group-item-action" data-listing-id="' + escapeHtml(listingId) + '" data-sku="' + escapeHtml(sku) + '">' +
+        '<div><strong>' + escapeHtml(sku) + '</strong> · ' + escapeHtml(platform) + '</div>' +
+        '<div class="text-muted">' + escapeHtml(title) + '</div>' +
+        '<small>Click to link to ' + escapeHtml(warehouseSku) + '</small>' +
+      '</button>';
+    }).join("");
+
+    results.querySelectorAll("[data-listing-id]").forEach(function(btn) {
+      btn.addEventListener("click", function() {
+        linkListingToWarehouse(
+          parseInt(btn.dataset.listingId || "0", 10),
+          parseInt(warehouseId || "0", 10),
+          btn.dataset.sku || "",
+          warehouseSku || "",
+          false
+        );
+      });
+    });
+  }
+
+  window.linkListingToWarehouse = async function(listingId, warehouseId, listingSku, warehouseSku, userConfirmed) {
+    if (!listingId || !warehouseId) {
+      alert("Missing listing or warehouse ID.");
+      return;
+    }
+
+    if (!userConfirmed && !confirm("Link " + listingSku + " to " + warehouseSku + "?")) {
+      return;
+    }
+
+    const response = await bt38Fetch("/governed/product-linking/link-listing-to-warehouse", {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "Accept": "application/json"},
+      body: JSON.stringify({
+        listing_id: listingId,
+        warehouse_id: warehouseId,
+        warehouse_stock_id: warehouseId,
+        source: "product_linking_feature_alignment"
+      })
+    });
+
+    if (!response || !response.ok) {
+      alert("Link failed.");
+      return;
+    }
+
+    window.BT38.state.cache.productLinking.dirty = true;
+    window.BT38.state.cache.productLinking.lastActionAt = Date.now();
+
+    hideModal("linkListingModal");
+    alert("Linked. Use Refresh when you want to reload the latest grouped view.");
+  };
+
+  window.unlinkListing = async function(listingId, listingSku, userConfirmed) {
+    if (!listingId) {
+      alert("Missing listing ID.");
+      return;
+    }
+
+    if (!userConfirmed && !confirm("Unlink " + listingSku + "?")) {
+      return;
+    }
+
+    const response = await bt38Fetch("/governed-disabled/unlink-listing", {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "Accept": "application/json"},
+      body: JSON.stringify({
+        listing_id: listingId,
+        source: "product_linking_feature_alignment"
+      })
+    });
+
+    if (!response || !response.ok) {
+      alert("Unlink failed or route is not enabled.");
+      return;
+    }
+
+    window.BT38.state.cache.productLinking.dirty = true;
+    window.BT38.state.cache.productLinking.lastActionAt = Date.now();
+    alert("Unlinked. Use Refresh when you want to reload the latest grouped view.");
+  };
+
+  window.executeGroupPush = async function() {
+    const groupId = document.getElementById("adjustPushGroupId").value;
+
+    if (!groupId) {
+      alert("No group ID found for push.");
+      return;
+    }
+
+    const btn = document.getElementById("adjustPushBtn");
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = "Pushing...";
+    }
+
+    const response = await bt38Fetch("/governed/actions/groups/" + encodeURIComponent(groupId) + "/push", {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "Accept": "application/json"},
+      body: JSON.stringify({source: "product_linking_feature_alignment"})
+    });
+
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Push Now";
+    }
+
+    if (!response || !response.ok) {
+      alert("Push failed.");
+      return;
+    }
+
+    window.BT38.state.cache.productLinking.dirty = true;
+    window.BT38.state.cache.productLinking.lastActionAt = Date.now();
+
+    hideModal("adjustPushModal");
+    alert("Group push sent.");
+  };
+
+  document.addEventListener("click", function(event) {
+    const pushButton = event.target.closest(".js-adjust-push");
+    if (!pushButton) return;
+    event.preventDefault();
+    window.bt38OpenRowAction(pushButton);
+  });
+
+  document.addEventListener("DOMContentLoaded", function() {
+    if (window.BT38.initPage) window.BT38.initPage("productLinking");
+
+    document.querySelectorAll(".bt38-stock-table tbody tr").forEach(function(row) {
+      window.BT38.state.cache.productLinking.rows.push(Object.assign({}, row.dataset));
+    });
+
+    const searchBtn = document.getElementById("plSearchBtn");
+    if (searchBtn) searchBtn.addEventListener("click", searchProductLinkingListings);
+
+    const searchInput = document.getElementById("plSearchInput");
+    if (searchInput) {
+      searchInput.addEventListener("keydown", function(event) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          searchProductLinkingListings();
+        }
+      });
+    }
+
+    const pushBtn = document.getElementById("adjustPushBtn");
+    if (pushBtn) pushBtn.addEventListener("click", window.executeGroupPush);
+  });
+})();
+</script>
+
 {{ super() }}
-<script src="{{ url_for('static', filename='js/warehouse-governed.js') }}?v=warehouse-governed-controller"></script>
+
 {% endblock %}
