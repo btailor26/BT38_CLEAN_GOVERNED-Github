@@ -161,6 +161,27 @@ def refresh_governed_listing_from_snapshot(
             fulfillment=fulfillment,
         )
 
+    # Legacy Amazon identifier migration guard:
+    # Older rows used external_listing_id = SKU.
+    # Newer snapshots may use ASIN as external_listing_id.
+    # If the same active Amazon SKU already points to the same warehouse row,
+    # reuse that legacy row instead of creating a duplicate MarketplaceListing.
+    if listing is None and warehouse_stock is not None:
+        legacy_listing = (
+            MarketplaceListing.query
+            .filter_by(
+                store_id=store.id,
+                external_sku=sku,
+                warehouse_stock_id=warehouse_stock.id,
+                is_active=True,
+            )
+            .filter(MarketplaceListing.external_listing_id == sku)
+            .order_by(MarketplaceListing.id.asc())
+            .first()
+        )
+        if legacy_listing is not None:
+            listing = legacy_listing
+
     created = False
     if listing is None:
         listing = MarketplaceListing(
