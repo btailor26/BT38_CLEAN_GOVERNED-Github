@@ -269,7 +269,7 @@ def _run_light_reconcile_cycle():
     order_stock_bridge = {
         "success": True,
         "skipped": True,
-        "reason": "15min_sync_read_only_locked",
+        "reason": "automatic_order_stock_mutation_disabled",
         "source": f"{source}_order_stock_bridge",
     }
 
