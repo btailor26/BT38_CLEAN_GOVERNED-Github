@@ -229,7 +229,7 @@ def run_governed_marketplace_import_refresh(store_id=None, source="governed_runt
         "push_started": False,
         "sync_started": False,
         "order_import_started": False,
-        "order_stock_bridge_started": False  # TEMP READ ONLY MODE,
+        "order_stock_bridge_started": False,
         "results": results,
     }
 
@@ -269,7 +269,7 @@ def _run_light_reconcile_cycle():
     order_stock_bridge = {
         "success": True,
         "skipped": True,
-        "reason": "15min_sync_read_only_locked",
+        "reason": "automatic_order_stock_mutation_disabled",
         "source": f"{source}_order_stock_bridge",
     }
 
