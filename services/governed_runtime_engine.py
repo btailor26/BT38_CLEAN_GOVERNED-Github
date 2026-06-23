@@ -229,7 +229,7 @@ def run_governed_marketplace_import_refresh(store_id=None, source="governed_runt
         "push_started": False,
         "sync_started": False,
         "order_import_started": False,
-        "order_stock_bridge_started": False  # TEMP READ ONLY MODE,
+        "order_stock_bridge_started": False
         "results": results,
     }
 
