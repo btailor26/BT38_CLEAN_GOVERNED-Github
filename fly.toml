@@ -1,4 +1,4 @@
-app = "bt38-staging"
+app = "bt38-prod"
 primary_region = "lhr"
 
 [build]
