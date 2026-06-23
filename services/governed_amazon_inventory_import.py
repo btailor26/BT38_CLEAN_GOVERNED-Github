@@ -118,7 +118,7 @@ def run_governed_amazon_inventory_import(store_id=None):
             if hasattr(inv, "store_id"):
                 inv.store_id = store.id
 
-            inv.available_quantity = qty
+            # BLOCKED: warehouse-only write authority
             inv.reserved_quantity = reserved
             inv.inbound_quantity = inbound
             inv.asin = asin or None

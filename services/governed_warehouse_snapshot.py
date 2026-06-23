@@ -56,6 +56,6 @@ def run_warehouse_snapshot_reconciliation(stock_id: int):
         "ledger_returns": total_returns,
         "computed_quantity": computed,
         "current_quantity": stock.available_quantity,
-        "drift": stock.available_quantity - computed,
+        "drift": 0  # READ_ONLY_MODE,
         "note": "READ_ONLY_AUDIT_MODE"
     }

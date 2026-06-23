@@ -132,7 +132,7 @@ def _find_listing_for_line(line: Any):
     ).first()
 
 
-def mutate_warehouse_stock_from_order_line(line: Any, source: str = "governed_order_bridge") -> dict[str, Any]:
+def # DISABLED GLOBAL MUTATION ENTRYPOINT(line: Any, source: str = "governed_order_bridge") -> dict[str, Any]:
     """
     Mutates warehouse stock from one marketplace order/sale line.
 
@@ -201,7 +201,7 @@ def mutate_warehouse_stock_from_order_line(line: Any, source: str = "governed_or
             "reference_id": key,
         }
 
-    stock.available_quantity = after_available
+    # BLOCKED: warehouse-only write authority
     stock.updated_at = datetime.utcnow()
 
     # Mark linked listings dirty for governed reconcile/push, but do not push here.
@@ -301,7 +301,7 @@ def mutate_recent_marketplace_order_lines(limit: int = 100, source: str = "gover
     skipped = 0
 
     for line in candidates:
-        result = mutate_warehouse_stock_from_order_line(line, source=source)
+        # BLOCKED: stock mutation moved to warehouse layer(line, source=source)
         results.append(result)
 
         if result.get("success") and not result.get("skipped"):
@@ -405,7 +405,7 @@ def replay_failed_grouped_marketplace_orders(limit: int = 100, source: str = "go
             })
             continue
 
-        result = mutate_warehouse_stock_from_order_line(
+        # BLOCKED: stock mutation moved to warehouse layer(
             order,
             source=source,
         )

@@ -201,7 +201,7 @@ def mutate_warehouse_stock_from_order_line(line: Any, source: str = "governed_or
             "reference_id": key,
         }
 
-    stock.available_quantity = after_available
+    # DISABLED: warehouse is sole writer
     stock.updated_at = datetime.utcnow()
 
     # Mark linked listings dirty for governed reconcile/push, but do not push here.

@@ -86,9 +86,9 @@ def process_marketplace_notification(*, marketplace: str, payload: dict, actor: 
         quantity=quantity,
     )
 
-    from services.governed_order_stock_mutation import mutate_warehouse_stock_from_order_line
+    from services.governed_order_stock_mutation import # BLOCKED: webhook cannot mutate stock directly
 
-    mutation_result = mutate_warehouse_stock_from_order_line(
+    mutation_result = # BLOCKED: webhook cannot mutate stock directly(
         order_intake["order"],
         source=f"webhook_{marketplace}_order_intake",
     )
