@@ -19,7 +19,7 @@ from app import db
 from models import MarketplaceListing, WarehouseStock, StockLedgerEntry
 
 
-SALE_TYPES = {"order", "processed", "fulfilled", "shipped"}
+SALE_TYPES = {"order", "sale", "sold", "payment", "completed", "paid", "pending", "unshipped", "partiallyshipped"}
 RETURN_TYPES = {"refund", "return", "returned", "cancelled", "canceled"}
 
 
@@ -97,7 +97,7 @@ def _line_type(line: Any) -> str:
     ).lower()
 
 
-def is_sale(line: Any) -> bool:
+def _is_sale(line: Any) -> bool:
     value = _line_type(line)
     if not value:
         return True
@@ -188,7 +188,7 @@ def mutate_warehouse_stock_from_order_line(line: Any, source: str = "governed_or
         after_available = before_available + qty
         transaction_type = "return"
         adjustment_type = "increase"
-    elif is_sale(line):
+    elif _is_sale(line):
         after_available = max(0, before_available - qty)
         transaction_type = "sale"
         adjustment_type = "decrease"
