@@ -128,88 +128,72 @@ def push_group_listings(*, group_id: int, actor: str, source: str, actor_user=No
 
     group_id = int(group_id)
 
-    # Warehouse is the authority.
-    # A grouped shortcut must push every active listing attached to the grouped warehouse,
-    # even if an individual MarketplaceListing is missing master_product_group_id.
     warehouse_ids = [
         row.id
         for row in (
             db.session.query(WarehouseStock)
-            .filter(WarehouseStock.master_product_group_id == group_id)
+            .filter(
+                (WarehouseStock.id == group_id)
+                | (WarehouseStock.master_product_group_id == group_id)
+            )
             .filter(WarehouseStock.is_active == True)  # noqa: E712
             .all()
         )
     ]
 
-    direct_group_listing_ids = [
-        row.id
-        for row in (
-            db.session.query(MarketplaceListing)
-            .filter(MarketplaceListing.master_product_group_id == group_id)
-            .filter(MarketplaceListing.is_active == True)  # noqa: E712
-            .all()
-        )
-    ]
-
-    query = (
+    listings = (
         db.session.query(MarketplaceListing)
         .filter(MarketplaceListing.is_active == True)  # noqa: E712
+        .filter(MarketplaceListing.warehouse_stock_id.in_(warehouse_ids))
+        .order_by(MarketplaceListing.id)
+        .all()
+        if warehouse_ids else []
     )
 
-    if warehouse_ids and direct_group_listing_ids:
-        listings = (
-            query
-            .filter(
-                (MarketplaceListing.warehouse_stock_id.in_(warehouse_ids))
-                | (MarketplaceListing.id.in_(direct_group_listing_ids))
-            )
-            .order_by(MarketplaceListing.id)
-            .all()
-        )
-    elif warehouse_ids:
-        listings = (
-            query
-            .filter(MarketplaceListing.warehouse_stock_id.in_(warehouse_ids))
-            .order_by(MarketplaceListing.id)
-            .all()
-        )
-    elif direct_group_listing_ids:
-        listings = (
-            query
-            .filter(MarketplaceListing.id.in_(direct_group_listing_ids))
-            .order_by(MarketplaceListing.id)
-            .all()
-        )
-    else:
-        listings = []
+    results: List[Dict[str, Any]] = []
+    skipped_results: List[Dict[str, Any]] = []
 
-    results: List[Dict[str, Any]] = [
-        push_marketplace_listing(
+    for listing in listings:
+        is_fba = (
+            bool(getattr(listing, "is_fba", False)) or
+            str(getattr(listing, "amazon_fulfillment_channel", "")).upper() in {"FBA", "AFN"}
+        )
+
+        if is_fba:
+            skipped_results.append({
+                "success": True,
+                "ok": True,
+                "skipped": True,
+                "skip_reason": "fba_read_only_warehouse_authority",
+                "listing_id": listing.id,
+                "warehouse_stock_id": getattr(listing, "warehouse_stock_id", None),
+            })
+            continue
+
+        results.append(push_marketplace_listing(
             listing_id=listing.id,
             actor=actor,
             source=source,
             actor_user=actor_user,
-        )
-        for listing in listings
-    ]
+        ))
 
     ok_count = sum(1 for item in results if item.get("ok") or item.get("success"))
+    pushable_count = len(results)
 
     return {
-        "success": ok_count == len(results) and bool(results),
-        "ok": ok_count == len(results) and bool(results),
+        "success": pushable_count > 0 and ok_count == pushable_count,
+        "ok": pushable_count > 0 and ok_count == pushable_count,
         "governed": True,
         "group_id": group_id,
         "warehouse_ids": warehouse_ids,
-        "direct_group_listing_ids": direct_group_listing_ids,
-        "total": len(results),
+        "push_targets": pushable_count,
+        "skipped": len(skipped_results),
         "ok_count": ok_count,
         "warehouse_truth_quantity_used": True,
         "warehouse_authority_resolution": True,
         "request_quantity_ignored": True,
-        "results": results,
+        "results": results + skipped_results,
     }
-
 
 def _blocked(reason: str, **extra) -> Dict[str, Any]:
     result = {
