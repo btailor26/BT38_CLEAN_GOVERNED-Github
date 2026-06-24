@@ -66,16 +66,13 @@
   // GOVERNED ACTIONS (NO RELOAD)
   // ==============================
 
-function pushListing(row) {
-    const groupId = row.dataset.groupId || row.dataset.stockId;
-    return postJson(`/governed/actions/groups/${groupId}/push`, {}, "push");
-}
-}
-    if (!listingId) return Promise.reject('Missing listingId');
-
-    return postJson(`/governed/actions/listings/${listingId}/push`, {}, 'push');
+  function pushListing(row) {
+    const { listingId, groupId, stockId } = getRow(row);
+    const warehouseGroupId = groupId || stockId;
+    if (warehouseGroupId) return postJson(`/governed/actions/groups/${warehouseGroupId}/push`, {}, "push");
+    if (!listingId) return Promise.reject("Missing listingId");
+    return postJson(`/governed/actions/listings/${listingId}/push`, {}, "push");
   }
-
   function saveQuantity(row, quantity) {
     const { listingId } = getRow(row);
     if (!listingId) return Promise.reject('Missing listingId');
