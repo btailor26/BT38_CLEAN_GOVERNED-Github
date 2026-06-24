@@ -66,8 +66,11 @@
   // GOVERNED ACTIONS (NO RELOAD)
   // ==============================
 
-  function pushListing(row) {
-    const { listingId } = getRow(row);
+function pushListing(row) {
+    const groupId = row.dataset.groupId || row.dataset.stockId;
+    return postJson(`/governed/actions/groups/${groupId}/push`, {}, "push");
+}
+}
     if (!listingId) return Promise.reject('Missing listingId');
 
     return postJson(`/governed/actions/listings/${listingId}/push`, {}, 'push');
