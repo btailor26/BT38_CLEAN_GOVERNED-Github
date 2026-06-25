@@ -644,18 +644,6 @@ except Exception as exc:
 # =========================
 
 # ==============================
-# BT38 IMPORT GATEWAY FIX (SAFE PATCH)
-# ==============================
-        orders = run_governed_marketplace_order_import()
-
-        return {
-            "status": "import_triggered",
-            "amazon": amazon,
-            "ebay": ebay,
-            "orders": orders
-        }, 200
-
-    except Exception as e:
         return {"status": "import_failed", "error": str(e)}, 500
 
 
