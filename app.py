@@ -644,13 +644,16 @@ except Exception as exc:
 # =========================
 
 # ==============================
-        return {"status": "import_failed", "error": str(e)}, 500
-
 
 # =========================
-# IMPORT ENTRY (WAREHOUSE-ALIGNED)
+# GOVERNED IMPORT ROUTE (RESTORED)
+# SINGLE SOURCE: WAREHOUSE ALIGNED
 # =========================
-@app.route("/governed/import")
+@app.route("/governed/import", methods=["GET"])
 def governed_import():
-    from governed_routes import governed_import_handler
-    return governed_import_handler()
+    try:
+        from services.governed_import_gate import run_import_cycle
+        result = run_import_cycle()
+        return result, 200
+    except Exception as e:
+        return {"status": "import_failed", "error": str(e)}, 500
