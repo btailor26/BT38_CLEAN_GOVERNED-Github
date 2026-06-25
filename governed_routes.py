@@ -4962,3 +4962,33 @@ def governed_runtime_understanding_audit():
             ),
         },
     }), 200
+
+# ==============================
+# BT38 IMPORT SINGLE SOURCE OF TRUTH
+# Warehouse-aligned import handler
+# ==============================
+def governed_import_handler():
+    try:
+        from services.governed_amazon_inventory_import import run_governed_amazon_inventory_import
+        from services.governed_ebay_inventory_import import run_governed_ebay_inventory_import
+        from services.governed_marketplace_order_import import run_governed_marketplace_order_import
+
+        amazon_result = run_governed_amazon_inventory_import()
+        ebay_result = run_governed_ebay_inventory_import()
+        order_result = run_governed_marketplace_order_import()
+
+        return {
+            "status": "success",
+            "warehouse_source": True,
+            "amazon": amazon_result,
+            "ebay": ebay_result,
+            "orders": order_result
+        }, 200
+
+    except Exception as e:
+        return {
+            "status": "failed",
+            "warehouse_source": True,
+            "error": str(e)
+        }, 500
+
