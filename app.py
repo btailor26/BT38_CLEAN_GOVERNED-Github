@@ -655,3 +655,28 @@ def governed_import():
     except Exception as e:
         return {"status": "import_failed", "error": str(e)}, 500
 
+
+# ==============================
+# BT38 IMPORT REWIRE (FIXED ENTRYPOINT)
+# ==============================
+@app.route("/governed/import")
+def governed_import():
+    try:
+        from services.governed_marketplace_order_import import run_governed_marketplace_order_import
+        from services.governed_amazon_inventory_import import run_governed_amazon_inventory_import
+        from services.governed_ebay_inventory_import import run_governed_ebay_inventory_import
+
+        amazon = run_governed_amazon_inventory_import()
+        ebay = run_governed_ebay_inventory_import()
+        orders = run_governed_marketplace_order_import()
+
+        return {
+            "status": "import_triggered",
+            "amazon": amazon,
+            "ebay": ebay,
+            "orders": orders
+        }, 200
+
+    except Exception as e:
+        return {"status": "import_failed", "error": str(e)}, 500
+
