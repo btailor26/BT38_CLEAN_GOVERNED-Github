@@ -642,3 +642,16 @@ except Exception as exc:
 # =========================
 # REAL LOCAL SYNC ROUTE
 # =========================
+
+# ==============================
+# BT38 IMPORT GATEWAY FIX (SAFE PATCH)
+# ==============================
+@app.route("/governed/import")
+def governed_import():
+    try:
+        from services.governed_import_gate import run_import_cycle
+        run_import_cycle()
+        return {"status": "import_triggered"}, 200
+    except Exception as e:
+        return {"status": "import_failed", "error": str(e)}, 500
+
