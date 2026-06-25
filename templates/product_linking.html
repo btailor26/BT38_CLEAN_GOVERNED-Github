@@ -424,7 +424,7 @@ onclick="window.location.href='/warehouse?view=groups&q={{ item.sku|urlencode }}
         listing_id: listingId,
         warehouse_id: warehouseId,
         warehouse_stock_id: warehouseId,
-        source: "product_linking_feature_alignment"
+        source: "stable_product_linking"
       })
     });
 
@@ -455,7 +455,7 @@ onclick="window.location.href='/warehouse?view=groups&q={{ item.sku|urlencode }}
       headers: {"Content-Type": "application/json", "Accept": "application/json"},
       body: JSON.stringify({
         listing_id: listingId,
-        source: "product_linking_feature_alignment"
+        source: "stable_product_linking"
       })
     });
 
@@ -486,7 +486,7 @@ onclick="window.location.href='/warehouse?view=groups&q={{ item.sku|urlencode }}
     const response = await bt38Fetch("/governed/actions/groups/" + encodeURIComponent(groupId) + "/push", {
       method: "POST",
       headers: {"Content-Type": "application/json", "Accept": "application/json"},
-      body: JSON.stringify({source: "product_linking_feature_alignment"})
+      body: JSON.stringify({source: "stable_product_linking"})
     });
 
     if (btn) {
