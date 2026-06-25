@@ -312,14 +312,8 @@ def _engine_loop(app):
         time.sleep(30)
 
 
-def _acquire_runtime_owner_lock() -> bool:
-    """
-    Ensures only one OS process owns the governed runtime engine.
 
-    Gunicorn may run multiple web workers.
-    One-off audit scripts may import app.py.
-    Neither should create duplicate governed runtime engines.
-    """
+def _acquire_runtime_owner_lock() -> bool:
     global _runtime_lock_handle
 
     if _runtime_lock_handle is not None:
@@ -329,12 +323,13 @@ def _acquire_runtime_owner_lock() -> bool:
         import fcntl
 
         handle = open(_RUNTIME_LOCK_PATH, "a+", encoding="utf-8")
+
         try:
             fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
             handle.close()
             _safe_log("Governed runtime engine already owned by another process")
-            pass
+            return False
 
         handle.seek(0)
         handle.truncate()
@@ -347,9 +342,7 @@ def _acquire_runtime_owner_lock() -> bool:
 
     except Exception as exc:
         _safe_error("Governed runtime owner lock failed", exc)
-        pass
-
-
+        return False
 def start_governed_runtime_engine(app):
     """
     Starts the governed runtime engine once per process.
