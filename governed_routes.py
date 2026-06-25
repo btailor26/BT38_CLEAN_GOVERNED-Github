@@ -3072,7 +3072,7 @@ def governed_store_import_shortcut(store_id):
     if "amazon" in platform:
         from services.governed_amazon_inventory_import import run_governed_amazon_inventory_import
 
-        result = run_governed_amazon_inventory_import(store_id=store.id)
+        result = # GATED_IMPORT_AMAZON(store_id=store.id)
         log_shortcut("success", "Amazon import shortcut executed through fuse box")
 
         if isinstance(result, dict):
@@ -3100,7 +3100,7 @@ def governed_store_import_shortcut(store_id):
     if "ebay" in platform:
         from services.governed_ebay_inventory_import import run_governed_ebay_inventory_import
 
-        result = run_governed_ebay_inventory_import(store_id=store.id)
+        result = # GATED_IMPORT_EBAY(store_id=store.id)
         log_shortcut("success", "eBay variation import shortcut executed through fuse box")
 
         if isinstance(result, dict):
@@ -3205,7 +3205,7 @@ def governed_amazon_inventory_import():
             ), 200
 
         from services.governed_amazon_inventory_import import run_governed_amazon_inventory_import
-        result = run_governed_amazon_inventory_import(store_id=getattr(store, "id", None))
+        result = # GATED_IMPORT_AMAZON(store_id=getattr(store, "id", None))
 
         if isinstance(result, dict):
             result.update({
@@ -3288,7 +3288,7 @@ def governed_ebay_inventory_import():
     from services.governed_ebay_inventory_import import run_governed_ebay_inventory_import
 
     try:
-        result = run_governed_ebay_inventory_import(
+        result = # GATED_IMPORT_EBAY(
             store_id=getattr(store, "id", None)
         )
 
@@ -3496,8 +3496,8 @@ def governed_disabled_action(action: str = ""):
         group = ensure_group_for_stock(stock)
         db.session.commit()
 
-        from governed_group_propagation_routes import governed_group_propagate_quantity
-        return governed_group_propagate_quantity(group.id)
+        # PROPAGATION MODULE DISABLED
+        raise Exception("LEGACY_PROPAGATION_DISABLED")
 
     if action == "link-listing-to-warehouse" and request.method == "POST":
         listing_id = body.get("listing_id") or body.get("marketplace_listing_id")
