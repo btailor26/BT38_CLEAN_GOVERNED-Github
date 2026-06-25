@@ -146,6 +146,24 @@ def governed_dashboard_page():
         a = (action_type or "").lower()
 
         if "ebay" in p:
+            if not _bt38_config_on("webhook_ebay_enabled"):
+                return log_shortcut("blocked", "eBay import disabled via settings")
+
+            if "dispatch" in a or "order" in a:
+                return "https://www.ebay.co.uk/sh/ord"
+            if "message" in a or "buyer" in a:
+                return "https://www.ebay.co.uk/sh/messages"
+            return "https://www.ebay.co.uk/sh/overview"
+
+        if "amazon" in p:
+            if not _bt38_config_on("webhook_amazon_enabled"):
+                return log_shortcut("blocked", "Amazon import disabled via settings")
+
+            if "dispatch" in a or "order" in a:
+                return "https://sellercentral.amazon.co.uk/orders-v3"
+            if "message" in a or "buyer" in a:
+                return "https://sellercentral.amazon.co.uk/messaging"
+            return "https://sellercentral.amazon.co.uk/home"
         if _bt38_config_on("webhook_ebay_enabled"):
         else:
             return log_shortcut("blocked", "eBay import disabled via settings")
