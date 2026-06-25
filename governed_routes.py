@@ -1,3 +1,9 @@
+
+# ================= GOVERNED EXECUTION LAYER =================
+from services.governed_import_gate import governed_import_allowed
+from services.governed_execution_gate import governed_execution_allowed
+# =============================================================
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -140,6 +146,9 @@ def governed_dashboard_page():
         a = (action_type or "").lower()
 
         if "ebay" in p:
+        if _bt38_config_on("webhook_ebay_enabled"):
+        else:
+            return log_shortcut("blocked", "eBay import disabled via settings")
             if "dispatch" in a or "order" in a:
                 return "https://www.ebay.co.uk/sh/ord"
             if "message" in a or "buyer" in a:
@@ -147,6 +156,9 @@ def governed_dashboard_page():
             return "https://www.ebay.co.uk/sh/overview"
 
         if "amazon" in p:
+        if _bt38_config_on("webhook_amazon_enabled"):
+        else:
+            return log_shortcut("blocked", "Amazon import disabled via settings")
             if "dispatch" in a or "order" in a:
                 return "https://sellercentral.amazon.co.uk/orders-v3"
             if "message" in a or "buyer" in a:
@@ -3241,10 +3253,10 @@ def governed_store_import_shortcut(store_id):
     platform = str(store.platform or "").strip().lower()
 
     if "amazon" in platform:
-        from services.governed_amazon_inventory_import import run_governed_amazon_inventory_import
-
-        result = run_governed_amazon_inventory_import(store_id=store.id)
-        log_shortcut("success", "Amazon import shortcut executed through fuse box")
+        
+    if _bt38_config_on("webhook_amazon_enabled"):
+    else:
+        return log_shortcut("blocked", "Amazon import disabled via settings")
 
         if isinstance(result, dict):
             result.update({
@@ -3269,10 +3281,10 @@ def governed_store_import_shortcut(store_id):
         ), 200
 
     if "ebay" in platform:
-        from services.governed_ebay_inventory_import import run_governed_ebay_inventory_import
-
-        result = run_governed_ebay_inventory_import(store_id=store.id)
-        log_shortcut("success", "eBay variation import shortcut executed through fuse box")
+        
+    if _bt38_config_on("webhook_ebay_enabled"):
+    else:
+        return log_shortcut("blocked", "eBay import disabled via settings")
 
         if isinstance(result, dict):
             result.update({
@@ -3327,166 +3339,6 @@ def governed_store_import_shortcut(store_id):
 
 
 @governed_bp.post("/governed/amazon/inventory/import")
-def governed_amazon_inventory_import():
-    """
-    Governed Amazon inventory import control point.
-
-    Runtime rule:
-    - This endpoint is a governed runtime import lane.
-    - It must not require an interactive admin/operator role.
-    - Fuse-box/settings still control whether the store/import is enabled.
-    - AFN/FBA writes to AmazonFBAInventory only.
-    """
-    from flask import jsonify, request
-    try:
-        from models import Store
-
-        body = request.get_json(silent=True) or {}
-        store_id = body.get("store_id") or request.args.get("store_id")
-        store = None
-
-        if store_id:
-            store = Store.query.get(int(store_id))
-        else:
-            store = (
-                Store.query
-                .filter(Store.platform.ilike("%amazon%"), Store.is_active == True)  # noqa: E712
-                .order_by(Store.id)
-                .first()
-            )
-
-        if not store:
-            return jsonify(
-                ok=False,
-                success=False,
-                governed=True,
-                error="amazon_store_not_found",
-                message="No active Amazon store found for governed import.",
-            ), 404
-
-        if not bool(getattr(store, "fba_import_enabled", False)):
-            return jsonify(
-                ok=False,
-                success=False,
-                governed=True,
-                execution_blocked=True,
-                reason="FBA import is disabled for this Amazon store.",
-                store_id=getattr(store, "id", None),
-                fuse_box_checked=True,
-            ), 200
-
-        from services.governed_amazon_inventory_import import run_governed_amazon_inventory_import
-        result = run_governed_amazon_inventory_import(store_id=getattr(store, "id", None))
-
-        if isinstance(result, dict):
-            result.update({
-                "ok": bool(result.get("success", True)),
-                "governed": True,
-                "runtime_import": True,
-                "manual_role_required": False,
-                "store_id": getattr(store, "id", None),
-                "fuse_box_checked": True,
-            })
-            return jsonify(_governed_json_safe(result)), 200
-
-        return jsonify(
-            ok=True,
-            success=True,
-            governed=True,
-            runtime_import=True,
-            manual_role_required=False,
-            result=result,
-        ), 200
-
-    except Exception as exc:
-        return jsonify(
-            ok=False,
-            success=False,
-            governed=True,
-            error="amazon_import_failed",
-            message=str(exc),
-            instruction="Amazon import failed before completing. Check Amazon SP-API client wiring/credentials.",
-        ), 500
-
-
-@governed_bp.post("/governed/ebay/inventory/import")
-def governed_ebay_inventory_import():
-    """Governed eBay import control point.
-
-    Phase status:
-    - Fuse-box controlled.
-    - Store-aware.
-    - No legacy importer, worker, queue, or scheduler is called here.
-    - Real eBay import must be added later behind this route only.
-    """
-    from flask import jsonify, request
-    from models import Store
-    from services.runtime_action_guard import is_runtime_action_allowed
-
-    body = request.get_json(silent=True) or {}
-    store_id = body.get("store_id") or request.args.get("store_id")
-
-    store = None
-    if store_id:
-        store = Store.query.get(int(store_id))
-    else:
-        store = (
-            Store.query
-            .filter(Store.platform.ilike("%ebay%"))
-            .order_by(Store.is_active.desc(), Store.id.asc())
-            .first()
-        )
-
-    guard = is_runtime_action_allowed(
-        store,
-        action_type="import",
-        manual=True,
-        context={"source": "governed_ebay_inventory_import"},
-    )
-
-    if not guard.get("allowed"):
-        return jsonify(
-            ok=False,
-            success=False,
-            governed=True,
-            marketplace="ebay",
-            import_started=False,
-            execution_started=False,
-            reason=guard.get("reason"),
-            guard=guard,
-        ), 200
-
-    from services.governed_ebay_inventory_import import run_governed_ebay_inventory_import
-
-    try:
-        result = run_governed_ebay_inventory_import(
-            store_id=getattr(store, "id", None)
-        )
-
-        if isinstance(result, dict):
-            return jsonify(_governed_json_safe(result)), 200
-
-        return jsonify(
-            ok=True,
-            success=True,
-            governed=True,
-            marketplace="ebay",
-            result=result,
-        ), 200
-
-    except Exception as exc:
-        return jsonify(
-            ok=False,
-            success=False,
-            governed=True,
-            marketplace="ebay",
-            error="ebay_import_failed",
-            message=str(exc),
-            instruction="eBay governed variation import failed.",
-        ), 500
-
-
-@governed_bp.route("/governed/webhooks/ebay", methods=["GET", "POST"])
 def governed_webhook_ebay_ingest():
     """Compatibility route: eBay webhook uses the single governed webhook intake."""
     return governed_marketplace_webhook_intake("ebay")
@@ -3667,8 +3519,8 @@ def governed_disabled_action(action: str = ""):
         group = ensure_group_for_stock(stock)
         db.session.commit()
 
-        from governed_group_propagation_routes import governed_group_propagate_quantity
-        return governed_group_propagate_quantity(group.id)
+        # PROPAGATION MODULE DISABLED
+        raise Exception("LEGACY_PROPAGATION_DISABLED")
 
     if action == "link-listing-to-warehouse" and request.method == "POST":
         listing_id = body.get("listing_id") or body.get("marketplace_listing_id")
