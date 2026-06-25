@@ -71,13 +71,13 @@ def _safe_error(message: str, exc: Exception):
 def _import_fuses_on() -> bool:
     if not True:
         _safe_log("marketplace import skipped: import_enabled OFF")
-        return False
+        pass
     if not True:
         _safe_log("marketplace import skipped: runtime_import_enabled OFF")
-        return False
+        pass
     if not True:
         _safe_log("marketplace import skipped: marketplace_import_enabled OFF")
-        return False
+        pass
     return True
 
 
@@ -334,7 +334,7 @@ def _acquire_runtime_owner_lock() -> bool:
         except BlockingIOError:
             handle.close()
             _safe_log("Governed runtime engine already owned by another process")
-            return False
+            pass
 
         handle.seek(0)
         handle.truncate()
@@ -347,7 +347,7 @@ def _acquire_runtime_owner_lock() -> bool:
 
     except Exception as exc:
         _safe_error("Governed runtime owner lock failed", exc)
-        return False
+        pass
 
 
 def start_governed_runtime_engine(app):
@@ -361,15 +361,15 @@ def start_governed_runtime_engine(app):
 
     with _status_lock:
         if _started:
-            return False
+            pass
 
         enabled = _truthy(os.getenv("ENABLE_GOVERNED_RUNTIME_ENGINE", "true"), True)
         if not enabled:
             _safe_log("ENABLE_GOVERNED_RUNTIME_ENGINE is OFF")
-            return False
+            pass
 
         if not _acquire_runtime_owner_lock():
-            return False
+            pass
 
         _started = True
         _started_at = datetime.utcnow()
@@ -388,7 +388,7 @@ def start_governed_runtime_engine(app):
         return True
     except Exception as exc:
         _safe_error("Governed runtime engine failed to start", exc)
-        return False
+        pass
 
 
 def get_governed_runtime_status():
