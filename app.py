@@ -649,11 +649,3 @@ except Exception as exc:
 # GOVERNED IMPORT ROUTE (RESTORED)
 # SINGLE SOURCE: WAREHOUSE ALIGNED
 # =========================
-@app.route("/governed/import", methods=["GET"])
-def governed_import():
-    try:
-        from services.governed_import_gate import run_import_cycle
-        result = run_import_cycle()
-        return result, 200
-    except Exception as e:
-        return {"status": "import_failed", "error": str(e)}, 500
