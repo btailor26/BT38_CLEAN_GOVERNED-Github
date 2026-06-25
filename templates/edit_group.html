@@ -289,7 +289,7 @@ function updateGroupStock(event, groupId) {
     `;
     
     // Make POST request to update endpoint
-    fetch(`/governed/groups/${groupId}/propagate-quantity`, {
+    fetch(`/__disabled_propagate_quantity`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
