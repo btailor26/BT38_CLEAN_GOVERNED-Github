@@ -24,3 +24,22 @@ def governed_execution_gate(action_type, fn, *args, **kwargs):
         return {"ok": False, "blocked": True, "reason": "warehouse_disabled"}
 
     return fn(*args, **kwargs)
+
+def governed_execution_allowed(action_type: str) -> bool:
+    """
+    Compatibility helper used by governed_routes.py.
+    Returns whether a governed execution action is enabled.
+    """
+    if not _enabled("execution_enabled"):
+        return False
+
+    if action_type == "amazon_import":
+        return _enabled("amazon_import_enabled")
+
+    if action_type == "ebay_import":
+        return _enabled("ebay_import_enabled")
+
+    if action_type == "warehouse_sync":
+        return _enabled("warehouse_sync_enabled")
+
+    return True
