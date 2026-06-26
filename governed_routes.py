@@ -1,10 +1,10 @@
+from __future__ import annotations
 
 # ================= GOVERNED EXECUTION LAYER =================
 from services.governed_import_gate import governed_import_allowed
 from services.governed_execution_gate import governed_execution_allowed
 # =============================================================
 
-from __future__ import annotations
 
 from datetime import datetime
 from types import SimpleNamespace
@@ -164,25 +164,6 @@ def governed_dashboard_page():
             if "message" in a or "buyer" in a:
                 return "https://sellercentral.amazon.co.uk/messaging"
             return "https://sellercentral.amazon.co.uk/home"
-        if _bt38_config_on("webhook_ebay_enabled"):
-        else:
-            return log_shortcut("blocked", "eBay import disabled via settings")
-            if "dispatch" in a or "order" in a:
-                return "https://www.ebay.co.uk/sh/ord"
-            if "message" in a or "buyer" in a:
-                return "https://www.ebay.co.uk/sh/messages"
-            return "https://www.ebay.co.uk/sh/overview"
-
-        if "amazon" in p:
-        if _bt38_config_on("webhook_amazon_enabled"):
-        else:
-            return log_shortcut("blocked", "Amazon import disabled via settings")
-            if "dispatch" in a or "order" in a:
-                return "https://sellercentral.amazon.co.uk/orders-v3"
-            if "message" in a or "buyer" in a:
-                return "https://sellercentral.amazon.co.uk/messaging"
-            return "https://sellercentral.amazon.co.uk/home"
-
         return "/dashboard"
 
     def _human_title(platform: str, event_type: str) -> tuple[str, str]:
@@ -3271,10 +3252,13 @@ def governed_store_import_shortcut(store_id):
     platform = str(store.platform or "").strip().lower()
 
     if "amazon" in platform:
-        
-    if _bt38_config_on("webhook_amazon_enabled"):
-    else:
-        return log_shortcut("blocked", "Amazon import disabled via settings")
+        if not _bt38_config_on("webhook_amazon_enabled"):
+            return log_shortcut("blocked", "Amazon import disabled via settings")
+
+        from services.governed_amazon_inventory_import import run_governed_amazon_inventory_import
+
+        result = run_governed_amazon_inventory_import(store_id=store.id)
+        log_shortcut("success", "Amazon import shortcut executed through fuse box")
 
         if isinstance(result, dict):
             result.update({
@@ -3299,10 +3283,13 @@ def governed_store_import_shortcut(store_id):
         ), 200
 
     if "ebay" in platform:
-        
-    if _bt38_config_on("webhook_ebay_enabled"):
-    else:
-        return log_shortcut("blocked", "eBay import disabled via settings")
+        if not _bt38_config_on("webhook_ebay_enabled"):
+            return log_shortcut("blocked", "eBay import disabled via settings")
+
+        from services.governed_ebay_inventory_import import run_governed_ebay_inventory_import
+
+        result = run_governed_ebay_inventory_import(store_id=store.id)
+        log_shortcut("success", "eBay variation import shortcut executed through fuse box")
 
         if isinstance(result, dict):
             result.update({
