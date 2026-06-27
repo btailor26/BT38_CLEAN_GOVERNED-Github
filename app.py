@@ -132,8 +132,13 @@ app.config['SESSION_COOKIE_DOMAIN'] = None  # Dynamic - see after_request handle
 app.config['BT38_SESSION_ENV'] = APP_ENV
 
 # Session cookie settings
-app.config['SESSION_COOKIE_SECURE'] = True  # Required for SameSite=None
-app.config['SESSION_COOKIE_SAMESITE'] = 'None'  # Required for cross-site iframe (Replit wrapper)
+# Environment-aware cookie settings
+if APP_ENV.upper() == "PROD":
+    app.config['SESSION_COOKIE_SECURE'] = True
+    app.config['SESSION_COOKIE_SAMESITE'] = 'None'
+else:
+    app.config['SESSION_COOKIE_SECURE'] = False
+    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 
 # Template configuration - force reload to ensure new templates are picked up after deployment
