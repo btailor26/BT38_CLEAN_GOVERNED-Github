@@ -509,6 +509,10 @@ except Exception as exc:
 try:
     from governed_group_routes import governed_group_bp
     app.register_blueprint(governed_group_bp)
+
+    from governed_group_propagation_routes import governed_group_propagation_bp
+    app.register_blueprint(governed_group_propagation_bp)
+    print("✅ Governed group propagation routes registered")
 except Exception as exc:
     logging.error(f"Failed to register governed group routes: {exc}")
 
