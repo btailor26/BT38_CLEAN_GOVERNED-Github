@@ -132,13 +132,8 @@ app.config['SESSION_COOKIE_DOMAIN'] = None  # Dynamic - see after_request handle
 app.config['BT38_SESSION_ENV'] = APP_ENV
 
 # Session cookie settings
-# Environment-aware cookie settings
-if APP_ENV.upper() == "PROD":
-    app.config['SESSION_COOKIE_SECURE'] = True
-    app.config['SESSION_COOKIE_SAMESITE'] = 'None'
-else:
-    app.config['SESSION_COOKIE_SECURE'] = False
-    app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = True  # Required for SameSite=None
+app.config['SESSION_COOKIE_SAMESITE'] = 'None'  # Required for cross-site iframe (Replit wrapper)
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 
 # Template configuration - force reload to ensure new templates are picked up after deployment
@@ -509,13 +504,14 @@ except Exception as exc:
 try:
     from governed_group_routes import governed_group_bp
     app.register_blueprint(governed_group_bp)
-
-    from governed_group_propagation_routes import governed_group_propagation_bp
-    app.register_blueprint(governed_group_propagation_bp)
-    print("✅ Governed group propagation routes registered")
 except Exception as exc:
     logging.error(f"Failed to register governed group routes: {exc}")
 
+try:
+    from governed_group_propagation_routes import governed_group_propagation_bp
+    app.register_blueprint(governed_group_propagation_bp)
+except Exception as exc:
+    logging.error(f"Failed to register governed group propagation routes: {exc}")
 
 try:
     from governed_runtime_visibility_routes import governed_runtime_visibility_bp
@@ -645,4 +641,11 @@ except Exception as exc:
 
 # =========================
 # REAL LOCAL SYNC ROUTE
+# =========================
+
+# ==============================
+
+# =========================
+# GOVERNED IMPORT ROUTE (RESTORED)
+# SINGLE SOURCE: WAREHOUSE ALIGNED
 # =========================
