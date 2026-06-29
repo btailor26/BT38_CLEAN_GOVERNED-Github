@@ -58,6 +58,7 @@
     return {
       listingId: row?.dataset.listingId || '',
       stockId: row?.dataset.stockId || '',
+      groupId: row?.dataset.groupId || '',
       sku: row?.dataset.sku || ''
     };
   }
@@ -67,10 +68,13 @@
   // ==============================
 
   function pushListing(row) {
-    const { listingId, groupId, stockId } = getRow(row);
-    const warehouseGroupId = groupId || stockId;
-    if (warehouseGroupId) return postJson(`/governed/actions/groups/${warehouseGroupId}/push`, {}, "push");
+    const { listingId } = getRow(row);
+
+    // Original warehouse rule:
+    // marketplace icon push is listing-specific.
+    // Group push belongs to explicit group actions only.
     if (!listingId) return Promise.reject("Missing listingId");
+
     return postJson(`/governed/actions/listings/${listingId}/push`, {}, "push");
   }
   function saveQuantity(row, quantity) {
