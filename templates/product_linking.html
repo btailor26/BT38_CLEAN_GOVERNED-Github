@@ -1,6 +1,38 @@
 {% extends "base.html" %}
 
-{% block title %}GroupView{% endblock %}
+{% block title %}GroupView
+<script>
+document.addEventListener("click", function(e) {
+  const target = e.target;
+  const clickable = target.closest("button, a, [onclick], .badge, td, tr");
+  if (!clickable) return;
+
+  const info = {
+    tag: clickable.tagName,
+    text: (clickable.innerText || clickable.textContent || "").trim().slice(0, 80),
+    title: clickable.getAttribute("title"),
+    onclick: clickable.getAttribute("onclick"),
+    id: clickable.id,
+    classes: clickable.className,
+    rowGroupId: clickable.closest("tr") ? clickable.closest("tr").getAttribute("data-group-id") : null,
+    rowWarehouseId: clickable.closest("tr") ? clickable.closest("tr").getAttribute("data-warehouse-id") : null
+  };
+
+  console.log("[BT38_CLICK_CAPTURE]", info);
+
+  if (
+    info.onclick ||
+    info.title ||
+    info.text.includes("Qty") ||
+    info.text.includes("Push") ||
+    info.rowGroupId
+  ) {
+    alert("BT38 CLICK CAPTURE\n" + JSON.stringify(info, null, 2));
+  }
+}, true);
+</script>
+
+{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
@@ -1001,7 +1033,7 @@ function renderWarehouseProducts(products) {
         const displayStockQuantity = fbaListingForStock ? fbaListingForStock.fba_available_quantity : product.quantity;
 
         html += `
-            <tr data-group-id="${product.id}" data-group-name="${escapeHtml(product.group_name)}" data-sku="${escapeHtml(product.sku)}">
+            <tr data-group-id="${product.master_product_group_id || ''}" data-warehouse-id="${product.id}" data-group-name="${escapeHtml(product.group_name)}" data-sku="${escapeHtml(product.sku)}">
                 <td>
                     <div class="d-flex align-items-start">
                         <div>
@@ -1026,7 +1058,15 @@ function renderWarehouseProducts(products) {
                         <button class="btn btn-outline-secondary" onclick="showDiagnostics(${product.id}, '${escapeHtml(product.sku)}')" title="Diagnostics">
                             <i data-feather="activity" class="feather-xs"></i>
                         </button>
-                        <button class="btn btn-outline-primary" onclick="showAdjustPushModal(${product.id}, ${product.master_product_group_id || 'null'}, '${escapeHtml(product.sku)}', '${escapeHtml(product.name || '')}', ${displayStockQuantity}, Boolean(fbaListingForStock))" title="Adjust quantity and push grouped marketplaces">
+                        <button type="button"
+                            class="btn btn-outline-primary bt38-qty-push-open"
+                            data-warehouse-id="${product.id}"
+                            data-group-id="${product.master_product_group_id || ''}"
+                            data-sku="${escapeHtml(product.sku)}"
+                            data-name="${escapeHtml(product.name || '')}"
+                            data-qty="${displayStockQuantity}"
+                            data-is-fba="${Boolean(fbaListingForStock)}"
+                            title="Adjust quantity and push grouped marketplaces">
                             <i data-feather="upload-cloud" class="feather-xs"></i>
                         </button>
                     </div>
@@ -1102,26 +1142,80 @@ document.addEventListener('click', function(e) {
     executeGroupPush();
 });
 
+
+document.addEventListener('click', function(e) {
+    const btn = e.target && e.target.closest ? e.target.closest('.bt38-qty-push-open') : null;
+    if (!btn) return;
+
+    e.preventDefault();
+
+    const warehouseId = parseInt(btn.dataset.warehouseId, 10);
+    const groupId = btn.dataset.groupId ? parseInt(btn.dataset.groupId, 10) : null;
+    const qty = parseInt(btn.dataset.qty, 10);
+    const isFba = btn.dataset.isFba === 'true';
+
+    if (!groupId) {
+        alert('This row is not linked to a governed group yet.');
+        return;
+    }
+
+    showAdjustPushModal(
+        warehouseId,
+        groupId,
+        btn.dataset.sku || '',
+        btn.dataset.name || '',
+        qty,
+        isFba
+    );
+});
+
+
 // ==========================================
 // ADJUST & PUSH - Main Control Center
 // ==========================================
 
 function showAdjustPushModal(warehouseId, groupId, sku, name, currentQty, isFbaGroup=false) {
+    console.log("[BT38_QTY_CLICK_AUDIT] showAdjustPushModal FIRED", {
+        warehouseId,
+        groupId,
+        sku,
+        name,
+        currentQty,
+        isFbaGroup
+    });
+    window.__BT38_QTY_CLICK_AUDIT = {
+        fired: true,
+        warehouseId,
+        groupId,
+        sku,
+        name,
+        currentQty,
+        isFbaGroup,
+        at: new Date().toISOString()
+    };
+    alert("BT38 QTY CLICK FIRED: warehouse=" + warehouseId + " group=" + groupId);
+
     adjustPushWarehouseId = warehouseId;
     adjustPushGroupId = groupId || null;
 
     document.getElementById('adjustPushSku').textContent = sku;
     document.getElementById('adjustPushName').textContent = name || '';
+
     const qtyInput = document.getElementById('adjustPushQuantity');
     qtyInput.value = currentQty;
 
-    if (isFbaGroup) {
+    const groupHasFba = Boolean(isFbaGroup);
+
+    if (groupHasFba) {
         qtyInput.setAttribute('readonly', 'readonly');
-        qtyInput.setAttribute('title', 'FBA quantity is read-only. Group push will only update non-FBA marketplaces.');
+        qtyInput.classList.add('bg-light');
+        qtyInput.setAttribute('title', 'FBA quantity is read-only and cannot be edited.');
     } else {
         qtyInput.removeAttribute('readonly');
+        qtyInput.classList.remove('bg-light');
         qtyInput.removeAttribute('title');
     }
+
     document.getElementById('adjustPushWarehouseId').value = warehouseId;
 
     let groupInput = document.getElementById('adjustPushGroupId');
@@ -1138,6 +1232,26 @@ function showAdjustPushModal(warehouseId, groupId, sku, name, currentQty, isFbaG
     const modal = new bootstrap.Modal(document.getElementById('adjustPushModal'));
     modal.show();
     feather.replace();
+}
+
+function renderGroupMembersPreview(warehouseId) {
+    const container = document.getElementById('groupMembersPreview');
+    const product = (allWarehouseProducts || []).find(p => String(p.id) === String(warehouseId));
+
+    if (!product || !product.listings || product.listings.length === 0) {
+        container.innerHTML = '<div class="alert alert-warning py-1 mb-0"><small>No linked listings found for this warehouse/group.</small></div>';
+        return;
+    }
+
+    let html = '<div class="small"><strong>Will push warehouse truth to:</strong><ul class="mb-0 ps-3">';
+    product.listings.forEach(l => {
+        const platform = l.platform || 'Unknown';
+        const badge = platform.toLowerCase().includes('amazon') ? 'bg-warning text-dark' : 'bg-primary';
+        const pushable = l.is_pushable ? '' : ' <span class="text-muted">(not pushable)</span>';
+        html += `<li><span class="badge ${badge} me-1">${escapeHtml(platform)}</span> ${escapeHtml(l.sku || l.external_sku || l.external_id || '')} (${escapeHtml(l.store_name || '')})${pushable}</li>`;
+    });
+    html += '</ul></div>';
+    container.innerHTML = html;
 }
 
 function renderGroupMembersPreview(warehouseId) {
@@ -1177,37 +1291,65 @@ async function executeGroupPush() {
     }
 
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Updating...';
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Pushing...';
 
     try {
         const quantityResponse = await fetch(`/governed/groups/${groupId}/propagate-quantity`, {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-BT38-Shortcut': 'product_linking_push_now_button'
+            },
             body: JSON.stringify({
                 warehouse_stock_id: parseInt(warehouseId),
                 quantity: qty,
-                update_warehouse_first: true
+                update_warehouse_first: true,
+                source: 'product_linking_push_now_button'
             })
         });
 
-        const quantityData = await quantityResponse.json();
-
-        if (!quantityData.success && !quantityData.ok) {
-            alert('Quantity update error: ' + (quantityData.error || quantityData.reason || quantityData.message || 'Unknown error'));
-            return;
+        const quantityText = await quantityResponse.text();
+        let quantityData = {};
+        try {
+            quantityData = quantityText ? JSON.parse(quantityText) : {};
+        } catch (error) {
+            throw new Error('Quantity save returned non-JSON response. Status: ' + quantityResponse.status);
         }
 
-        const data = quantityData;
-
-        if (data.success || data.ok) {
-            bootstrap.Modal.getInstance(document.getElementById('adjustPushModal')).hide();
-            alert(`Warehouse quantity saved and group push completed.\n\nListings checked: ${data.total_listings || data.total || 0}\nPushed: ${data.pushed || data.ok_count || 0}\nSkipped: ${data.skipped || 0}\nFailed: ${data.failed || 0}`);
-            loadProductLinkingData(productLinkingPage);
-        } else {
-            alert('Push error: ' + (data.error || data.reason || data.message || 'Unknown error'));
+        if (!quantityResponse.ok || (!quantityData.success && !quantityData.ok)) {
+            throw new Error(quantityData.error || quantityData.reason || quantityData.message || 'Quantity save failed.');
         }
+
+        const pushResponse = await fetch(`/governed/actions/groups/${groupId}/push`, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-BT38-Shortcut': 'product_linking_push_now_button'
+            },
+            body: JSON.stringify({
+                source: 'product_linking_push_now_button'
+            })
+        });
+
+        const pushText = await pushResponse.text();
+        let data = {};
+        try {
+            data = pushText ? JSON.parse(pushText) : {};
+        } catch (error) {
+            throw new Error('Group push returned non-JSON response. Status: ' + pushResponse.status);
+        }
+
+        if (!pushResponse.ok || (!data.success && !data.ok)) {
+            throw new Error(data.error || data.reason || data.message || 'Group push failed.');
+        }
+
+        bootstrap.Modal.getInstance(document.getElementById('adjustPushModal')).hide();
+        alert(`Warehouse quantity saved and group push completed.\n\nListings checked: ${data.total_listings || data.total || 0}\nPushed: ${data.pushed || data.ok_count || 0}\nSkipped: ${data.skipped || 0}\nFailed: ${data.failed || 0}`);
+        loadProductLinkingData(productLinkingPage);
     } catch (error) {
-        alert('Error: ' + error.message);
+        alert('Push error: ' + error.message);
         console.error('Group Push error:', error);
     } finally {
         btn.disabled = false;
@@ -1216,19 +1358,7 @@ async function executeGroupPush() {
     }
 }
 
-// ==========================================
-// Simple Flat List Modal Workflow
-// ==========================================
 
-// Get listings that can be linked to a specific warehouse (not already linked to it)
-function getLinkableListings(warehouseId) {
-    return allMarketplaceListings.filter(listing => {
-        // Show listings NOT linked to this warehouse (including unlinked ones)
-        return listing.warehouse_stock_id !== warehouseId;
-    });
-}
-
-// Show modal with flat list of linkable listings (not linked to current warehouse)
 function showLinkModal(warehouseId, warehouseSku, warehouseName = '') {
     currentWarehouseId = warehouseId;
     currentWarehouseSku = warehouseSku;
@@ -2189,22 +2319,29 @@ document.addEventListener('DOMContentLoaded', function() {
   }, true);
 
   const originalFetch = window.fetch;
-  window.fetch = function(input, init){
-    const url = typeof input === "string" ? input : (input && input.url);
-    if (isBlockedActionUrl(url)) {
-      return Promise.resolve(new Response(JSON.stringify({
-        success:false,
-        ok:false,
-        governed:true,
-        blocked:true,
-        message:"This governed action is disabled until the workflow is approved."
-      }), {
-        status:409,
-        headers:{"Content-Type":"application/json"}
-      }));
+  window.fetch = function(input, init) {
+    const url = typeof input === "string" ? input : (input && input.url) || "";
+    const method = ((init && init.method) || "GET").toUpperCase();
+
+    if (method === "GET") return originalFetch(input, init);
+    if (url.startsWith("/governed/")) return originalFetch(input, init);
+
+    const listingPush = url.match(/^\/listings\/(\d+)\/push$/);
+    if (listingPush) {
+      return originalFetch(`/governed/actions/listings/${listingPush[1]}/push`, init);
     }
-    return originalFetch.apply(this, arguments);
-  };
-})();
+
+    const groupPush = url.match(/^\/groups\/(\d+)\/push$/);
+    if (groupPush) {
+      return originalFetch(`/governed/actions/groups/${groupPush[1]}/push`, init);
+    }
+
+    const groupQty = url.match(/^\/groups\/(\d+)\/update-stock$/);
+    if (groupQty) {
+      return originalFetch(`/governed/groups/${groupQty[1]}/propagate-quantity`, init);
+    }
+
+    return originalFetch(input, init);
+  };})();
 </script>
 
