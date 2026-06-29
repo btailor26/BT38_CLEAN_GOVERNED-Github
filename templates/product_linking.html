@@ -1443,6 +1443,21 @@ function filterFlatListings() {
     }, 300);
 }
 
+
+function getLinkableListings(warehouseId) {
+    const id = parseInt(warehouseId, 10);
+
+    return (allMarketplaceListings || allUnlinkedListings || []).filter(listing => {
+        const linkedWarehouseId = listing.warehouse_stock_id;
+
+        if (linkedWarehouseId === null || linkedWarehouseId === undefined || linkedWarehouseId === '') {
+            return true;
+        }
+
+        return parseInt(linkedWarehouseId, 10) !== id;
+    });
+}
+
 // Render flat list of unlinked listings
 function renderFlatListings(listings) {
     const container = document.getElementById('unlinkedListingsList');
