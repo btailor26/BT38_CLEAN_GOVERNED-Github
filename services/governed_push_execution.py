@@ -212,9 +212,44 @@ def push_group_listings(*, group_id: int, actor: str, source: str, actor_user=No
     failed_count = len(results) - success_count - skipped_count
     pushable_count = len(results) - skipped_count
 
+    group_success = failed_count == 0 and pushable_count > 0
+
+    # Report group push result back to Warehouse authority rows.
+    # Product Linking is only a shortcut; Warehouse remains the source of truth.
+    warehouse_rows = (
+        db.session.query(WarehouseStock)
+        .filter(WarehouseStock.id.in_(warehouse_ids))
+        .all()
+        if warehouse_ids else []
+    )
+
+    for stock in warehouse_rows:
+        if hasattr(stock, "last_push_at"):
+            stock.last_push_at = datetime.utcnow()
+        if hasattr(stock, "last_push_status"):
+            stock.last_push_status = "success" if group_success else "error"
+        if hasattr(stock, "last_push_error"):
+            stock.last_push_error = None if group_success else "Group push had failed marketplace members."
+        if hasattr(stock, "last_group_push_at"):
+            stock.last_group_push_at = datetime.utcnow()
+        if hasattr(stock, "last_group_push_status"):
+            stock.last_group_push_status = "success" if group_success else "error"
+        if hasattr(stock, "last_group_push_result"):
+            stock.last_group_push_result = {
+                "group_id": group_id,
+                "pushed": success_count,
+                "skipped": skipped_count,
+                "failed": failed_count,
+                "pushable_count": pushable_count,
+                "source": source,
+            }
+
+    if warehouse_rows:
+        db.session.commit()
+
     return {
-        "success": failed_count == 0 and pushable_count > 0,
-        "ok": failed_count == 0 and pushable_count > 0,
+        "success": group_success,
+        "ok": group_success,
         "governed": True,
         "group_id": group_id,
         "warehouse_ids": warehouse_ids,
