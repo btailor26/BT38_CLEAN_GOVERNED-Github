@@ -1512,9 +1512,10 @@ function renderFlatListings(listings) {
         const linkStatusBadge = isLinkedElsewhere ? '<span class="badge bg-secondary ms-1" title="Currently linked to another warehouse">Linked</span>' : '';
         
         if (isFBA) {
-            // FBA listings - can be linked but push is disabled (read-only for quantities)
+            // FBA relationship/linking follows the same rule as FBM/eBay.
+            // Execution remains FBA read-only/no direct FBA push.
             const buttonText = isLinkedElsewhere ? 'Re-link' : 'Link';
-            const buttonClass = isLinkedElsewhere ? 'btn-outline-info' : 'btn-info';
+            const buttonClass = isLinkedElsewhere ? 'btn-outline-success' : 'btn-success';
             html += `
                 <tr class="table-light">
                     <td><span class="text-truncate d-inline-block" style="max-width:180px" title="${listing.title || ''}">${listing.title || 'No title'}</span>${linkStatusBadge}</td>
@@ -1523,10 +1524,10 @@ function renderFlatListings(listings) {
                     <td>${marketplaceBadge}</td>
                     <td><small>${listing.store_name || '-'}</small></td>
                     <td>
-                        <button class="btn btn-sm ${buttonClass}" onclick="linkListingToWarehouse(${listing.id}, ${currentWarehouseId}, '${(listing.external_sku || listing.sku || listing.external_listing_id || listing.external_id || '').replace(/'/g, "\\'")}', '${currentWarehouseSku.replace(/'/g, "\\'")}')" title="Link for tracking (push disabled for FBA)">
+                        <button class="btn btn-sm ${buttonClass}" onclick="linkListingToWarehouse(${listing.id}, ${currentWarehouseId}, '${(listing.external_sku || listing.sku || listing.external_listing_id || listing.external_id || '').replace(/'/g, "\\'")}', '${currentWarehouseSku.replace(/'/g, "\\'")}')" title="Link using the same group relationship rule as FBM. FBA stays read-only/no push.">
                             <i data-feather="link" class="feather-sm"></i> ${buttonText}
                         </button>
-                        <small class="d-block text-muted" style="font-size:10px">No push</small>
+                        <small class="d-block text-muted" style="font-size:10px">Read-only / skipped on push</small>
                     </td>
                 </tr>
             `;
