@@ -193,20 +193,43 @@ def push_group_listings(*, group_id: int, actor: str, source: str, actor_user=No
         for listing in listings
     ]
 
-    ok_count = sum(1 for item in results if item.get("ok") or item.get("success"))
+    def _is_success(item: Dict[str, Any]) -> bool:
+        return bool(item.get("ok") or item.get("success"))
+
+    def _is_fba_read_only_skip(item: Dict[str, Any]) -> bool:
+        reason = str(item.get("reason") or item.get("error") or item.get("message") or "").lower()
+        marketplace = str(item.get("marketplace") or item.get("platform") or "").lower()
+        channel = str(item.get("amazon_fulfillment_channel") or item.get("fulfillment_channel") or item.get("fulfillment") or "").upper()
+        return (
+            bool(item.get("is_fba"))
+            or item.get("push_status") == "read_only"
+            or channel in {"AFN", "FBA"}
+            or ("amazon" in marketplace and ("fba" in reason or "afn" in reason or "read-only" in reason or "read only" in reason))
+        )
+
+    success_count = sum(1 for item in results if _is_success(item))
+    skipped_count = sum(1 for item in results if (not _is_success(item)) and _is_fba_read_only_skip(item))
+    failed_count = len(results) - success_count - skipped_count
+    pushable_count = len(results) - skipped_count
 
     return {
-        "success": ok_count == len(results) and bool(results),
-        "ok": ok_count == len(results) and bool(results),
+        "success": failed_count == 0 and pushable_count > 0,
+        "ok": failed_count == 0 and pushable_count > 0,
         "governed": True,
         "group_id": group_id,
         "warehouse_ids": warehouse_ids,
         "direct_group_listing_ids": direct_group_listing_ids,
         "total": len(results),
-        "ok_count": ok_count,
+        "ok_count": success_count,
+        "pushed": success_count,
+        "skipped": skipped_count,
+        "failed": failed_count,
+        "fba_read_only_skipped": skipped_count,
+        "pushable_count": pushable_count,
         "warehouse_truth_quantity_used": True,
         "warehouse_authority_resolution": True,
         "request_quantity_ignored": True,
+        "fba_read_only_does_not_fail_group": True,
         "results": results,
     }
 
