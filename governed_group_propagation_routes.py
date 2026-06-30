@@ -172,7 +172,7 @@ def governed_group_propagate_quantity(group_id: int):
             if hasattr(stock, "is_group_controlled"):
                 stock.is_group_controlled = True
 
-            if target_quantity is not None and not group_has_fba_authority:
+            if target_quantity is not None:
                 stock_columns = set(stock.__table__.columns.keys())
                 for col in ("sellable_quantity", "available_quantity", "quantity"):
                     if col in stock_columns:
@@ -211,7 +211,7 @@ def governed_group_propagate_quantity(group_id: int):
             })
             continue
 
-        if target_quantity is None or group_has_fba_authority:
+        if target_quantity is None:
             quantity = listing.effective_quantity
         else:
             quantity = target_quantity
