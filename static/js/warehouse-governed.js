@@ -141,6 +141,67 @@
     }
   }
 
+
+  document.addEventListener('click', async function (e) {
+    const marketBadge = e.target && e.target.closest ? e.target.closest('.bt38-marketplace-control') : null;
+    if (!marketBadge) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const row = marketBadge.closest('tr');
+    const listingId = row && row.dataset ? row.dataset.listingId : '';
+
+    if (!listingId) {
+      alert('Missing listingId');
+      return;
+    }
+
+    try {
+      await postJson(`/governed/actions/listings/${listingId}/push`, {}, 'warehouse-market-badge');
+      alert('Market badge push complete');
+    } catch (err) {
+      alert(err.message || 'Govern action failed');
+      console.error('Warehouse market badge push failed', err);
+    }
+  });
+
+
+  document.addEventListener('click', async function (e) {
+    const qtyButton = e.target && e.target.closest ? e.target.closest('.bt38-qty-action') : null;
+    if (!qtyButton) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const row = qtyButton.closest('tr');
+    if (!row) return;
+
+    const current = (qtyButton.querySelector('span') || {}).textContent || '';
+
+    const value = window.prompt('Enter new quantity', current.trim());
+    if (value === null) return;
+
+    const quantity = parseInt(value, 10);
+    if (!Number.isFinite(quantity)) {
+      alert('Invalid quantity');
+      return;
+    }
+
+    try {
+      await saveQuantity(row, quantity);
+
+      const span = qtyButton.querySelector('span');
+      if (span) span.textContent = String(quantity);
+
+      console.log('[warehouse-qty-button] quantity updated');
+    } catch (err) {
+      alert(err.message || 'Quantity update failed');
+      console.error(err);
+    }
+  });
+
+
   document.addEventListener('DOMContentLoaded', function () {
     if (!warehouseActive()) return;
 
