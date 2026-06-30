@@ -112,6 +112,10 @@ def push_marketplace_listing(*, listing_id: int, actor: str, source: str, actor_
     db.session.commit()
 
     result.update({
+        "listing_id": listing.id,
+        "warehouse_stock_id": listing.warehouse_stock_id,
+        "master_product_group_id": listing.master_product_group_id,
+        "push_quantity": push_quantity,
         "ui_action_wired": True,
         "grouping_layer_ready": True,
         "audit_history_logged": True,
@@ -216,12 +220,21 @@ def push_group_listings(*, group_id: int, actor: str, source: str, actor_user=No
 
     # Report group push result back to Warehouse authority rows.
     # Product Linking is only a shortcut; Warehouse remains the source of truth.
+    # Warehouse authority must always be resolved from the marketplace
+    # listing warehouse_stock_id values, never from the group id itself.
+    report_stock_ids = sorted({
+        int(item.get("warehouse_stock_id"))
+        for item in results
+        if item.get("warehouse_stock_id")
+    })
+
     warehouse_rows = (
         db.session.query(WarehouseStock)
-        .filter(WarehouseStock.id.in_(warehouse_ids))
+        .filter(WarehouseStock.id.in_(report_stock_ids))
         .all()
-        if warehouse_ids else []
+        if report_stock_ids else []
     )
+
 
     for stock in warehouse_rows:
         if hasattr(stock, "last_push_at"):
