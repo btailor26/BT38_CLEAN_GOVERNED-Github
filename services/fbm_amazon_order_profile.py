@@ -240,11 +240,16 @@ def _fetch_order(store: Any, order_id: str) -> tuple[dict[str, Any], dict[str, A
         "aws_secret_access_key": getattr(creds, "aws_secret_access_key", None),
         "role_arn": getattr(creds, "aws_user_arn", None),
     }
-    client = Orders(
-        credentials=_sp_api_credentials(normalized),
-        marketplace=_marketplace_for_id(creds.marketplace_id, Marketplaces),
-    )
-    response = client.get_order(order_id)
+    try:
+        client = Orders(
+            credentials=_sp_api_credentials(normalized),
+            marketplace=_marketplace_for_id(creds.marketplace_id, Marketplaces),
+        )
+        response = client.get_order(order_id)
+    except Exception as exc:
+        raise AmazonOrderProfileError(
+            f"Amazon Orders API could not refresh order {order_id}."
+        ) from exc
     payload = _response_payload(response)
     if not isinstance(payload, dict):
         raise AmazonOrderProfileError("Amazon Orders API returned an unexpected order payload.")
