@@ -32,7 +32,7 @@ from services.governed_marketplace_order_import import (
     _text,
 )
 
-EBAY_FINANCES_TRANSACTIONS_URL = "https://api.ebay.com/sell/finances/v1/transaction"
+EBAY_FINANCES_TRANSACTIONS_URL = "https://apiz.ebay.com/sell/finances/v1/transaction"
 EBAY_FINANCES_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.finances"
 
 
