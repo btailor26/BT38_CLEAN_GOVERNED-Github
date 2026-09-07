@@ -34,6 +34,8 @@ REQUIRED_COLUMNS = {
         "carrier", "service", "tracking_number", "status", "label_purchased_at",
         "carrier_accepted_at", "first_movement_at", "delivered_at",
         "marketplace_confirmation_status", "purchase_key", "purchase_status",
+        "replacement_reason_code", "replacement_reason",
+        "replacement_reason_recorded_at", "replacement_reason_recorded_by",
         "created_at", "updated_at",
     },
     "fbm_order_profiles": {
