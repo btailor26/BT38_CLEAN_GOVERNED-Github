@@ -50,6 +50,7 @@ from services.governed_fbm_parcel_grouping_alignment import install_governed_fbm
 from services.governed_fbm_shared_shipment_confirmation_alignment import install_governed_fbm_shared_shipment_confirmation_alignment
 from services.governed_fbm_replacement_label_alignment import install_governed_fbm_replacement_label_alignment
 from services.governed_fbm_order_projection_alignment import install_governed_fbm_order_projection_alignment
+from services.governed_royal_mail_click_drop_alignment import install_governed_royal_mail_click_drop_alignment
 
 install_governed_notification_read_alignment(app)
 install_governed_fbm_page_alignment(app)
@@ -100,6 +101,10 @@ install_governed_fbm_shared_shipment_confirmation_alignment()
 # existing Packlink/FBMShipment path, but require and persist the purchase reason
 # before another label can be prepared; the original shipment remains unchanged.
 install_governed_fbm_replacement_label_alignment(app)
+# Royal Mail Click & Drop is another merchant-owned label authority. Connection
+# and exact reads are explicit only: no order import loop, no background polling,
+# no label purchase path and no second shipment table.
+install_governed_royal_mail_click_drop_alignment(app)
 # Amazon ORDER_CHANGE already carries Prime/program and, when supplied, promise
 # truth. Persist that exact event into the existing FBM profile/operational rows
 # once; there is no broad startup recovery.
