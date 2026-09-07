@@ -169,8 +169,11 @@ def install_packlink_draft_alignment() -> None:
     @wraps(original_create_draft)
     def aligned_create_draft(self, *, order, parcel, rate):
         original_post_json = self._post_json
-        had_instance_override = "_post_json" in self.__dict__
-        prior_instance_override = self.__dict__.get("_post_json")
+        original_missing_check = self._draft_required_fields_missing
+        had_post_override = "_post_json" in self.__dict__
+        prior_post_override = self.__dict__.get("_post_json")
+        had_missing_override = "_draft_required_fields_missing" in self.__dict__
+        prior_missing_override = self.__dict__.get("_draft_required_fields_missing")
 
         def post_with_contract_address(endpoint, body):
             normalized_endpoint = str(endpoint or "").strip("/")
@@ -178,7 +181,13 @@ def install_packlink_draft_alignment() -> None:
                 _strip_non_contract_address_selectors(body)
             return original_post_json(endpoint, body)
 
+        # The base adapter verifies the immediate POST snapshot. Packlink can
+        # legitimately return an incomplete draft at that point; this alignment
+        # layer exists specifically to perform the provider-browser PUT that
+        # completes it. Defer that one validation until after the PUT instead of
+        # aborting before this layer can run.
         self._post_json = post_with_contract_address
+        self._draft_required_fields_missing = lambda _snapshot: []
         try:
             result = original_create_draft(
                 self,
@@ -187,10 +196,14 @@ def install_packlink_draft_alignment() -> None:
                 rate=rate,
             )
         finally:
-            if had_instance_override:
-                self._post_json = prior_instance_override
+            if had_post_override:
+                self._post_json = prior_post_override
             else:
                 self.__dict__.pop("_post_json", None)
+            if had_missing_override:
+                self._draft_required_fields_missing = prior_missing_override
+            else:
+                self.__dict__.pop("_draft_required_fields_missing", None)
 
         if not isinstance(result, dict):
             return result
@@ -215,14 +228,20 @@ def install_packlink_draft_alignment() -> None:
         state = _provider_state(snapshot)
         blockers = self.draft_blockers(snapshot)
         ready = self._provider_ready_to_ship(snapshot)
+        missing_fields = original_missing_check(snapshot)
 
-        if not ready:
+        if missing_fields or not ready:
             labels = [
                 str(item.get("label") or item.get("code") or "Packlink draft")
                 for item in blockers
                 if isinstance(item, dict)
             ]
-            detail = ", ".join(labels) if labels else (state or "provider still reports draft/incomplete")
+            detail_parts = []
+            if missing_fields:
+                detail_parts.append("missing " + ", ".join(missing_fields))
+            if labels:
+                detail_parts.append(", ".join(labels))
+            detail = "; ".join(detail_parts) or (state or "provider still reports draft/incomplete")
             raise PacklinkRequestError(
                 f"Packlink shipment {reference} was browser-PUT-saved but did not reach a payment-ready state: {detail}."
             )
