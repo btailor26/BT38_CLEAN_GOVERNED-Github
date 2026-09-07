@@ -396,8 +396,13 @@ def _set_store_connection_health(
     authorization_required: bool,
     error: str | None,
 ) -> None:
-    """Keep the eBay Store connection state aligned with Notification API truth."""
+    """Keep the eBay Store connection state aligned with core Notification API truth."""
     if healthy:
+        if getattr(store, "auth_error_code", None) not in {
+            None,
+            "ebay_notification_reauthorization_required",
+        }:
+            return
         if hasattr(store, "auth_status"):
             store.auth_status = "ok"
         if hasattr(store, "auth_error_code"):
@@ -639,18 +644,17 @@ def ensure_ebay_order_notification_registration(
         for item in subscriptions
     )
     now = datetime.utcnow().isoformat()
-    authorization_required = any(
+    optional_authorization_required = any(
         item["status"] == "AUTHORIZATION_REQUIRED"
         for item in (listing_subscription, return_subscription)
     )
-    overall_ok = bool(
+    all_topics_ok = bool(
         order_subscription["ok"]
         and listing_subscription["ok"]
         and return_subscription["ok"]
     )
-    registration_status = "SUCCESS" if overall_ok else (
-        "AUTHORIZATION_REQUIRED" if authorization_required else "PARTIAL"
-    )
+    core_ok = bool(order_subscription["ok"])
+    registration_status = "SUCCESS" if all_topics_ok else "PARTIAL"
     registration_error = (
         return_subscription.get("error")
         or listing_subscription.get("error")
@@ -678,27 +682,32 @@ def ensure_ebay_order_notification_registration(
         "ebay_notification_schema_version": TOPIC_SCHEMA_VERSIONS[ORDER_TOPIC_ID],
         "ebay_notification_topic_schema_versions": topic_schema_versions,
         "ebay_notification_registered_at": now,
-        "ebay_reauthorization_required": authorization_required,
+        "ebay_reauthorization_required": optional_authorization_required,
+        "ebay_notification_optional_reauthorization_required": optional_authorization_required,
     })
 
-    if overall_ok:
+    if all_topics_ok:
         creds["ebay_notification_registration_error"] = None
         creds["ebay_notification_listing_subscription_error"] = None
         creds["ebay_reauthorization_required"] = False
+        creds["ebay_notification_optional_reauthorization_required"] = False
         creds["ebay_notification_authorization_cleared_at"] = now
 
     store.api_key = json.dumps(creds)
+    # Destination + ORDER_CONFIRMATION are the required sale-intake authority.
+    # Missing optional LISTING/RETURN grants must remain capability-specific and
+    # must never poison a still-working eBay store connection.
     _set_store_connection_health(
         store,
-        healthy=overall_ok,
-        authorization_required=authorization_required,
-        error=registration_error,
+        healthy=core_ok,
+        authorization_required=False,
+        error=None,
     )
     db.session.commit()
 
     return {
-        "ok": overall_ok,
-        "success": overall_ok,
+        "ok": core_ok,
+        "success": core_ok,
         "destination_id": destination_id,
         "destination_created": destination_created,
         "subscription_id": subscription_id,
@@ -710,5 +719,6 @@ def ensure_ebay_order_notification_registration(
         "listing_subscription": listing_subscription,
         "return_subscription": return_subscription,
         "registration_status": registration_status,
-        "authorization_required": authorization_required,
+        "authorization_required": optional_authorization_required,
+        "optional_authorization_required": optional_authorization_required,
     }
