@@ -37,9 +37,12 @@ def test_operational_health_remains_db_read_only_and_preserves_fbm_guards_throug
     assert "get_or_refresh_amazon_profile" not in HEALTH
 
 
-def test_dispatched_history_does_not_inflate_shipping_action_count():
-    assert '"shipping_actions": dispatch_due + overdue' in HEALTH
+def test_ready_queue_alone_owns_shipping_action_headline():
+    assert '"shipping_actions": dispatch_due,' in HEALTH
+    assert '"shipping_actions": dispatch_due + overdue' not in HEALTH
     assert '"dispatched": dispatched' in HEALTH
+    assert '"overdue": overdue' in HEALTH
+    assert "Current Ready-to-dispatch orders drive this number" in HEALTH
     assert 'platform.casefold() == "amazon"' in HEALTH
     assert 'page_alignment._health_html = operational_health_html' in HEALTH
     assert 'html.replace(mapping_card, "")' in HEALTH
