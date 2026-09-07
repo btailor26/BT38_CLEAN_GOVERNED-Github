@@ -58,6 +58,40 @@
         '</div>';
     }
 
+    function rowIsDispatched(orderId) {
+        const row = document.querySelector(`.fbm-order-row[data-order-id="${CSS.escape(String(orderId || ''))}"]`);
+        if (!row) return false;
+        const lifecycle = String(row.dataset.lifecycleStatus || '').trim().toLowerCase();
+        if (dispatchedStates.has(lifecycle)) return true;
+        return Boolean(row.querySelector('.fbm-tracking-journey, code')) && !/Unshipped/i.test(row.textContent || '');
+    }
+
+    function removeRedundantPacklinkChecks() {
+        document.querySelectorAll('.packlink-existing-status').forEach(button => button.remove());
+    }
+
+    function replacementRouteHtml(orderId) {
+        return '<div class="border rounded p-3 mb-2 d-flex justify-content-between align-items-start gap-3 flex-wrap bt38-replacement-route">' +
+            '<div><div class="d-flex align-items-center gap-2 flex-wrap"><strong>Replacement label</strong>' +
+            '<span class="badge bg-light text-dark border">Additional shipment</span></div>' +
+            '<div class="small text-muted mt-1">For an order already dispatched. Uses the existing external-label path and keeps the original shipment unchanged.</div></div>' +
+            `<button class="btn btn-sm btn-outline-warning bt38-replacement-start" type="button" data-order-id="${String(orderId)}">Replacement label</button>` +
+        '</div>';
+    }
+
+    function installReplacementRoutes() {
+        removeRedundantPacklinkChecks();
+        const host = document.getElementById('fbmShippingOrders');
+        if (!host) return;
+        host.querySelectorAll('.card[data-order-id]').forEach(card => {
+            const orderId = String(card.dataset.orderId || '').trim();
+            if (!orderId || !rowIsDispatched(orderId) || card.querySelector('.bt38-replacement-route')) return;
+            const manual = card.querySelector('.provider-action[data-provider="manual"]');
+            const manualRoute = manual ? manual.closest('.border.rounded') : null;
+            if (manualRoute) manualRoute.insertAdjacentHTML('afterend', replacementRouteHtml(orderId));
+        });
+    }
+
     function applyReplacementWorkspace() {
         if (!state.active) return;
         const host = document.getElementById('fbmShippingOrders');
@@ -82,46 +116,38 @@
         });
     }
 
-    function openReplacement(row) {
-        const orderId = String(row.dataset.orderId || '').trim();
-        if (!orderId) return;
-        const shippingButton = row.querySelector('.fbm-shipping-options');
-        if (!shippingButton) return;
+    function startReplacement(orderId) {
         state.active = true;
-        state.orderId = orderId;
+        state.orderId = String(orderId || '').trim();
         state.reasonCode = '';
         state.reason = '';
-        shippingButton.click();
-        window.setTimeout(applyReplacementWorkspace, 50);
+        applyReplacementWorkspace();
     }
 
     function installButtons() {
-        document.querySelectorAll('.fbm-order-row').forEach(row => {
-            const lifecycle = String(row.dataset.lifecycleStatus || '').trim().toLowerCase();
-            if (!dispatchedStates.has(lifecycle)) return;
-            const actionCell = row.children && row.children[9];
-            if (!actionCell || actionCell.querySelector('.bt38-replacement-label')) return;
-            const button = document.createElement('button');
-            button.type = 'button';
-            button.className = 'btn btn-sm btn-outline-warning mt-1 bt38-replacement-label';
-            button.textContent = 'Replacement label';
-            button.title = 'Buy another label for a dispatched order. A purchase reason is required.';
-            button.addEventListener('click', event => {
-                event.preventDefault();
-                event.stopPropagation();
-                openReplacement(row);
-            });
-            actionCell.appendChild(button);
-        });
+        removeRedundantPacklinkChecks();
+        document.querySelectorAll('.bt38-replacement-label').forEach(button => button.remove());
+        installReplacementRoutes();
     }
 
     const ordersBox = document.getElementById('fbmShippingOrders');
     if (ordersBox) {
-        const observer = new MutationObserver(() => applyReplacementWorkspace());
+        const observer = new MutationObserver(() => {
+            installReplacementRoutes();
+            applyReplacementWorkspace();
+        });
         observer.observe(ordersBox, {childList: true, subtree: true});
     }
 
     document.addEventListener('click', event => {
+        const replacementStart = event.target.closest('.bt38-replacement-start');
+        if (replacementStart) {
+            event.preventDefault();
+            event.stopPropagation();
+            startReplacement(replacementStart.dataset.orderId);
+            return;
+        }
+
         if (!state.active) return;
         const provider = event.target.closest('.provider-action');
         if (!provider) return;
