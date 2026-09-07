@@ -1,10 +1,11 @@
 """Authenticated exact Amazon FBM lifecycle recovery route.
 
 This is a narrow operator recovery surface for one existing Amazon FBM order.
-It reuses the existing Amazon Orders v2026 exact readback and persists only
-marketplace-owned lifecycle/tracking truth into the existing MarketplaceOrder.
-It never creates/replays an order, mutates inventory, buys postage, confirms
-shipment to Amazon, starts a scan, scheduler, or marketplace write.
+It reuses the existing Amazon Orders v2026 exact readback and existing Seller
+Central purchased-label readback. It persists only Amazon-owned lifecycle,
+tracking and validated shipment authority into existing BT38 records. It never
+creates/replays an order, mutates inventory, buys postage, confirms shipment to
+Amazon, starts a scan, scheduler, or marketplace write.
 """
 from __future__ import annotations
 
@@ -17,6 +18,9 @@ from flask_login import current_user
 
 from extensions import db
 from models import MarketplaceOrder, Store
+from services.governed_amazon_shipping_label_readback import (
+    hydrate_amazon_purchased_label_for_order,
+)
 from services.governed_amazon_tracking_readback import hydrate_amazon_tracking_for_order
 
 
@@ -32,7 +36,7 @@ _AMAZON_ORDER_RE = re.compile(r"\d{3}-\d{7}-\d{7}")
     "/governed/actions/amazon/exact-order-recovery"
 )
 def recover_exact_amazon_order_manually():
-    """Refresh marketplace-owned truth for one existing Amazon FBM order only."""
+    """Refresh exact Amazon-owned truth for one existing Amazon FBM order only."""
     configured_task_key = str(os.environ.get("TASK_API_KEY") or "")
     supplied_task_key = str(request.headers.get("X-Task-Key") or "")
     session_authorized = bool(getattr(current_user, "is_authenticated", False))
@@ -144,6 +148,31 @@ def recover_exact_amazon_order_manually():
             "marketplace_write_started": False,
         }), 502
 
+    try:
+        shipping_label = hydrate_amazon_purchased_label_for_order(
+            store=store,
+            marketplace_order_id=order_id,
+            source="manual_exact_amazon_recovery",
+        )
+    except Exception as exc:
+        db.session.rollback()
+        current_app.logger.exception(
+            "BT38 manual exact Amazon purchased-label recovery failed store_id=%s order_id=%s",
+            store_id,
+            order_id,
+        )
+        shipping_label = {
+            "success": False,
+            "skipped": False,
+            "reason": "amazon_purchased_label_recovery_exception",
+            "error": str(exc)[:500],
+            "order_id": order_id,
+            "marketplace_write_started": False,
+        }
+
+    hydration = dict(result)
+    hydration["shipping_label"] = shipping_label
+
     db.session.expire_all()
     readback_rows = (
         MarketplaceOrder.query
@@ -177,6 +206,6 @@ def recover_exact_amazon_order_manually():
         "marketplace_write_started": False,
         "store_id": store_id,
         "order_id": order_id,
-        "hydration": result,
+        "hydration": hydration,
         "database_readback": readback,
     }), 200
