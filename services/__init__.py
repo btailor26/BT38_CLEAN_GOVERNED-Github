@@ -37,3 +37,9 @@ import services.governed_fbm_shipment_event_alignment  # noqa: F401,E402
 # the existing profile authority (Prime/SFP, fulfilment, promise and shipped-order
 # readbacks) without making the health aggregation a marketplace-read surface.
 import services.governed_fbm_amazon_profile_alignment  # noqa: F401,E402
+
+# The existing 8-hour governed recovery must also invoke the already-built
+# bounded exact eBay missing-tracking readback. This only restores invocation of
+# eBay shipment truth for existing MarketplaceOrder rows; it adds no new writer,
+# poller, worker, shipment table or marketplace mutation path.
+import services.governed_ebay_runtime_recovery_alignment  # noqa: F401,E402
