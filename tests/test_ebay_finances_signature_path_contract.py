@@ -2,6 +2,7 @@ from Crypto.PublicKey import ECC
 from Crypto.Signature import eddsa
 
 from services.governed_ebay_shipping_label_finance import (
+    EBAY_FINANCES_TRANSACTIONS_URL,
     _import_ed25519_private_key,
     _signature_authority,
     _signature_headers,
@@ -9,19 +10,23 @@ from services.governed_ebay_shipping_label_finance import (
 )
 
 
+def test_ebay_finances_uses_apiz_production_endpoint():
+    assert EBAY_FINANCES_TRANSACTIONS_URL == "https://apiz.ebay.com/sell/finances/v1/transaction"
+
+
 def test_ebay_finances_signature_path_excludes_query_string():
     url = (
-        "https://api.ebay.com/sell/finances/v1/transaction"
+        "https://apiz.ebay.com/sell/finances/v1/transaction"
         "?filter=transactionType%3A%7BSHIPPING_LABEL%7D%2CorderId%3A%7B27-15097-79712%7D"
         "&limit=100"
     )
 
     assert _signature_path(url) == "/sell/finances/v1/transaction"
-    assert _signature_authority(url) == "api.ebay.com"
+    assert _signature_authority(url) == "apiz.ebay.com"
 
 
 def test_ebay_finances_signature_path_defaults_to_root():
-    assert _signature_path("https://api.ebay.com") == "/"
+    assert _signature_path("https://apiz.ebay.com") == "/"
 
 
 def _synthetic_ed25519_pkcs8_body() -> str:
@@ -50,7 +55,7 @@ def test_ebay_finances_signature_headers_accept_ebay_pkcs8_body(monkeypatch):
 
     headers = _signature_headers(
         method="GET",
-        url="https://api.ebay.com/sell/finances/v1/transaction?limit=100",
+        url="https://apiz.ebay.com/sell/finances/v1/transaction?limit=100",
     )
 
     assert headers["x-ebay-signature-key"] == "synthetic-jwe"
