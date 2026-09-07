@@ -79,6 +79,11 @@ def test_registration_uses_each_topics_supported_schema(monkeypatch):
     monkeypatch.setitem(sys.modules, "app", SimpleNamespace(db=fake_db))
     monkeypatch.setenv("EBAY_NOTIFICATION_VERIFICATION_TOKEN", "a" * 32)
     monkeypatch.setattr(registration, "_ensure_destination", lambda **kwargs: ("destination", False))
+    monkeypatch.setattr(
+        registration,
+        "_topic_schema_version",
+        lambda **kwargs: "1.0",
+    )
     calls = []
 
     def ensure_subscription(**kwargs):
@@ -90,6 +95,8 @@ def test_registration_uses_each_topics_supported_schema(monkeypatch):
     store = _store({
         "oauth_granted_scope": (
             "https://api.ebay.com/oauth/api_scope/sell.listing.read "
+            "https://api.ebay.com/oauth/api_scope/sell.return.read "
+            "https://api.ebay.com/oauth/api_scope/sell.return "
             "https://api.ebay.com/oauth/api_scope/commerce.notification.subscription"
         )
     })
@@ -99,19 +106,25 @@ def test_registration_uses_each_topics_supported_schema(monkeypatch):
     )
     persisted = json.loads(store.api_key)
 
-    assert calls == [("ORDER_CONFIRMATION", "1.1"), ("LISTING", "1.0")]
+    assert calls == [
+        ("ORDER_CONFIRMATION", "1.1"),
+        ("LISTING", "1.0"),
+        ("ORDER_RETURN_ACTIVITY", "1.0"),
+    ]
     assert result["ok"] is True
     assert result["success"] is True
     assert result["registration_status"] == "SUCCESS"
     assert result["authorization_required"] is False
+    assert result["optional_authorization_required"] is False
     assert result["listing_subscription"]["status"] == "ENABLED"
     assert persisted["ebay_reauthorization_required"] is False
+    assert persisted["ebay_notification_optional_reauthorization_required"] is False
     assert store.auth_status == "ok"
     assert store.auth_error_code is None
     assert fake_db.commits == 1
 
 
-def test_listing_authorization_failure_preserves_order_and_is_not_retried(monkeypatch):
+def test_optional_listing_authorization_failure_preserves_core_order_connection(monkeypatch):
     fake_db = _FakeDB()
     monkeypatch.setitem(sys.modules, "app", SimpleNamespace(db=fake_db))
     monkeypatch.setenv("EBAY_NOTIFICATION_VERIFICATION_TOKEN", "a" * 32)
@@ -135,17 +148,19 @@ def test_listing_authorization_failure_preserves_order_and_is_not_retried(monkey
     )
     persisted = json.loads(store.api_key)
 
-    assert first["ok"] is False
-    assert first["success"] is False
+    assert first["ok"] is True
+    assert first["success"] is True
     assert first["authorization_required"] is True
-    assert first["registration_status"] == "AUTHORIZATION_REQUIRED"
+    assert first["optional_authorization_required"] is True
+    assert first["registration_status"] == "PARTIAL"
     assert first["subscription_id"] == "order-subscription"
     assert first["listing_subscription"]["status"] == "AUTHORIZATION_REQUIRED"
     assert persisted["ebay_notification_order_subscription_status"] == "ENABLED"
     assert persisted["ebay_notification_listing_subscription_status"] == "AUTHORIZATION_REQUIRED"
     assert persisted["ebay_reauthorization_required"] is True
-    assert store.auth_status == "auth_error"
-    assert store.auth_error_code == "ebay_notification_reauthorization_required"
+    assert persisted["ebay_notification_optional_reauthorization_required"] is True
+    assert store.auth_status == "ok"
+    assert store.auth_error_code is None
 
     calls.clear()
     second = registration.ensure_ebay_order_notification_registration(
@@ -154,7 +169,41 @@ def test_listing_authorization_failure_preserves_order_and_is_not_retried(monkey
     )
 
     assert calls == [("ORDER_CONFIRMATION", "1.1")]
-    assert second["ok"] is False
+    assert second["ok"] is True
     assert second["authorization_required"] is True
+    assert second["optional_authorization_required"] is True
     assert second["listing_subscription"]["skipped"] is True
+    assert store.auth_status == "ok"
+    assert store.auth_error_code is None
     assert fake_db.commits == 2
+
+
+def test_missing_optional_return_scope_does_not_poison_core_order_connection(monkeypatch):
+    fake_db = _FakeDB()
+    monkeypatch.setitem(sys.modules, "app", SimpleNamespace(db=fake_db))
+    monkeypatch.setenv("EBAY_NOTIFICATION_VERIFICATION_TOKEN", "a" * 32)
+    monkeypatch.setattr(registration, "_ensure_destination", lambda **kwargs: ("destination", False))
+    monkeypatch.setattr(
+        registration,
+        "_ensure_subscription",
+        lambda **kwargs: (f'{kwargs["topic_id"]}-subscription', False),
+    )
+    store = _store({
+        "oauth_granted_scope": "https://api.ebay.com/oauth/api_scope/sell.listing.read"
+    })
+
+    result = registration.ensure_ebay_order_notification_registration(
+        store=store,
+        access_token="token",
+    )
+    persisted = json.loads(store.api_key)
+
+    assert result["ok"] is True
+    assert result["success"] is True
+    assert result["registration_status"] == "PARTIAL"
+    assert result["return_subscription"]["status"] == "AUTHORIZATION_REQUIRED"
+    assert result["optional_authorization_required"] is True
+    assert persisted["ebay_notification_order_subscription_status"] == "ENABLED"
+    assert persisted["ebay_notification_optional_reauthorization_required"] is True
+    assert store.auth_status == "ok"
+    assert store.auth_error_code is None
