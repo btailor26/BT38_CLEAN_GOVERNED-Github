@@ -28,11 +28,13 @@ def test_ebay_return_webhook_remains_existing_non_stock_lifecycle_event():
 def test_optional_notification_scope_failure_does_not_poison_core_ebay_auth():
     source = (ROOT / "services" / "governed_ebay_notification_registration.py").read_text()
 
-    assert 'core_registration_ok = bool(order_subscription_id)' in source
-    assert 'overall_ok = core_registration_ok' in source
-    assert 'optional_reauthorization_required' in source
-    assert 'listing_reauthorization_required' in source
-    assert 'return_reauthorization_required' in source
+    assert 'core_ok = bool(order_subscription["ok"])' in source
+    assert 'optional_authorization_required = any(' in source
+    assert '"ebay_notification_optional_reauthorization_required"' in source
+    assert 'healthy=core_ok' in source
+    assert 'authorization_required=False' in source
+    assert '"ok": core_ok' in source
+    assert '"success": core_ok' in source
 
 
 def test_shipping_notification_consent_is_persisted_separately_from_store_auth():
