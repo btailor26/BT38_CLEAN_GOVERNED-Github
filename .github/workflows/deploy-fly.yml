@@ -193,7 +193,21 @@ jobs:
               continue
             fi
             EXPECTED="$(sha256sum "$FILE" | awk '{print $1}')"
-            REMOTE_LINE="$(flyctl ssh console --app bt38-prod --command "sh -lc 'if [ ! -f /app/$FILE ]; then echo MISSING; else sha256sum /app/$FILE; fi'" | tail -n 1 | tr -d '\r')"
+            REMOTE_LINE=""
+            for ATTEMPT in 1 2 3 4 5; do
+              if REMOTE_LINE="$(flyctl ssh console --app bt38-prod --command "sh -lc 'if [ ! -f /app/$FILE ]; then echo MISSING; else sha256sum /app/$FILE; fi'" 2>/tmp/fly-ssh-error | tail -n 1 | tr -d '\r')"; then
+                break
+              fi
+              echo "WAIT: Fly SSH not ready for '$FILE' (attempt $ATTEMPT/5)."
+              cat /tmp/fly-ssh-error || true
+              REMOTE_LINE=""
+              sleep $((ATTEMPT * 3))
+            done
+            if [ -z "$REMOTE_LINE" ]; then
+              echo "BLOCKED: Fly SSH remained unavailable while verifying '$FILE' after 5 attempts."
+              FAILED=1
+              continue
+            fi
             if [ "$REMOTE_LINE" = "MISSING" ]; then
               echo "BLOCKED: Fly /app is missing critical file '$FILE'."
               FAILED=1
