@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from services.governed_amazon_shipping_label_readback import (
     _shipment_candidates,
     _shipment_values,
@@ -86,3 +88,15 @@ def test_merchant_fulfillment_tracked_label_extracts_tracking_when_present():
 
     assert values["shipment_id"] == "4c455d87-7737-42e4-99d2-24ddbe0fe777"
     assert values["tracking_number"] == "AA123456789GB"
+
+
+def test_exact_manual_recovery_aligns_existing_purchased_label_readback():
+    source = Path("services/governed_amazon_exact_order_recovery_route.py").read_text(
+        encoding="utf-8"
+    )
+    assert "hydrate_amazon_tracking_for_order(" in source
+    assert "hydrate_amazon_purchased_label_for_order(" in source
+    assert 'source="manual_exact_amazon_recovery"' in source
+    assert 'hydration["shipping_label"] = shipping_label' in source
+    assert '"broad_scan_started": False' in source
+    assert '"marketplace_write_started": False' in source
