@@ -49,3 +49,9 @@ import services.governed_ebay_runtime_recovery_alignment  # noqa: F401,E402
 # siblings collapse to one logical sale and later shipment events retire that
 # stale sale. This adds no DB/provider read or polling path.
 import services.governed_fbm_logical_bell_alignment  # noqa: F401,E402
+
+# The authority-backed bell already exposes a governed action_count. Keep the
+# red badge and assistant presentation tied to that one count rather than their
+# older unread-history/dashboard-attention counters. This observes only the bell
+# request the browser already makes; no extra read, polling or marketplace call.
+import services.governed_action_count_ui_alignment  # noqa: F401,E402
