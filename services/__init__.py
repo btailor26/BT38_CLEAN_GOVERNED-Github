@@ -43,3 +43,9 @@ import services.governed_fbm_amazon_profile_alignment  # noqa: F401,E402
 # eBay shipment truth for existing MarketplaceOrder rows; it adds no new writer,
 # poller, worker, shipment table or marketplace mutation path.
 import services.governed_ebay_runtime_recovery_alignment  # noqa: F401,E402
+
+# The notification bell is passive presentation only. It projects already-published
+# governed UI movements and never reads Neon, marketplaces or providers itself.
+# Recovery scans remain silent unless the normal event path emits a real lifecycle
+# movement; repeated recovery scans cannot manufacture a dispatch action.
+import services.governed_passive_bell_alignment  # noqa: F401,E402
