@@ -90,7 +90,10 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
             "platform_counts": dict(sorted(platform_counts.items(), key=lambda item: (-item[1], item[0].lower()))),
             "health_score": health_score,
             "risk_actions": risk_actions,
-            "shipping_actions": dispatch_due + overdue,
+            # Cofi's headline is the current Ready-to-dispatch workload. Carrier
+            # overdue remains a separate risk metric and must not inflate the
+            # number of orders the user still needs to dispatch.
+            "shipping_actions": dispatch_due,
             "truncated": bool(truncated),
         }
 
@@ -119,7 +122,7 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
     def operational_guide_html(health: dict) -> str:
         return original_guide_html(health).replace(
             "Ready-to-ship, overdue carrier and mapping actions drive this number.",
-            "Ready-to-dispatch and overdue carrier actions drive this number.",
+            "Current Ready-to-dispatch orders drive this number; carrier risks are shown separately.",
         )
 
     page_alignment._health_summary = session_health_summary
@@ -127,4 +130,4 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
     page_alignment._health_html = operational_health_html
     page_alignment._guide_html = operational_guide_html
     app._bt38_fbm_all_orders_health_alignment_installed = True
-    app.logger.info("BT38 FBM health aligned: same request/session snapshot; no independent order-history scan")
+    app.logger.info("BT38 FBM health aligned: same request/session snapshot; Ready-to-dispatch owns headline action count; no independent order-history scan")
