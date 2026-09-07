@@ -36,16 +36,25 @@ def test_replacement_reuses_existing_packlink_path_without_background_purchase()
     assert "purchase_shipment" not in ALIGNMENT
 
 
-def test_dispatched_workspace_exposes_replacement_label_and_reason_capture():
+def test_dispatched_workspace_places_replacement_beside_manual_shipping():
     assert "Replacement label" in SCRIPT
-    assert "bt38-replacement-label" in SCRIPT
-    assert "lifecycleStatus" in SCRIPT
+    assert "bt38-replacement-route" in SCRIPT
+    assert "bt38-replacement-start" in SCRIPT
+    assert 'provider-action[data-provider="manual"]' in SCRIPT
+    assert "insertAdjacentHTML('afterend'" in SCRIPT
+    assert "rowIsDispatched" in SCRIPT
     assert "Why is another label being purchased?" in SCRIPT
     assert "label_damaged" in SCRIPT
     assert "parcel_damaged" in SCRIPT
     assert "customer_replacement" in SCRIPT
     assert "shipment_purpose = 'replacement'" in SCRIPT
     assert "confirm_additional_shipment = 'CONFIRM_REPLACEMENT'" in SCRIPT
+
+
+def test_redundant_check_packlink_control_is_removed_from_dispatch_rows():
+    assert "removeRedundantPacklinkChecks" in SCRIPT
+    assert ".packlink-existing-status" in SCRIPT
+    assert "button.remove()" in SCRIPT
 
 
 def test_amazon_native_second_purchase_is_not_faked_for_dispatched_replacement():
