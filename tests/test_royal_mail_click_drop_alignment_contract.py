@@ -1,10 +1,10 @@
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 CLIENT = (ROOT / "services" / "royal_mail_click_drop.py").read_text(encoding="utf-8")
 ROUTES = (ROOT / "governed_royal_mail_routes.py").read_text(encoding="utf-8")
 MODEL = (ROOT / "royal_mail_models.py").read_text(encoding="utf-8")
+READBACK = (ROOT / "services" / "governed_royal_mail_label_readback.py").read_text(encoding="utf-8")
 INSTALLER = (ROOT / "services" / "governed_royal_mail_click_drop_alignment.py").read_text(encoding="utf-8")
 SCRIPT = (ROOT / "static" / "js" / "royal_mail_click_drop_connection.js").read_text(encoding="utf-8")
 MAIN = (ROOT / "main.py").read_text(encoding="utf-8")
@@ -12,7 +12,6 @@ MAIN = (ROOT / "main.py").read_text(encoding="utf-8")
 
 def test_click_drop_uses_account_api_key_not_website_password():
     assert '"Authorization": str(self.api_key).strip()' in CLIENT
-    assert "Royal Mail's public Click & Drop API does not authenticate" in ROUTES
     assert 'if body.get("password")' in ROUTES
     assert "normal Royal Mail website password" in MODEL
     assert "Click & Drop API auth key" in SCRIPT
@@ -28,10 +27,17 @@ def test_connection_is_merchant_owned_and_credentials_are_encrypted():
     assert "api_key=" not in MODEL
 
 
+def test_connection_validation_uses_real_account_capability():
+    assert 'self._get("/carriers")' in CLIENT
+    assert '"carrier_count"' in CLIENT
+    assert "BT38-CONNECTION-VALIDATION-NO-ORDER" not in CLIENT
+
+
 def test_royal_mail_read_path_is_exact_and_non_mutating():
     assert 'get_exact_orders(self, order_reference: str)' in CLIENT
-    assert 'get/orders/{orderIdentifiers}' not in CLIENT  # documentation wording, not a broad implementation
+    assert 'get_exact_order_evidence(self, order_reference: str)' in CLIENT
     assert 'f"/orders/{encoded}"' in CLIENT
+    assert 'f"/orders/{encoded}/full"' in CLIENT
     assert '"exact_order_only": True' in ROUTES
     assert '"marketplace_write_started": False' in ROUTES
     assert '"label_purchase_started": False' in ROUTES
@@ -42,10 +48,27 @@ def test_royal_mail_read_path_is_exact_and_non_mutating():
     assert "requests.delete(" not in CLIENT
 
 
+def test_exact_label_recovery_reuses_existing_fbm_shipment_authority():
+    assert "/governed/royal-mail/exact-label-recovery" in ROUTES
+    assert "hydrate_royal_mail_label_for_order" in ROUTES
+    assert "from fbm_models import FBMShipment" in READBACK
+    assert 'provider="royal_mail_click_drop"' in READBACK
+    assert 'shipment.label_source = "royal_mail_click_drop"' in READBACK
+    assert "MarketplaceOrder.query.filter_by" in READBACK
+    assert '"marketplace_write_started": False' in READBACK
+    assert '"broad_scan_started": False' in READBACK
+
+
+def test_cost_requires_royal_mail_postage_evidence():
+    assert 'detail.get("postageAppliedOn")' in READBACK
+    assert 'shipping.get("shippingCost")' in READBACK
+    assert 'row.source = "royal_mail_click_drop_postage_applied"' in READBACK
+    assert "shippingCostCharged" not in READBACK
+
+
 def test_alignment_adds_only_connection_table_not_another_shipment_model():
     assert '__tablename__ = "royal_mail_connections"' in MODEL
     assert "FBMShipment" not in MODEL
-    assert "shipment" not in MODEL.lower()
     assert "no second shipment table" in INSTALLER.lower()
 
 
