@@ -78,14 +78,18 @@ def _signature_path(url: str) -> str:
     return urlsplit(url).path or "/"
 
 
+def _signature_authority(url: str) -> str:
+    """Return RFC 9421 @authority from the prepared request URL."""
+    return urlsplit(url).netloc
+
+
 def _signature_headers(*, method: str, url: str) -> dict[str, str]:
     private_key, public_jwe = _signature_material()
     if not private_key or not public_jwe:
         raise RuntimeError("ebay_finances_signature_credentials_missing")
 
-    parsed = urlsplit(url)
     path = _signature_path(url)
-    authority = parsed.netloc
+    authority = _signature_authority(url)
     created = int(time.time())
     signature_input = (
         'sig1=("x-ebay-signature-key" "@method" "@path" "@authority");'
