@@ -55,3 +55,10 @@ import services.governed_fbm_logical_bell_alignment  # noqa: F401,E402
 # older unread-history/dashboard-attention counters. This observes only the bell
 # request the browser already makes; no extra read, polling or marketplace call.
 import services.governed_action_count_ui_alignment  # noqa: F401,E402
+
+# The authority-backed bell reader can still see more than one historical
+# MarketplaceOrder provider-line sibling for the same commercial order. Collapse
+# those siblings to one Ready action and retire all stale Ready siblings when the
+# same projection already contains a persisted shipment lifecycle. No new read,
+# write, polling or provider path is introduced.
+import services.governed_fbm_logical_action_count_alignment  # noqa: F401,E402
