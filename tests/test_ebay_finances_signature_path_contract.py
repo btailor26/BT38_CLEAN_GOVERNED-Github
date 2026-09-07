@@ -1,6 +1,3 @@
-import os
-
-from Crypto.PublicKey import ECC
 from Crypto.Signature import eddsa
 
 from services.governed_ebay_shipping_label_finance import (
