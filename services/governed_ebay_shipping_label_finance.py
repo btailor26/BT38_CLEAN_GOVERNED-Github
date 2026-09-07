@@ -73,13 +73,18 @@ def _signature_material() -> tuple[str, str] | tuple[None, None]:
     return private_key, public_jwe
 
 
+def _signature_path(url: str) -> str:
+    """Return RFC 9421 @path only; query parameters are not part of @path."""
+    return urlsplit(url).path or "/"
+
+
 def _signature_headers(*, method: str, url: str) -> dict[str, str]:
     private_key, public_jwe = _signature_material()
     if not private_key or not public_jwe:
         raise RuntimeError("ebay_finances_signature_credentials_missing")
 
     parsed = urlsplit(url)
-    path = parsed.path + (f"?{parsed.query}" if parsed.query else "")
+    path = _signature_path(url)
     authority = parsed.netloc
     created = int(time.time())
     signature_input = (
