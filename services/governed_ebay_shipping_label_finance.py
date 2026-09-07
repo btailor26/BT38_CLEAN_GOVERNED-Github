@@ -84,13 +84,27 @@ def _signature_authority(url: str) -> str:
 
 
 def _import_ed25519_private_key(private_key: str):
-    """Import either encoded Ed25519 material or eBay's 32-byte hex seed."""
+    """Import eBay Ed25519 private material without changing stored secrets.
+
+    eBay returns the PKCS#8 PEM body for ED25519 keys. Production secrets may
+    therefore contain only the base64 body, without BEGIN/END PRIVATE KEY lines.
+    Keep accepting complete encoded keys and the earlier raw 32-byte hex seed
+    form for compatibility.
+    """
+    candidate = private_key.strip()
+
     try:
-        return ECC.import_key(private_key)
+        return ECC.import_key(candidate)
     except (ValueError, IndexError, TypeError):
         pass
 
-    candidate = private_key.strip()
+    if "-----BEGIN" not in candidate:
+        pem = f"-----BEGIN PRIVATE KEY-----\n{candidate}\n-----END PRIVATE KEY-----"
+        try:
+            return ECC.import_key(pem)
+        except (ValueError, IndexError, TypeError):
+            pass
+
     if len(candidate) == 64:
         try:
             raw_seed = bytes.fromhex(candidate)
