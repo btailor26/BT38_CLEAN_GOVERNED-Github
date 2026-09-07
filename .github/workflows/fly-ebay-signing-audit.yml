@@ -1,0 +1,41 @@
+name: Fly eBay Signing Audit
+
+on:
+  push:
+    branches:
+      - fix/full-system-release-alignment
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-runtime-signing-material:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Set up Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Check Fly secret metadata names only
+        shell: bash
+        run: |
+          set -euo pipefail
+          SECRET_NAMES="$(flyctl secrets list --app bt38-prod | awk 'NR > 1 {print $1}')"
+          for KEY in EBAY_SIGNATURE_PRIVATE_KEY EBAY_SIGNATURE_PUBLIC_KEY_JWE; do
+            if printf '%s\n' "$SECRET_NAMES" | grep -Fxq "$KEY"; then
+              echo "FLY_SECRET_METADATA $KEY=PRESENT"
+            else
+              echo "FLY_SECRET_METADATA $KEY=MISSING"
+            fi
+          done
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Check running bt38-prod environment without exposing values
+        shell: bash
+        run: |
+          set -euo pipefail
+          flyctl ssh console --app bt38-prod --command "sh -lc 'cd /app && .venv/bin/python -c \"import os; keys=(\\\"EBAY_SIGNATURE_PRIVATE_KEY\\\",\\\"EBAY_SIGNATURE_PUBLIC_KEY_JWE\\\"); [print(k + (\\\"=PRESENT length=\\\" + str(len(os.getenv(k) or \\\"\\\")) if os.getenv(k) else \\\"=MISSING\\\")) for k in keys]\"'"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
