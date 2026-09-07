@@ -36,8 +36,10 @@ def test_royal_mail_read_path_is_exact_and_non_mutating():
     assert '"marketplace_write_started": False' in ROUTES
     assert '"label_purchase_started": False' in ROUTES
     assert '"broad_scan_started": False' in ROUTES
-    assert "create_order" not in CLIENT.lower()
-    assert "purchase" not in CLIENT.lower()
+    assert "requests.post(" not in CLIENT
+    assert "requests.put(" not in CLIENT
+    assert "requests.patch(" not in CLIENT
+    assert "requests.delete(" not in CLIENT
 
 
 def test_alignment_adds_only_connection_table_not_another_shipment_model():
