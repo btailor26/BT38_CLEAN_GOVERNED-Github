@@ -8,11 +8,14 @@ bounded Fulfillment API readback stays the recovery authority.
 """
 from __future__ import annotations
 
+import json
 import os
+from datetime import datetime
 from typing import Any
 
 import requests
 
+from extensions import db
 from services.governed_ebay_notification_registration import (
     NOTIFICATION_BASE_URL,
     _decode_store_credentials,
@@ -25,6 +28,29 @@ from services.governed_ebay_oauth_scopes import EBAY_COMMERCE_SHIPPING_SCOPE
 
 SHIPPING_TOPIC_ID = "ITEM_MARKED_SHIPPED"
 EBAY_TOKEN_URL = "https://api.ebay.com/identity/v1/oauth2/token"
+
+
+def _persist_shipping_consent_state(
+    store: Any,
+    *,
+    required: bool,
+    enabled: bool,
+    reason: str | None,
+) -> None:
+    """Persist optional shipment consent without changing core store auth health."""
+    creds = _decode_store_credentials(store)
+    creds.update(
+        {
+            "ebay_shipping_notification_status": (
+                "ENABLED" if enabled else "AUTHORIZATION_REQUIRED"
+            ),
+            "ebay_shipping_notification_reauthorization_required": bool(required),
+            "ebay_shipping_notification_reason": str(reason or ""),
+            "ebay_shipping_notification_attempted_at": datetime.utcnow().isoformat(),
+        }
+    )
+    store.api_key = json.dumps(creds)
+    db.session.commit()
 
 
 def _shipping_access_token(store: Any) -> dict[str, Any]:
@@ -155,6 +181,13 @@ def ensure_ebay_shipping_notification_alignment(
     token_result = _shipping_access_token(store)
     if not token_result.get("ok"):
         authorization_required = bool(token_result.get("authorization_required"))
+        if authorization_required:
+            _persist_shipping_consent_state(
+                store,
+                required=True,
+                enabled=False,
+                reason=str(token_result.get("reason") or "commerce_shipping_scope_not_granted"),
+            )
         return {
             "success": True if authorization_required else False,
             "ok": True if authorization_required else False,
@@ -171,6 +204,12 @@ def ensure_ebay_shipping_notification_alignment(
     shipping_token = str(token_result["access_token"])
     probe = _topic_probe(access_token=shipping_token)
     if probe.get("authorization_required"):
+        _persist_shipping_consent_state(
+            store,
+            required=True,
+            enabled=False,
+            reason="commerce_shipping_scope_not_granted",
+        )
         return {
             "success": True,
             "ok": True,
@@ -206,6 +245,12 @@ def ensure_ebay_shipping_notification_alignment(
     except RuntimeError as exc:
         message = str(exc)
         if "HTTP 401" in message or "HTTP 403" in message or "Insufficient permissions" in message:
+            _persist_shipping_consent_state(
+                store,
+                required=True,
+                enabled=False,
+                reason="commerce_shipping_scope_not_granted",
+            )
             return {
                 "success": True,
                 "ok": True,
@@ -219,6 +264,12 @@ def ensure_ebay_shipping_notification_alignment(
             }
         raise
 
+    _persist_shipping_consent_state(
+        store,
+        required=False,
+        enabled=True,
+        reason=None,
+    )
     return {
         "success": True,
         "ok": True,
