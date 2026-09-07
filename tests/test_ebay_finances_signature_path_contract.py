@@ -1,4 +1,7 @@
-from services.governed_ebay_shipping_label_finance import _signature_path
+from services.governed_ebay_shipping_label_finance import (
+    _signature_authority,
+    _signature_path,
+)
 
 
 def test_ebay_finances_signature_path_excludes_query_string():
@@ -9,6 +12,7 @@ def test_ebay_finances_signature_path_excludes_query_string():
     )
 
     assert _signature_path(url) == "/sell/finances/v1/transaction"
+    assert _signature_authority(url) == "api.ebay.com"
 
 
 def test_ebay_finances_signature_path_defaults_to_root():
