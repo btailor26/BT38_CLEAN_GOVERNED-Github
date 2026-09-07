@@ -152,9 +152,9 @@ def _persist(payload: dict) -> bool:
     if any((service, ship_by, earliest, latest)):
         db.session.execute(text("""
             INSERT INTO fbm_order_operational_state
-              (store_id, marketplace_order_id, platform, shipping_service, ship_by_at,
+              (store_id, marketplace_order_id, platform, parcel, shipping_service, ship_by_at,
                earliest_delivery_at, latest_delivery_at, marketplace_checked_at, created_at, updated_at)
-            VALUES (:store_id,:order_id,'amazon',:service,:ship_by,:earliest,:latest,:now,:now,:now)
+            VALUES (:store_id,:order_id,'amazon','{}'::json,:service,:ship_by,:earliest,:latest,:now,:now,:now)
             ON CONFLICT (store_id, marketplace_order_id) DO UPDATE SET
               platform='amazon',
               shipping_service=COALESCE(EXCLUDED.shipping_service,fbm_order_operational_state.shipping_service),
