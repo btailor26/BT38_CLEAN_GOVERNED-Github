@@ -83,6 +83,28 @@ def _signature_authority(url: str) -> str:
     return urlsplit(url).netloc
 
 
+def _import_ed25519_private_key(private_key: str):
+    """Import either encoded Ed25519 material or eBay's 32-byte hex seed."""
+    try:
+        return ECC.import_key(private_key)
+    except (ValueError, IndexError, TypeError):
+        pass
+
+    candidate = private_key.strip()
+    if len(candidate) == 64:
+        try:
+            raw_seed = bytes.fromhex(candidate)
+        except ValueError:
+            raw_seed = b""
+        if len(raw_seed) == 32:
+            try:
+                return eddsa.import_private_key(raw_seed)
+            except (ValueError, TypeError):
+                pass
+
+    raise RuntimeError("ebay_finances_signature_private_key_invalid")
+
+
 def _signature_headers(*, method: str, url: str) -> dict[str, str]:
     private_key, public_jwe = _signature_material()
     if not private_key or not public_jwe:
@@ -118,8 +140,10 @@ def _signature_headers(*, method: str, url: str) -> dict[str, str]:
         signed = pkcs1_15.new(rsa_key).sign(digest)
     else:
         try:
-            ecc_key = ECC.import_key(private_key)
+            ecc_key = _import_ed25519_private_key(private_key)
             signed = eddsa.new(ecc_key, "rfc8032").sign(signature_base)
+        except RuntimeError:
+            raise
         except Exception as exc:
             raise RuntimeError("ebay_finances_signature_private_key_invalid") from exc
 
@@ -258,9 +282,26 @@ def read_and_persist_exact_ebay_shipping_label_purchase(*, store, marketplace_or
         },
     )
     prepared = request.prepare()
-    prepared.headers.update(_signature_headers(method="GET", url=prepared.url))
+    try:
+        prepared.headers.update(_signature_headers(method="GET", url=prepared.url))
+    except Exception as exc:
+        return {
+            "success": False,
+            "skipped": False,
+            "reason": str(exc) or "ebay_finances_signature_failed",
+            "order_id": order_id,
+        }
 
-    response = requests.Session().send(prepared, timeout=30)
+    try:
+        response = requests.Session().send(prepared, timeout=30)
+    except requests.RequestException as exc:
+        return {
+            "success": False,
+            "skipped": False,
+            "reason": "ebay_finances_shipping_label_read_failed",
+            "error": str(exc)[:1000],
+            "order_id": order_id,
+        }
     if response.status_code >= 400:
         return {
             "success": False,
