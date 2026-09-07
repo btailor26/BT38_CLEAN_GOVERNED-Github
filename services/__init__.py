@@ -43,3 +43,9 @@ import services.governed_fbm_amazon_profile_alignment  # noqa: F401,E402
 # eBay shipment truth for existing MarketplaceOrder rows; it adds no new writer,
 # poller, worker, shipment table or marketplace mutation path.
 import services.governed_ebay_runtime_recovery_alignment  # noqa: F401,E402
+
+# Historical provider-line siblings are audit evidence, not separate commercial
+# bell actions. Patch the existing small FBM bell installer so pending/unshipped
+# siblings collapse to one logical sale and later shipment events retire that
+# stale sale. This adds no DB/provider read or polling path.
+import services.governed_fbm_logical_bell_alignment  # noqa: F401,E402
