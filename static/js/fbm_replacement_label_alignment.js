@@ -59,11 +59,16 @@
     }
 
     function rowIsDispatched(orderId) {
-        const row = document.querySelector(`.fbm-order-row[data-order-id="${CSS.escape(String(orderId || ''))}"]`);
+        const safeOrderId = String(orderId || '').replace(/"/g, '\\"');
+        const row = document.querySelector(`.fbm-order-row[data-order-id="${safeOrderId}"]`);
         if (!row) return false;
         const lifecycle = String(row.dataset.lifecycleStatus || '').trim().toLowerCase();
         if (dispatchedStates.has(lifecycle)) return true;
-        return Boolean(row.querySelector('.fbm-tracking-journey, code')) && !/Unshipped/i.test(row.textContent || '');
+        const shipmentCell = row.children && row.children[7];
+        if (!shipmentCell) return false;
+        const shipmentText = String(shipmentCell.textContent || '');
+        if (/Unshipped/i.test(shipmentText)) return false;
+        return Boolean(shipmentCell.querySelector('code')) || /Marketplace says shipped/i.test(shipmentText);
     }
 
     function removeRedundantPacklinkChecks() {
