@@ -17,8 +17,9 @@ DEPLOY = Path(".github/workflows/deploy-fly.yml").read_text(encoding="utf-8")
 
 def test_operator_dispatch_recovery_reuses_exact_existing_authorities():
     assert RECOVERY_PATH.exists()
+    assert "get_or_refresh_amazon_profile" in RECOVERY
     assert "hydrate_amazon_tracking_for_order" in RECOVERY
-    assert "hydrate_amazon_purchased_label_for_order" in RECOVERY
+    assert "hydrate_amazon_purchased_label_for_order" not in RECOVERY
     assert "hydrate_exact_ebay_order" in RECOVERY
     assert "MarketplaceOrder" in RECOVERY
     assert "Store" in RECOVERY
@@ -31,8 +32,8 @@ def test_recovery_covers_db_dispatch_history_without_arbitrary_time_window():
     assert "MarketplaceOrder.updated_at" in RECOVERY
     assert "MarketplaceOrder.created_at" in RECOVERY
     assert "def _candidate_order_ids(" in RECOVERY
-    assert "tracking_number.is_(None)" in RECOVERY
-    assert "carrier.is_(None)" in RECOVERY
+    assert "NULLIF(BTRIM(COALESCE(mo.tracking_number, '')), '') IS NULL" in RECOVERY
+    assert "NULLIF(BTRIM(COALESCE(mo.carrier, '')), '') IS NULL" in RECOVERY
 
     forbidden_time_caps = (
         "max_days",
@@ -45,9 +46,21 @@ def test_recovery_covers_db_dispatch_history_without_arbitrary_time_window():
         assert token not in RECOVERY
 
 
+def test_amazon_history_selector_includes_missing_promise_and_excludes_label_cost():
+    assert "Amazon uses the same existing exact-order profile + tracking authorities" in RECOVERY
+    assert "fos.ship_by_at IS NULL" in RECOVERY
+    assert "fos.earliest_delivery_at IS NULL AND fos.latest_delivery_at IS NULL" in RECOVERY
+    assert "get_or_refresh_amazon_profile(order, force=True)" in RECOVERY
+    assert '"amazon_label_cost_excluded": True' in RECOVERY
+    assert '"shipping_label_readback": None' in RECOVERY
+    assert "hydrate_amazon_purchased_label_for_order" not in RECOVERY
+    assert "governed_amazon_shipping_label_readback" not in RECOVERY
+
+
 def test_ebay_history_selector_includes_missing_journey_promise_and_confirmed_spend():
     assert 'if platform == "ebay":' in RECOVERY
     assert "fbm_order_operational_state" in RECOVERY
+    assert "fos.ship_by_at IS NULL" in RECOVERY
     assert "earliest_delivery_at IS NULL AND fos.latest_delivery_at IS NULL" in RECOVERY
     assert "shipping_spend_ledger" in RECOVERY
     assert "ssl.confirmed = TRUE" in RECOVERY
@@ -60,9 +73,8 @@ def test_ebay_history_selector_includes_missing_journey_promise_and_confirmed_sp
 def test_ebay_history_reuses_installed_exact_finance_and_does_not_invent_zero_cost():
     assert 'hydration.get("shipping_label_finance")' in RECOVERY
     assert 'finance.get("purchase_confirmed") is True' in RECOVERY
-    assert 'spend_available' in RECOVERY
-    assert 'exact_finance_checked' in RECOVERY
-    assert "£0.00" in RECOVERY
+    assert "spend_available" in RECOVERY
+    assert "exact_finance_checked" in RECOVERY
     assert "read_and_persist_exact_ebay_shipping_label_purchase" not in RECOVERY
     assert "persist_exact_ebay_purchased_shipment_authority" not in RECOVERY
 
@@ -87,14 +99,14 @@ def test_recovery_is_finite_operator_action_not_runtime_polling():
         assert token not in RECOVERY
 
 
-def test_recovery_classifies_from_durable_db_readback_and_keeps_fallback_success():
-    assert 'if extraction_resolved:' in RECOVERY
+def test_recovery_classifies_from_durable_db_readback():
+    assert "if extraction_resolved:" in RECOVERY
     assert 'elif not result.get("success"):' in RECOVERY
-    assert 'shipping_label is not None and shipping_label.get("success")' in RECOVERY
     assert '"database_readback": readback' in RECOVERY
     assert '"tracking_resolved": tracking_resolved' in RECOVERY
     assert '"delivery_promise_available": promise_available' in RECOVERY
-    assert '"confirmed_shipping_spend_available": spend_available' in RECOVERY
+    assert '"confirmed_shipping_spend_available": spend_available if platform == "ebay" else None' in RECOVERY
+    assert "extraction_resolved = bool(tracking_resolved and promise_available)" in RECOVERY
 
 
 def test_operator_route_returns_failure_and_unresolved_evidence():
