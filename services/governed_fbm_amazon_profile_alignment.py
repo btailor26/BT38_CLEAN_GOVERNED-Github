@@ -12,6 +12,11 @@ existing get_or_refresh_amazon_profile path owns Amazon reads and persistence;
 no worker, poller, order importer, shipment table or marketplace write is added.
 Subsequent profile-map reads in the same request (notably health aggregation)
 remain DB-only so the health surface never fans out marketplace calls.
+
+When Amazon's existing exact package readback has already advanced an existing
+MarketplaceOrder lifecycle, the FBM presentation reuses that persisted lifecycle
+for the existing journey badges if no physical BT38 shipment exists. Plain
+"shipped" remains dispatch-only and does not invent a carrier milestone.
 """
 from __future__ import annotations
 
@@ -26,6 +31,7 @@ import services.governed_fbm_page_alignment as _page_alignment
 
 
 _original_profile_map = _page_alignment._profile_map
+_original_render_template = _page_alignment.render_template
 
 
 def _amazon_row(row) -> bool:
@@ -78,6 +84,59 @@ def _governed_profile_map(rows):
     return _original_profile_map(rows) if refreshed else profiles
 
 
+def _amazon_marketplace_journey_state(order):
+    if order is None or not _amazon_row(order):
+        return None
+    status = (
+        str(getattr(order, "status", "") or "")
+        .strip()
+        .lower()
+        .replace("-", "_")
+        .replace(" ", "_")
+    )
+    # Only real post-dispatch lifecycle evidence lights a journey milestone.
+    # Amazon "shipped" alone remains dispatch truth with milestones unavailable.
+    return {
+        "picked_up": "accepted",
+        "pickedup": "accepted",
+        "accepted": "accepted",
+        "carrier_accepted": "accepted",
+        "collected": "accepted",
+        "in_transit": "in_transit",
+        "intransit": "in_transit",
+        "out_for_delivery": "out_for_delivery",
+        "outfordelivery": "out_for_delivery",
+        "delivered": "delivered",
+    }.get(status)
+
+
+def _governed_render_template(template_name, *args, **context):
+    if template_name == "fbm.html":
+        original_orders = context.get("orders") or []
+        aligned_orders = []
+        changed = False
+        for item in original_orders:
+            if not isinstance(item, dict) or item.get("shipment") is not None:
+                aligned_orders.append(item)
+                continue
+            journey_state = _amazon_marketplace_journey_state(item.get("order"))
+            if not journey_state:
+                aligned_orders.append(item)
+                continue
+            aligned = dict(item)
+            aligned["shipment_state"] = journey_state
+            aligned_orders.append(aligned)
+            changed = True
+        if changed:
+            context = dict(context)
+            context["orders"] = aligned_orders
+    return _original_render_template(template_name, *args, **context)
+
+
 if not getattr(_page_alignment, "_bt38_amazon_profile_hydration_restored", False):
     _page_alignment._profile_map = _governed_profile_map
     _page_alignment._bt38_amazon_profile_hydration_restored = True
+
+if not getattr(_page_alignment, "_amazon_marketplace_journey_alignment_installed", False):
+    _page_alignment.render_template = _governed_render_template
+    _page_alignment._amazon_marketplace_journey_alignment_installed = True
