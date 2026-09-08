@@ -177,8 +177,10 @@ def _database_readback(store_id: int, order_id: str) -> dict[str, Any]:
         text(
             """
             SELECT id, provider, carrier, service, tracking_number,
-                   shipped_at, accepted_at, in_transit_at,
-                   out_for_delivery_at, delivered_at
+                   status, label_purchased_at, handover_due_at,
+                   carrier_accepted_at, first_movement_at, delivered_at,
+                   last_provider_status, last_provider_checked_at,
+                   marketplace_confirmed_at, marketplace_confirmation_status
             FROM fbm_shipments
             WHERE store_id = :store_id AND marketplace_order_id = :order_id
             ORDER BY id DESC
