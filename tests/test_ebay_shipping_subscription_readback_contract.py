@@ -1,6 +1,53 @@
 from services import governed_ebay_shipping_notification_alignment as shipping
 
 
+def test_shipping_access_token_refreshes_exact_persisted_grant(monkeypatch):
+    granted = (
+        "https://api.ebay.com/oauth/api_scope "
+        "https://api.ebay.com/oauth/api_scope/commerce.notification.subscription "
+        "https://api.ebay.com/oauth/api_scope/commerce.shipping"
+    )
+    credentials = {
+        "refresh_token": "refresh-token",
+        "client_id": "client-id",
+        "client_secret": "client-secret",
+        "oauth_granted_scope": granted,
+    }
+    monkeypatch.setattr(shipping, "_decode_store_credentials", lambda store: credentials)
+    monkeypatch.delenv("EBAY_CLIENT_ID", raising=False)
+    monkeypatch.delenv("EBAY_CLIENT_SECRET", raising=False)
+
+    captured = {}
+
+    class Response:
+        status_code = 200
+        text = ""
+
+        @staticmethod
+        def json():
+            return {"access_token": "shipping-token"}
+
+    def fake_post(url, *, auth, data, timeout):
+        captured.update({"url": url, "auth": auth, "data": data, "timeout": timeout})
+        return Response()
+
+    monkeypatch.setattr(shipping.requests, "post", fake_post)
+
+    result = shipping._shipping_access_token(object())
+
+    assert result == {"ok": True, "access_token": "shipping-token"}
+    assert captured["data"]["scope"] == granted
+    assert "https://api.ebay.com/oauth/api_scope" in captured["data"]["scope"].split()
+    assert (
+        "https://api.ebay.com/oauth/api_scope/commerce.notification.subscription"
+        in captured["data"]["scope"].split()
+    )
+    assert (
+        "https://api.ebay.com/oauth/api_scope/commerce.shipping"
+        in captured["data"]["scope"].split()
+    )
+
+
 def test_shipping_subscription_readback_requires_exact_enabled_subscription(monkeypatch):
     monkeypatch.setattr(
         shipping,
