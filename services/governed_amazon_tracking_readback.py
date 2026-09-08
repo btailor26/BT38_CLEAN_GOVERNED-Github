@@ -99,7 +99,16 @@ def _package_lifecycle(package: dict[str, Any]) -> tuple[str | None, str | None]
     else:
         raw_status = _text(package_status)
         detailed_status = None
-    return _PACKAGE_LIFECYCLE.get(_status_key(raw_status)), detailed_status
+
+    lifecycle = _PACKAGE_LIFECYCLE.get(_status_key(raw_status))
+    detailed_lifecycle = _PACKAGE_LIFECYCLE.get(_status_key(detailed_status))
+    if detailed_lifecycle:
+        if lifecycle is None:
+            lifecycle = detailed_lifecycle
+        elif lifecycle in _JOURNEY_RANK and detailed_lifecycle in _JOURNEY_RANK:
+            if _JOURNEY_RANK[detailed_lifecycle] > _JOURNEY_RANK[lifecycle]:
+                lifecycle = detailed_lifecycle
+    return lifecycle, detailed_status
 
 
 def _order_fulfillment_status(order_payload: dict[str, Any]) -> str | None:
@@ -251,6 +260,9 @@ def _package_truth(order_payload: dict[str, Any]) -> tuple[dict[str, Any] | None
         package_lifecycle, detailed_status = _package_lifecycle(package)
         if lifecycle_status is None:
             lifecycle_status = package_lifecycle
+        elif lifecycle_status in _JOURNEY_RANK and package_lifecycle in _JOURNEY_RANK:
+            if _JOURNEY_RANK[package_lifecycle] > _JOURNEY_RANK[lifecycle_status]:
+                lifecycle_status = package_lifecycle
         package_status = package.get("packageStatus")
         raw_package_status = (
             _text(package_status.get("status"))
