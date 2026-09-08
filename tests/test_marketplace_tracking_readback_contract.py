@@ -5,6 +5,12 @@ AMAZON_TRACKING = Path("services/governed_amazon_tracking_readback.py").read_tex
 AMAZON_TRACKING_RUNTIME = Path(
     "services/governed_amazon_tracking_runtime_alignment.py"
 ).read_text(encoding="utf-8")
+AMAZON_FBM_PROFILE_ALIGNMENT = Path(
+    "services/governed_fbm_amazon_profile_alignment.py"
+).read_text(encoding="utf-8")
+FBM_PAGE_ALIGNMENT = Path(
+    "services/governed_fbm_page_alignment.py"
+).read_text(encoding="utf-8")
 SERVICES_INIT = Path("services/__init__.py").read_text(encoding="utf-8")
 EBAY_TRACKING = Path("services/governed_exact_ebay_order_hydration.py").read_text(encoding="utf-8")
 EBAY_SHIPPING_NOTIFICATION = Path(
@@ -67,6 +73,20 @@ def test_amazon_exact_order_verification_reuses_existing_tracking_readback():
     assert 'MarketplaceOrder.query' not in AMAZON_TRACKING_RUNTIME
     assert 'FBMShipment(' not in AMAZON_TRACKING_RUNTIME
     assert 'requests.' not in AMAZON_TRACKING_RUNTIME
+
+
+def test_amazon_marketplace_journey_reuses_existing_fbm_projection_without_proxy_shipment():
+    assert 'shipment_confirmation_state(shipment) if shipment else "not_started"' in FBM_PAGE_ALIGNMENT
+    assert '_page_alignment.render_template = _governed_render_template' in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert '"picked_up": "accepted"' in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert '"in_transit": "in_transit"' in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert '"out_for_delivery": "out_for_delivery"' in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert '"delivered": "delivered"' in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert 'item.get("shipment") is not None' in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert 'aligned["shipment_state"] = journey_state' in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert 'FBMShipment(' not in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert 'requests.' not in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert 'db.session.add(' not in AMAZON_FBM_PROFILE_ALIGNMENT
 
 
 def test_ebay_exact_tracking_hydration_remains_existing_order_only():
