@@ -17,6 +17,7 @@ _MARKETPLACE_BADGE_STYLE = ('<style id="bt38FbmMarketplaceBadgeAlignment">''.fbm
 _PROMISE_JOURNEY_SCRIPT = '<script id="bt38FbmPromiseJourneyAlignment" src="/static/js/fbm_delivery_promise_journey_alignment.js"></script>'
 _EVENT_SESSION_REFRESH_SCRIPT = '<script id="bt38FbmEventSessionRefreshAlignment" src="/static/js/fbm_event_session_refresh_alignment.js"></script>'
 _SCROLL_POSITION_SCRIPT = '<script id="bt38FbmScrollPositionAlignment" src="/static/js/fbm_scroll_position_alignment.js"></script>'
+_ROW_TRUTH_SCRIPT = '<script id="bt38FbmRowTruthAlignment" src="/static/js/fbm_row_truth_alignment.js"></script>'
 
 
 def _clean_fbm_journey_html(html: str) -> str:
@@ -53,6 +54,11 @@ def _align_fbm_event_session_refresh_html(html: str) -> str:
 def _align_fbm_scroll_position_html(html: str) -> str:
     """Prevent a stale pager anchor from forcing a browser reload to the page bottom."""
     return _inject_once(html, 'id="bt38FbmScrollPositionAlignment"', _SCROLL_POSITION_SCRIPT, '</body>')
+
+
+def _align_fbm_row_truth_html(html: str) -> str:
+    """Deterministically colour rendered journey truth without any read or call."""
+    return _inject_once(html, 'id="bt38FbmRowTruthAlignment"', _ROW_TRUTH_SCRIPT, '</body>')
 
 
 def _align_fbm_buyer_messages_card(html: str) -> str:
@@ -96,7 +102,8 @@ def install_governed_order_clarity_alignment(app) -> None:
             html = _align_fbm_promise_journey_html(html)
             html = _align_fbm_event_session_refresh_html(html)
             html = _align_fbm_scroll_position_html(html)
+            html = _align_fbm_row_truth_html(html)
             response.set_data(html)
         return response
 
-    app.logger.info("BT38 order clarity alignment installed: persisted delivery promises + global persisted FBM search + all-orders persisted FBM health + low-pressure overdue alert/filter + buyer-messages health slot + clean tracking controls + sharper existing marketplace badges + DB-row-authoritative promise journey + marketplace-dispatch shipment authority + existing-event FBM session refresh + stable reload scroll position; event-persisted state remains authoritative")
+    app.logger.info("BT38 order clarity alignment installed: persisted delivery promises + deterministic rendered journey colours + dispatched shipping truth cleanup + global persisted FBM search + all-orders persisted FBM health + low-pressure overdue alert/filter + buyer-messages health slot + clean tracking controls + sharper existing marketplace badges + DB-row-authoritative promise journey + marketplace-dispatch shipment authority + existing-event FBM session refresh + stable reload scroll position; event-persisted state remains authoritative")
