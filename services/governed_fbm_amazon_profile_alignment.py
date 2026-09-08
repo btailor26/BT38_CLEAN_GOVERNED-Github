@@ -61,9 +61,9 @@ def _tracking_number(item: dict) -> str:
 def _align_persisted_tracking_clicks(html: str, orders: list[dict]) -> str:
     """Point Amazon/eBay tracking clicks at the journey already rendered in-row.
 
-    This is deliberately client-only: no fetch(), XHR, DB endpoint or marketplace
-    redirect is installed. The click simply focuses the existing .fbm-journey-steps
-    for that row, which was already built from persisted page data.
+    This is deliberately client-only: no network request, XHR, DB endpoint or
+    marketplace redirect is installed. The click simply focuses the existing
+    .fbm-journey-steps for that row, which was already built from persisted page data.
     """
     changed = False
     for item in orders:
