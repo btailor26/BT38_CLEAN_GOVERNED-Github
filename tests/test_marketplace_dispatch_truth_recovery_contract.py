@@ -3,6 +3,9 @@ from pathlib import Path
 
 RECOVERY_PATH = Path("scripts/recover_marketplace_dispatch_history.py")
 RECOVERY = RECOVERY_PATH.read_text(encoding="utf-8")
+RECOVERY_WORKFLOW = Path(
+    ".github/workflows/recover-marketplace-dispatch-history.yml"
+).read_text(encoding="utf-8")
 AMAZON_TRACKING = Path(
     "services/governed_amazon_tracking_readback.py"
 ).read_text(encoding="utf-8")
@@ -73,3 +76,15 @@ def test_governed_deploy_still_does_not_run_recovery_implicitly():
     assert "scripts/recover_marketplace_dispatch_history.py" not in DEPLOY
     assert "recover_missing_dispatch_truth_from_db_start" not in DEPLOY
     assert "Recover stale marketplace dispatch truth once" not in DEPLOY
+
+
+def test_historical_recovery_requires_explicit_manual_workflow_dispatch():
+    assert "workflow_dispatch:" in RECOVERY_WORKFLOW
+    assert "RECOVER_DB_DISPATCH_HISTORY" in RECOVERY_WORKFLOW
+    assert "expected_commit" in RECOVERY_WORKFLOW
+    assert 'test "${{ github.ref_name }}" = "fix/full-system-release-alignment"' in RECOVERY_WORKFLOW
+    assert "pulls/528" in RECOVERY_WORKFLOW
+    assert "scripts/recover_marketplace_dispatch_history.py" in RECOVERY_WORKFLOW
+    assert "Verify deployed recovery source is exact" in RECOVERY_WORKFLOW
+    assert "Recover missing Amazon and eBay dispatch truth from DB start" in RECOVERY_WORKFLOW
+    assert "schedule:" not in RECOVERY_WORKFLOW
