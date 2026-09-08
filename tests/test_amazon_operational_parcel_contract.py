@@ -4,6 +4,7 @@ from pathlib import Path
 WRITERS = (
     Path("services/fbm_amazon_order_profile.py"),
     Path("services/governed_amazon_fbm_profile_event_alignment.py"),
+    Path("services/governed_amazon_tracking_readback.py"),
 )
 
 
