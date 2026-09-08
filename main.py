@@ -11,6 +11,22 @@ import services.governed_webhook_rejection_recovery  # noqa: F401
 # Keep the existing eBay notification registration aligned with the already-
 # implemented ITEM_MARKED_SHIPPED capability. This adds no importer or poller.
 import services.governed_ebay_shipping_notification_registration_alignment  # noqa: F401
+# app.py starts the governed runtime before main.py is imported, so the runtime
+# wrapper above cannot affect that already-running thread. Run the existing
+# bounded post-deploy eBay reconciler once here, after the Flask app is fully
+# initialized. This is one-shot deployment/restart recovery only.
+try:
+    from services.governed_ebay_post_deploy_alignment import (
+        align_ebay_notifications_and_recover_missed_changes,
+    )
+
+    with app.app_context():
+        align_ebay_notifications_and_recover_missed_changes(
+            store_id=23,
+            max_days=7,
+        )
+except Exception:
+    app.logger.exception("eBay post-deploy alignment failed after app startup")
 # eBay ORDER_CONFIRMATION carries orderLineItemId separately from listingId.
 # Normalize that exact line identity before the governed executor, then let
 # terminal shipment events trigger only their existing exact readback path.
