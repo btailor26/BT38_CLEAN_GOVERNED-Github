@@ -45,6 +45,28 @@ def test_recovery_covers_db_dispatch_history_without_arbitrary_time_window():
         assert token not in RECOVERY
 
 
+def test_ebay_history_selector_includes_missing_journey_promise_and_confirmed_spend():
+    assert 'if platform == "ebay":' in RECOVERY
+    assert "fbm_order_operational_state" in RECOVERY
+    assert "earliest_delivery_at IS NULL AND fos.latest_delivery_at IS NULL" in RECOVERY
+    assert "shipping_spend_ledger" in RECOVERY
+    assert "ssl.confirmed = TRUE" in RECOVERY
+    assert "NOT EXISTS" in RECOVERY
+    assert "shipping_service, ship_by_at, earliest_delivery_at" in RECOVERY
+    assert '"confirmed_shipping_spend": dict(spend) if spend else None' in RECOVERY
+    assert '"fbm_shipment": dict(shipment) if shipment else None' in RECOVERY
+
+
+def test_ebay_history_reuses_installed_exact_finance_and_does_not_invent_zero_cost():
+    assert 'hydration.get("shipping_label_finance")' in RECOVERY
+    assert 'finance.get("purchase_confirmed") is True' in RECOVERY
+    assert 'spend_available' in RECOVERY
+    assert 'exact_finance_checked' in RECOVERY
+    assert "£0.00" in RECOVERY
+    assert "read_and_persist_exact_ebay_shipping_label_purchase" not in RECOVERY
+    assert "persist_exact_ebay_purchased_shipment_authority" not in RECOVERY
+
+
 def test_recovery_is_finite_operator_action_not_runtime_polling():
     assert '"operator_action": True' in RECOVERY
     assert '"automatic_startup_recovery": False' in RECOVERY
@@ -66,10 +88,13 @@ def test_recovery_is_finite_operator_action_not_runtime_polling():
 
 
 def test_recovery_classifies_from_durable_db_readback_and_keeps_fallback_success():
-    assert 'if resolved:' in RECOVERY
+    assert 'if extraction_resolved:' in RECOVERY
     assert 'elif not result.get("success"):' in RECOVERY
     assert 'shipping_label is not None and shipping_label.get("success")' in RECOVERY
     assert '"database_readback": readback' in RECOVERY
+    assert '"tracking_resolved": tracking_resolved' in RECOVERY
+    assert '"delivery_promise_available": promise_available' in RECOVERY
+    assert '"confirmed_shipping_spend_available": spend_available' in RECOVERY
 
 
 def test_operator_route_returns_failure_and_unresolved_evidence():
