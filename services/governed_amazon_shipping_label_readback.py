@@ -13,9 +13,11 @@ and label authority even when the purchased service is untracked.
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import requests
+from sqlalchemy import text
 
 from extensions import db
 from fbm_models import FBMShipment
@@ -159,6 +161,23 @@ def _merchant_shipment(*, store: Any, shipment_id: str) -> dict[str, Any]:
     return {"success": True, "shipment": payload}
 
 
+def _shipment_rate(service: dict[str, Any]) -> tuple[Decimal | None, str | None]:
+    """Return Amazon's confirmed purchased carrier rate when getShipment exposes it."""
+    raw_rate = service.get("RateWithAdjustments") or service.get("Rate")
+    money = AmazonShippingAdapter._money(raw_rate)
+    raw_amount = money.get("value") if isinstance(money, dict) else None
+    currency = _text(money.get("unit") if isinstance(money, dict) else None).upper() or None
+    if raw_amount is None or not currency:
+        return None, None
+    try:
+        amount = Decimal(str(raw_amount))
+    except (InvalidOperation, TypeError, ValueError):
+        return None, None
+    if amount < 0:
+        return None, None
+    return amount, currency
+
+
 def _shipment_values(payload: dict[str, Any]) -> dict[str, Any]:
     service = payload.get("ShippingService") if isinstance(payload.get("ShippingService"), dict) else {}
     label = payload.get("Label") if isinstance(payload.get("Label"), dict) else {}
@@ -171,6 +190,7 @@ def _shipment_values(payload: dict[str, Any]) -> dict[str, Any]:
     status = _text(payload.get("Status") or payload.get("ShipmentStatus")) or None
     shipment_id = _text(payload.get("ShipmentId")) or None
     order_id = _text(payload.get("AmazonOrderId")) or None
+    rate_amount, rate_currency = _shipment_rate(service)
     label_format = _text(label.get("LabelFormat")) or None
     if label_format == "ShippingServiceDefault":
         file_type = _text(file_contents.get("FileType")).lower()
@@ -191,11 +211,88 @@ def _shipment_values(payload: dict[str, Any]) -> dict[str, Any]:
         "tracking_number": tracking,
         "status": status,
         "created_at": _parse_iso(payload.get("CreatedDate")),
+        "rate_amount": rate_amount,
+        "rate_currency": rate_currency,
         "label_format": label_format,
         "label_width": dimensions.get("Width"),
         "label_length": dimensions.get("Length"),
         "label_unit": _text(dimensions.get("Unit")) or None,
     }
+
+
+def _persist_confirmed_shipping_cost(
+    *,
+    store: Any,
+    order_id: str,
+    shipment: FBMShipment,
+    shipment_id: str,
+    amount: Decimal | None,
+    currency: str | None,
+    recorded_at: datetime | None,
+) -> bool:
+    """Persist proven Amazon Buy Shipping spend into BT38's existing spend authority."""
+    if amount is None or not currency:
+        return False
+    db.session.flush()
+    timestamp = recorded_at or datetime.utcnow()
+    dispatch_key = f"amazon_buy_shipping:{store.id}:{shipment_id}"
+    db.session.execute(
+        text(
+            """
+            INSERT INTO shipping_spend_ledger (
+                dispatch_key,
+                shipment_id,
+                store_id,
+                marketplace_order_id,
+                fulfillment_family,
+                provider,
+                amount,
+                currency,
+                source,
+                source_reference,
+                confirmed,
+                recorded_at,
+                created_at,
+                updated_at
+            ) VALUES (
+                :dispatch_key,
+                :shipment_row_id,
+                :store_id,
+                :order_id,
+                'FBM',
+                'amazon_buy_shipping',
+                :amount,
+                :currency,
+                'amazon_buy_shipping_get_shipment_rate',
+                :source_reference,
+                TRUE,
+                :recorded_at,
+                :recorded_at,
+                :recorded_at
+            )
+            ON CONFLICT (dispatch_key) DO UPDATE SET
+                shipment_id = EXCLUDED.shipment_id,
+                amount = EXCLUDED.amount,
+                currency = EXCLUDED.currency,
+                source = EXCLUDED.source,
+                source_reference = EXCLUDED.source_reference,
+                confirmed = TRUE,
+                recorded_at = EXCLUDED.recorded_at,
+                updated_at = EXCLUDED.updated_at
+            """
+        ),
+        {
+            "dispatch_key": dispatch_key,
+            "shipment_row_id": shipment.id,
+            "store_id": int(store.id),
+            "order_id": order_id,
+            "amount": amount,
+            "currency": currency,
+            "source_reference": shipment_id,
+            "recorded_at": timestamp,
+        },
+    )
+    return True
 
 
 def _persist_validated_shipment(
@@ -204,7 +301,7 @@ def _persist_validated_shipment(
     order_id: str,
     candidate_shipment_id: str,
     payload: dict[str, Any],
-) -> FBMShipment:
+) -> tuple[FBMShipment, dict[str, Any]]:
     values = _shipment_values(payload)
     returned_order_id = values["order_id"]
     returned_shipment_id = values["shipment_id"]
@@ -276,8 +373,21 @@ def _persist_validated_shipment(
             row.tracking_number = values["tracking_number"]
         row.updated_at = datetime.utcnow()
 
+    spend_persisted = _persist_confirmed_shipping_cost(
+        store=store,
+        order_id=order_id,
+        shipment=shipment,
+        shipment_id=candidate_shipment_id,
+        amount=values["rate_amount"],
+        currency=values["rate_currency"],
+        recorded_at=values["created_at"],
+    )
     db.session.commit()
-    return shipment
+    return shipment, {
+        "shipping_cost_persisted": spend_persisted,
+        "shipping_cost": float(values["rate_amount"]) if values["rate_amount"] is not None else None,
+        "shipping_cost_currency": values["rate_currency"],
+    }
 
 
 def hydrate_amazon_purchased_label_for_order(
@@ -316,15 +426,39 @@ def hydrate_amazon_purchased_label_for_order(
         ).filter(FBMShipment.provider_shipment_id.isnot(None))
         .order_by(FBMShipment.id.desc()).first()
     )
+
+    # A recovered shipment may pre-date shipping-spend alignment. Re-read the
+    # exact Amazon shipment instead of treating purchase_status as proof that
+    # the cost was already persisted.
     if existing is not None and _text(existing.purchase_status).lower() == "purchased":
-        return {
-            "success": True,
-            "skipped": True,
-            "reason": "amazon_purchased_label_already_persisted",
-            "shipment_id": existing.provider_shipment_id,
-            "tracking_number": existing.tracking_number,
-            "marketplace_write_started": False,
-        }
+        result = _merchant_shipment(store=store, shipment_id=existing.provider_shipment_id)
+        if result.get("success"):
+            payload = result.get("shipment") or {}
+            values = _shipment_values(payload)
+            if values.get("order_id") == order_id and (
+                not values.get("shipment_id") or values.get("shipment_id") == existing.provider_shipment_id
+            ):
+                shipment, spend = _persist_validated_shipment(
+                    store=store,
+                    order_id=order_id,
+                    candidate_shipment_id=existing.provider_shipment_id,
+                    payload=payload,
+                )
+                return {
+                    "success": True,
+                    "skipped": False,
+                    "reason": None,
+                    "order_id": order_id,
+                    "shipment_id": shipment.provider_shipment_id,
+                    "carrier": shipment.carrier,
+                    "service": shipment.service,
+                    "tracking_number": shipment.tracking_number,
+                    "untracked": not bool(_text(shipment.tracking_number)),
+                    "purchase_status": shipment.purchase_status,
+                    "source": source,
+                    **spend,
+                    "marketplace_write_started": False,
+                }
 
     finance = _list_finance_transactions(store=store, order_id=order_id)
     if not finance.get("success"):
@@ -369,7 +503,7 @@ def hydrate_amazon_purchased_label_for_order(
             })
             continue
 
-        shipment = _persist_validated_shipment(
+        shipment, spend = _persist_validated_shipment(
             store=store,
             order_id=order_id,
             candidate_shipment_id=candidate,
@@ -387,6 +521,7 @@ def hydrate_amazon_purchased_label_for_order(
             "untracked": not bool(_text(shipment.tracking_number)),
             "purchase_status": shipment.purchase_status,
             "source": source,
+            **spend,
             "marketplace_write_started": False,
         }
 
