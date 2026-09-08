@@ -51,11 +51,8 @@ def recover_exact_amazon_order_manually():
     """Refresh exact Amazon-owned truth for one existing Amazon FBM order only."""
     if not _operator_authorized():
         return jsonify({
-            "success": False,
-            "ok": False,
-            "governed": True,
-            "reason": "authentication_required",
-            "marketplace_write_started": False,
+            "success": False, "ok": False, "governed": True,
+            "reason": "authentication_required", "marketplace_write_started": False,
         }), 401
 
     payload = request.get_json(silent=True) or {}
@@ -63,19 +60,14 @@ def recover_exact_amazon_order_manually():
         store_id = int(payload.get("store_id"))
     except (TypeError, ValueError):
         return jsonify({
-            "success": False,
-            "ok": False,
-            "governed": True,
-            "reason": "invalid_store_id",
-            "marketplace_write_started": False,
+            "success": False, "ok": False, "governed": True,
+            "reason": "invalid_store_id", "marketplace_write_started": False,
         }), 400
 
     order_id = str(payload.get("marketplace_order_id") or "").strip()
     if store_id <= 0 or not _AMAZON_ORDER_RE.fullmatch(order_id):
         return jsonify({
-            "success": False,
-            "ok": False,
-            "governed": True,
+            "success": False, "ok": False, "governed": True,
             "reason": "invalid_exact_amazon_order_identity",
             "marketplace_write_started": False,
         }), 400
@@ -87,11 +79,8 @@ def recover_exact_amazon_order_manually():
         or "amazon" not in str(getattr(store, "platform", "") or "").lower()
     ):
         return jsonify({
-            "success": False,
-            "ok": False,
-            "governed": True,
-            "reason": "active_amazon_store_not_found",
-            "store_id": store_id,
+            "success": False, "ok": False, "governed": True,
+            "reason": "active_amazon_store_not_found", "store_id": store_id,
             "marketplace_write_started": False,
         }), 404
 
@@ -112,16 +101,10 @@ def recover_exact_amazon_order_manually():
     ]
     if not eligible:
         return jsonify({
-            "success": False,
-            "ok": False,
-            "governed": True,
-            "reason": "existing_amazon_fbm_order_missing",
-            "store_id": store_id,
-            "order_id": order_id,
-            "exact_order_only": True,
-            "order_replayed": False,
-            "stock_mutation_started": False,
-            "marketplace_write_started": False,
+            "success": False, "ok": False, "governed": True,
+            "reason": "existing_amazon_fbm_order_missing", "store_id": store_id,
+            "order_id": order_id, "exact_order_only": True, "order_replayed": False,
+            "stock_mutation_started": False, "marketplace_write_started": False,
         }), 404
 
     try:
@@ -134,22 +117,14 @@ def recover_exact_amazon_order_manually():
         db.session.rollback()
         current_app.logger.exception(
             "BT38 manual exact Amazon recovery failed store_id=%s order_id=%s",
-            store_id,
-            order_id,
+            store_id, order_id,
         )
         return jsonify({
-            "success": False,
-            "ok": False,
-            "governed": True,
-            "reason": "exact_amazon_recovery_exception",
-            "error": str(exc)[:500],
-            "store_id": store_id,
-            "order_id": order_id,
-            "exact_order_only": True,
-            "broad_scan_started": False,
-            "order_replayed": False,
-            "stock_mutation_started": False,
-            "marketplace_write_started": False,
+            "success": False, "ok": False, "governed": True,
+            "reason": "exact_amazon_recovery_exception", "error": str(exc)[:500],
+            "store_id": store_id, "order_id": order_id, "exact_order_only": True,
+            "broad_scan_started": False, "order_replayed": False,
+            "stock_mutation_started": False, "marketplace_write_started": False,
         }), 502
 
     try:
@@ -162,21 +137,17 @@ def recover_exact_amazon_order_manually():
         db.session.rollback()
         current_app.logger.exception(
             "BT38 manual exact Amazon purchased-label recovery failed store_id=%s order_id=%s",
-            store_id,
-            order_id,
+            store_id, order_id,
         )
         shipping_label = {
-            "success": False,
-            "skipped": False,
+            "success": False, "skipped": False,
             "reason": "amazon_purchased_label_recovery_exception",
-            "error": str(exc)[:500],
-            "order_id": order_id,
+            "error": str(exc)[:500], "order_id": order_id,
             "marketplace_write_started": False,
         }
 
     hydration = dict(result)
     hydration["shipping_label"] = shipping_label
-
     db.session.expire_all()
     readback_rows = (
         MarketplaceOrder.query
@@ -189,9 +160,7 @@ def recover_exact_amazon_order_manually():
     )
     readback = [
         {
-            "id": int(row.id),
-            "status": row.status,
-            "carrier": row.carrier,
+            "id": int(row.id), "status": row.status, "carrier": row.carrier,
             "tracking_number": row.tracking_number,
             "shipped_at": row.shipped_at.isoformat() if row.shipped_at else None,
             "updated_at": row.updated_at.isoformat() if row.updated_at else None,
@@ -200,18 +169,11 @@ def recover_exact_amazon_order_manually():
     ]
 
     return jsonify({
-        "success": bool(result.get("success")),
-        "ok": bool(result.get("success")),
-        "governed": True,
-        "exact_order_only": True,
-        "broad_scan_started": False,
-        "order_replayed": False,
-        "stock_mutation_started": False,
-        "marketplace_write_started": False,
-        "store_id": store_id,
-        "order_id": order_id,
-        "hydration": hydration,
-        "database_readback": readback,
+        "success": bool(result.get("success")), "ok": bool(result.get("success")),
+        "governed": True, "exact_order_only": True, "broad_scan_started": False,
+        "order_replayed": False, "stock_mutation_started": False,
+        "marketplace_write_started": False, "store_id": store_id,
+        "order_id": order_id, "hydration": hydration, "database_readback": readback,
     }), 200
 
 
@@ -222,24 +184,18 @@ def recover_marketplace_dispatch_history_manually():
     """Run the explicit one-time Amazon/eBay missing dispatch truth recovery."""
     if not _operator_authorized():
         return jsonify({
-            "success": False,
-            "ok": False,
-            "governed": True,
-            "reason": "authentication_required",
-            "polling_started": False,
+            "success": False, "ok": False, "governed": True,
+            "reason": "authentication_required", "polling_started": False,
             "marketplace_write_started": False,
         }), 401
 
     payload = request.get_json(silent=True) or {}
     if str(payload.get("confirm") or "").strip() != "RECOVER_DB_DISPATCH_HISTORY":
         return jsonify({
-            "success": False,
-            "ok": False,
-            "governed": True,
+            "success": False, "ok": False, "governed": True,
             "reason": "explicit_confirmation_required",
             "required_confirmation": "RECOVER_DB_DISPATCH_HISTORY",
-            "polling_started": False,
-            "marketplace_write_started": False,
+            "polling_started": False, "marketplace_write_started": False,
         }), 400
 
     from scripts.recover_marketplace_dispatch_history import (
@@ -252,19 +208,17 @@ def recover_marketplace_dispatch_history_manually():
         db.session.rollback()
         current_app.logger.exception("BT38 dispatch history recovery failed")
         return jsonify({
-            "success": False,
-            "ok": False,
-            "governed": True,
-            "reason": "dispatch_history_recovery_exception",
-            "error": str(exc)[:1000],
-            "polling_started": False,
-            "scheduler_started": False,
-            "worker_started": False,
-            "marketplace_write_started": False,
+            "success": False, "ok": False, "governed": True,
+            "reason": "dispatch_history_recovery_exception", "error": str(exc)[:1000],
+            "polling_started": False, "scheduler_started": False,
+            "worker_started": False, "marketplace_write_started": False,
         }), 502
 
-    stores = [
-        {
+    stores = []
+    failures = []
+    unresolved = []
+    for item in result.get("stores", []):
+        stores.append({
             "store_id": item.get("store_id"),
             "store_name": item.get("store_name"),
             "platform": item.get("platform"),
@@ -273,23 +227,34 @@ def recover_marketplace_dispatch_history_manually():
             "resolved": item.get("resolved"),
             "still_missing": item.get("still_missing"),
             "failed": item.get("failed"),
-        }
-        for item in result.get("stores", [])
-    ]
+        })
+        for order in item.get("orders", []):
+            evidence = {
+                "store_id": item.get("store_id"),
+                "store_name": item.get("store_name"),
+                "platform": item.get("platform"),
+                "order_id": order.get("order_id"),
+                "success": bool(order.get("success")),
+                "resolved": bool(order.get("resolved")),
+                "database_readback": order.get("database_readback"),
+                "result": order.get("result"),
+            }
+            if not order.get("resolved") and not order.get("success"):
+                failures.append(evidence)
+            elif not order.get("resolved"):
+                unresolved.append(evidence)
 
     return jsonify({
-        "success": bool(result.get("success")),
-        "ok": bool(result.get("success")),
-        "governed": True,
-        "operator_action": True,
-        "automatic_startup_recovery": False,
-        "polling_started": False,
-        "scheduler_started": False,
-        "worker_started": False,
+        "success": bool(result.get("success")), "ok": bool(result.get("success")),
+        "governed": True, "operator_action": True,
+        "automatic_startup_recovery": False, "polling_started": False,
+        "scheduler_started": False, "worker_started": False,
         "marketplace_write_started": False,
         "selected": int(result.get("selected", 0)),
         "resolved": int(result.get("resolved", 0)),
         "still_missing": int(result.get("still_missing", 0)),
         "failed": int(result.get("failed", 0)),
         "stores": stores,
+        "failures": failures,
+        "unresolved": unresolved,
     }), 200
