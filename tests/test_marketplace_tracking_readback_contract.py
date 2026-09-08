@@ -16,6 +16,7 @@ EBAY_TRACKING = Path("services/governed_exact_ebay_order_hydration.py").read_tex
 EBAY_SHIPPING_NOTIFICATION = Path(
     "services/governed_ebay_shipping_notification_alignment.py"
 ).read_text(encoding="utf-8")
+FBM_TRACKING_LEGACY = Path("static/js/fbm_tracking_journey_legacy.js").read_text(encoding="utf-8")
 
 
 def test_amazon_orders_2026_exact_tracking_read_is_present():
@@ -100,14 +101,18 @@ def test_amazon_marketplace_journey_reuses_existing_fbm_projection_without_proxy
     assert 'db.session.add(' not in AMAZON_FBM_PROFILE_ALIGNMENT
 
 
-def test_marketplace_tracking_click_reuses_loaded_journey_without_read_or_redirect():
+def test_marketplace_tracking_click_reuses_existing_journey_modal_without_read_or_redirect():
     assert 'def _align_persisted_tracking_clicks(' in AMAZON_FBM_PROFILE_ALIGNMENT
     assert "platform not in {\"amazon\", \"ebay\"}" in AMAZON_FBM_PROFILE_ALIGNMENT
-    assert 'bt38-persisted-journey' in AMAZON_FBM_PROFILE_ALIGNMENT
-    assert "row.querySelector('.fbm-journey-steps')" in AMAZON_FBM_PROFILE_ALIGNMENT
-    assert "journey.scrollIntoView" in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert 'fbm-tracking-journey' in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert 'data-journey-source="marketplace"' in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert 'data-platform=' in AMAZON_FBM_PROFILE_ALIGNMENT
     assert 'sellercentral.amazon.co.uk/orders-v3/order/' in AMAZON_FBM_PROFILE_ALIGNMENT
     assert 'ebay.co.uk/mesh/ord/details?orderid=' in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert "event.target.closest('.fbm-tracking-journey')" in FBM_TRACKING_LEGACY
+    assert 'openJourney(journeyButton)' in FBM_TRACKING_LEGACY
+    assert "document.getElementById('fbmTrackingJourneyModal')" in FBM_TRACKING_LEGACY
+    assert "button.dataset.journeySource === 'marketplace'" in FBM_TRACKING_LEGACY
     assert 'fetch(' not in AMAZON_FBM_PROFILE_ALIGNMENT
     assert 'XMLHttpRequest' not in AMAZON_FBM_PROFILE_ALIGNMENT
     assert 'jsonFetch(' not in AMAZON_FBM_PROFILE_ALIGNMENT
