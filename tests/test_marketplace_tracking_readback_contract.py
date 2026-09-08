@@ -3,6 +3,9 @@ from pathlib import Path
 
 AMAZON_TRACKING = Path("services/governed_amazon_tracking_readback.py").read_text(encoding="utf-8")
 EBAY_TRACKING = Path("services/governed_exact_ebay_order_hydration.py").read_text(encoding="utf-8")
+EBAY_SHIPPING_NOTIFICATION = Path(
+    "services/governed_ebay_shipping_notification_alignment.py"
+).read_text(encoding="utf-8")
 
 
 def test_amazon_orders_2026_exact_tracking_read_is_present():
@@ -54,3 +57,9 @@ def test_ebay_exact_tracking_hydration_remains_existing_order_only():
     assert 'MarketplaceOrder.query' in EBAY_TRACKING
     assert 'db.session.add(MarketplaceOrder' not in EBAY_TRACKING
     assert 'FBMShipment(' not in EBAY_TRACKING
+
+
+def test_ebay_shipped_notification_refresh_uses_persisted_grant_scope_set():
+    assert 'governed_ebay_refresh_scopes' in EBAY_SHIPPING_NOTIFICATION
+    assert 'refresh_scopes = governed_ebay_refresh_scopes(creds)' in EBAY_SHIPPING_NOTIFICATION
+    assert '"scope": refresh_scopes' in EBAY_SHIPPING_NOTIFICATION
