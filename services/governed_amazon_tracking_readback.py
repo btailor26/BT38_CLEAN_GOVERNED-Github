@@ -287,9 +287,9 @@ def _persist_package_shipping_service(
         text(
             """
             INSERT INTO fbm_order_operational_state
-              (store_id, marketplace_order_id, platform, shipping_service,
+              (store_id, marketplace_order_id, platform, parcel, shipping_service,
                marketplace_checked_at, created_at, updated_at)
-            VALUES (:store_id,:order_id,'amazon',:service,:now,:now,:now)
+            VALUES (:store_id,:order_id,'amazon','{}'::json,:service,:now,:now,:now)
             ON CONFLICT (store_id, marketplace_order_id) DO UPDATE SET
               platform='amazon',
               shipping_service=EXCLUDED.shipping_service,
