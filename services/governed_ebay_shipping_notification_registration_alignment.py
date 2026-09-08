@@ -14,6 +14,9 @@ from __future__ import annotations
 from typing import Any
 
 import services.governed_ebay_notification_registration as _registration
+# Normalize eBay's existing ITEM_MARKED_SHIPPED payload shape before the
+# canonical governed webhook executor handles it.
+import services.governed_ebay_item_marked_shipped_alignment  # noqa: F401
 
 
 _ORIGINAL = _registration.ensure_ebay_order_notification_registration
