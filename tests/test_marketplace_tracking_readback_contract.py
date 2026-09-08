@@ -2,6 +2,10 @@ from pathlib import Path
 
 
 AMAZON_TRACKING = Path("services/governed_amazon_tracking_readback.py").read_text(encoding="utf-8")
+AMAZON_TRACKING_RUNTIME = Path(
+    "services/governed_amazon_tracking_runtime_alignment.py"
+).read_text(encoding="utf-8")
+SERVICES_INIT = Path("services/__init__.py").read_text(encoding="utf-8")
 EBAY_TRACKING = Path("services/governed_exact_ebay_order_hydration.py").read_text(encoding="utf-8")
 EBAY_SHIPPING_NOTIFICATION = Path(
     "services/governed_ebay_shipping_notification_alignment.py"
@@ -50,6 +54,19 @@ def test_amazon_readback_only_commits_real_canonical_change():
     assert '_persist_marketplace_shipment(' not in AMAZON_TRACKING
     assert 'provider="marketplace"' not in AMAZON_TRACKING
     assert 'row.updated_at = datetime.utcnow()' in AMAZON_TRACKING
+
+
+def test_amazon_exact_order_verification_reuses_existing_tracking_readback():
+    assert 'import services.governed_amazon_tracking_runtime_alignment' in SERVICES_INIT
+    assert 'runtime._verify_exact_order = _aligned_verify_exact_order' in AMAZON_TRACKING_RUNTIME
+    assert 'hydrate_amazon_tracking_for_order(' in AMAZON_TRACKING_RUNTIME
+    assert 'marketplace_order_id=order_id' in AMAZON_TRACKING_RUNTIME
+    assert 'marketplace not in {"amazon", "amazon_fbm"}' in AMAZON_TRACKING_RUNTIME
+    assert 'threading.Thread' not in AMAZON_TRACKING_RUNTIME
+    assert 'while ' not in AMAZON_TRACKING_RUNTIME
+    assert 'MarketplaceOrder.query' not in AMAZON_TRACKING_RUNTIME
+    assert 'FBMShipment(' not in AMAZON_TRACKING_RUNTIME
+    assert 'requests.' not in AMAZON_TRACKING_RUNTIME
 
 
 def test_ebay_exact_tracking_hydration_remains_existing_order_only():
