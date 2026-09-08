@@ -75,20 +75,15 @@ def test_amazon_exact_order_verification_reuses_existing_tracking_readback():
     assert 'requests.' not in AMAZON_TRACKING_RUNTIME
 
 
-def test_visible_profile_complete_amazon_order_reuses_exact_missing_tracking_readback():
-    assert 'def _needs_exact_tracking_readback(row)' in AMAZON_FBM_PROFILE_ALIGNMENT
-    assert 'status not in {"shipped", "partially_shipped", "partiallyshipped"}' in AMAZON_FBM_PROFILE_ALIGNMENT
-    assert 'return not carrier or not tracking' in AMAZON_FBM_PROFILE_ALIGNMENT
-    assert 'def _read_exact_missing_tracking(row)' in AMAZON_FBM_PROFILE_ALIGNMENT
-    assert 'hydrate_amazon_tracking_for_order(' in AMAZON_FBM_PROFILE_ALIGNMENT
-    assert 'marketplace_order_id=str(row.marketplace_order_id)' in AMAZON_FBM_PROFILE_ALIGNMENT
-    assert 'source="fbm_visible_missing_tracking"' in AMAZON_FBM_PROFILE_ALIGNMENT
-    assert '_read_exact_missing_tracking(row)' in AMAZON_FBM_PROFILE_ALIGNMENT
-    assert 'MarketplaceOrder.query' not in AMAZON_FBM_PROFILE_ALIGNMENT
+def test_fbm_amazon_page_render_is_event_only_and_has_no_marketplace_read():
+    assert 'get_or_refresh_amazon_profile' not in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert 'hydrate_amazon_tracking_for_order' not in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert '_page_alignment._profile_map =' not in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert 'requests.' not in AMAZON_FBM_PROFILE_ALIGNMENT
     assert 'threading.Thread' not in AMAZON_FBM_PROFILE_ALIGNMENT
     assert 'while ' not in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert 'db.session' not in AMAZON_FBM_PROFILE_ALIGNMENT
     assert 'FBMShipment(' not in AMAZON_FBM_PROFILE_ALIGNMENT
-    assert 'requests.' not in AMAZON_FBM_PROFILE_ALIGNMENT
 
 
 def test_amazon_marketplace_journey_reuses_existing_fbm_projection_without_proxy_shipment():
