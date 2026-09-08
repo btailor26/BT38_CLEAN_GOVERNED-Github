@@ -28,6 +28,11 @@ _FBM_ROW_RE = re.compile(
     r'(<tr class="fbm-order-row" data-order-id="(?P<row_id>\d+)"[^>]*>)(?P<body>.*?)(</tr>)',
     re.DOTALL,
 )
+_SHIPPING_CELL_RE = re.compile(r'<td class="fbm-route-cell">(?P<body>.*?)</td>', re.DOTALL)
+_MARKETPLACE_PROMISE_SERVICE_RE = re.compile(
+    r'<div class="small text-muted">Marketplace promise</div><strong>(?P<service>.*?)</strong>',
+    re.DOTALL,
+)
 _DELIVER_BY_RE = re.compile(r"Deliver by:\s*(?P<day>\d{1,2})\s+(?P<month>[A-Za-z]{3})")
 _DELIVERED_BADGE_RE = re.compile(r'<span class="badge (?P<classes>[^"]*)">Delivered</span>')
 _MONTHS = {
@@ -77,6 +82,50 @@ def _align_fbm_buyer_messages_card(html: str) -> str:
     pattern = re.compile(r'<div class="fbm-period-card(?P<class_suffix>[^"]*)" tabindex="0"><div class="fbm-period-label">Mapping review</div><div class="fbm-period-value">[^<]*</div><div class="fbm-period-tip" role="tooltip">.*?</div></div>', re.DOTALL)
     replacement = ('<div class="fbm-period-card\\g<class_suffix>" tabindex="0"><div class="fbm-period-label">Buyer messages</div><div class="fbm-period-value">0</div><div class="fbm-period-tip" role="tooltip"><div>No buyer messages are currently ingested into BT38.</div></div></div>')
     return pattern.sub(replacement, value, count=1)
+
+
+def _align_fbm_recommended_shipping_html(html: str) -> str:
+    """Replace generic route-capability badges with one truthful recommendation action.
+
+    The old Marketplace / Packlink / carrier / Manual badges described available
+    routes, not a proven choice for this order. The FBM row now preserves the
+    marketplace promise and exposes the existing Shipping options action as the
+    place where a recommendation is resolved. No carrier is called or guessed on
+    page render; saved rates and user-confirmed cutoff truth remain the only valid
+    inputs for a later recommendation.
+    """
+    value = str(html or "")
+
+    def replace_row(match: re.Match[str]) -> str:
+        row_id = int(match.group("row_id"))
+        body = match.group("body")
+        cell_match = _SHIPPING_CELL_RE.search(body)
+        if cell_match is None:
+            return match.group(0)
+
+        old_cell_body = cell_match.group("body")
+        promise_match = _MARKETPLACE_PROMISE_SERVICE_RE.search(old_cell_body)
+        if promise_match is not None:
+            promise_html = (
+                '<div class="small text-muted">Marketplace promise</div>'
+                f'<strong>{promise_match.group("service")}</strong>'
+            )
+        else:
+            promise_html = (
+                '<div class="small text-muted">Marketplace promise</div>'
+                '<strong class="text-muted">Pending</strong>'
+            )
+
+        recommendation_html = (
+            '<div class="small text-muted mt-2">Recommended shipping</div>'
+            f'<button class="btn btn-sm btn-outline-primary fbm-shipping-options mt-1" type="button" data-order-id="{row_id}">Recommended shipping</button>'
+            '<div class="fbm-row-note text-muted">Uses saved eligible rates and a user-confirmed cutoff. BT38 never guesses a cutoff time.</div>'
+        )
+        replacement = '<td class="fbm-route-cell">' + promise_html + recommendation_html + '</td>'
+        body = body[:cell_match.start()] + replacement + body[cell_match.end():]
+        return match.group(1) + body + match.group(4)
+
+    return _FBM_ROW_RE.sub(replace_row, value)
 
 
 def _delivery_evidence_by_order_row(order_row_ids: set[int]) -> dict[int, dict[str, Any]]:
@@ -240,6 +289,7 @@ def install_governed_order_clarity_alignment(app) -> None:
         # recover/reconcile/hydrate/call a marketplace or carrier from page GET.
         if path == "/fbm" and response.status_code == 200 and response.content_type and "text/html" in response.content_type:
             html = _clean_fbm_journey_html(response.get_data(as_text=True))
+            html = _align_fbm_recommended_shipping_html(html)
             html = _enrich_fbm_delivery_timing_html(html)
             html = _align_fbm_tracking_link_html(html)
             html = _align_fbm_marketplace_badge_html(html)
@@ -250,4 +300,4 @@ def install_governed_order_clarity_alignment(app) -> None:
             response.set_data(html)
         return response
 
-    app.logger.info("BT38 order clarity alignment installed: persisted delivery promises + persisted courier delivery timing (On time / Delivered late / Delayed) + global persisted FBM search + all-orders persisted FBM health + low-pressure overdue alert/filter + buyer-messages health slot + clean tracking controls + sharper existing marketplace badges + DB-row-authoritative promise journey + marketplace-dispatch shipment authority + existing-event FBM session refresh + stable reload scroll position; event-persisted state remains authoritative")
+    app.logger.info("BT38 order clarity alignment installed: persisted delivery promises + truthful recommended-shipping action without generic route claims + persisted courier delivery timing (On time / Delivered late / Delayed) + global persisted FBM search + all-orders persisted FBM health + low-pressure overdue alert/filter + buyer-messages health slot + clean tracking controls + sharper existing marketplace badges + DB-row-authoritative promise journey + marketplace-dispatch shipment authority + existing-event FBM session refresh + stable reload scroll position; event-persisted state remains authoritative")
