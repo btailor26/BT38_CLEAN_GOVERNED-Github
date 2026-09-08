@@ -1,9 +1,11 @@
 """One-time governed recovery of missing marketplace dispatch truth.
 
-This operator action is intentionally finite and DB-driven. It selects only
-existing Amazon/eBay FBM orders that are already dispatched (or later) in BT38
-and still lack carrier or tracking truth, then hands each exact marketplace
-order back to the existing governed readback authority.
+This operator action is intentionally finite and DB-driven. Amazon keeps its
+existing missing carrier/tracking selector. eBay selects existing dispatched
+FBM orders missing carrier/tracking, persisted delivery promise, or confirmed
+shipping spend, then hands each exact order back to the existing governed eBay
+hydration authority. That authority already performs the exact fulfillment,
+promise and eBay Finances SHIPPING_LABEL reads.
 
 There is no date window, marketplace-wide order scan, worker, scheduler, queue,
 or marketplace write. The historical boundary is the first dispatched row
@@ -16,7 +18,7 @@ import json
 from collections import defaultdict
 from typing import Any
 
-from sqlalchemy import func, or_
+from sqlalchemy import func, or_, text
 
 from extensions import db
 from models import MarketplaceOrder, Store
@@ -70,7 +72,43 @@ def _first_dispatch_at(store_id: int):
     )
 
 
-def _candidate_order_ids(store_id: int) -> list[str]:
+def _candidate_order_ids(store_id: int, *, platform: str) -> list[str]:
+    if platform == "ebay":
+        # Reuse the existing persisted authorities. An eBay order is selected
+        # when any requested historical truth is still absent: shipment journey
+        # identity, delivery promise, or confirmed shipping spend. This remains
+        # DB-driven and exact-order only; it does not scan the eBay marketplace.
+        rows = db.session.execute(
+            text(
+                """
+                SELECT DISTINCT mo.marketplace_order_id
+                FROM marketplace_orders mo
+                LEFT JOIN fbm_order_operational_state fos
+                  ON fos.store_id = mo.store_id
+                 AND fos.marketplace_order_id = mo.marketplace_order_id
+                WHERE mo.store_id = :store_id
+                  AND UPPER(COALESCE(mo.fulfillment_type, '')) = 'FBM'
+                  AND LOWER(COALESCE(mo.status, '')) = ANY(:statuses)
+                  AND NULLIF(BTRIM(COALESCE(mo.marketplace_order_id, '')), '') IS NOT NULL
+                  AND (
+                    NULLIF(BTRIM(COALESCE(mo.tracking_number, '')), '') IS NULL
+                    OR NULLIF(BTRIM(COALESCE(mo.carrier, '')), '') IS NULL
+                    OR (fos.earliest_delivery_at IS NULL AND fos.latest_delivery_at IS NULL)
+                    OR NOT EXISTS (
+                        SELECT 1
+                        FROM shipping_spend_ledger ssl
+                        WHERE ssl.store_id = mo.store_id
+                          AND ssl.marketplace_order_id = mo.marketplace_order_id
+                          AND ssl.confirmed = TRUE
+                    )
+                  )
+                ORDER BY mo.marketplace_order_id ASC
+                """
+            ),
+            {"store_id": int(store_id), "statuses": sorted(_DISPATCHED_STATUSES)},
+        ).all()
+        return [_clean(order_id) for (order_id,) in rows if _clean(order_id)]
+
     rows = (
         db.session.query(MarketplaceOrder.marketplace_order_id)
         .filter(
@@ -104,6 +142,48 @@ def _database_readback(store_id: int, order_id: str) -> dict[str, Any]:
         .order_by(MarketplaceOrder.id.asc())
         .all()
     )
+    operational = db.session.execute(
+        text(
+            """
+            SELECT shipping_service, ship_by_at, earliest_delivery_at,
+                   latest_delivery_at, marketplace_checked_at
+            FROM fbm_order_operational_state
+            WHERE store_id = :store_id AND marketplace_order_id = :order_id
+            LIMIT 1
+            """
+        ),
+        {"store_id": int(store_id), "order_id": order_id},
+    ).mappings().first()
+    spend = db.session.execute(
+        text(
+            """
+            SELECT provider, amount, currency, source, source_reference,
+                   confirmed, recorded_at
+            FROM shipping_spend_ledger
+            WHERE store_id = :store_id
+              AND marketplace_order_id = :order_id
+              AND confirmed = TRUE
+            ORDER BY recorded_at DESC NULLS LAST, id DESC
+            LIMIT 1
+            """
+        ),
+        {"store_id": int(store_id), "order_id": order_id},
+    ).mappings().first()
+    shipment = db.session.execute(
+        text(
+            """
+            SELECT id, provider, carrier, service, tracking_number,
+                   shipped_at, accepted_at, in_transit_at,
+                   out_for_delivery_at, delivered_at
+            FROM fbm_shipments
+            WHERE store_id = :store_id AND marketplace_order_id = :order_id
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ),
+        {"store_id": int(store_id), "order_id": order_id},
+    ).mappings().first()
+
     return {
         "carrier": next((_clean(row.carrier) for row in rows if _clean(row.carrier)), None),
         "tracking_number": next(
@@ -115,6 +195,13 @@ def _database_readback(store_id: int, order_id: str) -> dict[str, Any]:
             (row.shipped_at.isoformat() for row in rows if row.shipped_at is not None),
             None,
         ),
+        "shipping_service": operational.get("shipping_service") if operational else None,
+        "ship_by_at": operational.get("ship_by_at") if operational else None,
+        "earliest_delivery_at": operational.get("earliest_delivery_at") if operational else None,
+        "latest_delivery_at": operational.get("latest_delivery_at") if operational else None,
+        "marketplace_checked_at": operational.get("marketplace_checked_at") if operational else None,
+        "confirmed_shipping_spend": dict(spend) if spend else None,
+        "fbm_shipment": dict(shipment) if shipment else None,
     }
 
 
@@ -199,7 +286,7 @@ def recover_missing_dispatch_truth_from_db_start() -> dict[str, Any]:
             continue
 
         first_dispatch_at = _first_dispatch_at(store.id)
-        order_ids = _candidate_order_ids(store.id)
+        order_ids = _candidate_order_ids(store.id, platform=platform)
         store_result: dict[str, Any] = {
             "store_id": int(store.id),
             "store_name": _clean(getattr(store, "name", "")),
@@ -232,12 +319,48 @@ def recover_missing_dispatch_truth_from_db_start() -> dict[str, Any]:
 
             db.session.expire_all()
             readback = _database_readback(store.id, order_id)
-            resolved = bool(readback.get("tracking_number") and readback.get("carrier"))
+            tracking_resolved = bool(readback.get("tracking_number") and readback.get("carrier"))
+            if platform == "ebay":
+                promise_available = bool(
+                    readback.get("earliest_delivery_at") is not None
+                    or readback.get("latest_delivery_at") is not None
+                )
+                spend_available = bool(readback.get("confirmed_shipping_spend"))
+                fbm_shipment_available = bool(readback.get("fbm_shipment"))
+                hydration = result.get("hydration") if isinstance(result, dict) else None
+                finance = (
+                    hydration.get("shipping_label_finance")
+                    if isinstance(hydration, dict)
+                    else None
+                )
+                exact_finance_checked = bool(
+                    isinstance(finance, dict)
+                    and finance.get("success") is True
+                    and not finance.get("skipped")
+                )
+                label_purchase_confirmed = bool(
+                    isinstance(finance, dict) and finance.get("purchase_confirmed") is True
+                )
+                extraction_resolved = bool(
+                    tracking_resolved
+                    and (promise_available or bool(isinstance(hydration, dict) and hydration.get("success")))
+                    and (
+                        spend_available
+                        or (exact_finance_checked and not label_purchase_confirmed)
+                    )
+                )
+            else:
+                promise_available = False
+                spend_available = False
+                fbm_shipment_available = False
+                exact_finance_checked = False
+                label_purchase_confirmed = False
+                extraction_resolved = tracking_resolved
 
-            # Durable DB readback is the recovery authority. A provider helper may
-            # report a failed first read even when its existing exact fallback
-            # subsequently persisted carrier/tracking truth.
-            if resolved:
+            # Durable DB readback remains authority for persisted truth. For eBay,
+            # a successful exact finance read with no purchase transaction is also
+            # a completed extraction outcome; absence is not converted to £0.00.
+            if extraction_resolved:
                 store_result["resolved"] += 1
                 totals["resolved"] += 1
             elif not result.get("success"):
@@ -250,7 +373,13 @@ def recover_missing_dispatch_truth_from_db_start() -> dict[str, Any]:
             store_result["orders"].append({
                 "order_id": order_id,
                 "success": bool(result.get("success")),
-                "resolved": resolved,
+                "resolved": extraction_resolved,
+                "tracking_resolved": tracking_resolved,
+                "delivery_promise_available": promise_available,
+                "confirmed_shipping_spend_available": spend_available,
+                "fbm_shipment_available": fbm_shipment_available,
+                "exact_finance_checked": exact_finance_checked,
+                "label_purchase_confirmed": label_purchase_confirmed,
                 "database_readback": readback,
                 "result": result,
             })
