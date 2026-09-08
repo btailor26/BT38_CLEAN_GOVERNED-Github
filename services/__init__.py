@@ -26,6 +26,12 @@ import services.governed_ebay_shipping_label_finance_alignment  # noqa: F401,E40
 # shipment identity. No worker, poller, second order path, or marketplace write.
 import services.governed_amazon_shipping_label_readback_alignment  # noqa: F401,E402
 
+# Exact Amazon order verification must also reuse the existing Orders v2026
+# PACKAGES readback so shipped FBM orders persist Amazon-owned carrier/tracking
+# truth when it is available. This remains one exact-order read with no scan,
+# poller, worker, shipment-table proxy, marketplace write, or second order path.
+import services.governed_amazon_tracking_runtime_alignment  # noqa: F401,E402
+
 # Successful shipment lifecycle events finish only that exact existing FBM
 # order's marketplace shipment authority. This reuses the established Amazon
 # and eBay exact readbacks and never introduces polling, startup recovery or a
