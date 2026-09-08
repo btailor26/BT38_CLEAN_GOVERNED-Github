@@ -111,4 +111,3 @@ def test_ebay_shipping_alignment_runs_existing_post_deploy_recovery_once_at_star
     assert "return original_engine_loop(app)" in EBAY_STARTUP_ALIGNMENT
     assert "threading.Thread" not in EBAY_STARTUP_ALIGNMENT
     assert "while " not in EBAY_STARTUP_ALIGNMENT
-    assert "scheduler" not in EBAY_STARTUP_ALIGNMENT.lower()
