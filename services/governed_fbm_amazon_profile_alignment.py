@@ -13,6 +13,12 @@ no worker, poller, order importer, shipment table or marketplace write is added.
 Subsequent profile-map reads in the same request (notably health aggregation)
 remain DB-only so the health surface never fans out marketplace calls.
 
+A profile-complete Amazon order can still be stale for shipment truth. If that
+same visible exact order is already shipped but carrier/tracking is missing, the
+first bounded FBM read reuses the existing Orders v2026 PACKAGES readback for
+that exact order only. This does not refresh the whole profile, scan historical
+orders, create a shipment, or introduce a background recovery path.
+
 When Amazon's existing exact package readback has already advanced an existing
 MarketplaceOrder lifecycle, the FBM presentation reuses that persisted lifecycle
 for the existing journey badges if no physical BT38 shipment exists. Plain
@@ -50,12 +56,48 @@ def _profile_complete(profile) -> bool:
     )
 
 
+def _needs_exact_tracking_readback(row) -> bool:
+    if not _amazon_row(row):
+        return False
+    status = (
+        str(getattr(row, "status", "") or "")
+        .strip()
+        .lower()
+        .replace("-", "_")
+        .replace(" ", "_")
+    )
+    if status not in {"shipped", "partially_shipped", "partiallyshipped"}:
+        return False
+    carrier = str(getattr(row, "carrier", "") or "").strip()
+    tracking = str(getattr(row, "tracking_number", "") or "").strip()
+    return not carrier or not tracking
+
+
+def _read_exact_missing_tracking(row) -> bool:
+    if not _needs_exact_tracking_readback(row):
+        return False
+    store = getattr(row, "store", None)
+    if store is None or row.marketplace_order_id is None:
+        return False
+    from services.governed_amazon_tracking_readback import (
+        hydrate_amazon_tracking_for_order,
+    )
+
+    result = hydrate_amazon_tracking_for_order(
+        store=store,
+        marketplace_order_id=str(row.marketplace_order_id),
+        source="fbm_visible_missing_tracking",
+    )
+    return bool(result.get("success"))
+
+
 def _governed_profile_map(rows):
     profiles = _original_profile_map(rows)
 
     # bounded_fbm_page calls _profile_map for its visible rows before health;
     # bounded_shipping_options calls it for the explicitly selected rows. Only
-    # that first request-local call may hydrate Amazon. Later calls stay DB-only.
+    # that first request-local call may hydrate/read Amazon. Later calls stay
+    # DB-only so the health surface never fans out marketplace calls.
     if getattr(g, "_bt38_fbm_amazon_profile_hydration_checked", False):
         return profiles
     g._bt38_fbm_amazon_profile_hydration_checked = True
@@ -67,6 +109,11 @@ def _governed_profile_map(rows):
                 continue
             key = (int(row.store_id), str(row.marketplace_order_id))
             if _profile_complete(profiles.get(key)):
+                # A complete Prime/MFN profile does not prove shipment package
+                # truth is complete. Reuse the exact existing Amazon PACKAGES
+                # reader only for this visible shipped row when tracking facts
+                # are still absent.
+                _read_exact_missing_tracking(row)
                 continue
             get_or_refresh_amazon_profile(row)
             refreshed = True
