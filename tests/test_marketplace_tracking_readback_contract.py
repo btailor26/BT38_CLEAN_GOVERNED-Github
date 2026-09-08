@@ -100,6 +100,23 @@ def test_amazon_marketplace_journey_reuses_existing_fbm_projection_without_proxy
     assert 'db.session.add(' not in AMAZON_FBM_PROFILE_ALIGNMENT
 
 
+def test_marketplace_tracking_click_reuses_loaded_journey_without_read_or_redirect():
+    assert 'def _align_persisted_tracking_clicks(' in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert "platform not in {\"amazon\", \"ebay\"}" in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert 'bt38-persisted-journey' in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert "row.querySelector('.fbm-journey-steps')" in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert "journey.scrollIntoView" in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert 'sellercentral.amazon.co.uk/orders-v3/order/' in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert 'ebay.co.uk/mesh/ord/details?orderid=' in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert 'fetch(' not in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert 'XMLHttpRequest' not in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert 'jsonFetch(' not in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert 'db.session' not in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert 'requests.' not in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert 'window.location' not in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert 'window.open(' not in AMAZON_FBM_PROFILE_ALIGNMENT
+
+
 def test_ebay_exact_tracking_hydration_remains_existing_order_only():
     assert 'shipping_fulfillment' in EBAY_TRACKING
     assert 'MarketplaceOrder.query' in EBAY_TRACKING
