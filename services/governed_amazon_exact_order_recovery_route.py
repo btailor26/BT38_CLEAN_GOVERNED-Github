@@ -32,11 +32,7 @@ governed_amazon_exact_order_recovery_bp = Blueprint(
 _AMAZON_ORDER_RE = re.compile(r"\d{3}-\d{7}-\d{7}")
 
 
-@governed_amazon_exact_order_recovery_bp.post(
-    "/governed/actions/amazon/exact-order-recovery"
-)
-def recover_exact_amazon_order_manually():
-    """Refresh exact Amazon-owned truth for one existing Amazon FBM order only."""
+def _operator_authorized() -> bool:
     configured_task_key = str(os.environ.get("TASK_API_KEY") or "")
     supplied_task_key = str(request.headers.get("X-Task-Key") or "")
     session_authorized = bool(getattr(current_user, "is_authenticated", False))
@@ -45,7 +41,15 @@ def recover_exact_amazon_order_manually():
         and supplied_task_key
         and hmac.compare_digest(configured_task_key, supplied_task_key)
     )
-    if not (session_authorized or task_authorized):
+    return bool(session_authorized or task_authorized)
+
+
+@governed_amazon_exact_order_recovery_bp.post(
+    "/governed/actions/amazon/exact-order-recovery"
+)
+def recover_exact_amazon_order_manually():
+    """Refresh exact Amazon-owned truth for one existing Amazon FBM order only."""
+    if not _operator_authorized():
         return jsonify({
             "success": False,
             "ok": False,
@@ -208,4 +212,84 @@ def recover_exact_amazon_order_manually():
         "order_id": order_id,
         "hydration": hydration,
         "database_readback": readback,
+    }), 200
+
+
+@governed_amazon_exact_order_recovery_bp.post(
+    "/governed/actions/marketplace/dispatch-history-recovery"
+)
+def recover_marketplace_dispatch_history_manually():
+    """Run the explicit one-time Amazon/eBay missing dispatch truth recovery."""
+    if not _operator_authorized():
+        return jsonify({
+            "success": False,
+            "ok": False,
+            "governed": True,
+            "reason": "authentication_required",
+            "polling_started": False,
+            "marketplace_write_started": False,
+        }), 401
+
+    payload = request.get_json(silent=True) or {}
+    if str(payload.get("confirm") or "").strip() != "RECOVER_DB_DISPATCH_HISTORY":
+        return jsonify({
+            "success": False,
+            "ok": False,
+            "governed": True,
+            "reason": "explicit_confirmation_required",
+            "required_confirmation": "RECOVER_DB_DISPATCH_HISTORY",
+            "polling_started": False,
+            "marketplace_write_started": False,
+        }), 400
+
+    from scripts.recover_marketplace_dispatch_history import (
+        recover_missing_dispatch_truth_from_db_start,
+    )
+
+    try:
+        result = recover_missing_dispatch_truth_from_db_start()
+    except Exception as exc:
+        db.session.rollback()
+        current_app.logger.exception("BT38 dispatch history recovery failed")
+        return jsonify({
+            "success": False,
+            "ok": False,
+            "governed": True,
+            "reason": "dispatch_history_recovery_exception",
+            "error": str(exc)[:1000],
+            "polling_started": False,
+            "scheduler_started": False,
+            "worker_started": False,
+            "marketplace_write_started": False,
+        }), 502
+
+    stores = [
+        {
+            "store_id": item.get("store_id"),
+            "store_name": item.get("store_name"),
+            "platform": item.get("platform"),
+            "first_dispatch_at": item.get("first_dispatch_at"),
+            "candidate_orders": item.get("candidate_orders"),
+            "resolved": item.get("resolved"),
+            "still_missing": item.get("still_missing"),
+            "failed": item.get("failed"),
+        }
+        for item in result.get("stores", [])
+    ]
+
+    return jsonify({
+        "success": bool(result.get("success")),
+        "ok": bool(result.get("success")),
+        "governed": True,
+        "operator_action": True,
+        "automatic_startup_recovery": False,
+        "polling_started": False,
+        "scheduler_started": False,
+        "worker_started": False,
+        "marketplace_write_started": False,
+        "selected": int(result.get("selected", 0)),
+        "resolved": int(result.get("resolved", 0)),
+        "still_missing": int(result.get("still_missing", 0)),
+        "failed": int(result.get("failed", 0)),
+        "stores": stores,
     }), 200
