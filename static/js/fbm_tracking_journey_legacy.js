@@ -120,20 +120,32 @@
         const row = button.closest('.fbm-order-row');
         const tracking = button.dataset.trackingNumber || String(button.textContent || '').trim() || '—';
         const platform = button.dataset.platform || marketplaceFromRow(row) || 'Marketplace';
+        const shippingCell = row ? row.children[5] : null;
         const shipmentCell = row ? row.children[7] : null;
         const carrier = button.dataset.carrier || (shipmentCell ? String(shipmentCell.querySelector('strong')?.textContent || platform).trim() : platform);
+        const service = shippingCell ? String(shippingCell.querySelector('strong')?.textContent || '').trim() : '';
         const journeyCell = row ? row.children[8] : null;
         const badges = journeyCell ? Array.from(journeyCell.querySelectorAll('.badge')) : [];
-        const milestoneHtml = badges.slice(0, 4).map(function (badge) {
-            const text = String(badge.textContent || '').replace(/^\d+\s*·\s*/, '').trim();
-            const active = badge.classList.contains('bg-success') || badge.classList.contains('bg-danger') || badge.classList.contains('bg-primary');
-            const statusClass = badge.classList.contains('bg-danger') ? 'bg-danger' : (active ? 'bg-success' : 'bg-light text-muted border');
-            return `<div class="d-flex align-items-center justify-content-between border rounded px-3 py-2 mb-2"><span class="fw-semibold">${esc(text)}</span><span class="badge ${statusClass}">${active ? 'Confirmed' : 'Pending'}</span></div>`;
-        }).join('');
-        const promiseText = journeyCell ? Array.from(journeyCell.querySelectorAll('.small')).map(function (node) { return String(node.textContent || '').trim(); }).find(function (text) { return text.startsWith('Deliver by:') || text.startsWith('Delivery promise'); }) : '';
+        const milestones = badges.slice(0, 4).map(function (badge) {
+            return {
+                text: String(badge.textContent || '').replace(/^\d+\s*·\s*/, '').trim(),
+                active: badge.classList.contains('bg-success') || badge.classList.contains('bg-danger') || badge.classList.contains('bg-primary')
+            };
+        });
+        const confirmed = milestones.filter(function (item) { return item.active; });
+        const currentIndex = confirmed.length - 1;
+        const rowsHtml = confirmed.map(function (item, index) {
+            const detail = index === currentIndex
+                ? `${item.text} · current persisted marketplace state`
+                : `${item.text} · confirmed by later persisted marketplace state`;
+            return `<tr><td class="text-nowrap text-muted">—</td><td class="text-muted">—</td><td><strong>${esc(item.text)}</strong><div class="small text-muted">${esc(detail)}</div></td></tr>`;
+        }).join('') || '<tr><td class="text-muted">—</td><td class="text-muted">—</td><td>Tracking received · carrier milestone not confirmed yet.</td></tr>';
+        const promiseCell = row ? row.children[6] : null;
+        const promiseText = promiseCell ? String(promiseCell.textContent || '').replace(/\s+/g, ' ').trim() : '';
         const source = /ebay/i.test(platform) ? 'eBay' : (/amazon/i.test(platform) ? 'Amazon' : platform);
         const warningHtml = warning ? `<div class="alert alert-warning py-2 mb-3"><strong>Live carrier history unavailable.</strong><div class="small">${esc(warning)} BT38 is showing the persisted tracking and journey state instead.</div></div>` : '';
-        return `${warningHtml}<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3"><div><div class="fw-semibold">${esc(carrier)}</div><div class="small">Tracking: <code>${esc(tracking)}</code></div><div class="small text-muted">Journey source: ${esc(source)} / persisted BT38 state</div></div></div>${promiseText ? `<div class="border rounded p-3 mb-3"><div class="small"><strong>${esc(promiseText)}</strong></div></div>` : ''}<div class="fw-semibold mb-2">Shipment journey</div>${milestoneHtml || '<div class="alert alert-light border mb-0">Tracking received. Carrier milestones have not been confirmed yet.</div>'}`;
+        const serviceLabel = service && service !== carrier ? ` · ${esc(service)}` : '';
+        return `${warningHtml}<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3"><div><div class="fw-semibold">${esc(carrier)}${serviceLabel}</div><div class="small">Tracking: <code>${esc(tracking)}</code></div><div class="small text-muted">Journey source: ${esc(source)} / persisted BT38 state</div></div></div>${promiseText ? `<div class="border rounded p-3 mb-3"><div class="small"><strong>Delivery information</strong><div class="text-muted mt-1">${esc(promiseText)}</div></div></div>` : ''}<div class="fw-semibold mb-2">Shipment journey</div><div class="table-responsive"><table class="table table-sm align-middle mb-2"><thead class="table-light"><tr><th>Time</th><th>Location</th><th>Event Details</th></tr></thead><tbody>${rowsHtml}</tbody></table></div><div class="small text-muted">Exact carrier event times and locations are not stored for this marketplace-only journey. BT38 is showing the persisted marketplace lifecycle only.</div>`;
     }
 
     function providerFallbackHtml(button, warning) {
