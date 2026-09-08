@@ -8,6 +8,9 @@ if "governed_mcf" not in app.blueprints:
 import services.governed_mcf_compat  # noqa: F401
 import services.governed_ui_event_signal  # noqa: F401
 import services.governed_webhook_rejection_recovery  # noqa: F401
+# Keep the existing eBay notification registration aligned with the already-
+# implemented ITEM_MARKED_SHIPPED capability. This adds no importer or poller.
+import services.governed_ebay_shipping_notification_registration_alignment  # noqa: F401
 # eBay ORDER_CONFIRMATION carries orderLineItemId separately from listingId.
 # Normalize that exact line identity before the governed executor, then let
 # terminal shipment events trigger only their existing exact readback path.
