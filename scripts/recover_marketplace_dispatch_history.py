@@ -18,7 +18,6 @@ from typing import Any
 
 from sqlalchemy import func, or_
 
-from app import app
 from extensions import db
 from models import MarketplaceOrder, Store
 
@@ -264,5 +263,7 @@ def recover_missing_dispatch_truth_from_db_start() -> dict[str, Any]:
 
 
 if __name__ == "__main__":
+    from app import app
+
     with app.app_context():
         print(json.dumps(recover_missing_dispatch_truth_from_db_start(), default=str))
