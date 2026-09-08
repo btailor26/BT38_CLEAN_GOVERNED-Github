@@ -7,11 +7,6 @@
 
     const pickupStates = new Set(['accepted', 'carrier_accepted', 'collected', 'picked_up']);
     const movementStates = new Set(['in_transit', 'out_for_delivery']);
-    const dispatchedStates = new Set([
-        'shipped', 'partially_shipped', 'partiallyshipped',
-        'accepted', 'carrier_accepted', 'collected', 'picked_up',
-        'in_transit', 'out_for_delivery', 'delivered'
-    ]);
 
     function setBadge(badge, confirmed) {
         if (!badge) return;
@@ -48,35 +43,68 @@
         if (delivered) delivered.title = status === 'delivered' ? 'Delivery confirmed by persisted marketplace lifecycle' : 'Delivery not confirmed';
     }
 
-    function marketplacePromiseHtml(cell) {
+    function renderedRecommendation(cell) {
         if (!cell) return '';
+
+        // When a marketplace promise was rendered, the existing governed route
+        // recommendation is already present in the row as "Route: ...". Use it;
+        // never replace it with a synthetic pending state.
+        const routeNote = Array.from(cell.querySelectorAll('.fbm-row-note')).find(node => /^\s*Route\s*:/i.test(String(node.textContent || '')));
+        if (routeNote) {
+            return String(routeNote.textContent || '').replace(/^\s*Route\s*:\s*/i, '').trim();
+        }
+
+        // When there is no marketplace service, the template already renders the
+        // existing recommendation directly as the primary strong value.
+        const promiseLabel = Array.from(cell.querySelectorAll('.small.text-muted')).find(node => /marketplace promise/i.test(String(node.textContent || '')));
+        const promiseValue = promiseLabel && promiseLabel.nextElementSibling && promiseLabel.nextElementSibling.tagName === 'STRONG'
+            ? promiseLabel.nextElementSibling
+            : null;
+        const primary = Array.from(cell.querySelectorAll('strong')).find(node => node !== promiseValue);
+        return primary ? String(primary.textContent || '').trim() : '';
+    }
+
+    function removeMarketplacePromise(cell) {
+        if (!cell) return;
         const label = Array.from(cell.querySelectorAll('.small.text-muted')).find(node => /marketplace promise/i.test(String(node.textContent || '')));
-        if (!label) return '';
+        if (!label) return;
         const service = label.nextElementSibling;
-        if (!service || service.tagName !== 'STRONG') return '';
-        return '<div class="small text-muted">Marketplace promise</div><strong>' + service.innerHTML + '</strong>';
+        if (service && service.tagName === 'STRONG') service.remove();
+        label.remove();
     }
 
     function alignShipping(row, status) {
         const cell = row.children && row.children[5];
         if (!cell) return;
-        const promise = marketplacePromiseHtml(cell);
-        if (!promise) return;
 
-        if (dispatchedStates.has(status)) {
-            // Once dispatch truth exists, route-choice badges are historical/no
-            // longer actionable. The physical carrier/tracking remains in the
-            // Shipment column; this cell is marketplace promise only.
-            cell.innerHTML = promise;
+        const recommendation = renderedRecommendation(cell);
+
+        // Marketplace shipping-service metadata is not physical shipment/label
+        // authority. Keep delivery dates in the promise column, but remove the
+        // marketplace service from this shipping cell so it cannot be mistaken
+        // for the purchased-label carrier/service.
+        removeMarketplacePromise(cell);
+
+        // Remove the old route note after capturing its existing governed value.
+        Array.from(cell.querySelectorAll('.fbm-row-note')).forEach(node => {
+            if (/^\s*Route\s*:/i.test(String(node.textContent || ''))) node.remove();
+        });
+
+        // Dispatched rows get their physical carrier/service from the Shipment
+        // column. Do not re-label historical marketplace service as shipment truth.
+        if (['shipped', 'partially_shipped', 'partiallyshipped', 'accepted', 'carrier_accepted', 'collected', 'picked_up', 'in_transit', 'out_for_delivery', 'delivered'].includes(status)) {
             return;
         }
 
-        // Pre-dispatch: remove the false generic Marketplace / Packlink / Manual
-        // route claims. The governed recommendation path can fill the actual
-        // carrier once parcel, saved rate and user-confirmed cutoff are available.
-        cell.innerHTML = promise +
-            '<div class="mt-2"><div class="small text-muted">Recommended shipping</div>' +
-            '<strong class="bt38-recommended-shipping-state">Pending automatic selection</strong></div>';
+        // Pre-dispatch rows must surface the recommendation already rendered by
+        // the governed shipping path. Never overwrite it with a locked
+        // "Pending automatic selection" placeholder.
+        if (recommendation) {
+            cell.innerHTML = '<div class="small text-muted">Recommended shipping</div>' +
+                '<strong class="bt38-recommended-shipping-state"></strong>';
+            const value = cell.querySelector('.bt38-recommended-shipping-state');
+            if (value) value.textContent = recommendation;
+        }
     }
 
     function alignRows() {
