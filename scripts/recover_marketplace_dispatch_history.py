@@ -91,11 +91,7 @@ def _candidate_order_ids(store_id: int) -> list[str]:
         .order_by(MarketplaceOrder.marketplace_order_id.asc())
         .all()
     )
-    return [
-        _clean(order_id)
-        for (order_id,) in rows
-        if _clean(order_id)
-    ]
+    return [_clean(order_id) for (order_id,) in rows if _clean(order_id)]
 
 
 def _database_readback(store_id: int, order_id: str) -> dict[str, Any]:
@@ -149,7 +145,10 @@ def _recover_amazon(store: Store, order_id: str) -> dict[str, Any]:
         readback = _database_readback(store.id, order_id)
 
     return {
-        "success": bool(tracking.get("success")),
+        "success": bool(
+            tracking.get("success")
+            or (shipping_label is not None and shipping_label.get("success"))
+        ),
         "tracking_readback": tracking,
         "shipping_label_readback": shipping_label,
         "database_readback": readback,
@@ -234,12 +233,16 @@ def recover_missing_dispatch_truth_from_db_start() -> dict[str, Any]:
             db.session.expire_all()
             readback = _database_readback(store.id, order_id)
             resolved = bool(readback.get("tracking_number") and readback.get("carrier"))
-            if not result.get("success"):
-                store_result["failed"] += 1
-                totals["failed"] += 1
-            elif resolved:
+
+            # Durable DB readback is the recovery authority. A provider helper may
+            # report a failed first read even when its existing exact fallback
+            # subsequently persisted carrier/tracking truth.
+            if resolved:
                 store_result["resolved"] += 1
                 totals["resolved"] += 1
+            elif not result.get("success"):
+                store_result["failed"] += 1
+                totals["failed"] += 1
             else:
                 store_result["still_missing"] += 1
                 totals["still_missing"] += 1
