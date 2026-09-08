@@ -1,0 +1,71 @@
+name: Governed Marketplace Dispatch History Recovery
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_recovery:
+        description: 'Type RECOVER_DB_DISPATCH_HISTORY'
+        required: true
+      expected_commit:
+        description: 'Exact current PR #528 head SHA already deployed to bt38-prod'
+        required: true
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: bt38-prod-dispatch-history-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Require explicit exact-SHA recovery approval
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "${{ inputs.confirm_recovery }}" = "RECOVER_DB_DISPATCH_HISTORY"
+          test "${{ github.ref_name }}" = "fix/full-system-release-alignment"
+          test "${{ inputs.expected_commit }}" = "${{ github.sha }}"
+          PR_JSON="$(gh api repos/${{ github.repository }}/pulls/528)"
+          test "$(printf '%s' "$PR_JSON" | jq -r '.state')" = "open"
+          test "$(printf '%s' "$PR_JSON" | jq -r '.merged')" = "false"
+          test "$(printf '%s' "$PR_JSON" | jq -r '.head.ref')" = "fix/full-system-release-alignment"
+          test "$(printf '%s' "$PR_JSON" | jq -r '.head.sha')" = "${{ inputs.expected_commit }}"
+          echo "GOVERNED_RECOVERY_SOURCE_APPROVED commit=${{ inputs.expected_commit }}"
+
+      - name: Checkout exact recovery source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Compile exact recovery action
+        run: python -m py_compile scripts/recover_marketplace_dispatch_history.py
+
+      - name: Set up Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Verify deployed recovery source is exact
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED="$(sha256sum scripts/recover_marketplace_dispatch_history.py | awk '{print $1}')"
+          REMOTE="$(flyctl ssh console --app bt38-prod --command "sh -lc 'sha256sum /app/scripts/recover_marketplace_dispatch_history.py'" | tail -n 1 | awk '{print $1}')"
+          test -n "$REMOTE"
+          test "$REMOTE" = "$EXPECTED"
+          echo "RECOVERY_SOURCE_OK commit=${{ inputs.expected_commit }}"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Recover missing Amazon and eBay dispatch truth from DB start
+        shell: bash
+        run: |
+          set -euo pipefail
+          flyctl ssh console --app bt38-prod --command "sh -lc 'cd /app && .venv/bin/python scripts/recover_marketplace_dispatch_history.py'"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
