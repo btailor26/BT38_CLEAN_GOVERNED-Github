@@ -24,7 +24,7 @@ from services.governed_ebay_notification_registration import (
     _headers,
     _safe_response_payload,
 )
-from services.governed_ebay_oauth_scopes import EBAY_COMMERCE_SHIPPING_SCOPE
+from services.governed_ebay_oauth_scopes import governed_ebay_refresh_scopes
 
 
 SHIPPING_TOPIC_ID = "ITEM_MARKED_SHIPPED"
@@ -85,13 +85,19 @@ def _shipping_access_token(store: Any) -> dict[str, Any]:
             "reason": "ebay_shipping_token_credentials_missing",
         }
 
+    # Refresh from the exact seller grant already persisted by BT38. eBay's
+    # ITEM_MARKED_SHIPPED path needs commerce.shipping in addition to the
+    # standard/user-subscription scopes used by the Notification API. Asking
+    # for commerce.shipping alone drops those companion scopes and can make an
+    # otherwise valid newly reauthorized grant fail at token mint/subscription.
+    refresh_scopes = governed_ebay_refresh_scopes(creds)
     response = requests.post(
         EBAY_TOKEN_URL,
         auth=(client_id, client_secret),
         data={
             "grant_type": "refresh_token",
             "refresh_token": refresh_token,
-            "scope": EBAY_COMMERCE_SHIPPING_SCOPE,
+            "scope": refresh_scopes,
         },
         timeout=30,
     )
