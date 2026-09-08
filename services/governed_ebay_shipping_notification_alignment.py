@@ -20,6 +20,7 @@ from services.governed_ebay_notification_registration import (
     NOTIFICATION_BASE_URL,
     _decode_store_credentials,
     _ensure_subscription,
+    _get_topic_subscriptions,
     _headers,
     _safe_response_payload,
 )
@@ -36,19 +37,38 @@ def _persist_shipping_consent_state(
     required: bool,
     enabled: bool,
     reason: str | None,
+    subscription_id: str | None = None,
+    destination_id: str | None = None,
+    subscription_status: str | None = None,
+    verified: bool = False,
 ) -> None:
-    """Persist optional shipment consent without changing core store auth health."""
+    """Persist optional shipment consent and exact eBay readback evidence."""
     creds = _decode_store_credentials(store)
+    now = datetime.utcnow().isoformat()
+    if enabled:
+        state = "ENABLED"
+    elif required:
+        state = "AUTHORIZATION_REQUIRED"
+    else:
+        state = "ERROR"
     creds.update(
         {
-            "ebay_shipping_notification_status": (
-                "ENABLED" if enabled else "AUTHORIZATION_REQUIRED"
-            ),
+            "ebay_shipping_notification_status": state,
             "ebay_shipping_notification_reauthorization_required": bool(required),
             "ebay_shipping_notification_reason": str(reason or ""),
-            "ebay_shipping_notification_attempted_at": datetime.utcnow().isoformat(),
+            "ebay_shipping_notification_attempted_at": now,
         }
     )
+    if subscription_id is not None:
+        creds["ebay_shipping_notification_subscription_id"] = str(subscription_id)
+    if destination_id is not None:
+        creds["ebay_shipping_notification_destination_id"] = str(destination_id)
+    if subscription_status is not None:
+        creds["ebay_shipping_notification_subscription_status"] = str(
+            subscription_status
+        ).upper()
+    if verified:
+        creds["ebay_shipping_notification_verified_at"] = now
     store.api_key = json.dumps(creds)
     db.session.commit()
 
@@ -158,13 +178,66 @@ def _topic_probe(*, access_token: str) -> dict[str, Any]:
     }
 
 
+def _shipping_subscription_readback(
+    *,
+    access_token: str,
+    destination_id: str,
+    subscription_id: str,
+) -> dict[str, Any]:
+    """Read eBay back and prove the exact shipped subscription is enabled."""
+    subscriptions = _get_topic_subscriptions(
+        access_token=access_token,
+        topic_id=SHIPPING_TOPIC_ID,
+    )
+    for row in subscriptions:
+        if not isinstance(row, dict):
+            continue
+        if str(row.get("subscriptionId") or "") != str(subscription_id):
+            continue
+        actual_topic = str(row.get("topicId") or "")
+        actual_destination = str(row.get("destinationId") or "")
+        status = str(row.get("status") or "").upper()
+        exact_topic = actual_topic == SHIPPING_TOPIC_ID
+        exact_destination = actual_destination == str(destination_id)
+        return {
+            "found": True,
+            "enabled": bool(exact_topic and exact_destination and status == "ENABLED"),
+            "topic_id": actual_topic,
+            "destination_id": actual_destination,
+            "status": status,
+            "topic_matches": exact_topic,
+            "destination_matches": exact_destination,
+        }
+    return {
+        "found": False,
+        "enabled": False,
+        "topic_id": "",
+        "destination_id": "",
+        "status": "",
+        "topic_matches": False,
+        "destination_matches": False,
+    }
+
+
+def _subscription_readback_reason(readback: dict[str, Any]) -> str:
+    if not readback.get("found"):
+        return "shipping_subscription_not_found_after_alignment"
+    if not readback.get("topic_matches"):
+        return "shipping_subscription_topic_mismatch"
+    if not readback.get("destination_matches"):
+        return "shipping_subscription_destination_mismatch"
+    if str(readback.get("status") or "").upper() != "ENABLED":
+        return "shipping_subscription_not_enabled"
+    return "shipping_subscription_verification_failed"
+
+
 def ensure_ebay_shipping_notification_alignment(
     *,
     store: Any,
     access_token: str,
     destination_id: str | None,
 ) -> dict[str, Any]:
-    """Subscribe to ITEM_MARKED_SHIPPED when the seller authorization permits it."""
+    """Subscribe to ITEM_MARKED_SHIPPED and prove eBay has enabled it."""
     del access_token  # base registration token can remain sell.fulfillment scoped
 
     if not destination_id:
@@ -187,6 +260,7 @@ def ensure_ebay_shipping_notification_alignment(
                 required=True,
                 enabled=False,
                 reason=str(token_result.get("reason") or "commerce_shipping_scope_not_granted"),
+                destination_id=str(destination_id),
             )
         return {
             "success": True if authorization_required else False,
@@ -209,6 +283,7 @@ def ensure_ebay_shipping_notification_alignment(
             required=True,
             enabled=False,
             reason="commerce_shipping_scope_not_granted",
+            destination_id=str(destination_id),
         )
         return {
             "success": True,
@@ -250,6 +325,7 @@ def ensure_ebay_shipping_notification_alignment(
                 required=True,
                 enabled=False,
                 reason="commerce_shipping_scope_not_granted",
+                destination_id=str(destination_id),
             )
             return {
                 "success": True,
@@ -264,11 +340,48 @@ def ensure_ebay_shipping_notification_alignment(
             }
         raise
 
+    readback = _shipping_subscription_readback(
+        access_token=shipping_token,
+        destination_id=str(destination_id),
+        subscription_id=str(subscription_id),
+    )
+    if not readback.get("enabled"):
+        reason = _subscription_readback_reason(readback)
+        _persist_shipping_consent_state(
+            store,
+            required=False,
+            enabled=False,
+            reason=reason,
+            subscription_id=str(subscription_id),
+            destination_id=str(destination_id),
+            subscription_status=str(readback.get("status") or ""),
+        )
+        return {
+            "success": False,
+            "ok": False,
+            "enabled": False,
+            "topic_id": SHIPPING_TOPIC_ID,
+            "schema_version": schema_version,
+            "subscription_id": subscription_id,
+            "subscription_created": created,
+            "subscription_verified": False,
+            "subscription_status": readback.get("status"),
+            "subscription_destination_id": readback.get("destination_id"),
+            "authorization_required": False,
+            "reauthorization_required": False,
+            "reason": reason,
+            "marketplace_write_started": False,
+        }
+
     _persist_shipping_consent_state(
         store,
         required=False,
         enabled=True,
         reason=None,
+        subscription_id=str(subscription_id),
+        destination_id=str(destination_id),
+        subscription_status=str(readback.get("status") or "ENABLED"),
+        verified=True,
     )
     return {
         "success": True,
@@ -278,6 +391,9 @@ def ensure_ebay_shipping_notification_alignment(
         "schema_version": schema_version,
         "subscription_id": subscription_id,
         "subscription_created": created,
+        "subscription_verified": True,
+        "subscription_status": readback.get("status"),
+        "subscription_destination_id": readback.get("destination_id"),
         "authorization_required": False,
         "reauthorization_required": False,
         "marketplace_write_started": False,
