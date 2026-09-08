@@ -1,15 +1,62 @@
 from pathlib import Path
 
 
-RECOVERY_PATH = Path("services/governed_marketplace_dispatch_truth_recovery.py")
+RECOVERY_PATH = Path("scripts/recover_marketplace_dispatch_history.py")
+RECOVERY = RECOVERY_PATH.read_text(encoding="utf-8")
 AMAZON_TRACKING = Path(
     "services/governed_amazon_tracking_readback.py"
 ).read_text(encoding="utf-8")
 DEPLOY = Path(".github/workflows/deploy-fly.yml").read_text(encoding="utf-8")
 
 
-def test_broad_historical_dispatch_recovery_is_removed():
-    assert not RECOVERY_PATH.exists()
+def test_operator_dispatch_recovery_reuses_exact_existing_authorities():
+    assert RECOVERY_PATH.exists()
+    assert "hydrate_amazon_tracking_for_order" in RECOVERY
+    assert "hydrate_amazon_purchased_label_for_order" in RECOVERY
+    assert "hydrate_exact_ebay_order" in RECOVERY
+    assert "MarketplaceOrder" in RECOVERY
+    assert "Store" in RECOVERY
+
+
+def test_recovery_covers_db_dispatch_history_without_arbitrary_time_window():
+    assert "def _first_dispatch_at(" in RECOVERY
+    assert "func.min(" in RECOVERY
+    assert "MarketplaceOrder.shipped_at" in RECOVERY
+    assert "MarketplaceOrder.updated_at" in RECOVERY
+    assert "MarketplaceOrder.created_at" in RECOVERY
+    assert "def _candidate_order_ids(" in RECOVERY
+    assert "tracking_number.is_(None)" in RECOVERY
+    assert "carrier.is_(None)" in RECOVERY
+
+    forbidden_time_caps = (
+        "max_days",
+        "max_age_hours",
+        "timedelta(",
+        "INTERVAL '",
+        ".limit(",
+    )
+    for token in forbidden_time_caps:
+        assert token not in RECOVERY
+
+
+def test_recovery_is_finite_operator_action_not_runtime_polling():
+    assert '"operator_action": True' in RECOVERY
+    assert '"automatic_startup_recovery": False' in RECOVERY
+    assert '"polling_started": False' in RECOVERY
+    assert '"scheduler_started": False' in RECOVERY
+    assert '"worker_started": False' in RECOVERY
+    assert '"marketplace_write_started": False' in RECOVERY
+
+    forbidden_runtime = (
+        "threading",
+        "Thread(",
+        "while True",
+        "time.sleep",
+        "schedule.",
+        "APScheduler",
+    )
+    for token in forbidden_runtime:
+        assert token not in RECOVERY
 
 
 def test_amazon_v2026_fulfillment_status_is_dispatch_authority():
@@ -22,9 +69,7 @@ def test_amazon_v2026_fulfillment_status_is_dispatch_authority():
     assert '"order_status": _order_fulfillment_status(order_payload)' in AMAZON_TRACKING
 
 
-def test_governed_deploy_does_not_run_cross_market_dispatch_recovery():
-    assert "services/governed_marketplace_dispatch_truth_recovery.py" not in DEPLOY
+def test_governed_deploy_still_does_not_run_recovery_implicitly():
+    assert "scripts/recover_marketplace_dispatch_history.py" not in DEPLOY
+    assert "recover_missing_dispatch_truth_from_db_start" not in DEPLOY
     assert "Recover stale marketplace dispatch truth once" not in DEPLOY
-    assert "recover_bounded_marketplace_dispatch_truth" not in DEPLOY
-    assert "max_days=90" not in DEPLOY
-    assert "limit_per_store=150" not in DEPLOY
