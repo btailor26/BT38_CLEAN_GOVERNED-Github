@@ -6,6 +6,9 @@ RECOVERY = RECOVERY_PATH.read_text(encoding="utf-8")
 RECOVERY_WORKFLOW = Path(
     ".github/workflows/recover-marketplace-dispatch-history.yml"
 ).read_text(encoding="utf-8")
+RECOVERY_ROUTE = Path(
+    "services/governed_amazon_exact_order_recovery_route.py"
+).read_text(encoding="utf-8")
 AMAZON_TRACKING = Path(
     "services/governed_amazon_tracking_readback.py"
 ).read_text(encoding="utf-8")
@@ -60,6 +63,23 @@ def test_recovery_is_finite_operator_action_not_runtime_polling():
     )
     for token in forbidden_runtime:
         assert token not in RECOVERY
+
+
+def test_recovery_classifies_from_durable_db_readback_and_keeps_fallback_success():
+    assert 'if resolved:' in RECOVERY
+    assert 'elif not result.get("success"):' in RECOVERY
+    assert 'shipping_label is not None and shipping_label.get("success")' in RECOVERY
+    assert '"database_readback": readback' in RECOVERY
+
+
+def test_operator_route_returns_failure_and_unresolved_evidence():
+    assert '"failures": failures' in RECOVERY_ROUTE
+    assert '"unresolved": unresolved' in RECOVERY_ROUTE
+    assert '"result": order.get("result")' in RECOVERY_ROUTE
+    assert '"database_readback": order.get("database_readback")' in RECOVERY_ROUTE
+    assert '"automatic_startup_recovery": False' in RECOVERY_ROUTE
+    assert '"polling_started": False' in RECOVERY_ROUTE
+    assert '"marketplace_write_started": False' in RECOVERY_ROUTE
 
 
 def test_amazon_v2026_fulfillment_status_is_dispatch_authority():
