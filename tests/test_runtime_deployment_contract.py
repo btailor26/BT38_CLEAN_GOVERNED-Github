@@ -3,6 +3,12 @@ import contextlib
 import importlib
 import inspect
 import time
+from pathlib import Path
+
+
+EBAY_STARTUP_ALIGNMENT = Path(
+    "services/governed_ebay_shipping_notification_registration_alignment.py"
+).read_text(encoding="utf-8")
 
 
 def _runtime_module():
@@ -94,3 +100,15 @@ def test_automatic_hydration_is_off_by_default(monkeypatch):
     assert status["automatic_8h_hydration_enabled"] is False
     assert status["idle_db_activity"] is False
     assert status["runtime_status_source"] == "process_memory"
+
+
+def test_ebay_shipping_alignment_runs_existing_post_deploy_recovery_once_at_startup():
+    assert "def _install_runtime_startup_alignment()" in EBAY_STARTUP_ALIGNMENT
+    assert "original_engine_loop = runtime._engine_loop" in EBAY_STARTUP_ALIGNMENT
+    assert "align_ebay_notifications_and_recover_missed_changes(" in EBAY_STARTUP_ALIGNMENT
+    assert "store_id=23" in EBAY_STARTUP_ALIGNMENT
+    assert "max_days=7" in EBAY_STARTUP_ALIGNMENT
+    assert "return original_engine_loop(app)" in EBAY_STARTUP_ALIGNMENT
+    assert "threading.Thread" not in EBAY_STARTUP_ALIGNMENT
+    assert "while " not in EBAY_STARTUP_ALIGNMENT
+    assert "scheduler" not in EBAY_STARTUP_ALIGNMENT.lower()
