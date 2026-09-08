@@ -19,6 +19,25 @@ def test_marketplace_tracking_stays_inside_bt38_journey():
     assert "window.location.assign(`https://sellercentral.amazon.co.uk/orders-v3/order/" not in source
 
 
+def test_marketplace_tracking_click_uses_persisted_table_without_live_read():
+    source = _read("static/js/fbm_tracking_journey_legacy.js")
+
+    marketplace_start = source.index("function marketplaceJourneyHtml")
+    provider_start = source.index("function providerFallbackHtml")
+    marketplace = source[marketplace_start:provider_start]
+
+    assert '<th>Time</th><th>Location</th><th>Event Details</th>' in marketplace
+    assert "current persisted marketplace state" in marketplace
+    assert "confirmed by later persisted marketplace state" in marketplace
+    assert "Exact carrier event times and locations are not stored" in marketplace
+    assert "row.children[5]" in marketplace
+    assert "row.children[7]" in marketplace
+    assert "row.children[8]" in marketplace
+    assert "fetch(" not in marketplace
+    assert "XMLHttpRequest" not in marketplace
+    assert "window.location" not in marketplace
+
+
 def test_ebay_physical_fulfillment_carrier_outranks_buyer_selected_service():
     ebay = _read("services/governed_exact_ebay_order_hydration.py")
     promise = _read("services/fbm_db_delivery_promise_alignment.py")
