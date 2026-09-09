@@ -1,7 +1,7 @@
 """DB-only FBM delivery-promise and delivery-performance projection.
 
 Marketplace promises and carrier lifecycle timestamps are already persisted by
-governed event/hydration paths.  FBM presentation consumes those stored facts
+governed event/hydration paths. FBM presentation consumes those stored facts
 for every carrier; rendering never reads a marketplace or carrier provider.
 """
 from __future__ import annotations
@@ -115,6 +115,21 @@ def _delivery_performance(shipment: Any, promise: dict[str, Any] | None) -> str:
     return "on_time" if delivered_at <= latest_delivery_at else "late"
 
 
+def _shipping_source(shipment: Any) -> str:
+    """Return only a persisted label-purchase source; never infer one."""
+    if shipment is None:
+        return ""
+    provider = str(getattr(shipment, "provider", "") or "").strip().lower()
+    label_source = str(getattr(shipment, "label_source", "") or "").strip().lower()
+    if provider == "packlink" or label_source == "packlink":
+        return "Packlink"
+    if provider == "ebay_shipping" or label_source == "ebay_finances_shipping_label":
+        return "eBay Shipping"
+    if provider in {"amazon_buy_shipping", "amazon_shipping"} or label_source in {"amazon_buy_shipping", "amazon_shipping"}:
+        return "Amazon Buy Shipping"
+    return ""
+
+
 def install_fbm_db_delivery_promise_alignment(app: Any) -> None:
     if getattr(app, "_bt38_fbm_db_delivery_promise_alignment", False):
         return
@@ -155,6 +170,8 @@ def install_fbm_db_delivery_promise_alignment(app: Any) -> None:
                     "ship_by_at": (promise or {}).get("ship_by_at").isoformat() if (promise or {}).get("ship_by_at") else "",
                     "latest_delivery_at": (promise or {}).get("latest_delivery_at").isoformat() if (promise or {}).get("latest_delivery_at") else "",
                     "delivery_performance": performance,
+                    "shipping_source": _shipping_source(shipment),
+                    "carrier": str((getattr(shipment, "carrier", "") if shipment is not None else "") or getattr(order, "carrier", "") or "").strip(),
                 }
 
             provider = str(getattr(shipment, "provider", "") or "").strip().lower()
@@ -163,8 +180,6 @@ def install_fbm_db_delivery_promise_alignment(app: Any) -> None:
             if shipment is not None and provider == "marketplace" and platform == "amazon" and service:
                 shipment.service = service
 
-        # Request-scoped handoff to the HTML presentation wrapper.  No provider
-        # access and no second DB read is required after rendering.
         g.fbm_delivery_truth_by_order_id = rendered_truth
 
     app._bt38_fbm_db_delivery_promise_alignment = True
