@@ -31,15 +31,15 @@ def test_fbm_page_alignment_never_recovers_or_requeries_persisted_state_on_get()
     assert "FBMOrderProfile" not in ALIGNMENT
     assert "tuple_(" not in ALIGNMENT
     assert "tracking_number" not in ALIGNMENT
-    assert "delivered_at" not in ALIGNMENT
+    assert 'getattr(g, "fbm_delivery_truth_by_order_id", {})' in ALIGNMENT
     assert "requests." not in ALIGNMENT
     assert "fetch(" not in ALIGNMENT
 
 
 def test_fbm_read_boundary_is_event_persisted_not_page_hydrated():
     assert "marketplace/provider handoff owns collection and persistence" in ALIGNMENT
-    assert "Never query or reconcile from a page" in ALIGNMENT
-    assert "event-persisted state remains authoritative" in ALIGNMENT
+    assert "Page GETs must" in ALIGNMENT
+    assert "not recover, reconcile, hydrate, or call marketplace/provider APIs" in ALIGNMENT
     assert "db.session.add" not in ALIGNMENT
     assert "db.session.commit" not in ALIGNMENT
     assert "process_marketplace_notification" not in ALIGNMENT
