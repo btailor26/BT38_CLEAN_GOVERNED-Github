@@ -6,6 +6,7 @@ for every carrier; rendering never reads a marketplace or carrier provider.
 """
 from __future__ import annotations
 
+from datetime import timezone
 from typing import Any
 
 from flask import before_render_template, g
@@ -104,6 +105,17 @@ def _merge_promise(fallback: dict[str, Any] | None, operational: dict[str, Any] 
     return merged
 
 
+def _as_utc_aware(value: Any) -> Any:
+    """Normalize a persisted datetime for comparison only; never mutate storage."""
+    if value is None:
+        return None
+    tzinfo = getattr(value, "tzinfo", None)
+    utcoffset = value.utcoffset() if tzinfo is not None else None
+    if utcoffset is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 def _delivery_performance(shipment: Any, promise: dict[str, Any] | None) -> str:
     """Return performance from persisted DB timestamps only, carrier-neutral."""
     delivered_at = getattr(shipment, "delivered_at", None) if shipment is not None else None
@@ -112,7 +124,9 @@ def _delivery_performance(shipment: Any, promise: dict[str, Any] | None) -> str:
         return ""
     if latest_delivery_at is None:
         return "timing_unavailable"
-    return "on_time" if delivered_at <= latest_delivery_at else "late"
+    delivered_cmp = _as_utc_aware(delivered_at)
+    latest_delivery_cmp = _as_utc_aware(latest_delivery_at)
+    return "on_time" if delivered_cmp <= latest_delivery_cmp else "late"
 
 
 def _shipping_source(shipment: Any) -> str:
