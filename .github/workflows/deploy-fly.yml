@@ -99,7 +99,8 @@ jobs:
             services/fbm_packlink_adapter.py services/fbm_packlink_callback.py \
             services/fbm_packlink_event_processor.py services/fbm_carrier_mapping.py \
             services/fbm_marketplace_confirmation.py services/fbm_post_purchase.py \
-            services/fbm_shipping_state.py services/governed_fbm_page_alignment.py \
+            services/fbm_shipping_state.py services/fbm_db_delivery_promise_alignment.py \
+            services/governed_order_clarity_alignment.py services/governed_fbm_page_alignment.py \
             services/governed_amazon_tracking_readback.py services/governed_exact_ebay_order_hydration.py \
             services/governed_ebay_oauth_scopes.py services/governed_ebay_shipping_notification_alignment.py \
             services/governed_runtime_engine.py services/governed_webhook_execution.py \
@@ -122,6 +123,8 @@ jobs:
             tests/test_fbm_amazon_tracking_contract.py tests/test_fbm_amazon_confirmation_payload.py \
             tests/test_fbm_manual_shipping_order_contract.py tests/test_marketplace_tracking_readback_contract.py \
             tests/test_marketplace_dispatch_truth_recovery_contract.py tests/test_production_db_contract_gate.py \
+            tests/test_fbm_db_delivery_performance_authority_contract.py \
+            tests/test_fbm_promise_tracking_presentation_alignment_contract.py \
             tests/test_event_runtime_zero_recovery_contract.py tests/test_deploy_no_recovery_contract.py
 
   deploy:
@@ -188,6 +191,9 @@ jobs:
             governed_fbm_manual_routes.py
             templates/fbm.html
             static/js/fbm_tracking_journey.js
+            static/js/fbm_delivery_promise_journey_alignment.js
+            services/fbm_db_delivery_promise_alignment.py
+            services/governed_order_clarity_alignment.py
             services/governed_fbm_page_alignment.py
             services/governed_fbm_lifecycle_alignment.py
             services/fbm_marketplace_confirmation.py
