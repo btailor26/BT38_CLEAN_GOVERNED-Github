@@ -30,7 +30,7 @@ def test_fbm_page_alignment_never_recovers_or_requeries_persisted_state_on_get()
     assert "FBMShipment" not in ALIGNMENT
     assert "FBMOrderProfile" not in ALIGNMENT
     assert "tuple_(" not in ALIGNMENT
-    assert "tracking_number" not in ALIGNMENT
+    assert 'data-tracking-number=' in ALIGNMENT
     assert 'getattr(g, "fbm_delivery_truth_by_order_id", {})' in ALIGNMENT
     assert "requests." not in ALIGNMENT
     assert "fetch(" not in ALIGNMENT
