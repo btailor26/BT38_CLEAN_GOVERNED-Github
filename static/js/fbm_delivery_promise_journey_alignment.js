@@ -31,9 +31,14 @@
         return `<div class="small text-muted mb-1">Marketplace promise · persisted BT38 DB</div>${shipBy ? `<div class="small"><strong>Ship by:</strong> ${esc(shipBy)}</div>` : ''}${deliverBy ? `<div class="small"><strong>Deliver by:</strong> ${esc(deliverBy)}</div>` : ''}`;
     }
 
-    function stateBadge(confirmed) {
-        const cls = confirmed ? 'bg-success text-white border border-success' : 'bg-secondary text-white border border-secondary';
-        return `<span class="badge rounded-pill px-2 py-1 text-center ${cls}" style="min-width:78px">${confirmed ? 'Confirmed' : 'Pending'}</span>`;
+    function stateBadge(state) {
+        if (state === 'confirmed') {
+            return '<span class="badge rounded-pill px-2 py-1 text-center bg-success text-white border border-success" style="min-width:88px">Confirmed</span>';
+        }
+        if (state === 'missing') {
+            return '<span class="badge rounded-pill px-2 py-1 text-center bg-danger text-white border border-danger" style="min-width:88px">Not confirmed</span>';
+        }
+        return '<span class="badge rounded-pill px-2 py-1 text-center bg-secondary text-white border border-secondary" style="min-width:88px">Pending</span>';
     }
 
     function milestoneHtml(row) {
@@ -42,14 +47,15 @@
         const movementAt = row?.dataset?.firstMovementAt || '';
         const deliveredAt = row?.dataset?.deliveredAt || '';
 
-        function milestone(title, time, detail) {
-            const confirmed = Boolean(time);
-            return `<div class="border-start border-3 ${confirmed ? 'border-success' : 'border-secondary'} ps-3 py-2 mb-2"><div class="d-flex justify-content-between align-items-start gap-3"><div><div class="fw-semibold">${esc(title)}</div>${confirmed ? `<div class="small text-muted">${esc(displayDate(time))}${detail ? ` · ${esc(detail)}` : ''}</div>` : ''}</div>${stateBadge(confirmed)}</div></div>`;
+        function milestone(title, time, detail, overtaken) {
+            const state = time ? 'confirmed' : (overtaken ? 'missing' : 'pending');
+            const border = state === 'confirmed' ? 'border-success' : (state === 'missing' ? 'border-danger' : 'border-secondary');
+            return `<div class="border-start border-3 ${border} ps-3 py-2 mb-2"><div class="d-flex justify-content-between align-items-start gap-3"><div><div class="fw-semibold">${esc(title)}</div>${time ? `<div class="small text-muted">${esc(displayDate(time))}${detail ? ` · ${esc(detail)}` : ''}</div>` : (overtaken ? '<div class="small text-danger">No persisted confirmation before a later shipment milestone.</div>' : '')}</div>${stateBadge(state)}</div></div>`;
         }
 
-        return milestone('Picked up', pickedUpAt, pickedUpAt ? `${carrier} carrier acceptance persisted` : '') +
-            milestone('In transit', movementAt, movementAt ? `${carrier} first movement persisted` : '') +
-            milestone('Delivered', deliveredAt, deliveredAt ? 'Delivery completion persisted' : '');
+        return milestone('Picked up', pickedUpAt, pickedUpAt ? `${carrier} carrier acceptance persisted` : '', Boolean(movementAt || deliveredAt)) +
+            milestone('In transit', movementAt, movementAt ? `${carrier} first movement persisted` : '', Boolean(deliveredAt)) +
+            milestone('Delivered', deliveredAt, deliveredAt ? 'Delivery completion persisted' : '', false);
     }
 
     function trackingEvents(row) {
@@ -164,8 +170,8 @@
     }
 
     function install() {
-        if (document.documentElement.dataset.bt38PromiseJourneyAligned === '8') return;
-        document.documentElement.dataset.bt38PromiseJourneyAligned = '8';
+        if (document.documentElement.dataset.bt38PromiseJourneyAligned === '9') return;
+        document.documentElement.dataset.bt38PromiseJourneyAligned = '9';
         document.querySelectorAll('.fbm-order-row').forEach(alignRowPerformance);
         window.addEventListener('click', intercept, true);
         window.addEventListener('keydown', function (event) {
