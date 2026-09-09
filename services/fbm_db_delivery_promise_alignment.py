@@ -144,6 +144,10 @@ def _shipping_source(shipment: Any) -> str:
     return ""
 
 
+def _iso(value: Any) -> str:
+    return value.isoformat() if value is not None and hasattr(value, "isoformat") else ""
+
+
 def install_fbm_db_delivery_promise_alignment(app: Any) -> None:
     if getattr(app, "_bt38_fbm_db_delivery_promise_alignment", False):
         return
@@ -180,12 +184,26 @@ def install_fbm_db_delivery_promise_alignment(app: Any) -> None:
             if order_id:
                 rendered_truth[order_id] = {
                     "shipment_state": str(item.get("shipment_state") or ""),
-                    "delivered_at": getattr(shipment, "delivered_at", None).isoformat() if shipment is not None and getattr(shipment, "delivered_at", None) else "",
-                    "ship_by_at": (promise or {}).get("ship_by_at").isoformat() if (promise or {}).get("ship_by_at") else "",
-                    "latest_delivery_at": (promise or {}).get("latest_delivery_at").isoformat() if (promise or {}).get("latest_delivery_at") else "",
+                    "order_created_at": _iso(getattr(order, "created_at", None)),
+                    "marketplace_created_at": _iso(getattr(order, "marketplace_created_at", None)),
+                    "shipped_at": _iso(getattr(order, "shipped_at", None)),
+                    "label_purchased_at": _iso(getattr(shipment, "label_purchased_at", None)) if shipment is not None else "",
+                    "marketplace_confirmed_at": _iso(getattr(shipment, "marketplace_confirmed_at", None)) if shipment is not None else "",
+                    "carrier_accepted_at": _iso(getattr(shipment, "carrier_accepted_at", None)) if shipment is not None else "",
+                    "first_movement_at": _iso(getattr(shipment, "first_movement_at", None)) if shipment is not None else "",
+                    "delivered_at": _iso(getattr(shipment, "delivered_at", None)) if shipment is not None else "",
+                    "last_provider_checked_at": _iso(getattr(shipment, "last_provider_checked_at", None)) if shipment is not None else "",
+                    "last_provider_status": str(getattr(shipment, "last_provider_status", "") or "") if shipment is not None else "",
+                    "ship_by_at": _iso((promise or {}).get("ship_by_at")),
+                    "earliest_delivery_at": _iso((promise or {}).get("earliest_delivery_at")),
+                    "latest_delivery_at": _iso((promise or {}).get("latest_delivery_at")),
                     "delivery_performance": performance,
                     "shipping_source": _shipping_source(shipment),
                     "carrier": str((getattr(shipment, "carrier", "") if shipment is not None else "") or getattr(order, "carrier", "") or "").strip(),
+                    "service": str(getattr(shipment, "service", "") or "") if shipment is not None else "",
+                    "tracking_number": str((getattr(shipment, "tracking_number", "") if shipment is not None else "") or getattr(order, "tracking_number", "") or "").strip(),
+                    "provider_shipment_id": str(getattr(shipment, "provider_shipment_id", "") or "") if shipment is not None else "",
+                    "marketplace_order_id": str(getattr(order, "marketplace_order_id", "") or ""),
                 }
 
             provider = str(getattr(shipment, "provider", "") or "").strip().lower()
