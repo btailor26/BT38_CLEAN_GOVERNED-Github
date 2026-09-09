@@ -18,9 +18,9 @@
 
     function performanceHtml(row) {
         const performance = String(row?.dataset?.deliveryPerformance || '').trim().toLowerCase();
-        if (performance === 'on_time') return '<span class="badge rounded-pill px-2 py-1 bg-success">On time</span>';
-        if (performance === 'late') return '<span class="badge rounded-pill px-2 py-1 bg-danger">Late</span>';
-        if (performance === 'timing_unavailable') return '<span class="badge rounded-pill px-2 py-1 bg-secondary">Delivered · timing unavailable</span>';
+        if (performance === 'on_time') return '<span class="badge rounded-pill px-2 py-1 bg-success text-white">On time</span>';
+        if (performance === 'late') return '<span class="badge rounded-pill px-2 py-1 bg-danger text-white">Late</span>';
+        if (performance === 'timing_unavailable') return '<span class="badge rounded-pill px-2 py-1 bg-secondary text-white">Delivered · timing unavailable</span>';
         return '';
     }
 
@@ -32,7 +32,7 @@
     }
 
     function stateBadge(confirmed) {
-        const cls = confirmed ? 'bg-success text-white border border-success' : 'bg-light text-muted border border-secondary';
+        const cls = confirmed ? 'bg-success text-white border border-success' : 'bg-secondary text-white border border-secondary';
         return `<span class="badge rounded-pill px-2 py-1 text-center ${cls}" style="min-width:78px">${confirmed ? 'Confirmed' : 'Pending'}</span>`;
     }
 
@@ -41,7 +41,6 @@
         const pickedUpAt = row?.dataset?.carrierAcceptedAt || '';
         const movementAt = row?.dataset?.firstMovementAt || '';
         const deliveredAt = row?.dataset?.deliveredAt || '';
-        const providerStatus = String(row?.dataset?.lastProviderStatus || '').trim();
 
         function milestone(title, time, detail) {
             const confirmed = Boolean(time);
@@ -49,7 +48,7 @@
         }
 
         return milestone('Picked up', pickedUpAt, pickedUpAt ? `${carrier} carrier acceptance persisted` : '') +
-            milestone('In transit', movementAt, movementAt ? `${carrier} first movement persisted${providerStatus ? ` · ${providerStatus}` : ''}` : '') +
+            milestone('In transit', movementAt, movementAt ? `${carrier} first movement persisted` : '') +
             milestone('Delivered', deliveredAt, deliveredAt ? 'Delivery completion persisted' : '');
     }
 
@@ -89,7 +88,7 @@
             const when = displayDate(event.event_time || event.observed_at || '');
             const title = String(event.description || event.status || 'Carrier update').trim();
             const detail = String(event.detail || '').trim();
-            return `<div class="list-group-item py-2"><div class="d-flex justify-content-between gap-3"><div><div class="fw-semibold">${esc(title)}</div>${detail ? `<div class="small text-muted">${esc(detail)}</div>` : ''}</div>${index === 0 ? '<span class="badge rounded-pill px-2 py-1 bg-primary align-self-start">Latest</span>' : ''}</div>${when ? `<div class="small text-muted mt-1">${esc(when)}</div>` : ''}</div>`;
+            return `<div class="list-group-item py-2"><div class="d-flex justify-content-between gap-3"><div><div class="fw-semibold">${esc(title)}</div>${detail ? `<div class="small text-muted">${esc(detail)}</div>` : ''}</div>${index === 0 ? '<span class="badge rounded-pill px-2 py-1 bg-secondary text-white align-self-start">Latest</span>' : ''}</div>${when ? `<div class="small text-muted mt-1">${esc(when)}</div>` : ''}</div>`;
         }).join('') + `</div>`;
     }
 
@@ -165,8 +164,8 @@
     }
 
     function install() {
-        if (document.documentElement.dataset.bt38PromiseJourneyAligned === '7') return;
-        document.documentElement.dataset.bt38PromiseJourneyAligned = '7';
+        if (document.documentElement.dataset.bt38PromiseJourneyAligned === '8') return;
+        document.documentElement.dataset.bt38PromiseJourneyAligned = '8';
         document.querySelectorAll('.fbm-order-row').forEach(alignRowPerformance);
         window.addEventListener('click', intercept, true);
         window.addEventListener('keydown', function (event) {
