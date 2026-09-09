@@ -127,8 +127,30 @@
         }
     }
 
+    function alignJourneyRowColours(row) {
+        const journeyCell = row?.children?.[8] || null;
+        if (!journeyCell) return;
+        const badges = Array.from(journeyCell.querySelectorAll('.badge')).filter(function (badge) {
+            const label = String(badge.textContent || '').trim().toLowerCase();
+            return label === 'picked up' || label === 'in transit' || label === 'delivered';
+        });
+        if (!badges.length) return;
+
+        // Row colours are shipment-progress indicators, not three independent proof flags.
+        // Before the first carrier movement is persisted they stay red. Once BT38 has
+        // persisted first movement (or delivery), the parcel is proven inside the
+        // carrier network and all three journey chips turn green. Delivery lateness is
+        // shown separately by performanceHtml() from persisted delivered/promise times.
+        const inCarrierNetwork = Boolean(row?.dataset?.firstMovementAt || row?.dataset?.deliveredAt);
+        badges.forEach(function (badge) {
+            badge.classList.remove('bg-success', 'bg-danger', 'bg-secondary', 'bg-light', 'text-muted', 'text-dark', 'border', 'border-success', 'border-danger', 'border-secondary');
+            badge.classList.add(inCarrierNetwork ? 'bg-success' : 'bg-danger', 'text-white');
+        });
+    }
+
     function alignRowPerformance(row) {
         alignShippingAndShipment(row);
+        alignJourneyRowColours(row);
         const journeyCell = row?.children?.[8] || null;
         if (!journeyCell) return;
         let holder = journeyCell.querySelector('.fbm-delivery-performance');
@@ -170,8 +192,8 @@
     }
 
     function install() {
-        if (document.documentElement.dataset.bt38PromiseJourneyAligned === '9') return;
-        document.documentElement.dataset.bt38PromiseJourneyAligned = '9';
+        if (document.documentElement.dataset.bt38PromiseJourneyAligned === '10') return;
+        document.documentElement.dataset.bt38PromiseJourneyAligned = '10';
         document.querySelectorAll('.fbm-order-row').forEach(alignRowPerformance);
         window.addEventListener('click', intercept, true);
         window.addEventListener('keydown', function (event) {
