@@ -357,7 +357,11 @@ def test_packlink_runtime_sleeps_until_exact_provider_event():
     assert "get_labels(reference)" in label_branch
     assert "get_labels(reference)" not in before_label_branch
     tracking_branch = event_source.split('if event_name == "shipment.tracking.update":', 1)[1]
-    assert "get_tracking_status" in tracking_branch
+    assert "get_tracking_status" not in tracking_branch
+    assert "get_shipment(reference)" not in tracking_branch
+    assert "_callback_tracking_history(data)" in tracking_branch
+    assert "_callback_provider_state(data)" in tracking_branch
+    assert '"webhook_only": True' in tracking_branch
     assert "get_labels" not in tracking_branch
     assert "recover_packlink_shipments_for_day" not in event_source
     assert ".all()" not in event_source
