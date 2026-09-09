@@ -8,10 +8,13 @@ payload itself and never performs a second Packlink tracking read.
 from __future__ import annotations
 
 from datetime import datetime
+import hashlib
+import json
 from typing import Any
 
 from extensions import db
 from fbm_models import FBMShipment
+from fbm_tracking_event_models import FBMShipmentTrackingEvent
 from models import MarketplaceOrder
 from services.fbm_packlink_adapter import PacklinkAdapter, PacklinkRequestError
 from services.fbm_packlink_callback import (
@@ -100,6 +103,136 @@ def _callback_provider_state(data: dict[str, Any], event_name: str) -> str:
     return event_name
 
 
+def _first_text(item: dict[str, Any], keys: tuple[str, ...]) -> str | None:
+    for key in keys:
+        value = item.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _parse_provider_datetime(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=None) if value.tzinfo is not None else value
+    if not isinstance(value, str) or not value.strip():
+        return None
+    text_value = value.strip()
+    normalized = text_value[:-1] + "+00:00" if text_value.endswith("Z") else text_value
+    try:
+        parsed = datetime.fromisoformat(normalized)
+        return parsed.replace(tzinfo=None) if parsed.tzinfo is not None else parsed
+    except ValueError:
+        return None
+
+
+def _event_datetime(item: dict[str, Any]) -> datetime | None:
+    for key in (
+        "timestamp",
+        "event_time",
+        "eventTime",
+        "event_date",
+        "eventDate",
+        "datetime",
+        "date_time",
+        "dateTime",
+        "created_at",
+        "createdAt",
+        "updated_at",
+        "updatedAt",
+        "date",
+    ):
+        parsed = _parse_provider_datetime(item.get(key))
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _estimated_delivery(data: dict[str, Any], item: dict[str, Any]) -> datetime | None:
+    for source in (item, data):
+        for key in (
+            "estimated_delivery",
+            "estimatedDelivery",
+            "estimated_delivery_at",
+            "estimatedDeliveryAt",
+            "delivery_estimate",
+            "deliveryEstimate",
+            "eta",
+        ):
+            parsed = _parse_provider_datetime(source.get(key))
+            if parsed is not None:
+                return parsed
+    return None
+
+
+def _package_metadata(data: dict[str, Any]) -> tuple[int | None, Any]:
+    for key in ("packages", "parcels"):
+        value = data.get(key)
+        if isinstance(value, list):
+            return len(value), value
+    for key in ("package", "parcel"):
+        value = data.get(key)
+        if isinstance(value, dict):
+            return 1, value
+    count = data.get("package_count") or data.get("packageCount") or data.get("parcel_count") or data.get("parcelCount")
+    try:
+        parsed_count = int(count) if count is not None else None
+    except (TypeError, ValueError):
+        parsed_count = None
+    return parsed_count, None
+
+
+def _tracking_event_key(shipment_id: int, item: dict[str, Any]) -> str:
+    canonical = json.dumps(item, sort_keys=True, separators=(",", ":"), default=str, ensure_ascii=False)
+    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:48]
+    return f"{shipment_id}:{digest}"
+
+
+def _persist_tracking_events(
+    shipment: FBMShipment,
+    *,
+    data: dict[str, Any],
+    history: list[dict[str, Any]],
+    observed_at: datetime,
+) -> int:
+    """Persist webhook-supplied tracking history only; replay-safe and provider-read free."""
+    package_count, package_data = _package_metadata(data)
+    inserted = 0
+    for item in history:
+        event_key = _tracking_event_key(int(shipment.id), item)
+        exists = (
+            FBMShipmentTrackingEvent.query
+            .filter_by(shipment_id=shipment.id, event_key=event_key)
+            .first()
+        )
+        if exists is not None:
+            continue
+        status = _first_text(item, (
+            "status", "state", "status_name", "statusName", "event_status", "eventStatus", "code"
+        ))
+        description = _first_text(item, (
+            "description", "message", "status_description", "statusDescription", "label"
+        ))
+        detail = _first_text(item, (
+            "detail", "details", "reason", "location", "event_description", "eventDescription"
+        ))
+        db.session.add(FBMShipmentTrackingEvent(
+            shipment_id=shipment.id,
+            provider="packlink",
+            event_key=event_key,
+            event_time=_event_datetime(item),
+            status=status,
+            description=description,
+            detail=detail,
+            estimated_delivery_at=_estimated_delivery(data, item),
+            package_count=package_count,
+            package_data=package_data,
+            raw_event=item,
+            observed_at=observed_at,
+        ))
+        inserted += 1
+    return inserted
+
+
 def process_packlink_event(
     payload: dict[str, Any],
     *,
@@ -128,7 +261,6 @@ def process_packlink_event(
             "reason": attach_error or "shipment_not_known_to_bt38",
         }
 
-    # Duplicate/replayed provider events must never generate another marketplace write.
     if shipment.marketplace_confirmed_at is not None and event_name == "shipment.label.ready":
         return {
             "success": True,
@@ -155,9 +287,6 @@ def process_packlink_event(
             "state": "provider_error",
         }
 
-    # Label purchase is the only callback path that may hydrate Packlink again.
-    # The provider read is needed to obtain the paid label file and authoritative
-    # label/tracking identity before marketplace confirmation.
     if event_name == "shipment.label.ready":
         adapter = adapter or PacklinkAdapter()
         provider_payload = adapter.get_shipment(reference)
@@ -223,9 +352,6 @@ def process_packlink_event(
             **result,
         }
 
-    # Tracking movement is webhook-owned. Packlink has already sent the event, so
-    # BT38 consumes that payload directly and does not call get_shipment() or
-    # get_tracking_status() again. The callback updates only this exact shipment.
     if event_name == "shipment.tracking.update":
         callback_history = _callback_tracking_history(data)
         provider_state = _callback_provider_state(data, event_name)
@@ -239,6 +365,12 @@ def process_packlink_event(
             shipment.provider_service_id = service_id
         if tracking:
             shipment.tracking_number = tracking
+        persisted_events = _persist_tracking_events(
+            shipment,
+            data=data,
+            history=callback_history,
+            observed_at=now,
+        )
         reconcile_packlink_tracking_lifecycle(
             shipment,
             provider_state=provider_state,
@@ -254,11 +386,10 @@ def process_packlink_event(
             "tracking_number": shipment.tracking_number,
             "shipment_status": shipment.status,
             "provider_status": shipment.last_provider_status,
+            "tracking_events_persisted": persisted_events,
             "webhook_only": True,
         }
 
-    # Carrier success / delivered are exact lifecycle changes from the callback.
-    # No label, shipment-detail or tracking endpoint is called here.
     _apply_lifecycle_state(shipment, event_name, now)
     db.session.commit()
     return {
