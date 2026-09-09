@@ -16,8 +16,16 @@
         return new Intl.DateTimeFormat('en-GB', {day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'}).format(date);
     }
 
+    function performanceState(row) {
+        return String(row?.dataset?.deliveryPerformance || '').trim().toLowerCase();
+    }
+
+    function deliveryProven(row) {
+        return ['on_time', 'late', 'timing_unavailable'].includes(performanceState(row));
+    }
+
     function performanceHtml(row) {
-        const performance = String(row?.dataset?.deliveryPerformance || '').trim().toLowerCase();
+        const performance = performanceState(row);
         if (performance === 'on_time') return '<span class="badge rounded-pill px-2 py-1 bg-success text-white">On time</span>';
         if (performance === 'late') return '<span class="badge rounded-pill px-2 py-1 bg-danger text-white">Late</span>';
         if (performance === 'timing_unavailable') return '<span class="badge rounded-pill px-2 py-1 bg-secondary text-white">Delivered · timing unavailable</span>';
@@ -42,9 +50,10 @@
         const pickedUpAt = row?.dataset?.carrierAcceptedAt || '';
         const movementAt = row?.dataset?.firstMovementAt || '';
         const deliveredAt = row?.dataset?.deliveredAt || '';
-        const pickupPassed = Boolean(pickedUpAt || movementAt || deliveredAt);
-        const transitPassed = Boolean(movementAt || deliveredAt);
-        const delivered = Boolean(deliveredAt);
+        const terminalDelivery = deliveryProven(row);
+        const pickupPassed = Boolean(pickedUpAt || movementAt || deliveredAt || terminalDelivery);
+        const transitPassed = Boolean(movementAt || deliveredAt || terminalDelivery);
+        const delivered = Boolean(deliveredAt || terminalDelivery);
 
         function milestone(title, confirmed, exactTime, confirmedDetail, inferredDetail) {
             const border = confirmed ? 'border-success' : 'border-danger';
@@ -54,9 +63,9 @@
             return `<div class="border-start border-3 ${border} ps-3 py-2 mb-2"><div class="d-flex justify-content-between align-items-start gap-3"><div><div class="fw-semibold">${esc(title)}</div>${detail}</div>${stateBadge(confirmed)}</div></div>`;
         }
 
-        return milestone('Picked up', pickupPassed, pickedUpAt, `${carrier} carrier acceptance persisted`, 'Stage passed: later persisted carrier movement proves pickup occurred; exact pickup timestamp is not persisted.') +
-            milestone('In transit', transitPassed, movementAt, `${carrier} first movement persisted`, 'Stage passed: persisted delivery proves transit occurred; exact first-movement timestamp is not persisted.') +
-            milestone('Delivered', delivered, deliveredAt, 'Delivery completion persisted', '');
+        return milestone('Picked up', pickupPassed, pickedUpAt, `${carrier} carrier acceptance persisted`, 'Stage passed: later persisted shipment truth proves pickup occurred; exact pickup timestamp is not persisted.') +
+            milestone('In transit', transitPassed, movementAt, `${carrier} first movement persisted`, 'Stage passed: later persisted shipment truth proves transit occurred; exact first-movement timestamp is not persisted.') +
+            milestone('Delivered', delivered, deliveredAt, 'Delivery completion persisted', terminalDelivery ? 'Delivery completion is proven by persisted delivery-performance truth; exact delivery timestamp is not exposed on this row.' : '');
     }
 
     function trackingEvents(row) {
@@ -118,10 +127,11 @@
     function alignJourneyRowColours(row) {
         const journeyCell = row?.children?.[8] || null;
         if (!journeyCell) return;
+        const terminalDelivery = deliveryProven(row);
         const stageTruth = {
-            'picked up': Boolean(row?.dataset?.carrierAcceptedAt || row?.dataset?.firstMovementAt || row?.dataset?.deliveredAt),
-            'in transit': Boolean(row?.dataset?.firstMovementAt || row?.dataset?.deliveredAt),
-            'delivered': Boolean(row?.dataset?.deliveredAt)
+            'picked up': Boolean(row?.dataset?.carrierAcceptedAt || row?.dataset?.firstMovementAt || row?.dataset?.deliveredAt || terminalDelivery),
+            'in transit': Boolean(row?.dataset?.firstMovementAt || row?.dataset?.deliveredAt || terminalDelivery),
+            'delivered': Boolean(row?.dataset?.deliveredAt || terminalDelivery)
         };
         Array.from(journeyCell.querySelectorAll('.badge')).forEach(function (badge) {
             const label = String(badge.textContent || '').trim().toLowerCase();
@@ -129,6 +139,11 @@
             badge.classList.remove('bg-success', 'bg-danger', 'bg-secondary', 'bg-light', 'text-muted', 'text-dark', 'border', 'border-success', 'border-danger', 'border-secondary');
             badge.classList.add(stageTruth[label] ? 'bg-success' : 'bg-danger', 'text-white');
         });
+        if (terminalDelivery) {
+            Array.from(journeyCell.querySelectorAll('.fbm-row-note')).forEach(function (note) {
+                if (/pickup not confirmed|carrier pickup overdue/i.test(String(note.textContent || ''))) note.remove();
+            });
+        }
     }
 
     function alignRowPerformance(row) {
@@ -165,8 +180,8 @@
     }
 
     function install() {
-        if (document.documentElement.dataset.bt38PromiseJourneyAligned === '11') return;
-        document.documentElement.dataset.bt38PromiseJourneyAligned = '11';
+        if (document.documentElement.dataset.bt38PromiseJourneyAligned === '12') return;
+        document.documentElement.dataset.bt38PromiseJourneyAligned = '12';
         document.querySelectorAll('.fbm-order-row').forEach(alignRowPerformance);
         window.addEventListener('click', intercept, true);
         window.addEventListener('keydown', function (event) { if (event.key !== 'Enter' && event.key !== ' ') return; intercept(event); }, true);
