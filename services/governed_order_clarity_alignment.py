@@ -65,11 +65,7 @@ def _align_fbm_buyer_messages_card(html: str) -> str:
 
 
 def _inject_db_delivery_truth(html: str) -> str:
-    """Attach the already-read DB projection to each rendered FBM row.
-
-    This performs no DB/provider read.  The request-scoped map was produced by
-    the before-render DB projection and is the only performance authority.
-    """
+    """Attach the already-read DB projection to each rendered FBM row."""
     truth = getattr(g, "fbm_delivery_truth_by_order_id", {}) or {}
     value = str(html or "")
     for order_id, row in truth.items():
@@ -82,6 +78,8 @@ def _inject_db_delivery_truth(html: str) -> str:
             f' data-ship-by-at="{html_lib.escape(row.get("ship_by_at", ""), quote=True)}"'
             f' data-delivery-promise-at="{html_lib.escape(row.get("latest_delivery_at", ""), quote=True)}"'
             f' data-delivery-performance="{html_lib.escape(row.get("delivery_performance", ""), quote=True)}"'
+            f' data-shipping-source="{html_lib.escape(row.get("shipping_source", ""), quote=True)}"'
+            f' data-carrier="{html_lib.escape(row.get("carrier", ""), quote=True)}"'
         )
         value = value.replace(marker, marker + attrs, 1)
     return value
@@ -123,4 +121,4 @@ def install_governed_order_clarity_alignment(app) -> None:
             response.set_data(html)
         return response
 
-    app.logger.info("BT38 order clarity alignment installed: DB-only carrier-neutral delivery performance + persisted promise/journey truth; UI/provider reads remain prohibited")
+    app.logger.info("BT38 order clarity alignment installed: DB-only carrier-neutral delivery performance + persisted shipping-source/carrier presentation; UI/provider reads remain prohibited")
