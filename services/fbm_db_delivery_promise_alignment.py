@@ -14,6 +14,7 @@ from sqlalchemy import bindparam, text, tuple_
 
 from extensions import db
 from fbm_models import FBMOrderProfile
+from fbm_tracking_event_models import FBMShipmentTrackingEvent
 
 
 _OPERATIONAL_FIELDS = (
@@ -148,6 +149,36 @@ def _iso(value: Any) -> str:
     return value.isoformat() if value is not None and hasattr(value, "isoformat") else ""
 
 
+def _tracking_events(shipment_ids: set[int]) -> dict[int, list[dict[str, Any]]]:
+    """Batch-read already-persisted carrier events for the visible canonical shipments."""
+    if not shipment_ids:
+        return {}
+    rows = (
+        db.session.query(FBMShipmentTrackingEvent)
+        .filter(FBMShipmentTrackingEvent.shipment_id.in_(sorted(shipment_ids)))
+        .order_by(
+            FBMShipmentTrackingEvent.shipment_id.asc(),
+            FBMShipmentTrackingEvent.event_time.asc().nulls_last(),
+            FBMShipmentTrackingEvent.observed_at.asc(),
+            FBMShipmentTrackingEvent.id.asc(),
+        )
+        .all()
+    )
+    result: dict[int, list[dict[str, Any]]] = {}
+    for row in rows:
+        result.setdefault(int(row.shipment_id), []).append({
+            "event_time": _iso(row.event_time),
+            "observed_at": _iso(row.observed_at),
+            "status": str(row.status or ""),
+            "description": str(row.description or ""),
+            "detail": str(row.detail or ""),
+            "estimated_delivery_at": _iso(row.estimated_delivery_at),
+            "package_count": row.package_count,
+            "package_data": row.package_data,
+        })
+    return result
+
+
 def install_fbm_db_delivery_promise_alignment(app: Any) -> None:
     if getattr(app, "_bt38_fbm_db_delivery_promise_alignment", False):
         return
@@ -168,7 +199,14 @@ def install_fbm_db_delivery_promise_alignment(app: Any) -> None:
             return
         profile_promises = _profile_promises(keys)
         operational_promises = _operational_promises(keys)
-        rendered_truth: dict[int, dict[str, str]] = {}
+        shipment_ids = {
+            int(getattr(item.get("shipment"), "id", 0) or 0)
+            for item in items
+            if isinstance(item, dict) and item.get("shipment") is not None
+        }
+        shipment_ids.discard(0)
+        tracking_events_by_shipment = _tracking_events(shipment_ids)
+        rendered_truth: dict[int, dict[str, Any]] = {}
 
         for item in items:
             if not isinstance(item, dict):
@@ -180,6 +218,8 @@ def install_fbm_db_delivery_promise_alignment(app: Any) -> None:
             shipment = item.get("shipment")
             performance = _delivery_performance(shipment, promise)
             item["delivery_performance"] = performance
+            shipment_id = int(getattr(shipment, "id", 0) or 0) if shipment is not None else 0
+            shipment_events = tracking_events_by_shipment.get(shipment_id, [])
             order_id = int(getattr(order, "id", 0) or 0)
             if order_id:
                 rendered_truth[order_id] = {
@@ -204,6 +244,7 @@ def install_fbm_db_delivery_promise_alignment(app: Any) -> None:
                     "tracking_number": str((getattr(shipment, "tracking_number", "") if shipment is not None else "") or getattr(order, "tracking_number", "") or "").strip(),
                     "provider_shipment_id": str(getattr(shipment, "provider_shipment_id", "") or "") if shipment is not None else "",
                     "marketplace_order_id": str(getattr(order, "marketplace_order_id", "") or ""),
+                    "tracking_events": shipment_events,
                 }
 
             provider = str(getattr(shipment, "provider", "") or "").strip().lower()
