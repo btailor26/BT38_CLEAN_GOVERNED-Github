@@ -1,8 +1,9 @@
 """Exact event-driven Packlink processing for BT38 FBM.
 
 No polling or batch scanning lives here. A Packlink callback wakes BT38 for one
-shipment reference only. The provider is hydrated only for the facts relevant to
-that event, so unpaid/unchanged labels remain asleep.
+shipment reference only. Label-ready may hydrate the exact provider shipment to
+obtain the purchased label. Tracking movement is consumed from the callback
+payload itself and never performs a second Packlink tracking read.
 """
 from __future__ import annotations
 
@@ -22,6 +23,7 @@ from services.fbm_packlink_callback import (
     _platform,
     _provider_identity,
     extract_packlink_tracking,
+    reconcile_packlink_tracking_lifecycle,
 )
 from services.fbm_post_purchase import persist_external_label
 
@@ -62,6 +64,40 @@ def _find_exact_shipment(reference: str, custom_reference: str | None):
         )
         return shipment, order, attach_error
     return shipment, order, None
+
+
+def _callback_tracking_history(data: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return only tracking events already supplied inside this callback."""
+    for key in ("tracking_history", "trackingHistory", "history", "events"):
+        value = data.get(key)
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, dict)]
+        if isinstance(value, dict):
+            return [value]
+    tracking_info = data.get("tracking_info")
+    if isinstance(tracking_info, list):
+        return [item for item in tracking_info if isinstance(item, dict)]
+    if isinstance(tracking_info, dict):
+        return [tracking_info]
+    return [data] if data else []
+
+
+def _callback_provider_state(data: dict[str, Any], event_name: str) -> str:
+    """Resolve lifecycle text directly from Packlink's webhook payload."""
+    for key in (
+        "state",
+        "status",
+        "status_name",
+        "statusName",
+        "event_status",
+        "eventStatus",
+        "description",
+        "message",
+    ):
+        value = data.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return event_name
 
 
 def process_packlink_event(
@@ -119,11 +155,11 @@ def process_packlink_event(
             "state": "provider_error",
         }
 
-    adapter = adapter or PacklinkAdapter()
-
-    # Label purchase is the only event that hydrates label + shipment + tracking.
-    # No label-ready event means no label call and no marketplace confirmation attempt.
+    # Label purchase is the only callback path that may hydrate Packlink again.
+    # The provider read is needed to obtain the paid label file and authoritative
+    # label/tracking identity before marketplace confirmation.
     if event_name == "shipment.label.ready":
+        adapter = adapter or PacklinkAdapter()
         provider_payload = adapter.get_shipment(reference)
         labels = adapter.get_labels(reference)
         tracking_history = adapter.get_tracking_status(reference=reference)
@@ -187,12 +223,14 @@ def process_packlink_event(
             **result,
         }
 
-    # Tracking events hydrate tracking only; they never fetch the label again.
+    # Tracking movement is webhook-owned. Packlink has already sent the event, so
+    # BT38 consumes that payload directly and does not call get_shipment() or
+    # get_tracking_status() again. The callback updates only this exact shipment.
     if event_name == "shipment.tracking.update":
-        provider_payload = adapter.get_shipment(reference)
-        tracking_history = adapter.get_tracking_status(reference=reference)
-        tracking = extract_packlink_tracking(provider_payload, tracking_history, shipment.tracking_number)
-        carrier, service, service_id = _provider_identity(provider_payload, shipment)
+        callback_history = _callback_tracking_history(data)
+        provider_state = _callback_provider_state(data, event_name)
+        tracking = extract_packlink_tracking(data, callback_history, shipment.tracking_number)
+        carrier, service, service_id = _provider_identity(data, shipment)
         if carrier:
             shipment.carrier = carrier
         if service:
@@ -201,7 +239,12 @@ def process_packlink_event(
             shipment.provider_service_id = service_id
         if tracking:
             shipment.tracking_number = tracking
-        _apply_lifecycle_state(shipment, event_name, now)
+        reconcile_packlink_tracking_lifecycle(
+            shipment,
+            provider_state=provider_state,
+            tracking_history=callback_history,
+            observed_at=now,
+        )
         db.session.commit()
         return {
             "success": True,
@@ -210,10 +253,12 @@ def process_packlink_event(
             "provider_reference": reference,
             "tracking_number": shipment.tracking_number,
             "shipment_status": shipment.status,
+            "provider_status": shipment.last_provider_status,
+            "webhook_only": True,
         }
 
-    # Carrier success / delivered are exact lifecycle changes. No label or tracking
-    # endpoint is called unless Packlink specifically sent a tracking event.
+    # Carrier success / delivered are exact lifecycle changes from the callback.
+    # No label, shipment-detail or tracking endpoint is called here.
     _apply_lifecycle_state(shipment, event_name, now)
     db.session.commit()
     return {
@@ -222,4 +267,5 @@ def process_packlink_event(
         "shipment_id": shipment.id,
         "provider_reference": reference,
         "shipment_status": shipment.status,
+        "webhook_only": True,
     }
