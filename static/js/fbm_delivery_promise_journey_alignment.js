@@ -26,12 +26,7 @@
         });
         if (/^pending$/i.test(shipBy)) shipBy = '';
         if (/^pending$/i.test(deliverBy)) deliverBy = '';
-        return {
-            shipBy: row?.dataset?.shipByAt || shipBy,
-            deliverBy: row?.dataset?.deliveryPromiseAt || deliverBy,
-            shipByDisplay: shipBy,
-            deliverByDisplay: deliverBy
-        };
+        return {shipBy: row?.dataset?.shipByAt || shipBy, deliverBy: row?.dataset?.deliveryPromiseAt || deliverBy, shipByDisplay: shipBy, deliverByDisplay: deliverBy};
     }
 
     function promiseDate(promise) {
@@ -50,13 +45,11 @@
     }
 
     function persistedState(row) {
-        const explicit = String(row?.dataset?.shipmentState || '').trim().toLowerCase();
+        const explicit = String(row?.dataset?.shipmentState || row?.dataset?.lifecycleStatus || '').trim().toLowerCase();
         if (explicit) return explicit;
         const journeyCell = row?.children?.[8] || null;
         if (!journeyCell) return '';
-        const confirmed = Array.from(journeyCell.querySelectorAll('.fbm-journey-steps .badge')).filter(function (badge) {
-            return badge.classList.contains('bg-success') || badge.classList.contains('bg-primary');
-        }).map(function (badge) { return String(badge.textContent || '').trim().toLowerCase(); });
+        const confirmed = Array.from(journeyCell.querySelectorAll('.fbm-journey-steps .badge')).filter(function (badge) { return badge.classList.contains('bg-success') || badge.classList.contains('bg-primary'); }).map(function (badge) { return String(badge.textContent || '').trim().toLowerCase(); });
         if (confirmed.some(function (value) { return value.includes('delivered'); })) return 'delivered';
         if (confirmed.some(function (value) { return value.includes('in transit'); })) return 'in_transit';
         if (confirmed.some(function (value) { return value.includes('picked up'); })) return 'accepted';
@@ -64,20 +57,15 @@
     }
 
     function performanceHtml(row) {
-        const promise = promiseFromRow(row);
-        const promisedAt = promiseDate(promise);
+        const promisedAt = promiseDate(promiseFromRow(row));
         if (!promisedAt) return '<span class="badge bg-secondary">Promise timing unavailable</span>';
         const state = persistedState(row);
         const deliveredAt = parseDate(row?.dataset?.deliveredAt || '');
         if (state === 'delivered') {
             if (!deliveredAt) return '<span class="badge bg-secondary">Delivered · timing unavailable</span>';
-            return deliveredAt.getTime() <= promisedAt.getTime()
-                ? '<span class="badge bg-success">On time</span>'
-                : '<span class="badge bg-danger">Late</span>';
+            return deliveredAt.getTime() <= promisedAt.getTime() ? '<span class="badge bg-success">On time</span>' : '<span class="badge bg-danger">Late</span>';
         }
-        return Date.now() > promisedAt.getTime()
-            ? '<span class="badge bg-danger">Late</span>'
-            : '<span class="badge bg-success">On track</span>';
+        return Date.now() > promisedAt.getTime() ? '<span class="badge bg-danger">Late</span>' : '<span class="badge bg-success">On track</span>';
     }
 
     function promiseHtml(row) {
@@ -99,15 +87,10 @@
     }
 
     function alignRowPerformance(row) {
-        if (!row) return;
-        const journeyCell = row.children && row.children[8];
+        const journeyCell = row?.children?.[8] || null;
         if (!journeyCell) return;
         let holder = journeyCell.querySelector('.fbm-delivery-performance');
-        if (!holder) {
-            holder = document.createElement('div');
-            holder.className = 'fbm-row-note fbm-delivery-performance mt-1';
-            journeyCell.appendChild(holder);
-        }
+        if (!holder) { holder = document.createElement('div'); holder.className = 'fbm-row-note fbm-delivery-performance mt-1'; journeyCell.appendChild(holder); }
         holder.innerHTML = performanceHtml(row);
     }
 
@@ -117,40 +100,34 @@
         const body = document.getElementById('fbmTrackingJourneyBody');
         const subtitle = document.getElementById('fbmTrackingJourneySubtitle');
         if (!row || !modalElement || !body) return;
-        const modal = bootstrap.Modal.getOrCreateInstance(modalElement);
         const tracking = button.dataset.trackingNumber || String(button.textContent || '').trim() || '—';
         const shipmentCell = row.children?.[7] || null;
         const carrier = button.dataset.carrier || String(shipmentCell?.querySelector('strong')?.textContent || 'Carrier').trim();
         const service = String(shipmentCell?.querySelector('.text-muted')?.textContent || '').trim();
         if (subtitle) subtitle.textContent = tracking;
         body.innerHTML = `<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3"><div><div class="fw-semibold">${esc(carrier)}${service ? ` · ${esc(service)}` : ''}</div><div class="small">Tracking: <code>${esc(tracking)}</code></div><div class="small text-muted">Journey source: persisted BT38 DB</div></div><div>${performanceHtml(row)}</div></div><div class="border rounded p-3 mb-3">${promiseHtml(row)}</div><div class="fw-semibold mb-2">Shipment journey</div>${milestoneHtml(row)}`;
-        modal.show();
+        bootstrap.Modal.getOrCreateInstance(modalElement).show();
+    }
+
+    function intercept(event) {
+        const button = event.target && event.target.closest ? event.target.closest(TRACKING_TRIGGER_SELECTOR) : null;
+        if (!button) return;
+        event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation();
+        openAlignedJourney(button);
     }
 
     function install() {
-        if (document.documentElement.dataset.bt38PromiseJourneyAligned === '2') return;
-        document.documentElement.dataset.bt38PromiseJourneyAligned = '2';
+        if (document.documentElement.dataset.bt38PromiseJourneyAligned === '3') return;
+        document.documentElement.dataset.bt38PromiseJourneyAligned = '3';
         document.querySelectorAll('.fbm-order-row').forEach(alignRowPerformance);
-        document.addEventListener('click', function (event) {
-            const button = event.target.closest(TRACKING_TRIGGER_SELECTOR);
-            if (!button) return;
-            event.preventDefault();
-            event.stopPropagation();
-            event.stopImmediatePropagation();
-            openAlignedJourney(button);
-        }, true);
-        document.addEventListener('keydown', function (event) {
+        // Window capture runs before the preserved legacy document-capture handler.
+        // Tracking clicks are presentation-only and can never reach a provider read.
+        window.addEventListener('click', intercept, true);
+        window.addEventListener('keydown', function (event) {
             if (event.key !== 'Enter' && event.key !== ' ') return;
-            const button = event.target.closest(TRACKING_TRIGGER_SELECTOR);
-            if (!button) return;
-            event.preventDefault();
-            event.stopPropagation();
-            event.stopImmediatePropagation();
-            openAlignedJourney(button);
+            intercept(event);
         }, true);
-        document.addEventListener('fbm:rows-updated', function () {
-            document.querySelectorAll('.fbm-order-row').forEach(alignRowPerformance);
-        });
+        document.addEventListener('fbm:rows-updated', function () { document.querySelectorAll('.fbm-order-row').forEach(alignRowPerformance); });
     }
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, {once: true});
