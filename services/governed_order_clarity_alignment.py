@@ -6,6 +6,7 @@ not recover, reconcile, hydrate, or call marketplace/provider APIs.
 from __future__ import annotations
 
 import html as html_lib
+import json
 import re
 
 from flask import g, request
@@ -77,6 +78,7 @@ def _inject_db_delivery_truth(html: str) -> str:
         marker = f'<tr class="fbm-order-row" data-order-id="{int(order_id)}"'
         if marker not in value:
             continue
+        tracking_events_json = json.dumps(row.get("tracking_events") or [], separators=(",", ":"), ensure_ascii=False)
         attrs = (
             f' data-shipment-state="{html_lib.escape(row.get("shipment_state", ""), quote=True)}"'
             f' data-order-created-at="{html_lib.escape(row.get("order_created_at", ""), quote=True)}"'
@@ -99,6 +101,7 @@ def _inject_db_delivery_truth(html: str) -> str:
             f' data-tracking-number="{html_lib.escape(row.get("tracking_number", ""), quote=True)}"'
             f' data-provider-shipment-id="{html_lib.escape(row.get("provider_shipment_id", ""), quote=True)}"'
             f' data-marketplace-order-id="{html_lib.escape(row.get("marketplace_order_id", ""), quote=True)}"'
+            f' data-tracking-events="{html_lib.escape(tracking_events_json, quote=True)}"'
         )
         value = value.replace(marker, marker + attrs, 1)
     return value
