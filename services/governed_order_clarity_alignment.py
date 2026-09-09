@@ -17,6 +17,7 @@ _PROMISE_JOURNEY_SCRIPT = '<script id="bt38FbmPromiseJourneyAlignment" src="/sta
 _EVENT_SESSION_REFRESH_SCRIPT = '<script id="bt38FbmEventSessionRefreshAlignment" src="/static/js/fbm_event_session_refresh_alignment.js"></script>'
 _SCROLL_POSITION_SCRIPT = '<script id="bt38FbmScrollPositionAlignment" src="/static/js/fbm_scroll_position_alignment.js"></script>'
 _ROW_TRUTH_SCRIPT = '<script id="bt38FbmRowTruthAlignment" src="/static/js/fbm_row_truth_alignment.js"></script>'
+_PERSISTED_TRACKING_JOURNEY_SCRIPT = '<script id="bt38FbmPersistedTrackingJourneyAlignment" src="/static/js/fbm_persisted_tracking_journey_alignment.js"></script>'
 
 
 def _clean_fbm_journey_html(html: str) -> str:
@@ -57,6 +58,10 @@ def _align_fbm_row_truth_html(html: str) -> str:
     return _inject_once(html, 'id="bt38FbmRowTruthAlignment"', _ROW_TRUTH_SCRIPT, '</body>')
 
 
+def _align_fbm_persisted_tracking_journey_html(html: str) -> str:
+    return _inject_once(html, 'id="bt38FbmPersistedTrackingJourneyAlignment"', _PERSISTED_TRACKING_JOURNEY_SCRIPT, '</body>')
+
+
 def _align_fbm_buyer_messages_card(html: str) -> str:
     value = str(html or "")
     pattern = re.compile(r'<div class="fbm-period-card(?P<class_suffix>[^"]*)" tabindex="0"><div class="fbm-period-label">Mapping review</div><div class="fbm-period-value">[^<]*</div><div class="fbm-period-tip" role="tooltip">.*?</div></div>', re.DOTALL)
@@ -74,12 +79,26 @@ def _inject_db_delivery_truth(html: str) -> str:
             continue
         attrs = (
             f' data-shipment-state="{html_lib.escape(row.get("shipment_state", ""), quote=True)}"'
+            f' data-order-created-at="{html_lib.escape(row.get("order_created_at", ""), quote=True)}"'
+            f' data-marketplace-created-at="{html_lib.escape(row.get("marketplace_created_at", ""), quote=True)}"'
+            f' data-shipped-at="{html_lib.escape(row.get("shipped_at", ""), quote=True)}"'
+            f' data-label-purchased-at="{html_lib.escape(row.get("label_purchased_at", ""), quote=True)}"'
+            f' data-marketplace-confirmed-at="{html_lib.escape(row.get("marketplace_confirmed_at", ""), quote=True)}"'
+            f' data-carrier-accepted-at="{html_lib.escape(row.get("carrier_accepted_at", ""), quote=True)}"'
+            f' data-first-movement-at="{html_lib.escape(row.get("first_movement_at", ""), quote=True)}"'
             f' data-delivered-at="{html_lib.escape(row.get("delivered_at", ""), quote=True)}"'
+            f' data-last-provider-checked-at="{html_lib.escape(row.get("last_provider_checked_at", ""), quote=True)}"'
+            f' data-last-provider-status="{html_lib.escape(row.get("last_provider_status", ""), quote=True)}"'
             f' data-ship-by-at="{html_lib.escape(row.get("ship_by_at", ""), quote=True)}"'
+            f' data-earliest-delivery-at="{html_lib.escape(row.get("earliest_delivery_at", ""), quote=True)}"'
             f' data-delivery-promise-at="{html_lib.escape(row.get("latest_delivery_at", ""), quote=True)}"'
             f' data-delivery-performance="{html_lib.escape(row.get("delivery_performance", ""), quote=True)}"'
             f' data-shipping-source="{html_lib.escape(row.get("shipping_source", ""), quote=True)}"'
             f' data-carrier="{html_lib.escape(row.get("carrier", ""), quote=True)}"'
+            f' data-service="{html_lib.escape(row.get("service", ""), quote=True)}"'
+            f' data-tracking-number="{html_lib.escape(row.get("tracking_number", ""), quote=True)}"'
+            f' data-provider-shipment-id="{html_lib.escape(row.get("provider_shipment_id", ""), quote=True)}"'
+            f' data-marketplace-order-id="{html_lib.escape(row.get("marketplace_order_id", ""), quote=True)}"'
         )
         value = value.replace(marker, marker + attrs, 1)
     return value
@@ -118,7 +137,8 @@ def install_governed_order_clarity_alignment(app) -> None:
             html = _align_fbm_event_session_refresh_html(html)
             html = _align_fbm_scroll_position_html(html)
             html = _align_fbm_row_truth_html(html)
+            html = _align_fbm_persisted_tracking_journey_html(html)
             response.set_data(html)
         return response
 
-    app.logger.info("BT38 order clarity alignment installed: DB-only carrier-neutral delivery performance + persisted shipping-source/carrier presentation; UI/provider reads remain prohibited")
+    app.logger.info("BT38 order clarity alignment installed: DB-only carrier-neutral delivery performance + persisted shipment movement/tracking modal; UI/provider reads remain prohibited")
