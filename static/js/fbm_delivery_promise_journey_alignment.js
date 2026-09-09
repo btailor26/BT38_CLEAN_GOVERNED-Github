@@ -32,13 +32,20 @@
     }
 
     function milestoneHtml(row) {
-        const journeyCell = row?.children?.[8] || null;
-        const badges = journeyCell ? Array.from(journeyCell.querySelectorAll('.fbm-journey-steps .badge')) : [];
-        return badges.map(function (badge) {
-            const text = String(badge.textContent || '').trim();
-            const confirmed = badge.classList.contains('bg-success') || badge.classList.contains('bg-primary');
-            return `<div class="border-start border-3 ${confirmed ? 'border-success' : 'border-secondary'} ps-3 py-2 mb-2"><div class="d-flex justify-content-between gap-3"><div class="fw-semibold">${esc(text)}</div><span class="badge ${confirmed ? 'bg-success' : 'bg-light text-muted border'}">${confirmed ? 'Confirmed' : 'Pending'}</span></div></div>`;
-        }).join('') || '<div class="alert alert-light border mb-0">No persisted carrier milestone is available yet.</div>';
+        const carrier = String(row?.dataset?.carrier || '').trim() || 'Carrier';
+        const pickedUpAt = row?.dataset?.carrierAcceptedAt || '';
+        const movementAt = row?.dataset?.firstMovementAt || '';
+        const deliveredAt = row?.dataset?.deliveredAt || '';
+        const providerStatus = String(row?.dataset?.lastProviderStatus || '').trim();
+
+        function milestone(title, time, detail) {
+            const confirmed = Boolean(time);
+            return `<div class="border-start border-3 ${confirmed ? 'border-success' : 'border-secondary'} ps-3 py-2 mb-2"><div class="d-flex justify-content-between gap-3"><div><div class="fw-semibold">${esc(title)}</div>${confirmed ? `<div class="small text-muted">${esc(displayDate(time))}${detail ? ` · ${esc(detail)}` : ''}</div>` : ''}</div><span class="badge ${confirmed ? 'bg-success' : 'bg-light text-muted border'}">${confirmed ? 'Confirmed' : 'Pending'}</span></div></div>`;
+        }
+
+        return milestone('Picked up', pickedUpAt, pickedUpAt ? `${carrier} carrier acceptance persisted` : '') +
+            milestone('In transit', movementAt, movementAt ? `${carrier} first movement persisted${providerStatus ? ` · ${providerStatus}` : ''}` : '') +
+            milestone('Delivered', deliveredAt, deliveredAt ? 'Delivery completion persisted' : '');
     }
 
     function alignShippingAndShipment(row) {
@@ -89,10 +96,10 @@
         const body = document.getElementById('fbmTrackingJourneyBody');
         const subtitle = document.getElementById('fbmTrackingJourneySubtitle');
         if (!row || !modalElement || !body) return;
-        const tracking = button.dataset.trackingNumber || String(button.textContent || '').trim() || '—';
+        const tracking = button.dataset.trackingNumber || row.dataset.trackingNumber || String(button.textContent || '').trim() || '—';
         const shipmentCell = row.children?.[7] || null;
         const carrier = String(row.dataset.carrier || '').trim() || '—';
-        const service = String(shipmentCell?.querySelector('.text-muted')?.textContent || '').trim();
+        const service = String(row.dataset.service || '').trim() || String(shipmentCell?.querySelector('.text-muted')?.textContent || '').trim();
         if (subtitle) subtitle.textContent = tracking;
         body.innerHTML = `<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3"><div><div class="fw-semibold">${esc(carrier)}${service && service !== '—' ? ` · ${esc(service)}` : ''}</div><div class="small">Tracking: <code>${esc(tracking)}</code></div><div class="small text-muted">Journey source: persisted BT38 DB</div></div><div>${performanceHtml(row)}</div></div><div class="border rounded p-3 mb-3">${promiseHtml(row)}</div><div class="fw-semibold mb-2">Shipment journey</div>${milestoneHtml(row)}`;
         bootstrap.Modal.getOrCreateInstance(modalElement).show();
@@ -108,8 +115,8 @@
     }
 
     function install() {
-        if (document.documentElement.dataset.bt38PromiseJourneyAligned === '5') return;
-        document.documentElement.dataset.bt38PromiseJourneyAligned = '5';
+        if (document.documentElement.dataset.bt38PromiseJourneyAligned === '6') return;
+        document.documentElement.dataset.bt38PromiseJourneyAligned = '6';
         document.querySelectorAll('.fbm-order-row').forEach(alignRowPerformance);
         window.addEventListener('click', intercept, true);
         window.addEventListener('keydown', function (event) {
