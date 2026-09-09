@@ -77,14 +77,23 @@
 
     function promisedDeliveryDate(promise, deliveredAt) {
         if (!promise.deliverBy) return null;
-        const match = String(promise.deliverBy).trim().match(/^(\d{1,2})\s+([A-Za-z]{3})(?:\s+(\d{4}))?$/);
+        const text = String(promise.deliverBy).replace(/\s+/g, ' ').trim();
+        const match = text.match(/(\d{1,2})\s+([A-Za-z]{3,9})(?:\s+(\d{4}))?(?:\s+(\d{1,2}):(\d{2}))?/i);
         if (!match) return null;
-        const monthMap = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+        const monthMap = {jan:0,january:0,feb:1,february:1,mar:2,march:2,apr:3,april:3,may:4,jun:5,june:5,jul:6,july:6,aug:7,august:7,sep:8,sept:8,september:8,oct:9,october:9,nov:10,november:10,dec:11,december:11};
         const month = monthMap[String(match[2]).toLowerCase()];
         if (month === undefined) return null;
         const reference = deliveredAt || new Date();
-        const year = match[3] ? Number(match[3]) : reference.getFullYear();
-        return new Date(year, month, Number(match[1]), 23, 59, 59, 999);
+        let year = match[3] ? Number(match[3]) : reference.getFullYear();
+        const day = Number(match[1]);
+        const hasTime = match[4] !== undefined;
+        let result = new Date(year, month, day, hasTime ? Number(match[4]) : 23, hasTime ? Number(match[5]) : 59, hasTime ? 0 : 59, hasTime ? 0 : 999);
+        if (!match[3] && !deliveredAt) {
+            const delta = result.getTime() - reference.getTime();
+            if (delta < -183 * 86400000) result = new Date(year + 1, month, day, hasTime ? Number(match[4]) : 23, hasTime ? Number(match[5]) : 59, hasTime ? 0 : 59, hasTime ? 0 : 999);
+            else if (delta > 183 * 86400000) result = new Date(year - 1, month, day, hasTime ? Number(match[4]) : 23, hasTime ? Number(match[5]) : 59, hasTime ? 0 : 59, hasTime ? 0 : 999);
+        }
+        return Number.isNaN(result.getTime()) ? null : result;
     }
 
     function performanceBlock(promise, history, providerStatus) {
@@ -103,6 +112,41 @@
         if (providerSaysDelivered) return '<span class="badge bg-secondary">Delivered · delivery time unavailable</span>';
         if (Date.now() > promisedAt.getTime()) return '<span class="badge bg-danger">Late · not delivered</span>';
         return '<span class="badge bg-success">On track</span>';
+    }
+
+    function rowProviderStatus(row) {
+        const journeyCell = row?.children?.[8] || null;
+        if (!journeyCell) return '';
+        const delivered = Array.from(journeyCell.querySelectorAll('.badge')).find(function (badge) {
+            return /delivered/i.test(String(badge.textContent || '')) && (badge.classList.contains('bg-success') || badge.classList.contains('bg-primary'));
+        });
+        return delivered ? 'delivered' : '';
+    }
+
+    function alignRowPerformance(row) {
+        if (!row) return;
+        const journeyCell = row.children && row.children[8];
+        if (!journeyCell) return;
+        const existing = journeyCell.querySelector('.fbm-delivery-performance');
+        const promise = promiseFromRow(row);
+        const promisedAt = promisedDeliveryDate(promise, null);
+        if (!promisedAt) {
+            if (existing) existing.remove();
+            return;
+        }
+        const providerStatus = rowProviderStatus(row);
+        let html;
+        if (/delivered/i.test(providerStatus)) html = '<span class="badge bg-secondary">Delivered · timing pending</span>';
+        else if (Date.now() > promisedAt.getTime()) html = '<span class="badge bg-danger">Late · not delivered</span>';
+        else html = '<span class="badge bg-success">On track</span>';
+        const holder = existing || document.createElement('div');
+        holder.className = 'fbm-row-note fbm-delivery-performance mt-1';
+        holder.innerHTML = html;
+        if (!existing) journeyCell.appendChild(holder);
+    }
+
+    function alignRowPerformanceBadges() {
+        document.querySelectorAll('.fbm-order-row').forEach(alignRowPerformance);
     }
 
     function historyHtml(history) {
@@ -136,7 +180,7 @@
         const shipmentCell = row?.children?.[7] || null;
         const carrier = button.dataset.carrier || String(shipmentCell?.querySelector('strong')?.textContent || marketplace).trim();
         const journeyCell = row?.children?.[8] || null;
-        const badges = journeyCell ? Array.from(journeyCell.querySelectorAll('.badge')) : [];
+        const badges = journeyCell ? Array.from(journeyCell.querySelectorAll('.fbm-journey-steps .badge')) : [];
         const milestoneHtml = badges.slice(0, 4).map(function (badge) {
             const text = String(badge.textContent || '').replace(/^\d+\s*·\s*/, '').trim();
             const isRed = badge.classList.contains('bg-danger');
@@ -144,17 +188,15 @@
             const borderClass = isRed ? 'border-danger' : (isConfirmed ? 'border-success' : 'border-secondary');
             const statusClass = isRed ? 'bg-danger' : (isConfirmed ? 'bg-success' : 'bg-light text-muted border');
             let statusText = 'Pending';
-            if (isRed) {
-                statusText = /picked up/i.test(text) ? 'Waiting collection' : (/delivered/i.test(text) ? 'Late' : 'Attention');
-            } else if (isConfirmed) {
-                statusText = 'Confirmed';
-            }
+            if (isRed) statusText = /picked up/i.test(text) ? 'Waiting collection' : (/delivered/i.test(text) ? 'Late' : 'Attention');
+            else if (isConfirmed) statusText = 'Confirmed';
             return `<div class="border-start border-3 ${borderClass} ps-3 py-2 mb-2"><div class="d-flex align-items-center justify-content-between gap-3"><div class="fw-semibold">${esc(text)}</div><span class="badge ${statusClass}">${esc(statusText)}</span></div></div>`;
         }).join('');
         const warningHtml = warning ? `<div class="alert alert-warning py-2 mb-3"><strong>Live carrier history unavailable.</strong><div class="small">${esc(warning)} BT38 is showing persisted shipment state instead.</div></div>` : '';
         const promise = promiseFromRow(row);
         const promiseBlock = promise.shipBy || promise.deliverBy ? `<div class="border rounded p-3 mb-3">${promiseHtml(promise)}</div>` : '';
-        return `${warningHtml}<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3"><div><div class="fw-semibold">${esc(carrier)}</div><div class="small">Tracking: <code>${esc(tracking)}</code></div><div class="small text-muted">Journey source: ${esc(marketplace)} / persisted BT38 state</div></div></div>${promiseBlock}<div class="fw-semibold mb-2">Shipment journey</div>${milestoneHtml || '<div class="alert alert-light border mb-0">Tracking received. Carrier milestones have not been confirmed yet.</div>'}`;
+        const performance = performanceBlock(promise, [], rowProviderStatus(row));
+        return `${warningHtml}<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3"><div><div class="fw-semibold">${esc(carrier)}</div><div class="small">Tracking: <code>${esc(tracking)}</code></div><div class="small text-muted">Journey source: ${esc(marketplace)} / persisted BT38 state</div></div><div>${performance}</div></div>${promiseBlock}<div class="fw-semibold mb-2">Shipment journey</div>${milestoneHtml || '<div class="alert alert-light border mb-0">Tracking received. Carrier milestones have not been confirmed yet.</div>'}`;
     }
 
     async function openAlignedJourney(button) {
@@ -190,6 +232,7 @@
     function install() {
         if (document.documentElement.dataset.bt38PromiseJourneyAligned === '1') return;
         document.documentElement.dataset.bt38PromiseJourneyAligned = '1';
+        alignRowPerformanceBadges();
         document.addEventListener('click', function (event) {
             const button = event.target.closest(TRACKING_TRIGGER_SELECTOR);
             if (!button) return;
@@ -207,6 +250,7 @@
             event.stopImmediatePropagation();
             openAlignedJourney(button);
         }, true);
+        document.addEventListener('fbm:rows-updated', alignRowPerformanceBadges);
     }
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, {once: true});
