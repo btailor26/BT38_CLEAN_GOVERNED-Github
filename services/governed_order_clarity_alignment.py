@@ -1,15 +1,14 @@
 """Presentation-only alignment for governed FBM UI.
 
 The marketplace/provider handoff owns collection and persistence. Page GETs must
-not recover, reconcile, hydrate, or call marketplace/provider APIs. This module
-keeps presentation cleanup separate while installing the existing DB-first
-marketplace lifecycle alignment before the FBM page wrapper is bound.
+not recover, reconcile, hydrate, or call marketplace/provider APIs.
 """
 from __future__ import annotations
 
+import html as html_lib
 import re
 
-from flask import request
+from flask import g, request
 
 _JOURNEY_LABEL_REPLACEMENTS = (("1 · Picked up", "Picked up"), ("2 · In transit", "In transit"), ("3 · Delivered", "Delivered"))
 _TRACKING_LINK_STYLE = ('<style id="bt38FbmTrackingLinkAlignment">''.fbm-orders-table td a:has(code),.fbm-orders-table td a:has(code):hover,.fbm-orders-table td a:has(code):focus,.fbm-orders-table .fbm-tracking-journey,.fbm-orders-table .fbm-tracking-journey:hover,.fbm-orders-table .fbm-tracking-journey:focus{text-decoration:none!important;border-bottom:0!important;box-shadow:none!important}.fbm-orders-table td a:has(code) code,.fbm-orders-table .fbm-tracking-journey code{text-decoration:none!important;border-bottom:0!important;box-shadow:none!important}</style>')
@@ -47,17 +46,14 @@ def _align_fbm_promise_journey_html(html: str) -> str:
 
 
 def _align_fbm_event_session_refresh_html(html: str) -> str:
-    """Reuse the existing shared marketplace event to refresh this FBM session from DB."""
     return _inject_once(html, 'id="bt38FbmEventSessionRefreshAlignment"', _EVENT_SESSION_REFRESH_SCRIPT, '</body>')
 
 
 def _align_fbm_scroll_position_html(html: str) -> str:
-    """Prevent a stale pager anchor from forcing a browser reload to the page bottom."""
     return _inject_once(html, 'id="bt38FbmScrollPositionAlignment"', _SCROLL_POSITION_SCRIPT, '</body>')
 
 
 def _align_fbm_row_truth_html(html: str) -> str:
-    """Deterministically colour rendered journey truth without any read or call."""
     return _inject_once(html, 'id="bt38FbmRowTruthAlignment"', _ROW_TRUTH_SCRIPT, '</body>')
 
 
@@ -66,6 +62,29 @@ def _align_fbm_buyer_messages_card(html: str) -> str:
     pattern = re.compile(r'<div class="fbm-period-card(?P<class_suffix>[^"]*)" tabindex="0"><div class="fbm-period-label">Mapping review</div><div class="fbm-period-value">[^<]*</div><div class="fbm-period-tip" role="tooltip">.*?</div></div>', re.DOTALL)
     replacement = ('<div class="fbm-period-card\\g<class_suffix>" tabindex="0"><div class="fbm-period-label">Buyer messages</div><div class="fbm-period-value">0</div><div class="fbm-period-tip" role="tooltip"><div>No buyer messages are currently ingested into BT38.</div></div></div>')
     return pattern.sub(replacement, value, count=1)
+
+
+def _inject_db_delivery_truth(html: str) -> str:
+    """Attach the already-read DB projection to each rendered FBM row.
+
+    This performs no DB/provider read.  The request-scoped map was produced by
+    the before-render DB projection and is the only performance authority.
+    """
+    truth = getattr(g, "fbm_delivery_truth_by_order_id", {}) or {}
+    value = str(html or "")
+    for order_id, row in truth.items():
+        marker = f'<tr class="fbm-order-row" data-order-id="{int(order_id)}"'
+        if marker not in value:
+            continue
+        attrs = (
+            f' data-shipment-state="{html_lib.escape(row.get("shipment_state", ""), quote=True)}"'
+            f' data-delivered-at="{html_lib.escape(row.get("delivered_at", ""), quote=True)}"'
+            f' data-ship-by-at="{html_lib.escape(row.get("ship_by_at", ""), quote=True)}"'
+            f' data-delivery-promise-at="{html_lib.escape(row.get("latest_delivery_at", ""), quote=True)}"'
+            f' data-delivery-performance="{html_lib.escape(row.get("delivery_performance", ""), quote=True)}"'
+        )
+        value = value.replace(marker, marker + attrs, 1)
+    return value
 
 
 def install_governed_order_clarity_alignment(app) -> None:
@@ -91,11 +110,9 @@ def install_governed_order_clarity_alignment(app) -> None:
     @app.after_request
     def bt38_order_clarity_response(response):
         path = request.path.rstrip("/") or "/"
-
-        # Never query or reconcile from a page. The already-rendered DB-backed
-        # FBM row is the presentation input; event-persisted state remains authoritative.
         if path == "/fbm" and response.status_code == 200 and response.content_type and "text/html" in response.content_type:
             html = _clean_fbm_journey_html(response.get_data(as_text=True))
+            html = _inject_db_delivery_truth(html)
             html = _align_fbm_tracking_link_html(html)
             html = _align_fbm_marketplace_badge_html(html)
             html = _align_fbm_buyer_messages_card(html)
@@ -106,4 +123,4 @@ def install_governed_order_clarity_alignment(app) -> None:
             response.set_data(html)
         return response
 
-    app.logger.info("BT38 order clarity alignment installed: persisted delivery promises + deterministic rendered journey colours + dispatched shipping truth cleanup + global persisted FBM search + all-orders persisted FBM health + low-pressure overdue alert/filter + buyer-messages health slot + clean tracking controls + sharper existing marketplace badges + DB-row-authoritative promise journey + marketplace-dispatch shipment authority + existing-event FBM session refresh + stable reload scroll position; event-persisted state remains authoritative")
+    app.logger.info("BT38 order clarity alignment installed: DB-only carrier-neutral delivery performance + persisted promise/journey truth; UI/provider reads remain prohibited")
