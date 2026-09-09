@@ -17,8 +17,10 @@ from html import escape
 from flask import g, request
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
+from sqlalchemy.orm.attributes import set_committed_value
 
 from extensions import db
+from fbm_models import FBMProviderCase, FBMShipmentMappingReview
 from models import MarketplaceOrder
 from governed_fbm_routes import _platform
 
@@ -140,6 +142,45 @@ def _row_matches_term(row: MarketplaceOrder, term: str) -> bool:
         getattr(warehouse, "product_name", None) if warehouse else None,
     )
     return any(needle in str(value or "").casefold() for value in values)
+
+
+def _prime_shipment_relationships(shipments) -> None:
+    """Bulk-load persisted shipment relationships used by the FBM page.
+
+    ``mapping_review`` and ``provider_cases`` are lazy backrefs on FBMShipment.
+    Touching them once per rendered order creates an N+1 read pattern.  Prime
+    both relationships in bounded bulk queries and mark them committed on the
+    already-loaded shipment objects so page rendering performs no per-row SQL.
+    """
+    by_id = {
+        int(shipment.id): shipment
+        for shipment in shipments
+        if shipment is not None and getattr(shipment, "id", None) is not None
+    }
+    shipment_ids = sorted(by_id)
+    if not shipment_ids:
+        return
+
+    reviews = (
+        db.session.query(FBMShipmentMappingReview)
+        .filter(FBMShipmentMappingReview.shipment_id.in_(shipment_ids))
+        .all()
+    )
+    review_by_shipment = {int(review.shipment_id): review for review in reviews}
+
+    provider_cases = (
+        db.session.query(FBMProviderCase)
+        .filter(FBMProviderCase.shipment_id.in_(shipment_ids))
+        .order_by(FBMProviderCase.id.asc())
+        .all()
+    )
+    cases_by_shipment: dict[int, list[FBMProviderCase]] = {}
+    for case in provider_cases:
+        cases_by_shipment.setdefault(int(case.shipment_id), []).append(case)
+
+    for shipment_id, shipment in by_id.items():
+        set_committed_value(shipment, "mapping_review", review_by_shipment.get(shipment_id))
+        set_committed_value(shipment, "provider_cases", cases_by_shipment.get(shipment_id, []))
 
 
 def _session_snapshot_rows() -> tuple[list[MarketplaceOrder], bool]:
@@ -311,7 +352,9 @@ def install_governed_fbm_global_search_alignment(app) -> None:
                 if row.store_id is not None and row.marketplace_order_id
                 and (int(row.store_id), str(row.marketplace_order_id)) in missing_keys
             ]
-            cache.update(original_shipment_map(missing_rows))
+            fresh = original_shipment_map(missing_rows)
+            _prime_shipment_relationships(fresh.values())
+            cache.update(fresh)
             loaded.update(missing_keys)
         return {key: cache.get(key) for key in keys if cache.get(key) is not None}
 
@@ -341,5 +384,5 @@ def install_governed_fbm_global_search_alignment(app) -> None:
 
     app._bt38_fbm_global_search_alignment_installed = True
     app.logger.info(
-        "BT38 FBM browser session aligned: one canonical DB snapshot; local search/tabs/page; request-cached profiles and shipments; no marketplace/provider reads"
+        "BT38 FBM browser session aligned: one canonical DB snapshot; local search/tabs/page; request-cached profiles, shipments and shipment relationships; no marketplace/provider reads"
     )
