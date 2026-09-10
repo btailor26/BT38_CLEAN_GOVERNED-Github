@@ -1,9 +1,13 @@
 """Align FBM shipment presentation to persisted marketplace dispatch truth.
 
-Marketplace dispatch remains a valid fallback when BT38 has no persisted physical
-shipment for the order. A real persisted provider shipment (Packlink, Amazon Buy
-Shipping, eBay Shipping, manual or another connected provider) stays the stronger
-physical-shipment authority even after the selling marketplace reports Shipped.
+Marketplace dispatch remains a valid fallback when BT38 has no confirmed persisted
+physical shipment for the order. A real persisted provider shipment (Packlink,
+Amazon Buy Shipping, eBay Shipping, manual or another connected provider) stays the
+stronger physical-shipment authority after the selling marketplace reports Shipped.
+
+Unverified/draft provider rows are not physical authority. This matters when a label
+attempt times out or is abandoned: stale draft carrier/service choices must not mask
+later marketplace dispatch truth or a subsequently recovered marketplace-native label.
 
 This is a read/presentation alignment only: no marketplace/provider reads, writes,
 pollers, workers, new tables or duplicate shipment identities are introduced.
@@ -30,6 +34,14 @@ _TERMINAL_DELIVERY_STATES = {
     "out_for_delivery",
     "delivered",
 }
+_UNVERIFIED_SHIPMENT_STATES = {
+    "draft",
+    "draft_verification_required",
+    "verification_required",
+    "quote",
+    "quoted",
+    "pending_verification",
+}
 
 
 def _status(value) -> str:
@@ -55,6 +67,37 @@ def _marketplace_has_dispatch_truth(row) -> bool:
         or getattr(row, "shipped_at", None)
         or str(getattr(row, "tracking_number", None) or "").strip()
     )
+
+
+def _confirmed_physical_shipment(shipment) -> bool:
+    """Return whether a persisted provider row has durable physical authority.
+
+    Merely choosing a provider/carrier/service or creating a verification draft is
+    not purchase/dispatch proof. Durable provider identity, tracking, purchase or
+    carrier lifecycle evidence is. Marketplace presentation proxies are handled
+    separately and are never classified as physical authority here.
+    """
+    if shipment is None:
+        return False
+    provider = str(getattr(shipment, "provider", "") or "").strip().lower()
+    if provider in {"", "marketplace"}:
+        return False
+
+    status = _status(getattr(shipment, "status", None))
+    purchase_status = _status(getattr(shipment, "purchase_status", None))
+    has_durable_evidence = bool(
+        getattr(shipment, "provider_shipment_id", None)
+        or getattr(shipment, "tracking_number", None)
+        or getattr(shipment, "label_purchased_at", None)
+        or getattr(shipment, "marketplace_confirmed_at", None)
+        or getattr(shipment, "carrier_accepted_at", None)
+        or getattr(shipment, "first_movement_at", None)
+        or getattr(shipment, "delivered_at", None)
+        or purchase_status in {"purchased", "confirmed", "committed"}
+    )
+    if status in _UNVERIFIED_SHIPMENT_STATES and not has_durable_evidence:
+        return False
+    return has_durable_evidence
 
 
 def _marketplace_shipment(row):
@@ -122,12 +165,16 @@ def install_governed_fbm_marketplace_dispatch_authority_alignment() -> None:
     original_route_state = page._route_state
 
     def aligned_shipment_map(rows):
-        # The existing DB shipment selector already chooses the canonical persisted
-        # physical shipment. Never replace that provider authority merely because
-        # MarketplaceOrder later reports Shipped. Use the marketplace proxy only
-        # where no persisted physical shipment exists for the exact order identity.
+        # The existing DB selector chooses a persisted shipment candidate. Keep it
+        # only when durable DB evidence proves physical authority. A stale draft
+        # from a timed-out/abandoned purchase must not override later marketplace
+        # dispatch truth.
         existing = original_shipment_map(rows)
-        result = dict(existing)
+        result = {
+            key: shipment
+            for key, shipment in existing.items()
+            if _confirmed_physical_shipment(shipment)
+        }
         for row in rows:
             if row.store_id is None or not row.marketplace_order_id:
                 continue
