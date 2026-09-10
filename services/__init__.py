@@ -73,3 +73,8 @@ import services.governed_fbm_logical_action_count_alignment  # noqa: F401,E402
 # Pending remains Pending; shipped/dispatched lifecycle appears under the local
 # FBA tab. Rows are display-only and never enter FBM shipping eligibility.
 import services.governed_fbm_fba_visibility_alignment  # noqa: F401,E402
+
+# Some Amazon FBA webhook rows carry BT38's internal intake marker ``processed``
+# while Amazon itself is still Pending. Preserve those rows in the existing
+# Pending tab until real persisted shipment/lifecycle evidence moves them to FBA.
+import services.governed_fbm_fba_pending_status_alignment  # noqa: F401,E402
