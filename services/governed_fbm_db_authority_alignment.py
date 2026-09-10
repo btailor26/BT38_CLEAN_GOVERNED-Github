@@ -126,24 +126,39 @@ def _canonical_persisted_shipment_map(rows):
 
 
 def install_governed_fbm_db_authority_alignment() -> None:
-    """Install one persisted shipment authority for every existing FBM consumer."""
+    """Install one shipment authority for every existing FBM consumer.
+
+    If the marketplace-dispatch presentation alignment has already wrapped the
+    persisted DB selector, preserve that wrapper. Otherwise this late startup
+    installer would silently replace it and make abandoned provider drafts show
+    as physical shipment truth again.
+    """
     import governed_fbm_routes as routes
     import services.governed_fbm_page_alignment as page
     import services.governed_fbm_global_search_alignment as global_search
     import services.governed_fbm_dispatch_queue_alignment as dispatch_queue
 
-    # The original blueprint helper historically ranked marketplace tracking
-    # before purchased physical authority. Keep the blueprint/page/stats/Cofi
-    # paths on this same canonical resolver so no consumer can disagree about
-    # the physical shipment merely because it imported a different helper.
-    routes._shipment_map = _canonical_persisted_shipment_map
+    marketplace_presentation_active = bool(
+        getattr(page, "_bt38_marketplace_dispatch_authority_aligned", False)
+    )
+    authority_map = (
+        page._shipment_map
+        if marketplace_presentation_active
+        else _canonical_persisted_shipment_map
+    )
+
+    # Keep all consumers on the same resolver. When marketplace presentation is
+    # active, authority_map is the existing wrapper: confirmed physical DB rows
+    # remain strongest, while an unverified draft is discarded and persisted
+    # MarketplaceOrder dispatch/tracking is exposed as read-only fallback.
+    routes._shipment_map = authority_map
 
     if not getattr(page, "_bt38_single_db_shipment_authority_installed", False):
-        page._shipment_map = _canonical_persisted_shipment_map
+        page._shipment_map = authority_map
         page._bt38_single_db_shipment_authority_installed = True
 
-    global_search._shipment_map = _canonical_persisted_shipment_map
-    dispatch_queue._shipment_map = _canonical_persisted_shipment_map
+    global_search._shipment_map = authority_map
+    dispatch_queue._shipment_map = authority_map
 
     # This installer is already the single startup hook for the canonical FBM
     # DB authority. Keep shipping-spend installation on that path without
