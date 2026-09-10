@@ -18,15 +18,28 @@
         const wrappedFetch = async function (input, init = {}) {
             const rawUrl = typeof input === 'string' ? input : String(input && input.url || '');
             let isFbmRequest = false;
+            let isBulkShippingOptions = false;
             try {
                 const parsed = new URL(rawUrl, global.location.href);
                 isFbmRequest = parsed.origin === global.location.origin && (
                     parsed.pathname.startsWith('/fbm/') || parsed.pathname.startsWith('/governed/fbm/')
                 );
+                if (parsed.pathname === '/fbm/shipping-options') {
+                    const orderIds = String(parsed.searchParams.get('order_ids') || '')
+                        .split(',')
+                        .map(value => value.trim())
+                        .filter(Boolean);
+                    isBulkShippingOptions = orderIds.length > 1;
+                }
             } catch (_) {
                 isFbmRequest = false;
+                isBulkShippingOptions = false;
             }
-            if (!isFbmRequest || init.signal) return nativeFetch(input, init);
+            // Bulk shipping-options can legitimately take longer while BT38 resolves
+            // persisted recipient addresses and completes provider/rate information for
+            // every selected order. Do not abort that user-initiated load at 15 seconds.
+            // The server still has its governed 10-minute request ceiling.
+            if (!isFbmRequest || isBulkShippingOptions || init.signal) return nativeFetch(input, init);
 
             const controller = new AbortController();
             const timeoutId = global.setTimeout(function () { controller.abort(); }, FBM_FETCH_TIMEOUT_MS);
