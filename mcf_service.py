@@ -6,14 +6,17 @@ Phase 2: FBA as the Multi-Channel Fulfillment Engine
 This service handles:
 1. Creating MCF orders via Amazon Fulfillment Outbound API
 2. Mapping external SKUs to FBA SKUs
-3. Getting MCF shipping estimates with real pricing
+3. Getting MCF shipping estimates for suggestions
 4. Tracking MCF order status and shipments
-5. Calculating fees for profit analysis
+5. Preserving Amazon-supplied financial truth for actual MCF costs
 
-MCF Pricing Rules:
-- First unit shipping fee + additional unit fee for each extra item
-- Weight-based handling fees
-- Per-shipment fees
+Financial authority rule:
+- The local MCF fee calculator is estimate-only and may be used before an order
+  exists to power BT38 suggestions.
+- Once an MCF order exists, BT38 must not manufacture an actual fulfilment cost
+  from a rate card, quantity formula, fallback, or zero.
+- Actual MCF cost/profit remains unknown until Amazon supplies order-specific
+  financial data for that exact MCF fulfilment.
 
 Critical: FBA orders do NOT deduct warehouse stock - Amazon holds the inventory.
 """
@@ -46,16 +49,17 @@ class MCFShippingSpeed:
 
 class MCFFeeCalculator:
     """
-    Calculate MCF fees based on Amazon's pricing structure.
-    
-    MCF Pricing (UK, approximate as of 2024):
+    Estimate MCF fees for BT38 suggestions only.
+
+    These local values are not Amazon order-specific financial evidence and must
+    never be persisted or presented as the actual cost of an existing MCF order.
+
+    Approximate legacy UK suggestion values:
     - Standard: £4.49 first unit, +£0.90 per additional unit
     - Expedited: £5.99 first unit, +£1.20 per additional unit
     - Priority: £8.99 first unit, +£1.80 per additional unit
-    
-    Plus:
-    - Weight handling: £0.25-£0.50 per kg over 0.5kg
-    - Per-shipment fee: £0.50
+
+    Plus legacy estimate assumptions for weight/per-shipment handling.
     """
     
     MCF_FEES = {
@@ -70,17 +74,7 @@ class MCFFeeCalculator:
     @classmethod
     def calculate_item_fee(cls, quantity: int, shipping_speed: str = 'Standard', 
                           weight_kg: float = 0.0) -> Dict:
-        """
-        Calculate MCF fee for an item with given quantity.
-        
-        Args:
-            quantity: Number of units
-            shipping_speed: Standard, Expedited, or Priority
-            weight_kg: Item weight in kg (for weight handling)
-            
-        Returns:
-            Dict with first_unit_fee, additional_unit_fee, total_fee, weight_handling
-        """
+        """Return a local estimate for suggestion/planning UI only."""
         fees = cls.MCF_FEES.get(shipping_speed, cls.MCF_FEES['Standard'])
         
         first_unit_fee = fees['first_unit']
@@ -92,7 +86,9 @@ class MCFFeeCalculator:
                 'additional_unit_fee': 0,
                 'total_fee': 0,
                 'weight_handling': 0,
-                'units': 0
+                'units': 0,
+                'authority': 'estimate',
+                'source': 'bt38_rate_card_estimate',
             }
         
         if quantity == 1:
@@ -110,21 +106,14 @@ class MCFFeeCalculator:
             'additional_unit_fee': additional_unit_fee,
             'total_fee': fulfillment_fee + weight_handling,
             'weight_handling': weight_handling,
-            'units': quantity
+            'units': quantity,
+            'authority': 'estimate',
+            'source': 'bt38_rate_card_estimate',
         }
     
     @classmethod
     def calculate_order_fee(cls, items: List[Dict], shipping_speed: str = 'Standard') -> Dict:
-        """
-        Calculate total MCF fees for an order with multiple items.
-        
-        Args:
-            items: List of dicts with 'quantity' and optional 'weight_kg'
-            shipping_speed: Shipping speed for all items
-            
-        Returns:
-            Dict with per_item_fees, per_shipment_fee, total_fee
-        """
+        """Return a local order-level estimate for suggestion/planning UI only."""
         fees = cls.MCF_FEES.get(shipping_speed, cls.MCF_FEES['Standard'])
         per_shipment_fee = fees['per_shipment']
         
@@ -146,23 +135,28 @@ class MCFFeeCalculator:
             'fulfillment_fee': total_fulfillment,
             'weight_handling': total_weight_handling,
             'total_units': total_units,
-            'total_fee': per_shipment_fee + total_fulfillment
+            'total_fee': per_shipment_fee + total_fulfillment,
+            'authority': 'estimate',
+            'source': 'bt38_rate_card_estimate',
         }
 
 
 class MCFService:
-    """
-    Multi-Channel Fulfillment Service
-    
-    Manages the complete MCF workflow:
-    1. Find FBA listing for external SKU
-    2. Create MCF order with Amazon
-    3. Track MCF order status
-    4. Calculate fees and profit
-    """
+    """Multi-Channel Fulfillment Service."""
     
     def __init__(self):
         self.fee_calculator = MCFFeeCalculator()
+
+    @staticmethod
+    def _mark_actual_financials_pending(mcf_order: MCFOrder) -> None:
+        """Never manufacture actual MCF money before Amazon supplies it."""
+        mcf_order.mcf_fulfillment_fee = None
+        mcf_order.mcf_per_unit_fee = None
+        mcf_order.mcf_per_shipment_fee = None
+        mcf_order.mcf_weight_handling_fee = None
+        mcf_order.total_mcf_fee = None
+        mcf_order.gross_profit = None
+        mcf_order.profit_margin_percent = None
 
     def _resolve_mcf_fba_store(self, mcf_order):
         """Use the Amazon store already resolved by governed MCF."""
@@ -190,11 +184,7 @@ class MCFService:
         sku: str,
         store_id: int = None,
     ) -> Optional[AmazonFBAInventory]:
-        """
-        Resolve FBA through the existing Product Linking group.
-
-        Non-grouped and non-FBA stock is never eligible for MCF.
-        """
+        """Resolve FBA through the existing Product Linking group."""
         warehouse_stock = (
             WarehouseStock.query
             .filter_by(sku=sku)
@@ -330,27 +320,18 @@ class MCFService:
             fba_inventory,
         )
 
-
     def get_mcf_estimate(self, items: List[Dict], shipping_speed: str = 'Standard',
                         destination_country: str = 'GB') -> Dict:
-        """
-        Get MCF shipping estimate with fees.
-        
-        Args:
-            items: List of dicts with 'sku', 'quantity', optional 'weight_kg'
-            shipping_speed: Standard, Expedited, or Priority
-            destination_country: 2-letter country code
-            
-        Returns:
-            Dict with estimated fees, availability, and delivery dates
-        """
+        """Get an explicitly non-authoritative MCF estimate for BT38 suggestions."""
         result = {
             'available': True,
             'items': [],
             'shipping_speed': shipping_speed,
             'fees': {},
             'estimated_delivery': None,
-            'errors': []
+            'errors': [],
+            'financial_authority': 'estimate',
+            'financial_source': 'bt38_rate_card_estimate',
         }
         
         all_available = True
@@ -399,35 +380,7 @@ class MCFService:
                         shipping_speed: str = 'Standard',
                         order_total: float = 0.0,
                         platform_fees: float = 0.0) -> Tuple[bool, str, Optional[MCFOrder]]:
-        """
-        Create an MCF order for external channel fulfillment.
-        
-        ============================================================
-        CRITICAL STOCK PROTECTION RULE:
-        MCF orders use FBA inventory ONLY - they NEVER touch warehouse stock.
-        
-        - DO NOT decrement WarehouseStock.available_quantity
-        - DO NOT create StockLedgerEntry for MCF orders
-        - DO NOT call warehouse_stock.deduct() or similar methods
-        
-        FBA inventory is managed by Amazon. When MCF order ships,
-        Amazon automatically deducts from their fulfillment center stock.
-        Our FBA listing quantities are updated via the normal FBA sync.
-        ============================================================
-        
-        Args:
-            source_order_id: Order ID from source channel (eBay, Etsy, etc)
-            source_channel: Channel name (eBay, Etsy, TikTok, Website)
-            source_store_id: Store ID where order originated
-            items: List of dicts with 'sku', 'quantity', 'unit_price', 'product_cost'
-            shipping_address: Dict with name, address_line1, city, postcode, country
-            shipping_speed: Standard, Expedited, or Priority
-            order_total: Total order value charged to customer
-            platform_fees: Fees charged by source platform
-            
-        Returns:
-            Tuple of (success, message, mcf_order)
-        """
+        """Create an MCF order without manufacturing actual Amazon financials."""
         try:
             fulfillment_order_id = f"MCF-{source_channel[:3].upper()}-{uuid.uuid4().hex[:8].upper()}"
             
@@ -452,12 +405,12 @@ class MCFService:
                 platform_fees=platform_fees,
                 currency='GBP'
             )
+            self._mark_actual_financials_pending(mcf_order)
             
             db.session.add(mcf_order)
             db.session.flush()
             
             total_product_cost = 0
-            fee_items = []
             
             for item_data in items:
                 sku = item_data.get('sku')
@@ -471,10 +424,9 @@ class MCFService:
                     db.session.rollback()
                     return False, message, None
                 
-                item_fee = self.fee_calculator.calculate_item_fee(
-                    quantity, shipping_speed, item_data.get('weight_kg', 0.3)
-                )
-                
+                # Actual-order rows deliberately carry no locally calculated MCF
+                # monetary amount. Amazon order-specific financial data must fill
+                # these fields later; a missing Amazon value remains NULL/pending.
                 mcf_item = MCFOrderItem(
                     mcf_order_id=mcf_order.id,
                     source_sku=sku,
@@ -485,27 +437,25 @@ class MCFService:
                     quantity=quantity,
                     unit_price=unit_price,
                     product_cost=product_cost,
-                    mcf_fulfillment_fee=item_fee['total_fee'],
-                    mcf_first_unit_fee=item_fee['first_unit_fee'],
-                    mcf_additional_unit_fee=item_fee['additional_unit_fee'],
+                    mcf_fulfillment_fee=None,
+                    mcf_first_unit_fee=None,
+                    mcf_additional_unit_fee=None,
                     status='pending'
                 )
                 
                 db.session.add(mcf_item)
                 total_product_cost += product_cost * quantity
-                fee_items.append({'quantity': quantity, 'weight_kg': item_data.get('weight_kg', 0.3)})
             
-            order_fees = self.fee_calculator.calculate_order_fee(fee_items, shipping_speed)
-            mcf_order.mcf_per_shipment_fee = order_fees['per_shipment_fee']
-            mcf_order.mcf_fulfillment_fee = order_fees['fulfillment_fee']
-            mcf_order.total_mcf_fee = order_fees['total_fee']
             mcf_order.product_cost = total_product_cost
-            
-            mcf_order.calculate_totals()
-            
+            self._mark_actual_financials_pending(mcf_order)
             db.session.commit()
             
-            logger.info(f"Created MCF order {fulfillment_order_id} for {source_channel} order {source_order_id}")
+            logger.info(
+                "Created MCF order %s for %s order %s; actual MCF cost pending Amazon financial truth",
+                fulfillment_order_id,
+                source_channel,
+                source_order_id,
+            )
             
             return True, f"MCF order created: {fulfillment_order_id}", mcf_order
             
@@ -515,11 +465,7 @@ class MCFService:
             return False, f"Error creating MCF order: {str(e)}", None
     
     def submit_mcf_to_amazon(self, mcf_order: MCFOrder) -> Tuple[bool, str]:
-        """
-        Submit MCF order to Amazon Fulfillment Outbound API.
-        
-        Uses the FBA store's credentials to call the Fulfillment Outbound API.
-        """
+        """Submit MCF order to Amazon Fulfillment Outbound API."""
         try:
             fba_store = self._resolve_mcf_fba_store(mcf_order)
             if not fba_store:
@@ -595,9 +541,7 @@ class MCFService:
             return False, f"Error: {str(e)}"
     
     def get_mcf_order_status(self, mcf_order: MCFOrder) -> Tuple[bool, Dict]:
-        """
-        Get updated status for an MCF order from Amazon.
-        """
+        """Get updated non-financial status/tracking truth for an MCF order from Amazon."""
         try:
             fba_store = self._resolve_mcf_fba_store(mcf_order)
             if not fba_store:
@@ -649,7 +593,13 @@ class MCFService:
                     'carrier': mcf_order.carrier,
                     'tracking_number': mcf_order.tracking_number,
                     'ship_date': mcf_order.ship_date.isoformat() if mcf_order.ship_date else None,
-                    'estimated_arrival': mcf_order.estimated_arrival_date.isoformat() if mcf_order.estimated_arrival_date else None
+                    'estimated_arrival': mcf_order.estimated_arrival_date.isoformat() if mcf_order.estimated_arrival_date else None,
+                    'actual_mcf_cost': mcf_order.total_mcf_fee,
+                    'actual_mcf_cost_authority': (
+                        'amazon_order_specific_financial_data'
+                        if mcf_order.total_mcf_fee is not None
+                        else 'pending_amazon_financial_truth'
+                    ),
                 }
             else:
                 return False, {'error': error or 'Failed to get status'}
@@ -659,9 +609,7 @@ class MCFService:
             return False, {'error': str(e)}
     
     def cancel_mcf_order(self, mcf_order: MCFOrder) -> Tuple[bool, str]:
-        """
-        Cancel an MCF order with Amazon.
-        """
+        """Cancel an MCF order with Amazon."""
         try:
             if mcf_order.status in ['completed', 'cancelled']:
                 return False, f"Cannot cancel order in status: {mcf_order.status}"
@@ -698,43 +646,13 @@ class MCFService:
 
 
 class OrderFulfillmentRouter:
-    """
-    Routes orders to correct fulfillment path: FBA (MCF) or FBM (warehouse).
-    
-    Decision logic:
-    1. Check if SKU has an active FBA listing with MCF enabled
-    2. Check FBA inventory availability
-    3. Route to MCF if FBA available, otherwise fall back to FBM
-    
-    CRITICAL STOCK HANDLING DIFFERENCES:
-    
-    FBA/MCF Path:
-    - Uses FBA inventory at Amazon fulfillment centers
-    - NO warehouse stock deduction
-    - NO StockLedgerEntry created
-    - FBA quantities updated via normal Amazon sync
-    
-    FBM Path:
-    - Uses warehouse stock (WarehouseStock model)
-    - DEDUCTS warehouse available_quantity
-    - CREATES StockLedgerEntry for audit trail
-    - Triggers push to connected marketplaces
-    
-    The caller is responsible for handling FBM stock deduction
-    via the marketplace_order_processor or similar service.
-    """
+    """Routes orders to the existing FBA (MCF) or FBM path."""
     
     def __init__(self):
         self.mcf_service = MCFService()
     
     def determine_fulfillment_type(self, sku: str, quantity: int = 1) -> Tuple[str, str]:
-        """
-        Determine the best fulfillment type for a SKU.
-        
-        Returns:
-            Tuple of (fulfillment_type, reason)
-            fulfillment_type: 'FBA' or 'FBM'
-        """
+        """Determine the best fulfillment type for a SKU."""
         available, message, fba_listing = self.mcf_service.check_fba_availability(sku, quantity)
         
         if available:
@@ -752,15 +670,7 @@ class OrderFulfillmentRouter:
     def route_order(self, source_order_id: str, source_channel: str, source_store_id: int,
                    items: List[Dict], shipping_address: Dict,
                    order_total: float = 0.0, platform_fees: float = 0.0) -> Dict:
-        """
-        Route an order to the appropriate fulfillment path.
-        
-        For FBA items: Creates MCF order (no warehouse deduction)
-        For FBM items: Creates MarketplaceOrder (deducts warehouse stock)
-        
-        Returns:
-            Dict with fulfillment results
-        """
+        """Route an order without changing existing stock authority rules."""
         result = {
             'source_order_id': source_order_id,
             'source_channel': source_channel,
