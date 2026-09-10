@@ -7,6 +7,16 @@ from flask import Blueprint, jsonify, request
 governed_runtime_visibility_bp = Blueprint("governed_runtime_visibility", __name__)
 
 
+@governed_runtime_visibility_bp.record_once
+def _install_fba_cancellation_safety_alignment(state):
+    """Install the small settings/FBA cancellation alignment after governed routes exist."""
+    from services.governed_fba_cancellation_safety_alignment import (
+        install_governed_fba_cancellation_safety_alignment,
+    )
+
+    install_governed_fba_cancellation_safety_alignment(state.app)
+
+
 def _non_negative_float(value, field_name: str):
     try:
         number = float(value)
@@ -106,9 +116,6 @@ def governed_warehouse_kpis():
     from models import MarketplaceListing, WarehouseStock
     from sqlalchemy import case, func
 
-    # WarehouseStock.sellable_quantity is a Python @property, so it cannot be
-    # passed into SQLAlchemy aggregate functions. Keep the exact same authority
-    # rule in SQL: max(0, available - reserved - allocated).
     raw_sellable = (
         func.coalesce(WarehouseStock.available_quantity, 0)
         - func.coalesce(WarehouseStock.reserved_quantity, 0)
