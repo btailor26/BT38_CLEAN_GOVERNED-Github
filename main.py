@@ -97,6 +97,9 @@ install_governed_fbm_global_search_alignment(app)
 install_governed_fbm_render_budget_alignment(app)
 install_governed_fbm_all_orders_health_alignment(app)
 install_governed_fbm_dispatch_queue_alignment(app)
+# FBA/AFN stays read-only but uses the same FBM workflow surface: Pending stays
+# Pending; exact persisted Amazon lifecycle after dispatch moves the row to FBA.
+import services.governed_fbm_fba_visibility_alignment  # noqa: F401,E402
 install_product_linking_unlink_alignment(app)
 install_governed_ebay_native_shipping_alignment(app)
 install_governed_ebay_packlink_confirmation_alignment()
