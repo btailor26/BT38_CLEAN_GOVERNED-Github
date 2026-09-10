@@ -1,11 +1,14 @@
-"""Collapse the existing FBM bell to one logical commercial order event.
+"""Present one current FBM commercial-order state on the existing bell.
 
-Historical eBay importer rows can preserve more than one provider line identity
-for the same commercial order/SKU. The bell must not turn those audit rows into
-multiple user actions merely because one persisted sale event says ``pending``
-and another says ``unshipped``. It must also stop presenting the original sale
-once the existing bell projection contains a later shipment lifecycle event for
-that same order.
+The bell is a presentation of the already-persisted FBM/order projection. It is
+not a webhook feed and it does not own fulfilment state. Marketplace retries,
+label assignment, dispatch confirmation, carrier acceptance and in-transit
+updates remain audit/FBM-page evidence and must not create fresh bell items.
+
+For a normal FBM sale the bell presents one stable "Get ready to dispatch"
+item until existing persisted delivery truth reaches Delivered. Genuine issue
+states (return/refund/cancellation/case/dispute/chargeback/replacement) remain
+visible because they require seller attention.
 
 This alignment wraps only the already-installed bell endpoint. It performs no
 DB query, marketplace/provider read, polling, scheduling, order mutation or
@@ -27,6 +30,50 @@ _ROUTINE_SALE_RANK = {
     "unshipped": 1,
 }
 
+_FINAL_BELL_STATUSES = {
+    "delivered",
+    "return_requested",
+    "returned",
+    "refund_requested",
+    "refunded",
+    "replacement_requested",
+    "replacement",
+    "case_open",
+    "dispute",
+    "chargeback",
+    "cancel_requested",
+    "cancelled",
+}
+
+
+def _platform_label(value: object) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized == "ebay":
+        return "eBay"
+    if normalized == "amazon":
+        return "Amazon"
+    return str(value or "Marketplace").strip() or "Marketplace"
+
+
+def _sale_product_title(record: dict) -> str:
+    current = str(record.get("title") or record.get("message") or "").strip()
+    for prefix in ("Get ready to dispatch · ", "Sale · "):
+        if current.startswith(prefix):
+            current = current[len(prefix):].strip()
+            break
+
+    platform_label = _platform_label(record.get("platform"))
+    platform_prefix = f"{platform_label} · "
+    if current.startswith(platform_prefix):
+        current = current[len(platform_prefix):].strip()
+
+    return current or str(
+        record.get("product_title")
+        or record.get("sku")
+        or record.get("order_id")
+        or "Order"
+    ).strip()
+
 
 def _sale_identity(record: dict) -> tuple[str, str, str, str] | None:
     order_id = str(record.get("order_id") or "").strip()
@@ -41,7 +88,12 @@ def _sale_identity(record: dict) -> tuple[str, str, str, str] | None:
 
 
 def _prefer_sale(current: dict, incoming: dict) -> dict:
-    """Prefer the stronger routine sale state, then the newest persisted event."""
+    """Prefer the stronger routine sale state, then the earliest stable sale time.
+
+    Retry/recovery writes can advance MarketplaceOrder.updated_at or create a
+    stronger sibling later. They must not make the same commercial sale look
+    new again on the bell.
+    """
     current_status = str(current.get("lifecycle_status") or "").strip().lower()
     incoming_status = str(incoming.get("lifecycle_status") or "").strip().lower()
     current_rank = _ROUTINE_SALE_RANK.get(current_status, -1)
@@ -50,48 +102,94 @@ def _prefer_sale(current: dict, incoming: dict) -> dict:
         return incoming if incoming_rank > current_rank else current
     return (
         incoming
-        if str(incoming.get("created_at") or "") > str(current.get("created_at") or "")
+        if str(incoming.get("created_at") or "") < str(current.get("created_at") or "")
         else current
     )
 
 
+def _is_final_bell_record(record: dict) -> bool:
+    status = str(record.get("lifecycle_status") or "").strip().lower()
+    log_type = str(record.get("log_type") or "").strip().lower()
+    return status in _FINAL_BELL_STATUSES or log_type == "fbm_delivered"
+
+
+def _align_ready_sale(record: dict) -> dict:
+    aligned = dict(record)
+    platform = str(aligned.get("platform") or "Marketplace").strip()
+    platform_label = _platform_label(platform)
+    product_title = _sale_product_title(aligned)
+    order_id = str(aligned.get("order_id") or "").strip()
+
+    aligned["status_label"] = "Get ready to dispatch"
+    aligned["title"] = f"Get ready to dispatch · {platform_label} · {product_title}"
+    aligned["message"] = aligned["title"]
+    aligned["event_key"] = f"fbm-ready:{platform.lower()}:{order_id}"
+    aligned["presentation_source"] = "existing_fbm_order_state"
+    return aligned
+
+
 def _collapse_logical_bell_records(records: list[dict], limit: int) -> list[dict]:
-    progressed_orders: set[tuple[str, str]] = set()
+    """Keep one Ready item per order until a final persisted state exists."""
+    final_orders: set[tuple[str, str]] = set()
+    final_records: list[dict] = []
+
     for record in records:
-        log_type = str(record.get("log_type") or "").strip().lower()
-        if log_type not in small_alignment._BELL_SHIPMENT_LOG_TYPES:
+        if not _is_final_bell_record(record):
             continue
         order_id = str(record.get("order_id") or "").strip()
         if not order_id:
             continue
-        progressed_orders.add((
-            str(record.get("platform") or "").strip().lower(),
-            order_id,
-        ))
+        platform = str(record.get("platform") or "").strip().lower()
+        final_orders.add((platform, order_id))
+        final_records.append(record)
 
     logical_sales: dict[tuple[str, str, str, str], dict] = {}
-    other_records: list[dict] = []
     for record in records:
         log_type = str(record.get("log_type") or "").strip().lower()
         if log_type != "marketplace_sale":
-            other_records.append(record)
             continue
 
         identity = _sale_identity(record)
         if identity is None:
-            other_records.append(record)
             continue
-        if (identity[0], identity[1]) in progressed_orders:
+        if (identity[0], identity[1]) in final_orders:
             continue
 
+        aligned = _align_ready_sale(record)
         existing = logical_sales.get(identity)
         logical_sales[identity] = (
-            record if existing is None else _prefer_sale(existing, record)
+            aligned if existing is None else _prefer_sale(existing, aligned)
         )
 
-    collapsed = other_records + list(logical_sales.values())
+    collapsed = final_records + list(logical_sales.values())
+
+    # Final records are already persisted lifecycle truth. Ready records keep
+    # the original sale time, so webhook retries cannot move them to the top.
     collapsed.sort(key=lambda item: str(item.get("created_at") or ""), reverse=True)
-    return collapsed[:limit]
+
+    seen: set[str] = set()
+    unique: list[dict] = []
+    for record in collapsed:
+        platform = str(record.get("platform") or "").strip().lower()
+        order_id = str(record.get("order_id") or "").strip()
+        status = str(record.get("lifecycle_status") or "").strip().lower()
+        log_type = str(record.get("log_type") or "").strip().lower()
+
+        if log_type == "marketplace_sale":
+            key = f"ready:{platform}:{order_id}"
+        elif order_id and status:
+            key = f"final:{platform}:{order_id}:{status}"
+        else:
+            key = str(record.get("event_key") or "").strip()
+
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        unique.append(record)
+        if len(unique) >= limit:
+            break
+
+    return unique
 
 
 def install_governed_fbm_logical_bell_alignment() -> None:
@@ -128,6 +226,8 @@ def install_governed_fbm_logical_bell_alignment() -> None:
             )
             payload["records"] = records
             payload["latest_event_at"] = records[0].get("created_at") if records else None
+            payload["presentation_source"] = "existing_fbm_order_state"
+            payload["polling"] = False
             return jsonify(payload)
 
         logical_order_bell._bt38_logical_order_bell = True
