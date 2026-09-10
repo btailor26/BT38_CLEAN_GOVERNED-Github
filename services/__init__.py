@@ -68,3 +68,8 @@ import services.governed_action_count_ui_alignment  # noqa: F401,E402
 # same projection already contains a persisted shipment lifecycle. No new read,
 # write, polling or provider path is introduced.
 import services.governed_fbm_logical_action_count_alignment  # noqa: F401,E402
+
+# Show persisted Amazon FBA/AFN order lifecycle on the existing /fbm table only.
+# Pending remains Pending; shipped/dispatched lifecycle appears under the local
+# FBA tab. Rows are display-only and never enter FBM shipping eligibility.
+import services.governed_fbm_fba_visibility_alignment  # noqa: F401,E402
