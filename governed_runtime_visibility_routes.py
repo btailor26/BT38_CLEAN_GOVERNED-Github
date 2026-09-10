@@ -116,6 +116,9 @@ def governed_warehouse_kpis():
     from models import MarketplaceListing, WarehouseStock
     from sqlalchemy import case, func
 
+    # WarehouseStock.sellable_quantity is a Python @property, so it cannot be
+    # passed into SQLAlchemy aggregate functions. Keep the exact same authority
+    # rule in SQL: max(0, available - reserved - allocated).
     raw_sellable = (
         func.coalesce(WarehouseStock.available_quantity, 0)
         - func.coalesce(WarehouseStock.reserved_quantity, 0)
