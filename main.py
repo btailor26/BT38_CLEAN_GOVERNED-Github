@@ -36,6 +36,7 @@ import services.public_early_access  # noqa: F401
 from services.governed_notification_read_alignment import install_governed_notification_read_alignment
 from services.governed_fbm_page_alignment import install_governed_fbm_page_alignment
 from services.governed_fbm_shipment_selection_alignment import install_governed_fbm_shipment_selection_alignment
+from services.governed_fbm_marketplace_dispatch_authority_alignment import install_governed_fbm_marketplace_dispatch_authority_alignment
 from services.fbm_db_delivery_promise_alignment import install_fbm_db_delivery_promise_alignment
 from services.governed_fbm_global_search_alignment import install_governed_fbm_global_search_alignment
 from services.governed_fbm_render_budget_alignment import install_governed_fbm_render_budget_alignment
@@ -78,6 +79,10 @@ install_governed_fbm_page_alignment(app)
 # shipment ahead of return/replacement rows and use marketplace tracking only
 # as fallback. This is a DB-only read selector.
 install_governed_fbm_shipment_selection_alignment(app)
+# Unverified provider drafts are not physical shipment authority. Apply the
+# existing DB-only marketplace-dispatch fallback after the canonical selector so
+# abandoned/timed-out Packlink choices cannot mask persisted marketplace truth.
+install_governed_fbm_marketplace_dispatch_authority_alignment()
 # Historical eBay listingId-as-lineId siblings remain in the DB for auditability.
 # Project the strongest persisted logical order into FBM reads and parcel prep so
 # sparse ghost rows cannot hide delivery truth or double the physical quantity.
