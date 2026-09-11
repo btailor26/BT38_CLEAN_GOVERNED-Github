@@ -7,6 +7,8 @@ payment providers or carriers and never mutates inventory/order truth.
 from __future__ import annotations
 
 from datetime import datetime
+import json
+from urllib.parse import parse_qsl, quote, urlencode, urlsplit
 
 from flask import abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -35,6 +37,17 @@ SUPPORT_CATEGORIES = (
 _CATEGORY_MAP = {key: label for key, label, _ in SUPPORT_CATEGORIES}
 _VALID_STATUS = {"open", "in_progress", "waiting_customer", "resolved", "closed"}
 _VALID_PRIORITY = {"low", "normal", "high", "urgent"}
+# Only non-secret operational identifiers may cross from a BT38 page into a case.
+_CONTEXT_KEYS = {
+    "marketplace", "store", "store_id", "order_id", "amazon_order_id", "ebay_order_id",
+    "shipment_id", "tracking", "tracking_number", "sku", "listing_id", "item_id",
+    "warehouse_stock_id", "group_id", "invoice_id", "assignment_id", "review_event_id",
+    "integration", "carrier", "connection", "entity_type", "entity_id",
+}
+_CONTEXT_BLOCKED_FRAGMENTS = (
+    "token", "secret", "password", "credential", "authorization", "api_key", "apikey",
+    "private_key", "public_key", "card", "cookie", "session", "signature",
+)
 
 
 class SupportCase(db.Model):
@@ -49,7 +62,8 @@ class SupportCase(db.Model):
     priority = db.Column(db.String(20), nullable=False, default="normal", index=True)
     status = db.Column(db.String(30), nullable=False, default="open", index=True)
     affected_area = db.Column(db.String(160))
-    source_page = db.Column(db.String(240))
+    source_page = db.Column(db.String(500))
+    context_json = db.Column(db.Text)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow, index=True)
 
@@ -98,12 +112,50 @@ def _case_number(case: SupportCase) -> str:
 
 def _status_label(value: str) -> str:
     return {
-        "open": "Open",
-        "in_progress": "In progress",
-        "waiting_customer": "Waiting for customer",
-        "resolved": "Resolved",
-        "closed": "Closed",
+        "open": "Open", "in_progress": "In progress", "waiting_customer": "Waiting for customer",
+        "resolved": "Resolved", "closed": "Closed",
     }.get(value, str(value or "").replace("_", " ").title())
+
+
+def _safe_source_page(value) -> str:
+    """Keep only a local BT38 path plus allowlisted, non-secret query identifiers."""
+    raw = _clean(value, 1200)
+    if not raw:
+        return ""
+    try:
+        parts = urlsplit(raw)
+    except ValueError:
+        return ""
+    path = parts.path if parts.path.startswith("/") else ""
+    if not path or path.startswith("//"):
+        return ""
+    safe_query = []
+    for key, val in parse_qsl(parts.query, keep_blank_values=False):
+        normal = str(key or "").strip().lower()
+        if normal in _CONTEXT_KEYS and not any(fragment in normal for fragment in _CONTEXT_BLOCKED_FRAGMENTS):
+            safe_query.append((normal, _clean(val, 180)))
+    return (path + (("?" + urlencode(safe_query)) if safe_query else ""))[:500]
+
+
+def _context_from_source(source_page: str) -> dict:
+    """Snapshot only identifiers already present in the originating BT38 URL."""
+    if not source_page:
+        return {}
+    parts = urlsplit(source_page)
+    context = {"source_page": parts.path[:240]}
+    for key, value in parse_qsl(parts.query, keep_blank_values=False):
+        normal = str(key or "").strip().lower()
+        if normal in _CONTEXT_KEYS and not any(fragment in normal for fragment in _CONTEXT_BLOCKED_FRAGMENTS):
+            context[normal] = _clean(value, 180)
+    return context
+
+
+def _case_context(case: SupportCase) -> dict:
+    try:
+        value = json.loads(case.context_json or "{}")
+    except Exception:
+        value = {}
+    return value if isinstance(value, dict) else {}
 
 
 @app.context_processor
@@ -124,7 +176,10 @@ def bt38_support_cases_page():
         return redirect(url_for("bt38_profile_page"))
     cases = (SupportCase.query.filter_by(account_id=account.id)
              .order_by(SupportCase.updated_at.desc(), SupportCase.id.desc()).limit(250).all())
-    return render_template("support_cases.html", cases=cases, account=account, admin_view=False)
+    source_page = _safe_source_page(request.args.get("from"))
+    source_context = _context_from_source(source_page)
+    return render_template("support_cases.html", cases=cases, account=account, admin_view=False,
+                           source_page=source_page, source_context=source_context)
 
 
 @app.post("/support/cases/new")
@@ -139,7 +194,8 @@ def bt38_support_create_case():
     description = _clean(request.form.get("description"), 8000)
     priority = _clean(request.form.get("priority"), 20).lower() or "normal"
     affected_area = _clean(request.form.get("affected_area"), 160)
-    source_page = _clean(request.form.get("source_page"), 240) or _clean(request.referrer, 240)
+    source_page = _safe_source_page(request.form.get("source_page"))
+    context = _context_from_source(source_page)
     if category not in _CATEGORY_MAP:
         flash("Choose a valid support category.", "danger")
         return redirect(url_for("bt38_support_cases_page"))
@@ -149,15 +205,10 @@ def bt38_support_create_case():
         flash("Add a subject and describe what is happening.", "danger")
         return redirect(url_for("bt38_support_cases_page"))
     case = SupportCase(
-        account_id=account.id,
-        opened_by_user_id=int(current_user.id),
-        category=category,
-        subject=subject,
-        description=description,
-        priority=priority,
-        status="open",
-        affected_area=affected_area or None,
-        source_page=source_page or None,
+        account_id=account.id, opened_by_user_id=int(current_user.id), category=category,
+        subject=subject, description=description, priority=priority, status="open",
+        affected_area=affected_area or None, source_page=source_page or None,
+        context_json=json.dumps(context, ensure_ascii=False, sort_keys=True) if context else None,
     )
     db.session.add(case)
     db.session.flush()
@@ -176,12 +227,8 @@ def bt38_support_case_page(case_id):
         if not body:
             flash("Enter a message before sending.", "danger")
             return redirect(url_for("bt38_support_case_page", case_id=case.case_id))
-        db.session.add(SupportCaseMessage(
-            case_pk=case.id,
-            author_user_id=int(current_user.id),
-            author_role="admin" if _is_admin() else "customer",
-            body=body,
-        ))
+        db.session.add(SupportCaseMessage(case_pk=case.id, author_user_id=int(current_user.id),
+                                          author_role="admin" if _is_admin() else "customer", body=body))
         if not _is_admin() and case.status in {"resolved", "waiting_customer"}:
             case.status = "open"
         elif _is_admin() and case.status == "open":
@@ -192,7 +239,8 @@ def bt38_support_case_page(case_id):
         return redirect(url_for("bt38_support_case_page", case_id=case.case_id))
     messages = (SupportCaseMessage.query.filter_by(case_pk=case.id)
                 .order_by(SupportCaseMessage.created_at.asc(), SupportCaseMessage.id.asc()).all())
-    return render_template("support_case.html", case=case, messages=messages, is_support_admin=_is_admin())
+    return render_template("support_case.html", case=case, messages=messages,
+                           case_context=_case_context(case), is_support_admin=_is_admin())
 
 
 @app.get("/admin/support/cases")
@@ -206,14 +254,8 @@ def bt38_admin_support_cases_page():
         query = query.filter_by(status=status)
     cases = query.order_by(SupportCase.updated_at.desc(), SupportCase.id.desc()).limit(500).all()
     counts = {state: SupportCase.query.filter_by(status=state).count() for state in _VALID_STATUS}
-    return render_template(
-        "support_cases.html",
-        cases=cases,
-        account=None,
-        admin_view=True,
-        support_counts=counts,
-        selected_status=status,
-    )
+    return render_template("support_cases.html", cases=cases, account=None, admin_view=True,
+                           support_counts=counts, selected_status=status, source_page="", source_context={})
 
 
 @app.post("/admin/support/cases/<case_id>/state")
@@ -234,6 +276,21 @@ def bt38_admin_support_case_state(case_id):
     return redirect(url_for("bt38_support_case_page", case_id=case.case_id))
 
 
+def _support_origin_url() -> str:
+    """Build a local, sanitized origin URL from the page currently being rendered."""
+    if request.path.startswith("/support") or request.path.startswith("/static"):
+        return ""
+    pairs = []
+    for key in request.args:
+        normal = str(key or "").strip().lower()
+        if normal not in _CONTEXT_KEYS or any(fragment in normal for fragment in _CONTEXT_BLOCKED_FRAGMENTS):
+            continue
+        for value in request.args.getlist(key):
+            pairs.append((normal, _clean(value, 180)))
+    origin = request.path + (("?" + urlencode(pairs)) if pairs else "")
+    return _safe_source_page(origin)
+
+
 def _install_support_navigation() -> None:
     if getattr(app, "_bt38_support_nav_installed", False):
         return
@@ -248,7 +305,9 @@ def _install_support_navigation() -> None:
                 marker = '<a class="list-group-item list-group-item-action bg-dark text-light border-secondary" href="/admin/system-activity">'
                 pos = html.find(marker)
                 if pos >= 0:
-                    link = ('<a class="list-group-item list-group-item-action bg-dark text-light border-secondary" href="/support/cases">'
+                    origin = _support_origin_url()
+                    href = "/support/cases" + (("?from=" + quote(origin, safe="")) if origin else "")
+                    link = ('<a class="list-group-item list-group-item-action bg-dark text-light border-secondary" href="' + href + '">'
                             '<i data-feather="help-circle" class="me-2"></i>Support</a>')
                     html = html[:pos] + link + html[pos:]
                     response.set_data(html)
