@@ -131,7 +131,8 @@ def test_customer_profile_extends_existing_auth_and_only_gates_new_users():
     assert "login_user(" not in profile_service
     assert "verify_google_id_token" not in profile_service
     assert "setup_required=bool(approved)" in profile_service
-    assert "setup_required=False" in profile_service
+    assert "setup_completed_at=None if approved else datetime.utcnow()" in profile_service
+    assert "Existing live users are grandfathered and never forced through onboarding." in profile_service
     assert 'path in _PROFILE_ALLOWED_PATHS' in profile_service
     assert 'name="username"' in first_login
     assert 'name="display_name"' in first_login
