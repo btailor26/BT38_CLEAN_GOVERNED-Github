@@ -174,6 +174,23 @@ def test_customer_account_owns_branding_five_seats_and_role_presets():
     assert "paypal" not in profile_service.lower()
 
 
+def test_customer_team_role_safety_does_not_grant_content_stock_write_and_aligns_existing_users():
+    cleanup = _read("services/auth_session_legacy_cleanup.py")
+    safety = _read("services/account_profile_role_safety.py")
+
+    compile(safety, "services/account_profile_role_safety.py", "exec")
+    assert "import services.account_profile_role_safety" in cleanup
+    assert 'ROLE_PRESETS["content_manager"]' in safety
+    assert '_content["role"] = "viewer"' in safety
+    assert 'key.startswith("edit_")' in safety
+    assert '_content["permissions"][key] = False' in safety
+    assert 'request.path.rstrip("/") != "/profile/team/add"' in safety
+    assert "profile = db.session.get(UserProfile, user.id)" in safety
+    assert "setup_required=True" in safety
+    assert "profile.setup_required = True" in safety
+    assert "membership.account_id != account.id" in safety
+
+
 def test_customer_shell_only_rebrands_after_customer_logo_exists():
     profile_service = _read("services/account_profile_alignment.py")
 
