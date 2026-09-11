@@ -3,7 +3,7 @@
 {% block content %}
 {% set package_info = bt38_package_for_account(account.id) %}
 <style>
-.billing-page{max-width:980px;margin:0 auto}.billing-head h1{font-size:30px;font-weight:850;letter-spacing:-.03em}.billing-card{background:#fff;border:1px solid #e3e7ed;border-radius:16px;box-shadow:0 4px 18px rgba(15,23,42,.035);padding:22px}.billing-stat{padding:17px;border-radius:12px;background:#f8f9fc;border:1px solid #e6eaf1}.billing-stat small{display:block;color:#7a8494}.billing-stat strong{display:block;font-size:22px;margin-top:4px}.billing-note{font-size:13px;color:#6e7889;line-height:1.55}.billing-feature{padding:10px 12px;border:1px solid #e7ebf1;border-radius:10px;background:#fbfcfe;font-size:14px}.payment-methods{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.payment-method{border:1px solid #e1e6ed;border-radius:12px;background:#fff;padding:13px 12px;min-height:76px}.payment-method strong{display:block;font-size:14px}.payment-method small{display:block;color:#778194;margin-top:4px;line-height:1.3}@media(max-width:767px){.payment-methods{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.billing-page{max-width:980px;margin:0 auto}.billing-head h1{font-size:30px;font-weight:850;letter-spacing:-.03em}.billing-card{background:#fff;border:1px solid #e3e7ed;border-radius:16px;box-shadow:0 4px 18px rgba(15,23,42,.035);padding:22px}.billing-stat{padding:17px;border-radius:12px;background:#f8f9fc;border:1px solid #e6eaf1}.billing-stat small{display:block;color:#7a8494}.billing-stat strong{display:block;font-size:22px;margin-top:4px}.billing-note{font-size:13px;color:#6e7889;line-height:1.55}.billing-feature{padding:10px 12px;border:1px solid #e7ebf1;border-radius:10px;background:#fbfcfe;font-size:14px}.payment-methods{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.payment-method{border:1px solid #e1e6ed;border-radius:12px;background:#fff;padding:13px 12px;min-height:76px}.payment-method strong{display:block;font-size:14px}.payment-method small{display:block;color:#778194;margin-top:4px;line-height:1.3}.billing-consent{display:flex;align-items:center;justify-content:space-between;gap:18px;border:1px solid #dfe4eb;background:#f8fafc;border-radius:14px;padding:15px 16px;margin:14px 0}.billing-consent-copy{min-width:0}.billing-consent-copy strong{display:block;font-size:14px}.billing-consent-copy small{display:block;color:#667085;line-height:1.45;margin-top:3px}.billing-toggle{position:relative;display:inline-block;width:52px;height:30px;flex:0 0 52px}.billing-toggle input{opacity:0;width:0;height:0}.billing-toggle-slider{position:absolute;cursor:pointer;inset:0;background:#cbd2dc;border-radius:999px;transition:.18s}.billing-toggle-slider:before{content:"";position:absolute;width:22px;height:22px;left:4px;top:4px;background:#fff;border-radius:50%;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:.18s}.billing-toggle input:checked + .billing-toggle-slider{background:#198754}.billing-toggle input:checked + .billing-toggle-slider:before{transform:translateX(22px)}.billing-toggle input:focus + .billing-toggle-slider{box-shadow:0 0 0 3px rgba(13,110,253,.15)}@media(max-width:767px){.payment-methods{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 <div class="billing-page">
   <div class="billing-head mb-4"><h1>Billing</h1><p class="text-muted mb-0">Plan ownership, package limits and payment status for {{ account.business_name or 'your workspace' }}.</p></div>
@@ -37,10 +37,22 @@
       <div class="payment-method"><strong>Google Pay</strong><small>Available on supported devices and browsers</small></div>
     </div>
     {% if package_info.package.revolut_plan_ref %}
-    <form method="post" action="/billing/revolut/start" class="d-flex align-items-center gap-3 flex-wrap">
+    <form method="post" action="/billing/revolut/start" id="bt38-payment-form">
       <input type="hidden" name="csrf_token" value="{{ bt38_revolut_billing_csrf() }}">
-      <button class="btn btn-primary" type="submit">Continue to payment</button>
-      <span class="billing-note">BT38 does not store card, bank or wallet credentials.</span>
+      <div class="billing-consent">
+        <div class="billing-consent-copy">
+          <strong>I agree to pay this subscription monthly</strong>
+          <small>By switching this on, you confirm that BT38 may charge the agreed monthly package price until you cancel or change your plan.</small>
+        </div>
+        <label class="billing-toggle" aria-label="Agree to monthly subscription payments">
+          <input type="checkbox" name="monthly_payment_consent" value="accepted" required>
+          <span class="billing-toggle-slider"></span>
+        </label>
+      </div>
+      <div class="d-flex align-items-center gap-3 flex-wrap">
+        <button class="btn btn-primary" type="submit">Continue to payment</button>
+        <span class="billing-note">BT38 does not store card, bank or wallet credentials.</span>
+      </div>
     </form>
     {% else %}
     <p class="billing-note mb-0">Payment setup is not available yet because this package has not been linked to its payment plan.</p>
