@@ -180,6 +180,7 @@
               data-client_id="{{ google_client_id }}"
               data-login_uri="{{ google_login_uri }}"
               data-auto_prompt="false"
+              data-use_fedcm_for_button="true"
               data-context="signin"
             ></div>
             <div
@@ -199,7 +200,10 @@
           {% endif %}
           <label for="username" class="block text-sm font-semibold">Username or email</label>
           <input id="username" name="username" type="text" autocomplete="username" required class="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="Enter username or email">
-          <label for="password" class="mt-5 block text-sm font-semibold">Password</label>
+          <div class="mt-5 flex items-center justify-between gap-4">
+            <label for="password" class="block text-sm font-semibold">Password</label>
+            <a href="{{ url_for('bt38_public_forgot_password') }}" class="text-sm font-semibold text-slate-600 underline">Forgot password?</a>
+          </div>
           <input id="password" name="password" type="password" autocomplete="current-password" required class="mt-2 w-full rounded-xl border border-slate-300 px-4 py-3" placeholder="Enter password">
           <button type="submit" class="mt-6 w-full rounded-xl bg-black px-5 py-3 font-semibold text-white">Sign in</button>
           <p class="mt-5 text-center text-sm text-slate-500">Not approved yet? <a href="/apply" class="font-semibold text-slate-900 underline">Apply to try BT38 Inventory</a></p>
