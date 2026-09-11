@@ -5,6 +5,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SERVICE = (ROOT / "services" / "revolut_subscription_alignment.py").read_text(encoding="utf-8")
 CLIENT = (ROOT / "services" / "revolut_billing.py").read_text(encoding="utf-8")
 BILLING = (ROOT / "templates" / "billing.html").read_text(encoding="utf-8")
+ADMIN_PACKAGES = (ROOT / "templates" / "admin" / "packages.html").read_text(encoding="utf-8")
+WEBHOOK_SECRET = (ROOT / "templates" / "admin" / "revolut_webhook_secret.html").read_text(encoding="utf-8")
 MIGRATION = (ROOT / "migrations" / "manual" / "20260911-revolut-subscription-binding.sql").read_text(encoding="utf-8")
 
 
@@ -35,16 +37,36 @@ def test_provider_customer_and_subscription_identity_are_persisted_before_reuse(
     assert "client.retrieve_subscription(binding.subscription_ref)" in SERVICE
 
 
-def test_signed_webhook_performs_exact_subscription_readback_before_account_mutation():
+def test_signed_webhook_resolves_exact_order_subscription_for_setup_and_recurring_cycles():
     assert '@app.post("/webhooks/revolut")' in SERVICE
     assert "verify_revolut_webhook_signature(" in SERVICE
-    assert "setup_order_ref=order_ref" in SERVICE
+    assert "order = client.retrieve_order(order_ref)" in SERVICE
+    assert 'subscription_data.get("subscription_id")' in SERVICE
+    assert "query.filter_by(subscription_ref=subscription_ref)" in SERVICE
     assert 'assignment.billing_provider != "revolut"' in SERVICE
-    readback = SERVICE.index("retrieve_subscription(binding.subscription_ref)")
+    readback = SERVICE.index("subscription = client.retrieve_subscription(binding.subscription_ref)")
     mutation = SERVICE.index("_sync_assignment_from_subscription(assignment, binding, subscription)", readback)
     assert readback < mutation
     assert "subscription identity did not match" in SERVICE
-    assert 'return jsonify({"ok": True, "status": "unmatched"}), 200' in SERVICE
+    assert 'return ("", 204)' in SERVICE
+
+
+def test_revolut_webhook_fails_closed_until_signing_secret_is_in_fly():
+    assert 'reason": "webhook_not_configured"' in SERVICE
+    assert "except RevolutBillingError:" in SERVICE
+    assert "verify_revolut_webhook_signature(" in SERVICE
+
+
+def test_admin_webhook_provisioning_is_explicit_and_secret_is_not_persisted():
+    assert '@app.post("/admin/revolut/webhook/provision")' in SERVICE
+    assert "if not _is_admin():" in SERVICE
+    assert "client.list_webhooks()" in SERVICE
+    assert "client.retrieve_webhook(webhook_id)" in SERVICE
+    assert "client.create_webhook(url=target_url, events=list(_WEBHOOK_EVENTS))" in SERVICE
+    assert '"ORDER_AUTHORISED", "ORDER_COMPLETED", "ORDER_CANCELLED"' in SERVICE
+    assert 'action="/admin/revolut/webhook/provision"' in ADMIN_PACKAGES
+    assert "REVOLUT_WEBHOOK_SIGNING_SECRET" in WEBHOOK_SECRET
+    assert "signing_secret" not in MIGRATION
 
 
 def test_revolut_subscription_states_map_to_existing_bt38_billing_statuses():
