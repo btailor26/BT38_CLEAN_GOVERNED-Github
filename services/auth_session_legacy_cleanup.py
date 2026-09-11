@@ -85,3 +85,6 @@ def bt38_legacy_remember_cookie_cleanup():
 # handler, so a valid fresh login can enter one-time profile setup without a
 # second auth path or session implementation.
 import services.account_profile_alignment  # noqa: E402,F401
+# First-login setup hands directly to the real dashboard. Consume its one-time
+# COFI welcome marker there without adding a setup wizard or parallel dashboard.
+import services.cofi_first_welcome_alignment  # noqa: E402,F401
