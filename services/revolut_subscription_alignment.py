@@ -59,10 +59,10 @@ def _binding_for_assignment(assignment_id):
 
 def _owner_identity(account):
     owner = db.session.get(User, int(account.owner_user_id))
-    if not owner or not str(owner.email or "").strip(): raise ValueError("The paying account owner needs an email address before Revolut setup can start.")
+    if not owner or not str(owner.email or "").strip(): raise ValueError("The paying account owner needs an email address before payment setup can start.")
     profile = db.session.get(UserProfile, int(owner.id))
     name = str(getattr(profile, "display_name", "") or owner.username or account.business_name or "").strip()
-    if not name: raise ValueError("The paying account owner needs a name before Revolut setup can start.")
+    if not name: raise ValueError("The paying account owner needs a name before payment setup can start.")
     return name[:140], str(owner.email).strip().lower()[:120]
 
 def _assignment_for_owner():
@@ -72,8 +72,8 @@ def _assignment_for_owner():
     if not assignment: raise ValueError("Assign a BT38 package before starting payment setup.")
     package = db.session.get(SubscriptionPackage, assignment.package_id)
     if not package or not package.is_active: raise ValueError("The assigned package is not active.")
-    if package.tier_type != "paid" or assignment.billing_provider != "revolut": raise ValueError("This package does not use Revolut billing.")
-    if not str(package.revolut_plan_ref or "").strip(): raise ValueError("This paid package needs its Revolut plan variation ID before payment setup can start.")
+    if package.tier_type != "paid" or assignment.billing_provider != "revolut": raise ValueError("This package does not use the configured payment provider.")
+    if not str(package.revolut_plan_ref or "").strip(): raise ValueError("This paid package needs its payment plan variation ID before payment setup can start.")
     return account, assignment, package
 
 def _map_provider_state(state):
@@ -98,28 +98,42 @@ def bt38_revolut_billing_context(): return {"bt38_revolut_billing_csrf": lambda:
 @login_required
 def bt38_revolut_subscription_start():
     if not _valid(_BILLING_CSRF_KEY): return redirect(url_for("bt38_billing_page"))
+    if str(request.form.get("monthly_payment_consent") or "").strip().lower() != "accepted":
+        app.logger.warning("Monthly billing setup blocked because owner consent was not supplied")
+        return redirect(url_for("bt38_billing_page"))
     try:
-        account, assignment, package = _assignment_for_owner(); binding = _binding_for_assignment(assignment.id); client = configured_revolut_client()
+        account, assignment, package = _assignment_for_owner()
+        _audit("billing_consent", "Account owner accepted recurring monthly billing", {
+            "account_id": account.id,
+            "assignment_id": assignment.id,
+            "package_id": package.id,
+            "billing_interval": "month",
+            "consent": "accepted",
+            "accepted_at": datetime.utcnow().isoformat() + "Z",
+            "user_id": current_user.id,
+        })
+        db.session.commit()
+        binding = _binding_for_assignment(assignment.id); client = configured_revolut_client()
         if not binding.customer_ref:
             name, email = _owner_identity(account); customer = client.create_customer(full_name=name, email=email); ref = str(customer.get("id") or "").strip()
-            if not ref: raise RevolutBillingError("Revolut did not return a customer ID.")
+            if not ref: raise RevolutBillingError("Payment provider did not return a customer ID.")
             binding.customer_ref = ref; db.session.commit()
         if binding.subscription_ref:
             subscription = client.retrieve_subscription(binding.subscription_ref); _sync_assignment(assignment, binding, subscription); assignment.provider_subscription_ref = binding.subscription_ref; db.session.commit()
         else:
             subscription = client.create_subscription(plan_variation_id=str(package.revolut_plan_ref).strip(), customer_id=str(binding.customer_ref).strip(), setup_order_redirect_url=url_for("bt38_billing_page", _external=True), external_reference=f"bt38-account-{account.id}", idempotency_key=f"bt38-account-{account.id}-package-{package.id}")
             subref = str(subscription.get("id") or "").strip(); orderref = str(subscription.get("setup_order_id") or "").strip()
-            if not subref or not orderref: raise RevolutBillingError("Revolut did not return the subscription setup identifiers.")
+            if not subref or not orderref: raise RevolutBillingError("Payment provider did not return the subscription setup identifiers.")
             binding.subscription_ref=subref; binding.setup_order_ref=orderref; binding.provider_state=str(subscription.get("state") or "pending")[:40]; assignment.provider_subscription_ref=subref; assignment.status="setup_pending"; account.billing_status="setup_pending"; db.session.commit()
         if assignment.status == "active": return redirect(url_for("bt38_billing_page"))
         order = client.retrieve_order(binding.setup_order_ref); checkout_url = str(order.get("checkout_url") or "").strip()
-        if not checkout_url.startswith("https://"): raise RevolutBillingError("Revolut did not return a secure hosted checkout URL.")
+        if not checkout_url.startswith("https://"): raise RevolutBillingError("Payment provider did not return a secure hosted checkout URL.")
         return redirect(checkout_url)
     except PermissionError: return redirect(url_for("bt38_profile_page"))
     except (ValueError, RevolutBillingError) as exc:
-        db.session.rollback(); app.logger.warning("Revolut billing setup blocked: %s", str(exc)); return redirect(url_for("bt38_billing_page"))
+        db.session.rollback(); app.logger.warning("Billing setup blocked: %s", str(exc)); return redirect(url_for("bt38_billing_page"))
     except Exception:
-        db.session.rollback(); app.logger.exception("Revolut billing setup failed"); return redirect(url_for("bt38_billing_page"))
+        db.session.rollback(); app.logger.exception("Billing setup failed"); return redirect(url_for("bt38_billing_page"))
 
 @app.post("/admin/revolut/webhook/provision")
 @login_required
@@ -154,7 +168,6 @@ def bt38_revolut_webhook():
     if not event or not order_ref: return ("",204)
     try:
         client=configured_revolut_client(); order=client.retrieve_order(order_ref)
-        # Exact readback identity must agree with the signed event before any invoice/account mutation.
         if str(order.get("id") or "").strip() != order_ref: raise RevolutBillingError("Revolut order identity did not match the signed webhook order.")
         sd=order.get("subscription_data") if isinstance(order,dict) else None; subref=str(sd.get("subscription_id") or "").strip() if isinstance(sd,dict) else ""
         if not subref: return ("",204)
@@ -169,7 +182,6 @@ def bt38_revolut_webhook():
         subscription=client.retrieve_subscription(binding.subscription_ref)
         if str(subscription.get("id") or "").strip()!=str(binding.subscription_ref): raise RevolutBillingError("Revolut subscription identity did not match the persisted binding.")
         _sync_assignment(assignment,binding,subscription); assignment.provider_subscription_ref=binding.subscription_ref; binding.last_event=event
-        # Invoice only exact provider-completed money. Package price is never substituted for payment truth.
         record_completed_revolut_invoice(account=account,assignment=assignment,package=package,order=order,subscription_ref=binding.subscription_ref)
         _audit("revolut_webhook","Revolut subscription/payment state verified",{"event":event,"assignment_id":assignment.id,"subscription_ref":binding.subscription_ref,"provider_state":binding.provider_state,"billing_status":assignment.status,"order_ref":order_ref})
         db.session.commit()
