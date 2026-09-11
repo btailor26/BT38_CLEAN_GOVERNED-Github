@@ -1,16 +1,19 @@
 """Governed Revolut Merchant API client for BT38 subscription billing.
 
-This module is deliberately side-effect free at import time.  It does not create
-customers, subscriptions, orders or webhooks on startup.  Callers must make an
+This module is deliberately side-effect free at import time. It does not create
+customers, subscriptions, orders or webhooks on startup. Callers must make an
 explicit customer/admin action before any provider write occurs.
 
-Revolut is payment authority.  BT38 package/account models remain entitlement and
+Revolut is payment authority. BT38 package/account models remain entitlement and
 workspace authority; only non-secret provider identifiers may be persisted there.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
+import hmac
 import os
+import time
 from typing import Any, Mapping
 
 import requests
@@ -20,6 +23,7 @@ DEFAULT_BASE_URL = "https://merchant.revolut.com"
 _SECRET_ENV = "REVOLUT_PRODUCTION_API_SECRET_KEY"
 _PUBLIC_ENV = "REVOLUT_PRODUCTION_API_PUBLIC_KEY"
 _VERSION_ENV = "REVOLUT_MERCHANT_API_VERSION"
+_WEBHOOK_SECRET_ENV = "REVOLUT_WEBHOOK_SIGNING_SECRET"
 
 
 class RevolutBillingError(RuntimeError):
@@ -63,7 +67,7 @@ class RevolutMerchantConfig:
 class RevolutMerchantClient:
     """Small exact-request client for the Revolut Merchant API.
 
-    No retries are performed here for provider writes.  A caller may safely retry
+    No retries are performed here for provider writes. A caller may safely retry
     an idempotent write only when it supplies the same Idempotency-Key and payload.
     """
 
@@ -219,6 +223,9 @@ class RevolutMerchantClient:
     def list_webhooks(self) -> dict[str, Any]:
         return self._request("GET", "/api/webhooks", expected=(200,))
 
+    def retrieve_webhook(self, webhook_id: str) -> dict[str, Any]:
+        return self._request("GET", f"/api/webhooks/{str(webhook_id).strip()}", expected=(200,))
+
     def create_webhook(self, *, url: str, events: list[str]) -> dict[str, Any]:
         clean_events = [str(event).strip() for event in events if str(event).strip()]
         if not clean_events:
@@ -234,3 +241,52 @@ class RevolutMerchantClient:
 def configured_revolut_client() -> RevolutMerchantClient:
     """Build the production client lazily so startup never performs a provider call."""
     return RevolutMerchantClient(RevolutMerchantConfig.from_environment())
+
+
+def revolut_webhook_signing_secret() -> str:
+    secret = str(os.getenv(_WEBHOOK_SECRET_ENV) or "").strip()
+    if not secret:
+        raise RevolutBillingError(f"{_WEBHOOK_SECRET_ENV} is not configured.")
+    return secret
+
+
+def verify_revolut_webhook_signature(
+    *,
+    raw_body: bytes,
+    timestamp_header: str,
+    signature_header: str,
+    signing_secret: str | None = None,
+    now_ms: int | None = None,
+    tolerance_seconds: int = 300,
+) -> bool:
+    """Verify a Merchant webhook exactly as Revolut documents it.
+
+    The raw body is never re-serialized. Multiple comma-separated v1 signatures
+    are supported for signing-secret rotation. Timestamp validation fails closed.
+    """
+    timestamp = str(timestamp_header or "").strip()
+    supplied_header = str(signature_header or "").strip()
+    secret = str(signing_secret or "").strip() or revolut_webhook_signing_secret()
+    if not timestamp or not supplied_header:
+        return False
+
+    try:
+        delivered_ms = int(timestamp)
+    except (TypeError, ValueError):
+        return False
+
+    current_ms = int(now_ms if now_ms is not None else time.time() * 1000)
+    if abs(current_ms - delivered_ms) > int(tolerance_seconds) * 1000:
+        return False
+
+    try:
+        raw_text = raw_body.decode("utf-8")
+    except UnicodeDecodeError:
+        return False
+
+    payload_to_sign = f"v1.{timestamp}.{raw_text}".encode("utf-8")
+    digest = hmac.new(secret.encode("utf-8"), payload_to_sign, hashlib.sha256).hexdigest()
+    expected = f"v1={digest}"
+
+    supplied = [part.strip() for part in supplied_header.split(",") if part.strip()]
+    return any(hmac.compare_digest(expected, candidate) for candidate in supplied)
