@@ -156,8 +156,6 @@ def _insert_mcf_rows(html: str, pairs: list[tuple[MCFOrder, MarketplaceOrder]]) 
     payload: dict[str, dict] = {}
     for mcf, source in pairs:
         row_id = str(int(source.id))
-        if f'data-order-id="{row_id}"' in html:
-            continue
         payload[row_id] = {
             "queue": "mcf",
             "status": _text(getattr(mcf, "amazon_status", None) or getattr(mcf, "status", None)).lower(),
@@ -167,6 +165,13 @@ def _insert_mcf_rows(html: str, pairs: list[tuple[MCFOrder, MarketplaceOrder]]) 
             "mcf_read_only": True,
             "mcf_order_id": int(mcf.id),
         }
+        # Source MCF orders can already be present in the base FBM HTML after
+        # their tracking was enriched and the source row became shipped. Keep
+        # that existing row, but always override its browser queue to MCF. Only
+        # inject a dedicated read-only row when the source row is not already
+        # rendered. This prevents duplicate rows while preserving all MCF orders.
+        if f'data-order-id="{row_id}"' in html:
+            continue
         fragments.append(_row_html(mcf, source))
 
     if fragments:
