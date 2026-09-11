@@ -2,13 +2,59 @@
 {% block title %}Billing{% endblock %}
 {% block content %}
 {% set package_info = bt38_package_for_account(account.id) %}
-<style>.billing-page{max-width:980px;margin:0 auto}.billing-head h1{font-size:30px;font-weight:850;letter-spacing:-.03em}.billing-card{background:#fff;border:1px solid #e3e7ed;border-radius:16px;box-shadow:0 4px 18px rgba(15,23,42,.035);padding:22px}.billing-stat{padding:17px;border-radius:12px;background:#f8f9fc;border:1px solid #e6eaf1}.billing-stat small{display:block;color:#7a8494}.billing-stat strong{display:block;font-size:22px;margin-top:4px}.billing-note{font-size:13px;color:#6e7889;line-height:1.55}.billing-feature{padding:10px 12px;border:1px solid #e7ebf1;border-radius:10px;background:#fbfcfe;font-size:14px}</style>
-<div class="billing-page"><div class="billing-head mb-4"><h1>Billing</h1><p class="text-muted mb-0">Plan ownership, package limits and payment status for {{ account.business_name or 'your workspace' }}.</p></div><div class="billing-card">
-<div class="row g-3"><div class="col-md-3"><div class="billing-stat"><small>Plan</small><strong>{{ package_info.name if package_info else account.plan_name }}</strong></div></div><div class="col-md-3"><div class="billing-stat"><small>Price</small><strong>{{ package_info.price_display if package_info else 'Not assigned' }}</strong></div></div><div class="col-md-3"><div class="billing-stat"><small>Team seats</small><strong>{{ seat_count }} / {{ account.user_limit }}</strong></div></div><div class="col-md-3"><div class="billing-stat"><small>Billing status</small><strong style="font-size:17px">{{ account.billing_status|replace('_',' ')|title }}</strong></div></div></div>
-{% if package_info %}<div class="row g-3 mt-1"><div class="col-md-4"><div class="billing-stat"><small>Tier</small><strong style="font-size:17px">{{ package_info.tier_type|title }}</strong></div></div><div class="col-md-4"><div class="billing-stat"><small>Marketplaces</small><strong style="font-size:17px">{{ package_info.marketplace_limit if package_info.marketplace_limit else 'Unlimited' }}</strong></div></div><div class="col-md-4"><div class="billing-stat"><small>Orders / month</small><strong style="font-size:17px">{{ package_info.monthly_order_limit if package_info.monthly_order_limit else 'Unlimited' }}</strong></div></div></div>
-{% if package_info.features %}<hr class="my-4"><h5 class="mb-3">Included</h5><div class="row g-2">{% for feature in package_info.features %}<div class="col-md-6"><div class="billing-feature">{{ feature }}</div></div>{% endfor %}</div>{% endif %}
-{% if package_info.tier_type == 'paid' and package_info.billing_provider == 'revolut' and package_info.billing_status != 'active' %}<hr class="my-4">{% if package_info.package.revolut_plan_ref %}<form method="post" action="/billing/revolut/start" class="d-flex align-items-center gap-3 flex-wrap"><input type="hidden" name="csrf_token" value="{{ bt38_revolut_billing_csrf() }}"><button class="btn btn-primary" type="submit">Continue secure payment setup</button><span class="billing-note">Payment details are entered on Revolut's hosted checkout. BT38 does not store card or bank credentials.</span></form>{% else %}<p class="billing-note mb-0">Payment setup is not available yet because this package has not been linked to a Revolut plan variation.</p>{% endif %}{% endif %}
-<hr class="my-4"><p class="billing-note mb-0">BT38 controls package entitlement and billing documents. {% if package_info.tier_type == 'paid' %}Revolut is used only as the payment authority; BT38 stores payment references and verified payment state, never payment credentials.{% else %}This is a free tier, so no payment provider is required.{% endif %}</p>{% else %}<hr class="my-4"><p class="billing-note mb-0">This account is still using the existing legacy plan fields and has not yet been assigned a package.</p>{% endif %}
-<hr class="my-4"><div class="d-flex justify-content-between align-items-end gap-3 mb-3"><div><h5 class="mb-1">Payment history & invoices</h5><p class="billing-note mb-0">Invoices are created by BT38 only after an exact completed payment is verified.</p></div></div>
-{% if invoices %}<div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Invoice</th><th>Date</th><th>Package</th><th>Amount</th><th>Status</th><th class="text-end">Download</th></tr></thead><tbody>{% for invoice in invoices %}<tr><td><strong>{{ invoice.invoice_number }}</strong></td><td>{{ invoice.paid_at.strftime('%d/%m/%Y') }}</td><td>{{ invoice.package_name }}</td><td>{{ '%.2f'|format(invoice.amount_minor / 100) }} {{ invoice.currency }}</td><td>Paid</td><td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="/billing/invoices/{{ invoice.id }}.pdf">PDF</a> <a class="btn btn-sm btn-outline-secondary" href="/billing/invoices/{{ invoice.id }}.csv">CSV</a></td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="billing-note mb-0">No completed payments have been invoiced yet.</p>{% endif %}
-<a class="btn btn-outline-secondary mt-4" href="/profile">Back to profile</a></div></div>{% endblock %}
+<style>
+.billing-page{max-width:980px;margin:0 auto}.billing-head h1{font-size:30px;font-weight:850;letter-spacing:-.03em}.billing-card{background:#fff;border:1px solid #e3e7ed;border-radius:16px;box-shadow:0 4px 18px rgba(15,23,42,.035);padding:22px}.billing-stat{padding:17px;border-radius:12px;background:#f8f9fc;border:1px solid #e6eaf1}.billing-stat small{display:block;color:#7a8494}.billing-stat strong{display:block;font-size:22px;margin-top:4px}.billing-note{font-size:13px;color:#6e7889;line-height:1.55}.billing-feature{padding:10px 12px;border:1px solid #e7ebf1;border-radius:10px;background:#fbfcfe;font-size:14px}.payment-methods{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.payment-method{border:1px solid #e1e6ed;border-radius:12px;background:#fff;padding:13px 12px;min-height:76px}.payment-method strong{display:block;font-size:14px}.payment-method small{display:block;color:#778194;margin-top:4px;line-height:1.3}@media(max-width:767px){.payment-methods{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
+<div class="billing-page">
+  <div class="billing-head mb-4"><h1>Billing</h1><p class="text-muted mb-0">Plan ownership, package limits and payment status for {{ account.business_name or 'your workspace' }}.</p></div>
+  <div class="billing-card">
+    <div class="row g-3">
+      <div class="col-md-3"><div class="billing-stat"><small>Plan</small><strong>{{ package_info.name if package_info else account.plan_name }}</strong></div></div>
+      <div class="col-md-3"><div class="billing-stat"><small>Price</small><strong>{{ package_info.price_display if package_info else 'Not assigned' }}</strong></div></div>
+      <div class="col-md-3"><div class="billing-stat"><small>Team seats</small><strong>{{ seat_count }} / {{ account.user_limit }}</strong></div></div>
+      <div class="col-md-3"><div class="billing-stat"><small>Billing status</small><strong style="font-size:17px">{{ account.billing_status|replace('_',' ')|title }}</strong></div></div>
+    </div>
+
+    {% if package_info %}
+    <div class="row g-3 mt-1">
+      <div class="col-md-4"><div class="billing-stat"><small>Tier</small><strong style="font-size:17px">{{ package_info.tier_type|title }}</strong></div></div>
+      <div class="col-md-4"><div class="billing-stat"><small>Marketplaces</small><strong style="font-size:17px">{{ package_info.marketplace_limit if package_info.marketplace_limit else 'Unlimited' }}</strong></div></div>
+      <div class="col-md-4"><div class="billing-stat"><small>Orders / month</small><strong style="font-size:17px">{{ package_info.monthly_order_limit if package_info.monthly_order_limit else 'Unlimited' }}</strong></div></div>
+    </div>
+
+    {% if package_info.features %}
+    <hr class="my-4"><h5 class="mb-3">Included</h5><div class="row g-2">{% for feature in package_info.features %}<div class="col-md-6"><div class="billing-feature">{{ feature }}</div></div>{% endfor %}</div>
+    {% endif %}
+
+    {% if package_info.tier_type == 'paid' and package_info.billing_provider == 'revolut' and package_info.billing_status != 'active' %}
+    <hr class="my-4">
+    <h5 class="mb-2">Choose how you want to pay</h5>
+    <p class="billing-note">Available checkout methods are shown securely based on your device, bank and payment availability.</p>
+    <div class="payment-methods mb-3" aria-label="Available payment methods">
+      <div class="payment-method"><strong>Card</strong><small>Visa, Mastercard and supported cards</small></div>
+      <div class="payment-method"><strong>Pay by Bank</strong><small>Connect to a supported bank and approve the payment</small></div>
+      <div class="payment-method"><strong>Apple Pay</strong><small>Available on supported Apple devices and browsers</small></div>
+      <div class="payment-method"><strong>Google Pay</strong><small>Available on supported devices and browsers</small></div>
+    </div>
+    {% if package_info.package.revolut_plan_ref %}
+    <form method="post" action="/billing/revolut/start" class="d-flex align-items-center gap-3 flex-wrap">
+      <input type="hidden" name="csrf_token" value="{{ bt38_revolut_billing_csrf() }}">
+      <button class="btn btn-primary" type="submit">Continue to payment</button>
+      <span class="billing-note">BT38 does not store card, bank or wallet credentials.</span>
+    </form>
+    {% else %}
+    <p class="billing-note mb-0">Payment setup is not available yet because this package has not been linked to its payment plan.</p>
+    {% endif %}
+    {% endif %}
+
+    <hr class="my-4"><p class="billing-note mb-0">BT38 controls package entitlement, billing history and billing documents. {% if package_info.tier_type == 'paid' %}Payment credentials stay with the secure payment service and are never stored by BT38.{% else %}This is a free tier, so no payment is required.{% endif %}</p>
+    {% else %}
+    <hr class="my-4"><p class="billing-note mb-0">This account is still using the existing legacy plan fields and has not yet been assigned a package.</p>
+    {% endif %}
+
+    <hr class="my-4"><div class="d-flex justify-content-between align-items-end gap-3 mb-3"><div><h5 class="mb-1">Payment history & invoices</h5><p class="billing-note mb-0">Invoices are created by BT38 only after an exact completed payment is verified.</p></div></div>
+    {% if invoices %}<div class="table-responsive"><table class="table align-middle mb-0"><thead><tr><th>Invoice</th><th>Date</th><th>Package</th><th>Amount</th><th>Status</th><th class="text-end">Download</th></tr></thead><tbody>{% for invoice in invoices %}<tr><td><strong>{{ invoice.invoice_number }}</strong></td><td>{{ invoice.paid_at.strftime('%d/%m/%Y') }}</td><td>{{ invoice.package_name }}</td><td>{{ '%.2f'|format(invoice.amount_minor / 100) }} {{ invoice.currency }}</td><td>Paid</td><td class="text-end"><a class="btn btn-sm btn-outline-secondary" href="/billing/invoices/{{ invoice.id }}.pdf">PDF</a> <a class="btn btn-sm btn-outline-secondary" href="/billing/invoices/{{ invoice.id }}.csv">CSV</a></td></tr>{% endfor %}</tbody></table></div>{% else %}<p class="billing-note mb-0">No completed payments have been invoiced yet.</p>{% endif %}
+    <a class="btn btn-outline-secondary mt-4" href="/profile">Back to profile</a>
+  </div>
+</div>
+{% endblock %}
