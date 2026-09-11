@@ -2,115 +2,26 @@
 {% block title %}Support Cases | BT38 Inventory{% endblock %}
 {% block content %}
 <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
-  <div>
-    <h1 class="h3 mb-1">Support Centre</h1>
-    <p class="text-muted mb-0">Every issue is tracked against a BT38 Case ID from opening through resolution.</p>
-  </div>
+  <div><h1 class="h3 mb-1">Support Centre</h1><p class="text-muted mb-0">Every issue is tracked against a BT38 Case ID from opening through resolution.</p></div>
   {% if admin_view %}<span class="badge text-bg-dark">Admin support queue</span>{% endif %}
 </div>
-
 {% if admin_view %}
-<div class="card shadow-sm mb-4">
-  <div class="card-body d-flex flex-wrap gap-2 align-items-center">
-    <strong class="me-2">Queue</strong>
-    <a class="btn btn-sm {{ 'btn-dark' if not selected_status else 'btn-outline-dark' }}" href="/admin/support/cases">All</a>
-    {% for key in ['open','in_progress','waiting_customer','resolved','closed'] %}
-      <a class="btn btn-sm {{ 'btn-dark' if selected_status == key else 'btn-outline-dark' }}" href="/admin/support/cases?status={{ key }}">
-        {{ support_status_label(key) }} <span class="badge text-bg-secondary">{{ support_counts.get(key, 0) }}</span>
-      </a>
-    {% endfor %}
-  </div>
-</div>
+<div class="card shadow-sm mb-4"><div class="card-body d-flex flex-wrap gap-2 align-items-center"><strong class="me-2">Queue</strong><a class="btn btn-sm {{ 'btn-dark' if not selected_status else 'btn-outline-dark' }}" href="/admin/support/cases">All</a>{% for key in ['open','in_progress','waiting_customer','resolved','closed'] %}<a class="btn btn-sm {{ 'btn-dark' if selected_status == key else 'btn-outline-dark' }}" href="/admin/support/cases?status={{ key }}">{{ support_status_label(key) }} <span class="badge text-bg-secondary">{{ support_counts.get(key, 0) }}</span></a>{% endfor %}</div></div>
 {% else %}
 <div class="row g-4 mb-4">
-  <div class="col-xl-5">
-    <div class="card shadow-sm h-100">
-      <div class="card-header bg-white"><strong>Open a support case</strong></div>
-      <div class="card-body">
-        <form method="post" action="/support/cases/new">
-          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-          <input type="hidden" name="source_page" value="{{ request.args.get('from', '') }}">
-          <div class="mb-3">
-            <label class="form-label">Issue type</label>
-            <select class="form-select" name="category" required>
-              <option value="">Choose an issue</option>
-              {% for key, label, description in support_categories %}
-                <option value="{{ key }}">{{ label }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="mb-3">
-            <label class="form-label">Subject</label>
-            <input class="form-control" name="subject" maxlength="180" required placeholder="Short description of the issue">
-          </div>
-          <div class="mb-3">
-            <label class="form-label">Affected area / connection</label>
-            <input class="form-control" name="affected_area" maxlength="160" placeholder="Example: Amazon UK, eBay, Yodel, billing, OrderWise">
-          </div>
-          <div class="mb-3">
-            <label class="form-label">Priority</label>
-            <select class="form-select" name="priority">
-              <option value="normal">Normal</option>
-              <option value="low">Low</option>
-              <option value="high">High</option>
-              <option value="urgent">Urgent — blocking operation</option>
-            </select>
-          </div>
-          <div class="mb-3">
-            <label class="form-label">What is happening?</label>
-            <textarea class="form-control" name="description" rows="6" maxlength="8000" required placeholder="What were you trying to do, what happened, and what did you expect?"></textarea>
-            <div class="form-text">Do not paste passwords, API secrets, card numbers or private keys.</div>
-          </div>
-          <button class="btn btn-primary w-100" type="submit"><i data-feather="plus-circle" class="me-1"></i>Create support case</button>
-        </form>
-      </div>
-    </div>
-  </div>
-  <div class="col-xl-7">
-    <div class="card shadow-sm h-100">
-      <div class="card-header bg-white"><strong>Issue coverage</strong></div>
-      <div class="card-body">
-        <div class="row g-3">
-          {% for key, label, description in support_categories %}
-          <div class="col-md-6">
-            <div class="border rounded p-3 h-100">
-              <div class="fw-semibold">{{ label }}</div>
-              <div class="text-muted small mt-1">{{ description }}</div>
-            </div>
-          </div>
-          {% endfor %}
-        </div>
-      </div>
-    </div>
-  </div>
+  <div class="col-xl-5"><div class="card shadow-sm h-100"><div class="card-header bg-white"><strong>Open a support case</strong></div><div class="card-body">
+    {% if source_page %}<div class="alert alert-light border"><div class="fw-semibold mb-1">BT38 context attached</div><div class="small text-muted">Page: {{ source_context.get('source_page', source_page) }}</div>{% for key, value in source_context.items() %}{% if key != 'source_page' %}<div class="small"><span class="text-muted">{{ key|replace('_',' ')|title }}:</span> {{ value }}</div>{% endif %}{% endfor %}<div class="small text-muted mt-2">Only non-secret identifiers from the BT38 page are attached.</div></div>{% endif %}
+    <form method="post" action="/support/cases/new"><input type="hidden" name="csrf_token" value="{{ csrf_token }}"><input type="hidden" name="source_page" value="{{ source_page or '' }}">
+      <div class="mb-3"><label class="form-label">Issue type</label><select class="form-select" name="category" required><option value="">Choose an issue</option>{% for key, label, description in support_categories %}<option value="{{ key }}">{{ label }}</option>{% endfor %}</select></div>
+      <div class="mb-3"><label class="form-label">Subject</label><input class="form-control" name="subject" maxlength="180" required placeholder="Short description of the issue"></div>
+      <div class="mb-3"><label class="form-label">Affected area / connection</label><input class="form-control" name="affected_area" maxlength="160" placeholder="Example: Amazon UK, eBay, Yodel, billing, OrderWise"></div>
+      <div class="mb-3"><label class="form-label">Priority</label><select class="form-select" name="priority"><option value="normal">Normal</option><option value="low">Low</option><option value="high">High</option><option value="urgent">Urgent — blocking operation</option></select></div>
+      <div class="mb-3"><label class="form-label">What is happening?</label><textarea class="form-control" name="description" rows="6" maxlength="8000" required placeholder="What were you trying to do, what happened, and what did you expect?"></textarea><div class="form-text">Do not paste passwords, API secrets, card numbers or private keys.</div></div>
+      <button class="btn btn-primary w-100" type="submit"><i data-feather="plus-circle" class="me-1"></i>Create support case</button>
+    </form>
+  </div></div></div>
+  <div class="col-xl-7"><div class="card shadow-sm h-100"><div class="card-header bg-white"><strong>Issue coverage</strong></div><div class="card-body"><div class="row g-3">{% for key, label, description in support_categories %}<div class="col-md-6"><div class="border rounded p-3 h-100"><div class="fw-semibold">{{ label }}</div><div class="text-muted small mt-1">{{ description }}</div></div></div>{% endfor %}</div></div></div></div>
 </div>
 {% endif %}
-
-<div class="card shadow-sm">
-  <div class="card-header bg-white d-flex justify-content-between align-items-center">
-    <strong>{{ 'All support cases' if admin_view else 'Your support cases' }}</strong>
-    <span class="text-muted small">{{ cases|length }} shown</span>
-  </div>
-  <div class="table-responsive">
-    <table class="table table-hover align-middle mb-0">
-      <thead class="table-light">
-        <tr><th>Case ID</th><th>Issue</th><th>Category</th><th>Priority</th><th>Status</th><th>Updated</th></tr>
-      </thead>
-      <tbody>
-      {% for case in cases %}
-        <tr>
-          <td><a class="fw-semibold text-decoration-none" href="/support/cases/{{ case.case_id }}">{{ case.case_id }}</a></td>
-          <td><div>{{ case.subject }}</div>{% if case.affected_area %}<div class="text-muted small">{{ case.affected_area }}</div>{% endif %}</td>
-          <td>{{ support_category_labels.get(case.category, case.category) }}</td>
-          <td><span class="badge {{ 'text-bg-danger' if case.priority == 'urgent' else 'text-bg-warning' if case.priority == 'high' else 'text-bg-secondary' }}">{{ case.priority|title }}</span></td>
-          <td><span class="badge {{ 'text-bg-success' if case.status == 'resolved' else 'text-bg-secondary' if case.status == 'closed' else 'text-bg-primary' }}">{{ support_status_label(case.status) }}</span></td>
-          <td class="text-muted small">{{ case.updated_at.strftime('%d %b %Y %H:%M') if case.updated_at else '—' }}</td>
-        </tr>
-      {% else %}
-        <tr><td colspan="6" class="text-center text-muted py-5">No support cases yet.</td></tr>
-      {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</div>
+<div class="card shadow-sm"><div class="card-header bg-white d-flex justify-content-between align-items-center"><strong>{{ 'All support cases' if admin_view else 'Your support cases' }}</strong><span class="text-muted small">{{ cases|length }} shown</span></div><div class="table-responsive"><table class="table table-hover align-middle mb-0"><thead class="table-light"><tr><th>Case ID</th><th>Issue</th><th>Category</th><th>Priority</th><th>Status</th><th>Updated</th></tr></thead><tbody>{% for case in cases %}<tr><td><a class="fw-semibold text-decoration-none" href="/support/cases/{{ case.case_id }}">{{ case.case_id }}</a></td><td><div>{{ case.subject }}</div>{% if case.affected_area %}<div class="text-muted small">{{ case.affected_area }}</div>{% endif %}</td><td>{{ support_category_labels.get(case.category, case.category) }}</td><td><span class="badge {{ 'text-bg-danger' if case.priority == 'urgent' else 'text-bg-warning' if case.priority == 'high' else 'text-bg-secondary' }}">{{ case.priority|title }}</span></td><td><span class="badge {{ 'text-bg-success' if case.status == 'resolved' else 'text-bg-secondary' if case.status == 'closed' else 'text-bg-primary' }}">{{ support_status_label(case.status) }}</span></td><td class="text-muted small">{{ case.updated_at.strftime('%d %b %Y %H:%M') if case.updated_at else '—' }}</td></tr>{% else %}<tr><td colspan="6" class="text-center text-muted py-5">No support cases yet.</td></tr>{% endfor %}</tbody></table></div></div>
 {% endblock %}
