@@ -1,12 +1,12 @@
-"""BT38 customer support cases using the existing customer account authority.
+"""BT38 account-scoped support case workflow.
 
-Support is an account-scoped workflow only. It does not call marketplaces,
-payment providers, carriers, or mutate inventory/order truth.
+The public /support page remains untouched. Authenticated case handling lives at
+/support/cases and /admin/support/cases. This module never calls marketplaces,
+payment providers or carriers and never mutates inventory/order truth.
 """
 from __future__ import annotations
 
 from datetime import datetime
-from html import escape
 
 from flask import abort, flash, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
@@ -42,7 +42,7 @@ class SupportCase(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     case_id = db.Column(db.String(40), unique=True, nullable=True, index=True)
     account_id = db.Column(db.Integer, db.ForeignKey("customer_accounts.id", ondelete="CASCADE"), nullable=False, index=True)
-    opened_by_user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="RESTRICT"), nullable=False, index=True)
+    opened_by_user_id = db.Column(db.Integer, nullable=False, index=True)
     category = db.Column(db.String(50), nullable=False, index=True)
     subject = db.Column(db.String(180), nullable=False)
     description = db.Column(db.Text, nullable=False)
@@ -58,7 +58,7 @@ class SupportCaseMessage(db.Model):
     __tablename__ = "support_case_messages"
     id = db.Column(db.Integer, primary_key=True)
     case_pk = db.Column(db.Integer, db.ForeignKey("support_cases.id", ondelete="CASCADE"), nullable=False, index=True)
-    author_user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    author_user_id = db.Column(db.Integer, nullable=True, index=True)
     author_role = db.Column(db.String(20), nullable=False, default="customer")
     body = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
@@ -77,8 +77,7 @@ def _clean(value, limit: int) -> str:
 
 
 def _customer_scope():
-    account, member = _account_for_user(current_user.id)
-    return account, member
+    return _account_for_user(current_user.id)
 
 
 def _case_or_404(case_id: str) -> SupportCase:
@@ -104,7 +103,7 @@ def _status_label(value: str) -> str:
         "waiting_customer": "Waiting for customer",
         "resolved": "Resolved",
         "closed": "Closed",
-    }.get(value, value.replace("_", " ").title())
+    }.get(value, str(value or "").replace("_", " ").title())
 
 
 @app.context_processor
@@ -116,31 +115,25 @@ def bt38_support_context():
     }
 
 
-@app.get("/support")
+@app.get("/support/cases")
 @login_required
-def bt38_support_page():
+def bt38_support_cases_page():
     account, _ = _customer_scope()
-    if account is None and not _is_admin():
-        flash("Your BT38 account is not available yet.", "warning")
+    if account is None:
+        flash("Your BT38 customer account is not available yet.", "warning")
         return redirect(url_for("bt38_profile_page"))
-    if _is_admin() and request.args.get("all") == "1":
-        cases = SupportCase.query.order_by(SupportCase.updated_at.desc(), SupportCase.id.desc()).limit(500).all()
-    else:
-        if account is None:
-            cases = []
-        else:
-            cases = (SupportCase.query.filter_by(account_id=account.id)
-                     .order_by(SupportCase.updated_at.desc(), SupportCase.id.desc()).limit(250).all())
-    return render_template("support.html", cases=cases, account=account, admin_view=False)
+    cases = (SupportCase.query.filter_by(account_id=account.id)
+             .order_by(SupportCase.updated_at.desc(), SupportCase.id.desc()).limit(250).all())
+    return render_template("support_cases.html", cases=cases, account=account, admin_view=False)
 
 
-@app.post("/support/cases")
+@app.post("/support/cases/new")
 @login_required
 def bt38_support_create_case():
     account, _ = _customer_scope()
     if account is None:
         flash("A customer account is required to open a support case.", "danger")
-        return redirect(url_for("bt38_support_page"))
+        return redirect(url_for("bt38_support_cases_page"))
     category = _clean(request.form.get("category"), 50).lower()
     subject = _clean(request.form.get("subject"), 180)
     description = _clean(request.form.get("description"), 8000)
@@ -149,15 +142,15 @@ def bt38_support_create_case():
     source_page = _clean(request.form.get("source_page"), 240) or _clean(request.referrer, 240)
     if category not in _CATEGORY_MAP:
         flash("Choose a valid support category.", "danger")
-        return redirect(url_for("bt38_support_page"))
+        return redirect(url_for("bt38_support_cases_page"))
     if priority not in _VALID_PRIORITY:
         priority = "normal"
     if not subject or not description:
         flash("Add a subject and describe what is happening.", "danger")
-        return redirect(url_for("bt38_support_page"))
+        return redirect(url_for("bt38_support_cases_page"))
     case = SupportCase(
         account_id=account.id,
-        opened_by_user_id=current_user.id,
+        opened_by_user_id=int(current_user.id),
         category=category,
         subject=subject,
         description=description,
@@ -185,7 +178,7 @@ def bt38_support_case_page(case_id):
             return redirect(url_for("bt38_support_case_page", case_id=case.case_id))
         db.session.add(SupportCaseMessage(
             case_pk=case.id,
-            author_user_id=current_user.id,
+            author_user_id=int(current_user.id),
             author_role="admin" if _is_admin() else "customer",
             body=body,
         ))
@@ -202,9 +195,9 @@ def bt38_support_case_page(case_id):
     return render_template("support_case.html", case=case, messages=messages, is_support_admin=_is_admin())
 
 
-@app.get("/admin/support")
+@app.get("/admin/support/cases")
 @login_required
-def bt38_admin_support_page():
+def bt38_admin_support_cases_page():
     if not _is_admin():
         abort(403)
     status = _clean(request.args.get("status"), 30).lower()
@@ -213,7 +206,14 @@ def bt38_admin_support_page():
         query = query.filter_by(status=status)
     cases = query.order_by(SupportCase.updated_at.desc(), SupportCase.id.desc()).limit(500).all()
     counts = {state: SupportCase.query.filter_by(status=state).count() for state in _VALID_STATUS}
-    return render_template("support.html", cases=cases, account=None, admin_view=True, support_counts=counts, selected_status=status)
+    return render_template(
+        "support_cases.html",
+        cases=cases,
+        account=None,
+        admin_view=True,
+        support_counts=counts,
+        selected_status=status,
+    )
 
 
 @app.post("/admin/support/cases/<case_id>/state")
@@ -244,17 +244,15 @@ def _install_support_navigation() -> None:
             if response.status_code != 200 or "text/html" not in str(response.content_type or "").lower():
                 return response
             html = response.get_data(as_text=True)
-            if 'href="/support"' not in html:
+            if 'href="/support/cases"' not in html:
                 marker = '<a class="list-group-item list-group-item-action bg-dark text-light border-secondary" href="/admin/system-activity">'
                 pos = html.find(marker)
                 if pos >= 0:
-                    link = ('<a class="list-group-item list-group-item-action bg-dark text-light border-secondary" href="/support">'
+                    link = ('<a class="list-group-item list-group-item-action bg-dark text-light border-secondary" href="/support/cases">'
                             '<i data-feather="help-circle" class="me-2"></i>Support</a>')
                     html = html[:pos] + link + html[pos:]
-                html = html.replace('<span class="text-muted small">Help (retired)</span>',
-                                    '<a class="text-muted small text-decoration-none" href="/support">Support</a>')
-                response.set_data(html)
-                response.headers["Content-Length"] = str(len(response.get_data()))
+                    response.set_data(html)
+                    response.headers["Content-Length"] = str(len(response.get_data()))
         except Exception:
             pass
         return response
