@@ -32,6 +32,10 @@ except Exception:
 # terminal shipment events trigger only their existing exact readback path.
 import services.governed_ebay_order_identity_alignment  # noqa: F401
 import services.governed_fbm_shipment_event_alignment  # noqa: F401
+# Retire pre-alignment Flask-Login remember cookies before the main auth guard
+# evaluates request freshness, so old browsers reach /login once instead of
+# being restored into a redirect loop.
+import services.auth_session_legacy_cleanup  # noqa: F401
 import services.public_early_access  # noqa: F401
 from services.governed_notification_read_alignment import install_governed_notification_read_alignment
 from services.governed_fbm_page_alignment import install_governed_fbm_page_alignment
