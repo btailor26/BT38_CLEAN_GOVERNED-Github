@@ -9,10 +9,15 @@ CREATE TABLE IF NOT EXISTS support_cases (
     priority VARCHAR(20) NOT NULL DEFAULT 'normal',
     status VARCHAR(30) NOT NULL DEFAULT 'open',
     affected_area VARCHAR(160),
-    source_page VARCHAR(240),
+    source_page VARCHAR(500),
+    context_json TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Safe for a database where the first support-case draft was already created.
+ALTER TABLE support_cases ADD COLUMN IF NOT EXISTS context_json TEXT;
+ALTER TABLE support_cases ALTER COLUMN source_page TYPE VARCHAR(500);
 
 CREATE TABLE IF NOT EXISTS support_case_messages (
     id SERIAL PRIMARY KEY,
