@@ -11,6 +11,19 @@
   </div>
 
   <div class="pkg-card mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3">
+      <div>
+        <h4 class="mb-1">Revolut production webhook</h4>
+        <p class="pkg-muted mb-0">Explicitly create the BT38 Merchant webhook, or retrieve the existing one, so you can copy its signing secret into Fly. Nothing is created on app startup.</p>
+      </div>
+      <form method="post" action="/admin/revolut/webhook/provision" class="m-0">
+        <input type="hidden" name="csrf_token" value="{{ bt38_revolut_webhook_admin_csrf() }}">
+        <button class="btn btn-outline-primary" type="submit">Create / retrieve webhook</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="pkg-card mb-4">
     <h4 class="mb-3">Create package</h4>
     <form method="post" action="/admin/packages/create">
       <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
