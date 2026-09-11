@@ -101,6 +101,11 @@ import services.governed_fbm_mcf_visibility_alignment  # noqa: F401,E402
 # audit stream only and never mutate canonical marketplace/warehouse data.
 import services.governed_truth_attention_alignment  # noqa: F401,E402
 
+# The owner cockpit consumes the same SystemEvent review stream as one compact,
+# collapsed inbox. Anything explicitly marked under review is surfaced there;
+# no second review table, worker, poller or marketplace path is introduced.
+import services.governed_admin_attention_inbox_alignment  # noqa: F401,E402
+
 # COFI controls extend the existing owner fuse board and persist in SystemConfig.
 # No second settings page, worker, sync path or marketplace execution path.
 import services.cofi_settings_alignment  # noqa: F401,E402
