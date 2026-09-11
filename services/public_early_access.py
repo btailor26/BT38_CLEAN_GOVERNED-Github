@@ -8,23 +8,117 @@ Scope:
 - no stock/sync/push/import execution
 - no automatic user creation
 - approved applicants are handed to existing governed user management
+- Google Identity verifies approved users into the existing BT38 session only
 """
 from __future__ import annotations
 
 from datetime import datetime
+import hmac
 import json
+import os
 from urllib.parse import quote
 
 from flask import redirect, render_template, request, url_for, flash
-from flask_login import current_user, login_required
+from flask_login import current_user, login_required, login_user
 
 from app import app
 from extensions import db
 from models import SystemLog, User
+from services.google_identity import GoogleIdentityError, verify_google_id_token
 
 
 def _clean(value: str, limit: int = 500) -> str:
     return str(value or "").strip()[:limit]
+
+
+def _safe_login_next() -> str:
+    requested_next = request.args.get("next") or request.form.get("next") or ""
+    if requested_next.startswith("/") and not requested_next.startswith("//") and "\\" not in requested_next:
+        return requested_next
+    return url_for("governed.governed_warehouse_page")
+
+
+@app.context_processor
+def bt38_google_identity_context():
+    """Expose only the public Google client ID and existing BT38 login URI."""
+    client_id = str(os.getenv("GOOGLE_CLIENT_ID") or "").strip()
+    return {
+        "google_client_id": client_id,
+        "google_login_uri": (
+            url_for("governed.login", _external=True, _scheme="https")
+            if client_id
+            else ""
+        ),
+    }
+
+
+@app.before_request
+def bt38_google_identity_login():
+    """Handle Google credentials on the existing /login authority.
+
+    Google proves identity. BT38 still requires an existing active User and
+    creates the normal Flask-Login session. Username/password POSTs continue
+    to the existing governed login route unchanged.
+    """
+    path = request.path.rstrip("/") or "/"
+    credential = str(request.form.get("credential") or "").strip()
+    if request.method != "POST" or path != "/login" or not credential:
+        return None
+
+    next_url = _safe_login_next()
+    client_id = str(os.getenv("GOOGLE_CLIENT_ID") or "").strip()
+    if not client_id:
+        return render_template(
+            "login.html",
+            error="Google sign-in is not configured for BT38 Inventory.",
+            next_url=next_url,
+        ), 503
+
+    # Google Identity Services sends the same anti-forgery value in a cookie
+    # and POST field. Both must exist and match before the credential is used.
+    csrf_cookie = str(request.cookies.get("g_csrf_token") or "")
+    csrf_form = str(request.form.get("g_csrf_token") or "")
+    if not csrf_cookie or not csrf_form or not hmac.compare_digest(csrf_cookie, csrf_form):
+        return render_template(
+            "login.html",
+            error="Google sign-in could not be verified. Please try again.",
+            next_url=next_url,
+        ), 400
+
+    try:
+        claims = verify_google_id_token(credential, client_id)
+    except GoogleIdentityError:
+        return render_template(
+            "login.html",
+            error="Google sign-in could not be verified. Please try again or use your BT38 password.",
+            next_url=next_url,
+        ), 401
+
+    email = str(claims.get("email") or "").strip().lower()
+    user = User.query.filter(User.email.ilike(email)).first()
+    if not user or not user.is_active:
+        return render_template(
+            "login.html",
+            error="This Google account is not linked to an active BT38 Inventory account. Apply for access or use the email on your approved account.",
+            next_url=next_url,
+        ), 403
+
+    user.last_login = datetime.utcnow()
+    db.session.add(SystemLog(
+        log_type="authentication",
+        message="Google sign-in succeeded",
+        details=json.dumps({
+            "provider": "google",
+            "user_id": user.id,
+            "select_by": _clean(request.form.get("select_by"), 40),
+            "signed_in_at": datetime.utcnow().isoformat() + "Z",
+        }),
+    ))
+    db.session.commit()
+
+    # Keep one session authority: the existing Flask-Login session.
+    login_user(user, remember=False, fresh=True)
+    return redirect(next_url)
 
 
 def _application_payload() -> dict:
