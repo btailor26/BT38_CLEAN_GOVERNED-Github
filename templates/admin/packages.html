@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Packages{% endblock %}
+{% block content %}
+<style>
+.pkg-page{max-width:1220px;margin:0 auto}.pkg-head h1{font-size:30px;font-weight:850;letter-spacing:-.03em}.pkg-card{background:#fff;border:1px solid #e3e7ed;border-radius:16px;box-shadow:0 4px 18px rgba(15,23,42,.035);padding:22px}.pkg-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:16px}.pkg-pill{font-size:12px;font-weight:700;border-radius:999px;padding:5px 9px;background:#eef2f7}.pkg-muted{font-size:13px;color:#6e7889}.pkg-price{font-size:22px;font-weight:800}.pkg-features{font-size:13px;color:#596273;padding-left:18px;margin-bottom:0}.pkg-account{border:1px solid #e6eaf1;border-radius:12px;padding:16px;background:#fafbfc}
+</style>
+<div class="pkg-page">
+  <div class="pkg-head d-flex flex-wrap justify-content-between align-items-end gap-3 mb-4">
+    <div><h1 class="mb-1">Packages</h1><p class="text-muted mb-0">Create free or paid BT38 tiers, then assign one package to each customer account.</p></div>
+    <a class="btn btn-outline-secondary" href="/admin/early-access-applications">Early-access applications</a>
+  </div>
+
+  <div class="pkg-card mb-4">
+    <h4 class="mb-3">Create package</h4>
+    <form method="post" action="/admin/packages/create">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <div class="row g-3">
+        <div class="col-md-3"><label class="form-label">Package name</label><input class="form-control" name="name" maxlength="100" required placeholder="Starter"></div>
+        <div class="col-md-3"><label class="form-label">Code</label><input class="form-control" name="code" maxlength="48" required placeholder="starter"></div>
+        <div class="col-md-2"><label class="form-label">Tier</label><select class="form-select" name="tier_type"><option value="free">Free</option><option value="paid">Paid</option></select></div>
+        <div class="col-md-2"><label class="form-label">Price £</label><input class="form-control" name="price" inputmode="decimal" value="0.00"></div>
+        <div class="col-md-2"><label class="form-label">Interval</label><select class="form-select" name="billing_interval"><option value="none">None</option><option value="month">Monthly</option><option value="year">Yearly</option></select></div>
+        <div class="col-md-4"><label class="form-label">Description</label><input class="form-control" name="description" maxlength="500" placeholder="Who this package is for"></div>
+        <div class="col-md-2"><label class="form-label">Users</label><input class="form-control" type="number" name="user_limit" min="1" max="1000" value="1" required></div>
+        <div class="col-md-2"><label class="form-label">Marketplaces</label><input class="form-control" type="number" name="marketplace_limit" min="1" max="100" placeholder="Unlimited"></div>
+        <div class="col-md-2"><label class="form-label">Orders / month</label><input class="form-control" type="number" name="monthly_order_limit" min="1" max="100000000" placeholder="Unlimited"></div>
+        <div class="col-md-2"><label class="form-label">Revolut plan ref</label><input class="form-control" name="revolut_plan_ref" maxlength="180" placeholder="Optional"></div>
+        <div class="col-12"><label class="form-label">Features <span class="text-muted fw-normal">— one per line</span></label><textarea class="form-control" name="features" rows="4" placeholder="Inventory management&#10;Amazon + eBay&#10;COFI opportunities"></textarea></div>
+      </div>
+      <button class="btn btn-primary mt-3" type="submit">Create package</button>
+    </form>
+  </div>
+
+  <div class="pkg-card mb-4">
+    <h4 class="mb-3">Package catalogue</h4>
+    {% if packages %}
+    <div class="pkg-grid">
+      {% for package in packages %}
+      <div class="border rounded-3 p-3">
+        <div class="d-flex justify-content-between gap-2 align-items-start mb-2">
+          <div><strong>{{ package.name }}</strong><div class="pkg-muted">{{ package.code }}</div></div>
+          <span class="pkg-pill">{{ package.tier_type|title }}{% if not package.is_active %} · Disabled{% endif %}</span>
+        </div>
+        <div class="pkg-price mb-2">{{ money(package) }}</div>
+        {% if package.description %}<p class="pkg-muted">{{ package.description }}</p>{% endif %}
+        <div class="pkg-muted mb-2">{{ package.user_limit }} user{% if package.user_limit != 1 %}s{% endif %} · {% if package.marketplace_limit %}{{ package.marketplace_limit }} marketplaces{% else %}Unlimited marketplaces{% endif %} · {% if package.monthly_order_limit %}{{ package.monthly_order_limit }} orders/month{% else %}Unlimited orders{% endif %}</div>
+        {% if package.features %}<ul class="pkg-features mb-3">{% for feature in package.features %}<li>{{ feature }}</li>{% endfor %}</ul>{% endif %}
+        <details>
+          <summary class="btn btn-sm btn-outline-secondary">Edit package</summary>
+          <form method="post" action="/admin/packages/{{ package.id }}/update" class="mt-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="row g-2">
+              <div class="col-12"><label class="form-label small">Name</label><input class="form-control form-control-sm" name="name" value="{{ package.name }}" required></div>
+              <div class="col-6"><label class="form-label small">Tier</label><select class="form-select form-select-sm" name="tier_type"><option value="free" {% if package.tier_type == 'free' %}selected{% endif %}>Free</option><option value="paid" {% if package.tier_type == 'paid' %}selected{% endif %}>Paid</option></select></div>
+              <div class="col-6"><label class="form-label small">Price £</label><input class="form-control form-control-sm" name="price" value="{{ '%.2f'|format((package.price_pence or 0) / 100) }}"></div>
+              <div class="col-6"><label class="form-label small">Interval</label><select class="form-select form-select-sm" name="billing_interval"><option value="none" {% if package.billing_interval == 'none' %}selected{% endif %}>None</option><option value="month" {% if package.billing_interval == 'month' %}selected{% endif %}>Monthly</option><option value="year" {% if package.billing_interval == 'year' %}selected{% endif %}>Yearly</option></select></div>
+              <div class="col-6"><label class="form-label small">Users</label><input class="form-control form-control-sm" type="number" name="user_limit" min="1" max="1000" value="{{ package.user_limit }}" required></div>
+              <div class="col-6"><label class="form-label small">Marketplaces</label><input class="form-control form-control-sm" type="number" name="marketplace_limit" min="1" max="100" value="{{ package.marketplace_limit or '' }}"></div>
+              <div class="col-6"><label class="form-label small">Orders/month</label><input class="form-control form-control-sm" type="number" name="monthly_order_limit" min="1" max="100000000" value="{{ package.monthly_order_limit or '' }}"></div>
+              <div class="col-12"><label class="form-label small">Revolut plan ref</label><input class="form-control form-control-sm" name="revolut_plan_ref" maxlength="180" value="{{ package.revolut_plan_ref or '' }}"></div>
+              <div class="col-12"><label class="form-label small">Description</label><input class="form-control form-control-sm" name="description" maxlength="500" value="{{ package.description or '' }}"></div>
+              <div class="col-12"><label class="form-label small">Features</label><textarea class="form-control form-control-sm" name="features" rows="4">{{ (package.features or [])|join('\n') }}</textarea></div>
+              <div class="col-12 form-check ms-1"><input class="form-check-input" type="checkbox" name="is_active" id="active-{{ package.id }}" {% if package.is_active %}checked{% endif %}><label class="form-check-label small" for="active-{{ package.id }}">Active package</label></div>
+            </div>
+            <button class="btn btn-sm btn-primary mt-2" type="submit">Save</button>
+          </form>
+        </details>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}<p class="text-muted mb-0">No packages have been created yet.</p>{% endif %}
+  </div>
+
+  <div class="pkg-card">
+    <h4 class="mb-1">Assign customer packages</h4>
+    <p class="pkg-muted mb-3">Assignment updates the existing account plan name, team-seat limit and billing status. Free tiers are always active with no payment provider.</p>
+    {% if account_rows %}
+      <div class="d-grid gap-3">
+      {% for row in account_rows %}
+        <div class="pkg-account">
+          <div class="d-flex flex-wrap justify-content-between gap-2 mb-3">
+            <div><strong>{{ row.account.business_name or ('Customer account ' ~ row.account.id) }}</strong><div class="pkg-muted">{{ row.owner.email if row.owner else 'Owner unavailable' }}</div></div>
+            <div class="text-end"><div class="pkg-muted">Current</div><strong>{{ row.package.name if row.package else row.account.plan_name }}</strong>{% if row.assignment %}<div class="pkg-muted">{{ row.assignment.status|replace('_',' ')|title }} · {{ row.assignment.billing_provider|title }}</div>{% endif %}</div>
+          </div>
+          <form method="post" action="/admin/packages/assign">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="account_id" value="{{ row.account.id }}">
+            <div class="row g-2 align-items-end">
+              <div class="col-md-4"><label class="form-label small">Package</label><select class="form-select" name="package_id" required><option value="">Choose package</option>{% for package in packages if package.is_active %}<option value="{{ package.id }}" {% if row.assignment and row.assignment.package_id == package.id %}selected{% endif %}>{{ package.name }} — {{ money(package) }}</option>{% endfor %}</select></div>
+              <div class="col-md-2"><label class="form-label small">Status</label><select class="form-select" name="status">{% for status in ['setup_pending','trial','active','past_due','cancelled'] %}<option value="{{ status }}" {% if row.assignment and row.assignment.status == status %}selected{% elif not row.assignment and status == 'active' %}selected{% endif %}>{{ status|replace('_',' ')|title }}</option>{% endfor %}</select></div>
+              <div class="col-md-2"><label class="form-label small">Billing provider</label><select class="form-select" name="billing_provider"><option value="none" {% if not row.assignment or row.assignment.billing_provider == 'none' %}selected{% endif %}>None</option><option value="manual" {% if row.assignment and row.assignment.billing_provider == 'manual' %}selected{% endif %}>Manual</option><option value="revolut" {% if row.assignment and row.assignment.billing_provider == 'revolut' %}selected{% endif %}>Revolut</option></select></div>
+              <div class="col-md-3"><label class="form-label small">Subscription ref</label><input class="form-control" name="provider_subscription_ref" maxlength="180" value="{{ row.assignment.provider_subscription_ref if row.assignment and row.assignment.provider_subscription_ref else '' }}" placeholder="Required for active Revolut"></div>
+              <div class="col-md-1"><button class="btn btn-primary w-100" type="submit">Assign</button></div>
+            </div>
+          </form>
+        </div>
+      {% endfor %}
+      </div>
+    {% else %}<p class="text-muted mb-0">No customer accounts exist yet.</p>{% endif %}
+  </div>
+</div>
+{% endblock %}
