@@ -112,12 +112,12 @@ def test_legacy_remember_cookie_is_retired_before_main_auth_guard():
     assert "return _expire_bt38_auth_cookies(response)" in cleanup
 
     # Clear BT38 state first, then let Flask-Login emit its _remember='clear'
-    # marker. Reversing this order recreates the remembered-login redirect loop.
+    # marker. Reversing this executable order recreates the redirect loop.
     end_block = cleanup.split("def _end_auth_session_once", 1)[1].split(
         "@app.before_request", 1
     )[0]
-    assert end_block.index("session.clear()") < end_block.index("logout_user()")
-    assert "logout_user()\n    session.clear()" not in end_block
+    assert "    session.clear()\n    logout_user()\n" in end_block
+    assert "    logout_user()\n    session.clear()\n" not in end_block
 
 
 def test_forgot_password_reuses_existing_google_login_callback():
