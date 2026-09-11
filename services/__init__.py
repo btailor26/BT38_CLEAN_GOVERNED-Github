@@ -44,6 +44,12 @@ import services.governed_fbm_shipment_event_alignment  # noqa: F401,E402
 # readbacks) without making the health aggregation a marketplace-read surface.
 import services.governed_fbm_amazon_profile_alignment  # noqa: F401,E402
 
+# Amazon order idempotency is line-level, not order-level. Existing persisted
+# siblings must never suppress the exact Orders.get_order_items read because one
+# AmazonOrderId can contain multiple sizes/SKUs. This replaces only the existing
+# bounded Amazon import function and keeps the same writer/stock bridge.
+import services.governed_amazon_multiline_order_alignment  # noqa: F401,E402
+
 # The existing 8-hour governed recovery must also invoke the already-built
 # bounded exact eBay missing-tracking readback. This only restores invocation of
 # eBay shipment truth for existing MarketplaceOrder rows; it adds no new writer,
