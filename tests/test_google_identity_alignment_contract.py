@@ -89,6 +89,9 @@ def test_bt38_browser_session_is_first_party_fresh_and_password_bound():
     assert "if not login_fresh():" in public_service
     assert '_AUTH_STAMP_SESSION_KEY = "bt38_auth_stamp"' in public_service
     assert "current_stamp = _auth_stamp(current_user)" in public_service
+    assert "if not expected_stamp:" in public_service
+    assert "session[_AUTH_STAMP_SESSION_KEY] = current_stamp" in public_service
+    assert "if not hmac.compare_digest(expected_stamp, current_stamp):" in public_service
     assert 'session.get("_remember") == "set"' in public_service
     assert 'app.config.get("REMEMBER_COOKIE_NAME", "remember_token")' in public_service
 
