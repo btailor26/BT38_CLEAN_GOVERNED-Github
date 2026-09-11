@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-import os
+import hashlib
+import hmac
 
 import pytest
 
@@ -8,6 +9,7 @@ from services.revolut_billing import (
     RevolutBillingError,
     RevolutMerchantClient,
     RevolutMerchantConfig,
+    verify_revolut_webhook_signature,
 )
 
 
@@ -134,3 +136,61 @@ def test_import_and_client_construction_make_no_network_call():
     client = _client(session)
     assert client is not None
     assert session.calls == []
+
+
+def _signature(secret: str, timestamp: str, raw: bytes) -> str:
+    payload = b"v1." + timestamp.encode("ascii") + b"." + raw
+    return "v1=" + hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
+
+
+def test_webhook_signature_uses_exact_raw_body_and_timestamp():
+    secret = "wsk_test_secret"
+    timestamp = "1789161600000"
+    raw = b'{"event":"ORDER_COMPLETED","order_id":"abc"}'
+    signature = _signature(secret, timestamp, raw)
+
+    assert verify_revolut_webhook_signature(
+        raw_body=raw,
+        timestamp_header=timestamp,
+        signature_header=signature,
+        signing_secret=secret,
+        now_ms=1789161600000,
+    ) is True
+
+    # Re-serialising/adding whitespace must not validate against the original signature.
+    assert verify_revolut_webhook_signature(
+        raw_body=b'{"event": "ORDER_COMPLETED", "order_id": "abc"}',
+        timestamp_header=timestamp,
+        signature_header=signature,
+        signing_secret=secret,
+        now_ms=1789161600000,
+    ) is False
+
+
+def test_webhook_signature_accepts_any_current_rotation_signature():
+    secret = "wsk_test_secret"
+    timestamp = "1789161600000"
+    raw = b'{"event":"ORDER_COMPLETED"}'
+    valid = _signature(secret, timestamp, raw)
+
+    assert verify_revolut_webhook_signature(
+        raw_body=raw,
+        timestamp_header=timestamp,
+        signature_header=f"v1={'0' * 64},{valid}",
+        signing_secret=secret,
+        now_ms=1789161600000,
+    ) is True
+
+
+def test_webhook_signature_rejects_replayed_timestamp():
+    secret = "wsk_test_secret"
+    timestamp = "1789161600000"
+    raw = b'{"event":"ORDER_COMPLETED"}'
+
+    assert verify_revolut_webhook_signature(
+        raw_body=raw,
+        timestamp_header=timestamp,
+        signature_header=_signature(secret, timestamp, raw),
+        signing_secret=secret,
+        now_ms=1789161600000 + (301 * 1000),
+    ) is False
