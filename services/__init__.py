@@ -78,3 +78,13 @@ import services.governed_fbm_fba_visibility_alignment  # noqa: F401,E402
 # while Amazon itself is still Pending. Preserve those rows in the existing
 # Pending tab until real persisted shipment/lifecycle evidence moves them to FBA.
 import services.governed_fbm_fba_pending_status_alignment  # noqa: F401,E402
+
+# Amazon ORDER_CHANGE can carry the S02 identity for an already-existing MCF
+# order. Attach that identity through the existing MCF seller-fulfilment item id
+# before the ordinary Amazon order path continues. No second order path or read.
+import services.governed_mcf_amazon_order_identity_alignment  # noqa: F401,E402
+
+# MCF is its own fulfilment lifecycle, not FBA presentation. Reuse the existing
+# /fbm table to expose persisted MCF orders under a dedicated MCF tab and prevent
+# positive MCF/S02 rows from being absorbed into Pending/FBA. Presentation only.
+import services.governed_fbm_mcf_visibility_alignment  # noqa: F401,E402
