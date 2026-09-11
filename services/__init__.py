@@ -118,3 +118,8 @@ import services.billing_invoice_alignment  # noqa: F401,E402
 # It registers explicit owner-start and signed webhook routes, stores provider
 # identifiers in a 1:1 binding row, and makes no provider call on application start.
 import services.revolut_subscription_alignment  # noqa: F401,E402
+
+# Customer/account support is a case workflow only. It uses the existing
+# CustomerAccount authority and never reads/writes marketplace, carrier or payment
+# provider truth. The existing public /support page remains separate.
+import services.support_case_alignment  # noqa: F401,E402
