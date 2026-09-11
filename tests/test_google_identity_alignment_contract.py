@@ -120,6 +120,71 @@ def test_legacy_remember_cookie_is_retired_before_main_auth_guard():
     assert "    logout_user()\n    session.clear()\n" not in end_block
 
 
+def test_customer_profile_extends_existing_auth_and_only_gates_new_users():
+    cleanup = _read("services/auth_session_legacy_cleanup.py")
+    profile_service = _read("services/account_profile_alignment.py")
+    first_login = _read("templates/profile_first_login.html")
+
+    compile(profile_service, "services/account_profile_alignment.py", "exec")
+    assert "import services.account_profile_alignment" in cleanup
+    assert "from models import SystemLog, User" in profile_service
+    assert "login_user(" not in profile_service
+    assert "verify_google_id_token" not in profile_service
+    assert "setup_required=bool(approved)" in profile_service
+    assert "setup_required=False" in profile_service
+    assert 'path in _PROFILE_ALLOWED_PATHS' in profile_service
+    assert 'name="username"' in first_login
+    assert 'name="display_name"' in first_login
+    assert 'name="position"' in first_login
+    assert "Continue to dashboard" in first_login
+    assert "No setup wizard" in first_login
+
+
+def test_customer_account_owns_branding_five_seats_and_role_presets():
+    profile_service = _read("services/account_profile_alignment.py")
+    profile_page = _read("templates/profile.html")
+    billing_page = _read("templates/billing.html")
+    migration = _read("migrations/manual/20260911-customer-account-profile.sql")
+
+    assert 'user_limit = db.Column(db.Integer, nullable=False, default=5)' in profile_service
+    assert "if _member_count(account.id) >= int(account.user_limit or 5):" in profile_service
+    assert '"warehouse_manager"' in profile_service
+    assert '"purchasing_manager"' in profile_service
+    assert '"content_manager"' in profile_service
+    assert '"assistant"' in profile_service
+    assert '"manage_users": bool(manage_users)' in profile_service
+    assert "Position is not permission." in profile_page
+    assert "including the owner" in profile_page
+
+    assert "logo_data = db.Column(db.LargeBinary" in profile_service
+    assert "image/png" in profile_service
+    assert "image/jpeg" in profile_service
+    assert "image/webp" in profile_service
+    assert "Powered by BT38" in profile_service
+    assert "Powered by BT38" in profile_page
+    assert "customer_accounts" in migration
+    assert "customer_account_members" in migration
+    assert "user_profiles" in migration
+
+    # Billing is one account surface, not a second subscription/user authority.
+    assert '@app.get("/billing")' in profile_service
+    assert "no separate user or subscription system" in billing_page
+    assert "stripe" not in profile_service.lower()
+    assert "paypal" not in profile_service.lower()
+
+
+def test_customer_shell_only_rebrands_after_customer_logo_exists():
+    profile_service = _read("services/account_profile_alignment.py")
+
+    shell_block = profile_service.split("def bt38_customer_owned_shell_alignment", 1)[1]
+    assert "if account and account.logo_data:" in shell_block
+    assert "BT38 Inventory" in shell_block
+    assert "Powered by BT38" in shell_block
+    assert 'href="/profile"' in shell_block
+    assert 'href="/billing"' in shell_block
+    assert 'href="/logout"' in shell_block
+
+
 def test_forgot_password_reuses_existing_google_login_callback():
     public_service = _read("services/public_early_access.py")
     landing = _read("templates/public_landing.html")

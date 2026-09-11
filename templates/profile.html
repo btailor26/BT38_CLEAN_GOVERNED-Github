@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}Profile{% endblock %}
+{% block content %}
+<style>
+.account-page{max-width:1320px;margin:0 auto;color:#172033}.account-head{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;margin-bottom:22px}.account-head h1{font-size:30px;font-weight:850;letter-spacing:-.03em;margin:0}.account-head p{color:#737f91;margin:6px 0 0}.account-tabs{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:18px}.account-tabs a{padding:9px 13px;border-radius:9px;text-decoration:none;color:#4a5568;background:#fff;border:1px solid #e2e7ef;font-size:13px;font-weight:700}.account-tabs a:hover{border-color:#91a1dc;color:#2b4ec2}.account-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(320px,.55fr);gap:18px}.account-stack{display:grid;gap:18px}.account-card{background:#fff;border:1px solid #e3e7ed;border-radius:16px;box-shadow:0 4px 18px rgba(15,23,42,.035);overflow:hidden}.account-card-head{padding:18px 20px;border-bottom:1px solid #eef1f5;display:flex;justify-content:space-between;align-items:center;gap:12px}.account-card-head h2{font-size:16px;font-weight:820;margin:0}.account-card-body{padding:20px}.form-label{font-size:12px;font-weight:750;color:#465167}.form-control,.form-select{border-radius:9px;min-height:42px}.brand-preview{display:flex;align-items:center;gap:14px;padding:15px;border:1px solid #e5e9f0;border-radius:12px;background:#f9fafc;margin-bottom:18px}.brand-logo{width:72px;height:56px;border-radius:10px;background:#fff;border:1px solid #e3e7ed;display:flex;align-items:center;justify-content:center;overflow:hidden}.brand-logo img{max-width:64px;max-height:48px;object-fit:contain}.brand-name{font-weight:800}.powered{font-size:11px;color:#8a94a4;margin-top:2px}.seat-meter{padding:14px;border-radius:12px;background:#f7f9fe;border:1px solid #e5eaf6}.seat-number{font-size:24px;font-weight:850}.seat-sub{font-size:12px;color:#778294}.team-list{display:grid;gap:10px;margin-top:16px}.team-row{display:grid;grid-template-columns:42px minmax(0,1fr) 190px 78px;gap:10px;align-items:center;padding:12px;border:1px solid #e8ebf0;border-radius:12px}.avatar{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#eef2ff;color:#4258c9;font-weight:850}.team-name{font-size:13px;font-weight:800}.team-meta{font-size:11px;color:#7a8494;margin-top:2px}.role-card{border:1px solid #e6eaf0;border-radius:11px;padding:12px;height:100%}.role-card strong{font-size:12px}.role-card p{font-size:11px;color:#788295;line-height:1.4;margin:4px 0 0}.badge-owner{background:#eaf2ff;color:#2754b8}.profile-save{min-width:120px}.owner-only{font-size:11px;color:#8b95a5}.section-anchor{scroll-margin-top:20px}@media(max-width:900px){.account-grid{grid-template-columns:1fr}.team-row{grid-template-columns:38px minmax(0,1fr)}.team-row form,.team-row .team-action{grid-column:2}.account-head{flex-direction:column}}
+</style>
+<div class="account-page">
+  <div class="account-head">
+    <div><h1>Your profile & workspace</h1><p>Your identity, your business, your team. BT38 powers the system in the background.</p></div>
+    {% if account %}<div class="seat-meter"><span class="seat-number">{{ seat_count }}</span><span class="text-muted"> / {{ account.user_limit }}</span><div class="seat-sub">team seats assigned</div></div>{% endif %}
+  </div>
+
+  <div class="account-tabs">
+    <a href="#personal">Personal</a>
+    {% if account %}<a href="#business">Business</a><a href="#team">Team</a>{% endif %}
+    {% if member and member.is_owner %}<a href="/billing">Billing</a>{% endif %}
+  </div>
+
+  <div class="account-grid">
+    <div class="account-stack">
+      <section class="account-card section-anchor" id="personal">
+        <div class="account-card-head"><h2>Personal profile</h2><span class="text-muted small">How COFI and your team know you</span></div>
+        <div class="account-card-body">
+          <form method="post">
+            <input type="hidden" name="section" value="personal">
+            <div class="row g-3">
+              <div class="col-md-4"><label class="form-label">Username</label><input class="form-control" name="username" value="{{ current_user.username }}" required minlength="3" maxlength="32"><div class="form-text">Your sign-in username.</div></div>
+              <div class="col-md-4"><label class="form-label">Name</label><input class="form-control" name="display_name" value="{{ profile.display_name or '' }}" required maxlength="140"><div class="form-text">COFI uses this name.</div></div>
+              <div class="col-md-4"><label class="form-label">Position</label><input class="form-control" name="position" value="{{ profile.position or '' }}" required maxlength="140" placeholder="Owner, Director, Manager…"></div>
+              <div class="col-12 text-end"><button class="btn btn-primary profile-save" type="submit">Save profile</button></div>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      {% if account %}
+      <section class="account-card section-anchor" id="business">
+        <div class="account-card-head"><h2>Business identity</h2>{% if member and member.is_owner %}<span class="owner-only">Account owner</span>{% endif %}</div>
+        <div class="account-card-body">
+          <div class="brand-preview">
+            <div class="brand-logo">{% if account.logo_data %}<img src="/profile/logo" alt="Business logo">{% else %}<i data-feather="image"></i>{% endif %}</div>
+            <div><div class="brand-name">{{ account.business_name or 'Your business' }}</div><div class="powered">{% if account.logo_data %}Your branding · Powered by BT38{% else %}Add your logo and BT38 branding is removed from your working shell.{% endif %}</div></div>
+          </div>
+          {% if member and member.is_owner %}
+          <form method="post" enctype="multipart/form-data">
+            <input type="hidden" name="section" value="business">
+            <div class="row g-3 align-items-end">
+              <div class="col-md-7"><label class="form-label">Business name</label><input class="form-control" name="business_name" value="{{ account.business_name or '' }}" maxlength="180" required></div>
+              <div class="col-md-5"><label class="form-label">Logo</label><input class="form-control" type="file" name="logo" accept="image/png,image/jpeg,image/webp"><div class="form-text">PNG, JPEG or WebP · max 1 MB</div></div>
+              <div class="col-12 text-end"><button class="btn btn-primary profile-save" type="submit">Save branding</button></div>
+            </div>
+          </form>
+          {% else %}<p class="text-muted mb-0">Business branding is controlled by the account owner.</p>{% endif %}
+        </div>
+      </section>
+
+      <section class="account-card section-anchor" id="team">
+        <div class="account-card-head"><h2>Team</h2><span class="text-muted small">{{ seat_count }} of {{ account.user_limit }} seats</span></div>
+        <div class="account-card-body">
+          {% if member and member.is_owner %}
+          <form method="post" action="/profile/team/add" class="row g-2 align-items-end">
+            <div class="col-md-6"><label class="form-label">Team member email</label><input class="form-control" type="email" name="email" required placeholder="name@company.com"></div>
+            <div class="col-md-4"><label class="form-label">Access role</label><select class="form-select" name="access_preset">{% for key, preset in role_presets.items() %}<option value="{{ key }}">{{ preset.label }}</option>{% endfor %}</select></div>
+            <div class="col-md-2"><button class="btn btn-dark w-100" type="submit" {% if seat_count >= account.user_limit %}disabled{% endif %}>Add user</button></div>
+          </form>
+          <div class="form-text mt-2">The plan includes {{ account.user_limit }} users in total, including the owner. New users sign in with Google using the email above, then choose Username, Name and Position once.</div>
+          {% endif %}
+
+          <div class="team-list">
+          {% for item in team %}
+            <div class="team-row">
+              <div class="avatar">{{ ((item.profile.display_name if item.profile and item.profile.display_name else item.user.email) or '?')[:1]|upper }}</div>
+              <div><div class="team-name">{{ item.profile.display_name if item.profile and item.profile.display_name else 'Setup pending' }} {% if item.membership.is_owner %}<span class="badge badge-owner ms-1">Owner</span>{% endif %}</div><div class="team-meta">{{ item.user.email }}{% if item.profile and item.profile.position %} · {{ item.profile.position }}{% endif %}</div></div>
+              {% if member and member.is_owner and not item.membership.is_owner %}
+              <form method="post" action="/profile/team/{{ item.user.id }}/role" class="d-flex gap-1"><select class="form-select form-select-sm" name="access_preset">{% for key, preset in role_presets.items() %}<option value="{{ key }}" {% if key == item.membership.access_preset %}selected{% endif %}>{{ preset.label }}</option>{% endfor %}</select><button class="btn btn-outline-secondary btn-sm" type="submit">Save</button></form>
+              <form method="post" action="/profile/team/{{ item.user.id }}/remove" class="team-action" onsubmit="return confirm('Remove this user from your account?')"><button class="btn btn-outline-danger btn-sm" type="submit">Remove</button></form>
+              {% else %}<div class="text-muted small">{{ item.preset_label }}</div><div></div>{% endif %}
+            </div>
+          {% endfor %}
+          </div>
+        </div>
+      </section>
+      {% endif %}
+    </div>
+
+    <aside class="account-stack">
+      <section class="account-card">
+        <div class="account-card-head"><h2>Access roles</h2></div>
+        <div class="account-card-body">
+          <div class="row g-2">
+            {% for key, preset in role_presets.items() %}<div class="col-12"><div class="role-card"><strong>{{ preset.label }}</strong><p>{{ preset.description }}</p></div></div>{% endfor %}
+          </div>
+          <div class="alert alert-light border mt-3 mb-0 small"><strong>Position is not permission.</strong> Someone can be called “Operations Director” while their system access is controlled separately by the role you assign.</div>
+        </div>
+      </section>
+      {% if account and member and member.is_owner %}
+      <section class="account-card">
+        <div class="account-card-head"><h2>Billing</h2></div>
+        <div class="account-card-body"><div class="d-flex justify-content-between"><span class="text-muted">Plan</span><strong>{{ account.plan_name }}</strong></div><div class="d-flex justify-content-between mt-2"><span class="text-muted">Users</span><strong>{{ seat_count }} / {{ account.user_limit }}</strong></div><a class="btn btn-outline-dark w-100 mt-3" href="/billing">Open billing</a></div>
+      </section>
+      {% endif %}
+    </aside>
+  </div>
+</div>
+{% endblock %}

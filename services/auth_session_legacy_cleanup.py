@@ -78,3 +78,10 @@ def bt38_legacy_remember_cookie_cleanup():
         return _end_auth_session_once()
 
     return None
+
+
+# The customer account/profile layer extends this same single-session authority.
+# Load it after legacy-cookie cleanup is registered and before the public Google
+# handler, so a valid fresh login can enter one-time profile setup without a
+# second auth path or session implementation.
+import services.account_profile_alignment  # noqa: E402,F401
