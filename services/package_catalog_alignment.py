@@ -16,7 +16,7 @@ import secrets
 
 from flask import flash, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import UniqueConstraint, func
 
 from app import app
 from extensions import db
@@ -370,6 +370,17 @@ def bt38_package_update(package_id: int):
             raise ValueError("Choose Free or Paid.")
         if billing_interval not in _BILLING_INTERVALS:
             raise ValueError("Choose a valid billing interval.")
+
+        assigned_account_ids = [
+            row.account_id
+            for row in AccountPackageAssignment.query.filter_by(package_id=package.id).all()
+        ]
+        if assigned_account_ids and tier_type != package.tier_type:
+            raise ValueError(
+                "Free/Paid type cannot be changed while this package is assigned. "
+                "Create or choose another package and reassign the customer instead."
+            )
+
         if tier_type == "free":
             price_pence = 0
             billing_interval = "none"
@@ -380,16 +391,12 @@ def bt38_package_update(package_id: int):
             if billing_interval not in {"month", "year"}:
                 raise ValueError("A paid package needs a monthly or yearly billing interval.")
 
-        assigned_account_ids = [
-            row.account_id
-            for row in AccountPackageAssignment.query.filter_by(package_id=package.id).all()
-        ]
         if assigned_account_ids:
             oversized = (
-                db.session.query(CustomerAccountMember.account_id, db.func.count(CustomerAccountMember.id))
+                db.session.query(CustomerAccountMember.account_id, func.count(CustomerAccountMember.id))
                 .filter(CustomerAccountMember.account_id.in_(assigned_account_ids))
                 .group_by(CustomerAccountMember.account_id)
-                .having(db.func.count(CustomerAccountMember.id) > user_limit)
+                .having(func.count(CustomerAccountMember.id) > user_limit)
                 .first()
             )
             if oversized:
