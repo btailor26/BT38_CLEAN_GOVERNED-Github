@@ -36,8 +36,8 @@ from models import SystemLog, User
 from services.google_identity import GoogleIdentityError, verify_google_id_token
 
 
-# Browser-session alignment only. Google proves identity; BT38 keeps one
-# first-party Flask session as the application authority.
+# Google proves identity; BT38 keeps the existing first-party Flask session as
+# the sole application session authority.
 app.config["SESSION_COOKIE_SECURE"] = True
 app.config["SESSION_COOKIE_HTTPONLY"] = True
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
@@ -48,6 +48,7 @@ app.config["REMEMBER_COOKIE_SAMESITE"] = "Lax"
 
 _PASSWORD_RESET_MINUTES = 10
 _AUTH_STAMP_SESSION_KEY = "bt38_auth_stamp"
+_RESET_INTENT_EXPIRES_SESSION_KEY = "bt38_password_reset_intent_expires_at"
 _RESET_USER_SESSION_KEY = "bt38_password_reset_user_id"
 _RESET_EXPIRES_SESSION_KEY = "bt38_password_reset_expires_at"
 _RESET_STAMP_SESSION_KEY = "bt38_password_reset_auth_stamp"
@@ -65,8 +66,20 @@ def _safe_login_next() -> str:
     return url_for("governed.governed_warehouse_page")
 
 
+def _google_client_id() -> str:
+    return str(os.getenv("GOOGLE_CLIENT_ID") or "").strip()
+
+
+def _google_login_uri() -> str:
+    return (
+        url_for("governed.login", _external=True, _scheme="https")
+        if _google_client_id()
+        else ""
+    )
+
+
 def _auth_stamp(user: User) -> str:
-    """Bind a BT38 browser session to the user's current password hash."""
+    """Bind a browser session to the user's current BT38 password hash."""
     secret = str(app.secret_key or "").encode("utf-8")
     material = f"{int(user.id)}:{str(user.password_hash or '')}".encode("utf-8")
     return hmac.new(secret, material, hashlib.sha256).hexdigest()
@@ -80,6 +93,37 @@ def _clear_password_reset_grant() -> None:
         _RESET_CSRF_SESSION_KEY,
     ):
         session.pop(key, None)
+
+
+def _clear_password_reset_state() -> None:
+    session.pop(_RESET_INTENT_EXPIRES_SESSION_KEY, None)
+    _clear_password_reset_grant()
+
+
+def _password_reset_intent_active() -> bool:
+    raw = session.get(_RESET_INTENT_EXPIRES_SESSION_KEY)
+    if raw in (None, ""):
+        return False
+    try:
+        expires_at = float(raw)
+    except (TypeError, ValueError):
+        session.pop(_RESET_INTENT_EXPIRES_SESSION_KEY, None)
+        return False
+    if expires_at <= datetime.utcnow().timestamp():
+        session.pop(_RESET_INTENT_EXPIRES_SESSION_KEY, None)
+        return False
+    return True
+
+
+def _grant_password_reset(user: User) -> None:
+    _clear_password_reset_grant()
+    session.pop(_RESET_INTENT_EXPIRES_SESSION_KEY, None)
+    session[_RESET_USER_SESSION_KEY] = int(user.id)
+    session[_RESET_EXPIRES_SESSION_KEY] = (
+        datetime.utcnow() + timedelta(minutes=_PASSWORD_RESET_MINUTES)
+    ).timestamp()
+    session[_RESET_STAMP_SESSION_KEY] = _auth_stamp(user)
+    session[_RESET_CSRF_SESSION_KEY] = secrets.token_urlsafe(32)
 
 
 def _password_reset_user():
@@ -108,20 +152,25 @@ def _password_reset_user():
     return user
 
 
+def _forgot_password_page(error: str = "", status: int = 200):
+    return render_template(
+        "forgot_password.html",
+        error=error,
+        google_client_id=_google_client_id(),
+        google_reset_uri=_google_login_uri(),
+    ), status
+
+
 @app.before_request
 def bt38_browser_session_alignment():
-    """Keep authenticated browsing on one fresh BT38 Flask session.
-
-    Old remember-cookie restorations are rejected. The session is also bound to
-    the current password hash, so changing/resetting a password invalidates
-    other stamped browser sessions on their next request.
-    """
+    """Keep authenticated browsing on one fresh, password-bound BT38 session."""
     if not current_user.is_authenticated:
         return None
 
     if request.path == "/logout":
         return None
 
+    # A Flask-Login remember cookie is not a second BT38 session authority.
     if not login_fresh():
         logout_user()
         session.clear()
@@ -139,12 +188,17 @@ def bt38_browser_session_alignment():
 
 @app.after_request
 def bt38_browser_session_response_alignment(response):
-    """Stamp fresh logins and prevent a second long-lived remember session."""
+    """Stamp fresh logins and suppress the legacy remember-cookie side effect."""
     if current_user.is_authenticated and login_fresh():
+        # app.py already sets PERMANENT_SESSION_LIFETIME to 30 minutes. Mark the
+        # live browser session permanent so that configured sliding lifetime is
+        # actually used while the user remains active.
+        session.permanent = True
         session[_AUTH_STAMP_SESSION_KEY] = _auth_stamp(current_user)
 
-        # The existing password login still calls remember=True. Neutralise the
-        # remember-cookie side effect here without replacing that login route.
+        # Existing manual /login still calls remember=True. Keep that route
+        # intact, but remove its remember-cookie request so both login methods
+        # finish on the same first-party BT38 session.
         if session.get("_remember") == "set":
             session.pop("_remember", None)
 
@@ -155,26 +209,29 @@ def bt38_browser_session_response_alignment(response):
             samesite="Lax",
         )
 
+        # A successful manual password login cancels any abandoned reset intent.
+        if (
+            request.path.rstrip("/") == "/login"
+            and request.method == "POST"
+            and not str(request.form.get("credential") or "").strip()
+        ):
+            _clear_password_reset_state()
+
     return response
 
 
 @app.context_processor
 def bt38_google_identity_context():
     """Expose only the public Google client ID and existing BT38 login URI."""
-    client_id = str(os.getenv("GOOGLE_CLIENT_ID") or "").strip()
     return {
-        "google_client_id": client_id,
-        "google_login_uri": (
-            url_for("governed.login", _external=True, _scheme="https")
-            if client_id
-            else ""
-        ),
+        "google_client_id": _google_client_id(),
+        "google_login_uri": _google_login_uri(),
     }
 
 
 def _verify_google_post():
-    """Verify Google GIS CSRF + ID token and return claims or an error string."""
-    client_id = str(os.getenv("GOOGLE_CLIENT_ID") or "").strip()
+    """Verify Google GIS double-submit CSRF and the signed Google ID token."""
+    client_id = _google_client_id()
     if not client_id:
         return None, "Google sign-in is not configured for BT38 Inventory."
 
@@ -195,20 +252,18 @@ def _verify_google_post():
 
 @app.before_request
 def bt38_google_identity_login():
-    """Handle Google credentials on the existing /login authority.
-
-    Google proves identity. BT38 still requires an existing active User and
-    creates the normal Flask-Login session. Username/password POSTs continue
-    to the existing governed login route unchanged.
-    """
+    """Handle Google identity on the existing /login authority only."""
     path = request.path.rstrip("/") or "/"
     credential = str(request.form.get("credential") or "").strip()
     if request.method != "POST" or path != "/login" or not credential:
         return None
 
     next_url = _safe_login_next()
+    reset_requested = _password_reset_intent_active()
     claims, google_error = _verify_google_post()
     if not claims:
+        if reset_requested:
+            return _forgot_password_page(google_error, 401)
         return render_template(
             "login.html",
             error=google_error,
@@ -217,6 +272,27 @@ def bt38_google_identity_login():
 
     email = str(claims.get("email") or "").strip().lower()
     user = User.query.filter(User.email.ilike(email)).first()
+
+    if reset_requested:
+        if not user or not user.is_active:
+            return _forgot_password_page(
+                "This Google account cannot be used to reset a BT38 password. Use the Google account that matches your approved BT38 email, or contact your BT38 administrator.",
+                403,
+            )
+
+        _grant_password_reset(user)
+        db.session.add(SystemLog(
+            log_type="authentication",
+            message="Google password-reset identity verified",
+            details=json.dumps({
+                "provider": "google",
+                "user_id": user.id,
+                "verified_at": datetime.utcnow().isoformat() + "Z",
+            }),
+        ))
+        db.session.commit()
+        return redirect(url_for("bt38_public_password_reset"))
+
     if not user or not user.is_active:
         return render_template(
             "login.html",
@@ -224,6 +300,7 @@ def bt38_google_identity_login():
             next_url=next_url,
         ), 403
 
+    _clear_password_reset_state()
     user.last_login = datetime.utcnow()
     db.session.add(SystemLog(
         log_type="authentication",
@@ -244,79 +321,12 @@ def bt38_google_identity_login():
 
 @app.get("/forgot-password")
 def bt38_public_forgot_password():
-    """Start a zero-email-cost reset by proving the BT38 email with Google."""
-    _clear_password_reset_grant()
-    client_id = str(os.getenv("GOOGLE_CLIENT_ID") or "").strip()
-    return render_template(
-        "forgot_password.html",
-        error="",
-        google_client_id=client_id,
-        google_reset_uri=(
-            url_for(
-                "bt38_public_google_password_reset_verify",
-                _external=True,
-                _scheme="https",
-            )
-            if client_id
-            else ""
-        ),
-    )
-
-
-@app.post("/forgot-password/google")
-def bt38_public_google_password_reset_verify():
-    """Use Google only as proof that the user owns the BT38 account email."""
-    claims, google_error = _verify_google_post()
-    client_id = str(os.getenv("GOOGLE_CLIENT_ID") or "").strip()
-
-    if not claims:
-        return render_template(
-            "forgot_password.html",
-            error=google_error,
-            google_client_id=client_id,
-            google_reset_uri=url_for(
-                "bt38_public_google_password_reset_verify",
-                _external=True,
-                _scheme="https",
-            ) if client_id else "",
-        ), 401
-
-    email = str(claims.get("email") or "").strip().lower()
-    user = User.query.filter(User.email.ilike(email)).first()
-    if not user or not user.is_active:
-        # Only the owner of the Google address reaches this point. Keep the
-        # wording generic and do not create/reset any BT38 account.
-        return render_template(
-            "forgot_password.html",
-            error="This Google account cannot be used to reset a BT38 password. Use the Google account that matches your approved BT38 email, or contact your BT38 administrator.",
-            google_client_id=client_id,
-            google_reset_uri=url_for(
-                "bt38_public_google_password_reset_verify",
-                _external=True,
-                _scheme="https",
-            ) if client_id else "",
-        ), 403
-
-    _clear_password_reset_grant()
-    session[_RESET_USER_SESSION_KEY] = int(user.id)
-    session[_RESET_EXPIRES_SESSION_KEY] = (
+    """Begin a zero-email-cost reset using the existing Google /login callback."""
+    _clear_password_reset_state()
+    session[_RESET_INTENT_EXPIRES_SESSION_KEY] = (
         datetime.utcnow() + timedelta(minutes=_PASSWORD_RESET_MINUTES)
     ).timestamp()
-    session[_RESET_STAMP_SESSION_KEY] = _auth_stamp(user)
-    session[_RESET_CSRF_SESSION_KEY] = secrets.token_urlsafe(32)
-
-    db.session.add(SystemLog(
-        log_type="authentication",
-        message="Google password-reset identity verified",
-        details=json.dumps({
-            "provider": "google",
-            "user_id": user.id,
-            "verified_at": datetime.utcnow().isoformat() + "Z",
-        }),
-    ))
-    db.session.commit()
-
-    return redirect(url_for("bt38_public_password_reset"))
+    return _forgot_password_page()
 
 
 @app.route("/reset-password", methods=["GET", "POST"])
@@ -337,17 +347,11 @@ def bt38_public_password_reset():
 
     submitted_csrf = str(request.form.get("reset_csrf") or "")
     if not reset_csrf or not submitted_csrf or not hmac.compare_digest(reset_csrf, submitted_csrf):
-        _clear_password_reset_grant()
-        return render_template(
-            "forgot_password.html",
-            error="Your password reset could not be verified. Please verify with Google again.",
-            google_client_id=str(os.getenv("GOOGLE_CLIENT_ID") or "").strip(),
-            google_reset_uri=url_for(
-                "bt38_public_google_password_reset_verify",
-                _external=True,
-                _scheme="https",
-            ),
-        ), 400
+        _clear_password_reset_state()
+        return _forgot_password_page(
+            "Your password reset could not be verified. Please verify with Google again.",
+            400,
+        )
 
     new_password = str(request.form.get("new_password") or "")
     confirm_password = str(request.form.get("confirm_password") or "")
@@ -379,8 +383,8 @@ def bt38_public_password_reset():
     db.session.commit()
 
     # Do not auto-login after a password change. End this browser session and
-    # remove any legacy remember cookie; other stamped sessions will fail their
-    # password-hash binding on the next request.
+    # remove any legacy remember cookie. Other stamped sessions fail the new
+    # password-hash binding on their next request.
     logout_user()
     session.clear()
     flash("Password updated. Sign in again with your new BT38 password.", "success")
@@ -428,6 +432,7 @@ def bt38_public_root_landing():
         return None
     if current_user.is_authenticated:
         return None
+    session.pop(_RESET_INTENT_EXPIRES_SESSION_KEY, None)
     return render_template(
         "public_landing.html",
         error="",
