@@ -206,7 +206,6 @@ jobs:
             services/governed_webhook_execution.py
             services/google_identity.py
             services/public_early_access.py
-            tests/test_google_identity_alignment_contract.py
             scripts/verify_production_db_contract.py
           )
           FAILED=0
