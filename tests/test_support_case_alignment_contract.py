@@ -37,7 +37,10 @@ def test_support_is_case_id_based_and_account_scoped():
 
 
 def test_public_support_page_is_preserved_and_case_centre_has_separate_routes():
-    assert 'How can we help?' in PUBLIC
+    assert '<h1 class="mt-3 text-4xl font-black">Support</h1>' in PUBLIC
+    assert 'Apply to Try BT38 Inventory' in PUBLIC
+    assert 'Open Support Centre' in PUBLIC
+    assert 'href="/support/cases"' in PUBLIC
     assert '@app.get("/support")' not in SUPPORT
     assert '@app.get("/support/cases")' in SUPPORT
     assert '@app.post("/support/cases/new")' in SUPPORT
