@@ -88,3 +88,8 @@ import services.governed_mcf_amazon_order_identity_alignment  # noqa: F401,E402
 # /fbm table to expose persisted MCF orders under a dedicated MCF tab and prevent
 # positive MCF/S02 rows from being absorbed into Pending/FBA. Presentation only.
 import services.governed_fbm_mcf_visibility_alignment  # noqa: F401,E402
+
+# Revolut subscription billing extends the existing package assignment only.
+# It registers explicit owner-start and signed webhook routes, stores provider
+# identifiers in a 1:1 binding row, and makes no provider call on application start.
+import services.revolut_subscription_alignment  # noqa: F401,E402
