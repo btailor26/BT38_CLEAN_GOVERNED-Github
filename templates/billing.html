@@ -31,10 +31,10 @@
     {% endif %}
 
     <hr class="my-4">
-    <p class="billing-note mb-0">BT38 controls package entitlement and limits. {% if package_info.tier_type == 'paid' %}Payment authority is {{ package_info.billing_provider|title }}{% if package_info.billing_provider == 'revolut' %}; BT38 stores only the linked subscription reference and status, not payment credentials{% endif %}.{% else %}This is a free tier, so no payment provider is required.{% endif %}</p>
+    <p class="billing-note mb-0">This remains one BT38 customer account surface with no separate user or subscription system. BT38 controls package entitlement and limits. {% if package_info.tier_type == 'paid' %}Payment authority is {{ package_info.billing_provider|title }}{% if package_info.billing_provider == 'revolut' %}; BT38 stores only the linked subscription reference and status, not payment credentials{% endif %}.{% else %}This is a free tier, so no payment provider is required.{% endif %}</p>
     {% else %}
     <hr class="my-4">
-    <p class="billing-note mb-0">This account is still using the existing legacy plan fields and has not yet been assigned a package from the package catalogue.</p>
+    <p class="billing-note mb-0">This remains one BT38 customer account surface with no separate user or subscription system. This account is still using the existing legacy plan fields and has not yet been assigned a package from the package catalogue.</p>
     {% endif %}
 
     <a class="btn btn-outline-secondary mt-4" href="/profile">Back to profile</a>
