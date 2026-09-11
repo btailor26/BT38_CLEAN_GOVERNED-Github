@@ -178,7 +178,18 @@ def bt38_browser_session_alignment():
 
     expected_stamp = str(session.get(_AUTH_STAMP_SESSION_KEY) or "")
     current_stamp = _auth_stamp(current_user)
-    if not expected_stamp or not hmac.compare_digest(expected_stamp, current_stamp):
+
+    # Existing fresh sessions created before password-bound session stamping was
+    # introduced have no stamp yet. Migrate those sessions in place instead of
+    # bouncing them through /login, which can create a redirect loop at rollout.
+    if not expected_stamp:
+        session.permanent = True
+        session[_AUTH_STAMP_SESSION_KEY] = current_stamp
+        return None
+
+    # A present-but-different stamp still means the user's password authority
+    # changed after this browser session was established. End that session.
+    if not hmac.compare_digest(expected_stamp, current_stamp):
         logout_user()
         session.clear()
         return redirect(url_for("governed.login"))
