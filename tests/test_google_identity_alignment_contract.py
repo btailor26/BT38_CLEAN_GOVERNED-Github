@@ -186,6 +186,22 @@ def test_customer_shell_only_rebrands_after_customer_logo_exists():
     assert 'href="/logout"' in shell_block
 
 
+def test_first_login_hands_once_to_cofi_dashboard_welcome():
+    cleanup = _read("services/auth_session_legacy_cleanup.py")
+    profile_service = _read("services/account_profile_alignment.py")
+    welcome_service = _read("services/cofi_first_welcome_alignment.py")
+
+    compile(welcome_service, "services/cofi_first_welcome_alignment.py", "exec")
+    assert "import services.cofi_first_welcome_alignment" in cleanup
+    assert 'session["bt38_cofi_first_welcome"] = display_name' in profile_service
+    assert 'session.pop("bt38_cofi_first_welcome", "")' in welcome_service
+    assert 'data-bt38-cofi-first-welcome="true"' in welcome_service
+    assert "I’m COFI." in welcome_service
+    assert "Nothing else to set up right now." in welcome_service
+    assert 'request.path.rstrip("/")' in welcome_service
+    assert '"/dashboard"' in welcome_service
+
+
 def test_forgot_password_reuses_existing_google_login_callback():
     public_service = _read("services/public_early_access.py")
     landing = _read("templates/public_landing.html")
