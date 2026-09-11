@@ -96,6 +96,30 @@ def test_bt38_browser_session_is_first_party_fresh_and_password_bound():
     assert 'app.config.get("REMEMBER_COOKIE_NAME", "remember_token")' in public_service
 
 
+def test_legacy_remember_cookie_is_retired_before_main_auth_guard():
+    main = _read("main.py")
+    cleanup = _read("services/auth_session_legacy_cleanup.py")
+
+    compile(cleanup, "services/auth_session_legacy_cleanup.py", "exec")
+
+    assert main.index("import services.auth_session_legacy_cleanup") < main.index(
+        "import services.public_early_access"
+    )
+    assert 'if path == "/logout":' in cleanup
+    assert "if current_user.is_authenticated and not login_fresh():" in cleanup
+    assert 'app.config.get("REMEMBER_COOKIE_NAME", "remember_token")' in cleanup
+    assert 'app.config.get("SESSION_COOKIE_NAME", "session")' in cleanup
+    assert "return _expire_bt38_auth_cookies(response)" in cleanup
+
+    # Clear BT38 state first, then let Flask-Login emit its _remember='clear'
+    # marker. Reversing this order recreates the remembered-login redirect loop.
+    end_block = cleanup.split("def _end_auth_session_once", 1)[1].split(
+        "@app.before_request", 1
+    )[0]
+    assert end_block.index("session.clear()") < end_block.index("logout_user()")
+    assert "logout_user()\n    session.clear()" not in end_block
+
+
 def test_forgot_password_reuses_existing_google_login_callback():
     public_service = _read("services/public_early_access.py")
     landing = _read("templates/public_landing.html")
