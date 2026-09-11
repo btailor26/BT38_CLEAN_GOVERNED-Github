@@ -111,6 +111,7 @@ jobs:
             services/governed_mcf_confirmation.py services/governed_mcf_tracking.py \
             services/governed_mcf_tracking_startup_alignment.py services/governed_marketplace_order_import.py \
             services/governed_order_stock_mutation.py services/governed_warehouse_sync.py \
+            services/google_identity.py services/public_early_access.py \
             scripts/verify_production_db_contract.py
       - name: Run deployment contracts
         run: |
@@ -124,7 +125,8 @@ jobs:
             tests/test_fbm_manual_shipping_order_contract.py tests/test_marketplace_tracking_readback_contract.py \
             tests/test_marketplace_dispatch_truth_recovery_contract.py tests/test_production_db_contract_gate.py \
             tests/test_fbm_db_delivery_performance_authority_contract.py \
-            tests/test_event_runtime_zero_recovery_contract.py tests/test_deploy_no_recovery_contract.py
+            tests/test_event_runtime_zero_recovery_contract.py tests/test_deploy_no_recovery_contract.py \
+            tests/test_google_identity_alignment_contract.py
 
   deploy:
     needs: audit
@@ -189,6 +191,9 @@ jobs:
             governed_fbm_routes.py
             governed_fbm_manual_routes.py
             templates/fbm.html
+            templates/public_landing.html
+            templates/forgot_password.html
+            templates/reset_password.html
             static/js/fbm_tracking_journey.js
             static/js/fbm_delivery_promise_journey_alignment.js
             services/fbm_db_delivery_promise_alignment.py
@@ -199,6 +204,9 @@ jobs:
             services/fbm_post_purchase.py
             services/governed_runtime_engine.py
             services/governed_webhook_execution.py
+            services/google_identity.py
+            services/public_early_access.py
+            tests/test_google_identity_alignment_contract.py
             scripts/verify_production_db_contract.py
           )
           FAILED=0
@@ -242,6 +250,14 @@ jobs:
             exit 1
           fi
           echo "CRITICAL_DEPLOYED_SOURCE_OK commit=${{ inputs.expected_commit }}"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Verify effective Google auth and browser session policy
+        if: steps.restore_mode.outputs.enabled != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          flyctl ssh console --app bt38-prod --command "sh -lc 'cd /app && .venv/bin/python -c \"import os; from app import app; import services.public_early_access; cid=str(os.getenv(\\\"GOOGLE_CLIENT_ID\\\") or \\\"\\\").strip(); assert app.config.get(\\\"SESSION_COOKIE_SECURE\\\") is True; assert app.config.get(\\\"SESSION_COOKIE_HTTPONLY\\\") is True; assert app.config.get(\\\"SESSION_COOKIE_SAMESITE\\\") == \\\"Lax\\\"; assert app.config.get(\\\"SESSION_REFRESH_EACH_REQUEST\\\") is True; assert app.config.get(\\\"SESSION_PERMANENT\\\") is True; assert int(app.config.get(\\\"PERMANENT_SESSION_LIFETIME\\\").total_seconds()) == 1800; assert app.config.get(\\\"SESSION_COOKIE_DOMAIN\\\") is None; assert app.config.get(\\\"REMEMBER_COOKIE_SECURE\\\") is True; assert app.config.get(\\\"REMEMBER_COOKIE_HTTPONLY\\\") is True; assert app.config.get(\\\"REMEMBER_COOKIE_SAMESITE\\\") == \\\"Lax\\\"; assert cid.endswith(\\\".apps.googleusercontent.com\\\"); print(\\\"AUTH_SESSION_POLICY_OK samesite=Lax secure=True httponly=True sliding_seconds=1800 host_only=True google_client_configured=True\\\")\"'"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       - name: Verify deployed image DB contract against production Neon
