@@ -30,8 +30,21 @@
     </div>
     {% endif %}
 
+    {% if package_info.tier_type == 'paid' and package_info.billing_provider == 'revolut' and package_info.billing_status != 'active' %}
     <hr class="my-4">
-    <p class="billing-note mb-0">This remains one BT38 customer account surface with no separate user or subscription system. BT38 controls package entitlement and limits. {% if package_info.tier_type == 'paid' %}Payment authority is {{ package_info.billing_provider|title }}{% if package_info.billing_provider == 'revolut' %}; BT38 stores only the linked subscription reference and status, not payment credentials{% endif %}.{% else %}This is a free tier, so no payment provider is required.{% endif %}</p>
+    {% if package_info.package.revolut_plan_ref %}
+    <form method="post" action="/billing/revolut/start" class="d-flex align-items-center gap-3 flex-wrap">
+      <input type="hidden" name="csrf_token" value="{{ bt38_revolut_billing_csrf() }}">
+      <button class="btn btn-primary" type="submit">Continue secure payment setup</button>
+      <span class="billing-note">Payment details are entered on Revolut's hosted checkout. BT38 does not store card or bank credentials.</span>
+    </form>
+    {% else %}
+    <p class="billing-note mb-0">Payment setup is not available yet because this package has not been linked to a Revolut plan variation.</p>
+    {% endif %}
+    {% endif %}
+
+    <hr class="my-4">
+    <p class="billing-note mb-0">This remains one BT38 customer account surface with no separate user or subscription system. BT38 controls package entitlement and limits. {% if package_info.tier_type == 'paid' %}Payment authority is {{ package_info.billing_provider|title }}{% if package_info.billing_provider == 'revolut' %}; BT38 stores only the linked provider identifiers and observed status, not payment credentials{% endif %}.{% else %}This is a free tier, so no payment provider is required.{% endif %}</p>
     {% else %}
     <hr class="my-4">
     <p class="billing-note mb-0">This remains one BT38 customer account surface with no separate user or subscription system. This account is still using the existing legacy plan fields and has not yet been assigned a package from the package catalogue.</p>
