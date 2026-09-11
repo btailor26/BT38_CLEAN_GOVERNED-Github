@@ -5,6 +5,11 @@ subscription. When the existing registration path has a valid destination, it
 also asks the already-implemented ITEM_MARKED_SHIPPED alignment to ensure that
 subscription for the same destination/store.
 
+Notification registration must use the seller's governed notification/shipping
+scope set. The fulfilment-only token used by eBay order readback is not valid
+authority for Notification API registration and must never be allowed to create
+a false reauthorization state.
+
 The same existing post-deploy eBay reconciler is also invoked once when the
 single governed runtime engine starts. This is restart/deployment recovery only:
 no worker, poller, scheduler, importer duplication or marketplace order write is
@@ -26,7 +31,37 @@ _RUNTIME_INSTALLED = False
 
 
 def _aligned_registration(*, store: Any, access_token: str) -> dict[str, Any]:
-    result = _ORIGINAL(store=store, access_token=access_token)
+    # The caller's token may intentionally be sell.fulfillment-only because it
+    # is also used by bounded order readback. Do not use that token to judge
+    # Notification API authorization. Mint the notification/shipping-scoped
+    # seller token from the already-persisted governed grant instead.
+    del access_token
+    from services.governed_ebay_shipping_notification_alignment import (
+        _shipping_access_token,
+        ensure_ebay_shipping_notification_alignment,
+    )
+
+    token_result = _shipping_access_token(store)
+    if not token_result.get("ok"):
+        authorization_required = bool(token_result.get("authorization_required"))
+        return {
+            "success": False,
+            "ok": False,
+            "authorization_required": authorization_required,
+            "reauthorization_required": authorization_required,
+            "registration_status": (
+                "AUTHORIZATION_REQUIRED" if authorization_required else "ERROR"
+            ),
+            "reason": token_result.get("reason") or "ebay_notification_token_unavailable",
+            "status_code": token_result.get("status_code"),
+            "error": token_result.get("error"),
+            "shipping_notification_enabled": False,
+            "shipping_notification_reauthorization_required": authorization_required,
+            "marketplace_write_started": False,
+        }
+
+    notification_token = str(token_result["access_token"])
+    result = _ORIGINAL(store=store, access_token=notification_token)
     if not isinstance(result, dict) or not result.get("success"):
         return result
 
@@ -34,22 +69,16 @@ def _aligned_registration(*, store: Any, access_token: str) -> dict[str, Any]:
     if not destination_id:
         return result
 
-    # Import lazily to avoid the intentional helper dependency from the shipping
-    # alignment back to this registration module during module initialization.
-    from services.governed_ebay_shipping_notification_alignment import (
-        ensure_ebay_shipping_notification_alignment,
-    )
-
     try:
         shipping = ensure_ebay_shipping_notification_alignment(
             store=store,
-            access_token=access_token,
+            access_token=notification_token,
             destination_id=str(destination_id),
         )
     except Exception as exc:
         # Shipment notification is an accelerator/capability. Never break the
-        # already-proven ORDER_CONFIRMATION registration because this optional
-        # scope is absent or eBay temporarily rejects its registration call.
+        # already-proven ORDER_CONFIRMATION registration because eBay
+        # temporarily rejects its registration call.
         shipping = {
             "success": False,
             "ok": False,
