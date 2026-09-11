@@ -2,7 +2,7 @@
 
 The existing CustomerAccount remains workspace authority and AccountPackageAssignment
 remains entitlement authority. This module stores only provider-side identifiers in a
-1:1 extension row and performs provider writes only after an explicit owner action.
+1:1 extension row and performs provider writes only after an explicit owner/admin action.
 """
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from datetime import datetime
 import json
 import secrets
 
-from flask import jsonify, redirect, request, session, url_for
+from flask import jsonify, redirect, render_template, request, session, url_for
 from flask_login import current_user, login_required
 from sqlalchemy import UniqueConstraint
 
@@ -25,6 +25,7 @@ from services.account_profile_alignment import (
 from services.package_catalog_alignment import (
     AccountPackageAssignment,
     SubscriptionPackage,
+    _is_admin,
 )
 from services.revolut_billing import (
     RevolutBillingError,
@@ -64,6 +65,8 @@ with app.app_context():
 
 
 _BILLING_CSRF_KEY = "bt38_revolut_billing_csrf"
+_ADMIN_WEBHOOK_CSRF_KEY = "bt38_revolut_webhook_admin_csrf"
+_WEBHOOK_EVENTS = ["ORDER_AUTHORISED", "ORDER_COMPLETED", "ORDER_CANCELLED"]
 
 
 def _csrf_token() -> str:
@@ -77,6 +80,20 @@ def _csrf_token() -> str:
 def _valid_csrf() -> bool:
     supplied = str(request.form.get("csrf_token") or "")
     expected = str(session.get(_BILLING_CSRF_KEY) or "")
+    return bool(expected and supplied and secrets.compare_digest(expected, supplied))
+
+
+def _admin_webhook_csrf_token() -> str:
+    token = str(session.get(_ADMIN_WEBHOOK_CSRF_KEY) or "")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        session[_ADMIN_WEBHOOK_CSRF_KEY] = token
+    return token
+
+
+def _valid_admin_webhook_csrf() -> bool:
+    supplied = str(request.form.get("csrf_token") or "")
+    expected = str(session.get(_ADMIN_WEBHOOK_CSRF_KEY) or "")
     return bool(expected and supplied and secrets.compare_digest(expected, supplied))
 
 
@@ -153,6 +170,7 @@ def _audit(event: str, message: str, details: dict) -> None:
 def bt38_revolut_billing_context():
     return {
         "bt38_revolut_billing_csrf": _csrf_token,
+        "bt38_revolut_webhook_admin_csrf": _admin_webhook_csrf_token,
     }
 
 
@@ -236,14 +254,88 @@ def bt38_revolut_subscription_start():
         return redirect(url_for("bt38_billing_page"))
 
 
+@app.post("/admin/revolut/webhook/provision")
+@login_required
+def bt38_revolut_webhook_provision():
+    """Explicitly create or retrieve the one BT38 Revolut webhook.
+
+    The signing secret is shown only in this response. It is never persisted in
+    Neon, GitHub, logs or the browser session. The admin must copy it into Fly as
+    REVOLUT_WEBHOOK_SIGNING_SECRET.
+    """
+    if not _is_admin():
+        return redirect(url_for("governed.governed_dashboard_page"))
+    if not _valid_admin_webhook_csrf():
+        return redirect(url_for("bt38_package_admin"))
+
+    try:
+        target_url = url_for("bt38_revolut_webhook", _external=True)
+        if not target_url.startswith("https://"):
+            raise RevolutBillingError("Revolut webhook URL must use HTTPS.")
+
+        client = configured_revolut_client()
+        listing = client.list_webhooks()
+        rows = listing.get("webhooks", []) if isinstance(listing, dict) else []
+        exact = next(
+            (
+                row for row in rows
+                if isinstance(row, dict) and str(row.get("url") or "").rstrip("/") == target_url.rstrip("/")
+            ),
+            None,
+        )
+
+        created = False
+        if exact:
+            webhook_id = str(exact.get("id") or "").strip()
+            if not webhook_id:
+                raise RevolutBillingError("Existing Revolut webhook did not include an ID.")
+            webhook = client.retrieve_webhook(webhook_id)
+        else:
+            webhook = client.create_webhook(url=target_url, events=list(_WEBHOOK_EVENTS))
+            created = True
+
+        webhook_id = str(webhook.get("id") or "").strip()
+        signing_secret = str(webhook.get("signing_secret") or "").strip()
+        events = list(webhook.get("events") or [])
+        if not webhook_id or not signing_secret:
+            raise RevolutBillingError("Revolut did not return the webhook signing secret.")
+
+        return render_template(
+            "admin/revolut_webhook_secret.html",
+            webhook_id=webhook_id,
+            webhook_url=str(webhook.get("url") or target_url),
+            events=events,
+            signing_secret=signing_secret,
+            created=created,
+        )
+    except RevolutBillingError as exc:
+        app.logger.warning("Revolut webhook provisioning blocked: %s", str(exc))
+        return render_template(
+            "admin/revolut_webhook_secret.html",
+            error=str(exc),
+            webhook_id="",
+            webhook_url="",
+            events=[],
+            signing_secret="",
+            created=False,
+        ), 503
+
+
 @app.post("/webhooks/revolut")
 def bt38_revolut_webhook():
     raw_body = request.get_data(cache=True, as_text=False)
-    if not verify_revolut_webhook_signature(
-        raw_body=raw_body,
-        timestamp_header=request.headers.get("Revolut-Request-Timestamp", ""),
-        signature_header=request.headers.get("Revolut-Signature", ""),
-    ):
+    try:
+        signature_valid = verify_revolut_webhook_signature(
+            raw_body=raw_body,
+            timestamp_header=request.headers.get("Revolut-Request-Timestamp", ""),
+            signature_header=request.headers.get("Revolut-Signature", ""),
+        )
+    except RevolutBillingError:
+        # A registered webhook without its Fly signing secret must fail closed so
+        # Revolut retries later rather than BT38 accepting an unverifiable event.
+        return jsonify({"ok": False, "reason": "webhook_not_configured"}), 503
+
+    if not signature_valid:
         return jsonify({"ok": False, "reason": "invalid_signature"}), 401
 
     payload = request.get_json(silent=True)
@@ -253,19 +345,32 @@ def bt38_revolut_webhook():
     event = str(payload.get("event") or "").strip()[:80]
     order_ref = str(payload.get("order_id") or "").strip()
     if not event or not order_ref:
-        return jsonify({"ok": True, "status": "ignored"}), 200
-
-    binding = RevolutSubscriptionBinding.query.filter_by(setup_order_ref=order_ref).first()
-    if not binding or not binding.subscription_ref:
-        # Do not mutate any customer from an unknown provider event.
-        return jsonify({"ok": True, "status": "unmatched"}), 200
-
-    assignment = db.session.get(AccountPackageAssignment, binding.assignment_id)
-    if not assignment or assignment.billing_provider != "revolut":
-        return jsonify({"ok": True, "status": "unmatched"}), 200
+        return ("", 204)
 
     try:
-        subscription = configured_revolut_client().retrieve_subscription(binding.subscription_ref)
+        client = configured_revolut_client()
+        # Revolut webhook payloads are order events. Resolve the exact order first;
+        # subscription orders expose subscription_data.subscription_id. This also
+        # handles future recurring billing orders, whose order IDs differ from the
+        # original setup_order_id.
+        order = client.retrieve_order(order_ref)
+        subscription_data = order.get("subscription_data") if isinstance(order, dict) else None
+        subscription_ref = ""
+        if isinstance(subscription_data, dict):
+            subscription_ref = str(subscription_data.get("subscription_id") or "").strip()
+        if not subscription_ref:
+            return ("", 204)
+
+        binding = RevolutSubscriptionBinding.query.filter_by(subscription_ref=subscription_ref).first()
+        if not binding:
+            # Signed provider event, but not for a BT38 subscription binding.
+            return ("", 204)
+
+        assignment = db.session.get(AccountPackageAssignment, binding.assignment_id)
+        if not assignment or assignment.billing_provider != "revolut":
+            return ("", 204)
+
+        subscription = client.retrieve_subscription(binding.subscription_ref)
         if str(subscription.get("id") or "").strip() != str(binding.subscription_ref):
             raise RevolutBillingError("Revolut subscription identity did not match the persisted binding.")
         _sync_assignment_from_subscription(assignment, binding, subscription)
@@ -281,7 +386,8 @@ def bt38_revolut_webhook():
         db.session.commit()
     except RevolutBillingError:
         db.session.rollback()
-        app.logger.exception("Revolut exact subscription readback failed after signed webhook")
+        app.logger.exception("Revolut exact order/subscription readback failed after signed webhook")
         return jsonify({"ok": False, "reason": "provider_readback_failed"}), 503
 
-    return jsonify({"ok": True, "status": "verified"}), 200
+    # Revolut recommends 204 for successful webhook acknowledgement.
+    return ("", 204)
