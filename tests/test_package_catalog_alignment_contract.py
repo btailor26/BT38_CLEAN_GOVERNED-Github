@@ -51,6 +51,16 @@ def test_package_limits_and_features_are_manual_admin_fields():
     assert '/admin/packages/assign' in source
 
 
+def test_package_schema_has_explicit_manual_migration_and_db_guards():
+    migration = _read("migrations/manual/20260911-package-catalog.sql")
+    assert "CREATE TABLE IF NOT EXISTS subscription_packages" in migration
+    assert "CREATE TABLE IF NOT EXISTS account_package_assignments" in migration
+    assert "uq_account_package_assignment_account" in migration
+    assert "ck_subscription_packages_free_shape" in migration
+    assert "ck_subscription_packages_paid_shape" in migration
+    assert "billing_provider IN ('none', 'manual', 'revolut')" in migration
+
+
 def test_billing_page_reads_package_without_global_page_query():
     source = _read("services/package_catalog_alignment.py")
     billing = _read("templates/billing.html")
