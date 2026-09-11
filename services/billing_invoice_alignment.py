@@ -1,0 +1,178 @@
+"""BT38-owned invoice ledger and download surfaces.
+
+Revolut remains payment authority only.  BT38 persists immutable payment evidence
+for completed subscription orders and renders its own PDF/CSV documents without
+calling a paid invoice/document provider.
+"""
+from __future__ import annotations
+
+import csv
+from datetime import datetime
+from io import BytesIO, StringIO
+from xml.sax.saxutils import escape
+
+from flask import Response, abort, send_file
+from flask_login import current_user, login_required
+from sqlalchemy import UniqueConstraint
+
+from app import app
+from extensions import db
+from services.account_profile_alignment import _account_for_user, _is_owner
+
+
+class BillingInvoice(db.Model):
+    __tablename__ = "billing_invoices"
+    __table_args__ = (
+        UniqueConstraint("provider", "provider_order_ref", name="uq_billing_invoice_provider_order"),
+        UniqueConstraint("invoice_number", name="uq_billing_invoice_number"),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey("customer_accounts.id", ondelete="RESTRICT"), nullable=False, index=True)
+    assignment_id = db.Column(db.Integer, db.ForeignKey("account_package_assignments.id", ondelete="RESTRICT"), nullable=False, index=True)
+    package_id = db.Column(db.Integer, db.ForeignKey("subscription_packages.id", ondelete="RESTRICT"), nullable=False, index=True)
+    provider = db.Column(db.String(30), nullable=False, default="revolut")
+    provider_order_ref = db.Column(db.String(180), nullable=False, index=True)
+    provider_subscription_ref = db.Column(db.String(180), nullable=True, index=True)
+    invoice_number = db.Column(db.String(40), nullable=False, unique=True, index=True)
+    business_name = db.Column(db.String(180), nullable=False)
+    package_name = db.Column(db.String(100), nullable=False)
+    amount_minor = db.Column(db.BigInteger, nullable=False)
+    currency = db.Column(db.String(3), nullable=False)
+    payment_state = db.Column(db.String(30), nullable=False, default="completed")
+    paid_at = db.Column(db.DateTime, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+
+with app.app_context():
+    db.create_all()
+
+
+def _minor_amount(value) -> int:
+    if isinstance(value, bool):
+        raise ValueError("Invalid payment amount")
+    return int(value)
+
+
+def _provider_paid_at(order: dict) -> datetime:
+    for key in ("completed_at", "updated_at", "created_at"):
+        raw = str(order.get(key) or "").strip()
+        if not raw:
+            continue
+        try:
+            return datetime.fromisoformat(raw.replace("Z", "+00:00")).replace(tzinfo=None)
+        except ValueError:
+            continue
+    return datetime.utcnow()
+
+
+def record_completed_revolut_invoice(*, account, assignment, package, order: dict, subscription_ref: str) -> BillingInvoice | None:
+    """Persist one invoice per exact completed Revolut order; duplicate webhooks are idempotent."""
+    state = str(order.get("state") or "").strip().lower()
+    if state != "completed":
+        return None
+    order_ref = str(order.get("id") or "").strip()
+    currency = str(order.get("currency") or "").strip().upper()
+    if not order_ref or len(currency) != 3:
+        raise ValueError("Completed Revolut order is missing invoice authority fields")
+
+    existing = BillingInvoice.query.filter_by(provider="revolut", provider_order_ref=order_ref).first()
+    if existing:
+        return existing
+
+    invoice = BillingInvoice(
+        account_id=account.id,
+        assignment_id=assignment.id,
+        package_id=package.id,
+        provider="revolut",
+        provider_order_ref=order_ref,
+        provider_subscription_ref=str(subscription_ref or "").strip() or None,
+        invoice_number=f"BT38-R-{order_ref}",
+        business_name=str(account.business_name or "BT38 customer")[:180],
+        package_name=str(package.name or "BT38")[:100],
+        amount_minor=_minor_amount(order.get("amount")),
+        currency=currency,
+        payment_state="completed",
+        paid_at=_provider_paid_at(order),
+    )
+    db.session.add(invoice)
+    db.session.flush()
+    return invoice
+
+
+def invoices_for_account(account_id: int):
+    return BillingInvoice.query.filter_by(account_id=int(account_id)).order_by(BillingInvoice.paid_at.desc(), BillingInvoice.id.desc()).all()
+
+
+def _invoice_for_owner(invoice_id: int) -> BillingInvoice:
+    account, member = _account_for_user(current_user.id)
+    if not account or not _is_owner(member):
+        abort(403)
+    invoice = db.session.get(BillingInvoice, int(invoice_id))
+    if not invoice or int(invoice.account_id) != int(account.id):
+        abort(404)
+    return invoice
+
+
+def _money(invoice: BillingInvoice) -> str:
+    return f"{invoice.amount_minor / 100:.2f} {invoice.currency}"
+
+
+def _pdf_bytes(invoice: BillingInvoice) -> bytes:
+    """Small dependency-free PDF generated by BT38 itself."""
+    lines = [
+        "BT38 PAID INVOICE",
+        f"Invoice: {invoice.invoice_number}",
+        f"Customer: {invoice.business_name}",
+        f"Package: {invoice.package_name}",
+        f"Paid: {invoice.paid_at.strftime('%d %B %Y %H:%M')}",
+        f"Amount paid: {_money(invoice)}",
+        f"Payment provider: Revolut",
+        f"Payment reference: {invoice.provider_order_ref}",
+        "Status: Paid",
+    ]
+    # Build a standards-compatible one-page PDF with Helvetica; no external service/library.
+    y = 790
+    commands = ["BT", "/F1 16 Tf", f"72 {y} Td"]
+    for index, line in enumerate(lines):
+        safe = line.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+        if index:
+            commands.extend(["0 -28 Td", "/F1 11 Tf"])
+        commands.append(f"({safe}) Tj")
+    commands.append("ET")
+    stream = "\n".join(commands).encode("latin-1", "replace")
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+        b"<< /Length %d >>\nstream\n" % len(stream) + stream + b"\nendstream",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    out = BytesIO(); out.write(b"%PDF-1.4\n")
+    offsets = [0]
+    for i, obj in enumerate(objects, 1):
+        offsets.append(out.tell()); out.write(f"{i} 0 obj\n".encode()); out.write(obj); out.write(b"\nendobj\n")
+    xref = out.tell(); out.write(f"xref\n0 {len(objects)+1}\n".encode()); out.write(b"0000000000 65535 f \n")
+    for offset in offsets[1:]: out.write(f"{offset:010d} 00000 n \n".encode())
+    out.write(f"trailer\n<< /Size {len(objects)+1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode())
+    return out.getvalue()
+
+
+@app.get("/billing/invoices/<int:invoice_id>.pdf")
+@login_required
+def bt38_billing_invoice_pdf(invoice_id: int):
+    invoice = _invoice_for_owner(invoice_id)
+    return send_file(BytesIO(_pdf_bytes(invoice)), mimetype="application/pdf", as_attachment=True, download_name=f"{invoice.invoice_number}.pdf")
+
+
+@app.get("/billing/invoices/<int:invoice_id>.csv")
+@login_required
+def bt38_billing_invoice_csv(invoice_id: int):
+    invoice = _invoice_for_owner(invoice_id)
+    out = StringIO(newline="")
+    writer = csv.writer(out)
+    writer.writerow(["invoice_number", "paid_at", "business_name", "package", "amount", "currency", "status", "payment_provider", "payment_reference"])
+    writer.writerow([invoice.invoice_number, invoice.paid_at.isoformat(), invoice.business_name, invoice.package_name, f"{invoice.amount_minor / 100:.2f}", invoice.currency, "Paid", "Revolut", invoice.provider_order_ref])
+    response = Response(out.getvalue(), mimetype="text/csv")
+    response.headers["Content-Disposition"] = f'attachment; filename="{invoice.invoice_number}.csv"'
+    return response
