@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block title %}{{ case.case_id }} | BT38 Support{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
+  <div>
+    <a class="small text-decoration-none" href="{{ '/admin/support/cases' if is_support_admin else '/support/cases' }}">← Back to support cases</a>
+    <h1 class="h3 mt-2 mb-1">{{ case.case_id }}</h1>
+    <div class="text-muted">{{ case.subject }}</div>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <span class="badge {{ 'text-bg-danger' if case.priority == 'urgent' else 'text-bg-warning' if case.priority == 'high' else 'text-bg-secondary' }}">{{ case.priority|title }}</span>
+    <span class="badge {{ 'text-bg-success' if case.status == 'resolved' else 'text-bg-secondary' if case.status == 'closed' else 'text-bg-primary' }}">{{ support_status_label(case.status) }}</span>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-xl-8">
+    <div class="card shadow-sm mb-4">
+      <div class="card-header bg-white"><strong>Issue</strong></div>
+      <div class="card-body">
+        <dl class="row mb-0">
+          <dt class="col-sm-3">Category</dt><dd class="col-sm-9">{{ support_category_labels.get(case.category, case.category) }}</dd>
+          <dt class="col-sm-3">Affected area</dt><dd class="col-sm-9">{{ case.affected_area or 'Not specified' }}</dd>
+          <dt class="col-sm-3">Opened</dt><dd class="col-sm-9">{{ case.created_at.strftime('%d %b %Y %H:%M') if case.created_at else '—' }}</dd>
+          <dt class="col-sm-3">Description</dt><dd class="col-sm-9"><div style="white-space:pre-wrap">{{ case.description }}</div></dd>
+        </dl>
+      </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+      <div class="card-header bg-white"><strong>Case conversation</strong></div>
+      <div class="card-body">
+        {% for message in messages %}
+        <div class="border rounded p-3 mb-3 {{ 'bg-light' if message.author_role == 'admin' else '' }}">
+          <div class="d-flex justify-content-between gap-3 mb-2">
+            <strong>{{ 'BT38 Support' if message.author_role == 'admin' else 'Customer' }}</strong>
+            <span class="text-muted small">{{ message.created_at.strftime('%d %b %Y %H:%M') if message.created_at else '—' }}</span>
+          </div>
+          <div style="white-space:pre-wrap">{{ message.body }}</div>
+        </div>
+        {% else %}
+        <p class="text-muted">No replies yet.</p>
+        {% endfor %}
+
+        {% if case.status != 'closed' %}
+        <form method="post" class="mt-4">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <label class="form-label">Add reply</label>
+          <textarea class="form-control" name="message" rows="5" maxlength="8000" required></textarea>
+          <div class="form-text mb-3">Do not include passwords, API secrets, card numbers or private keys.</div>
+          <button class="btn btn-primary" type="submit">Send reply</button>
+        </form>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-4">
+    <div class="card shadow-sm mb-4">
+      <div class="card-header bg-white"><strong>Case status</strong></div>
+      <div class="card-body">
+        <div class="mb-2"><span class="text-muted small">Case ID</span><div class="fw-semibold">{{ case.case_id }}</div></div>
+        <div class="mb-2"><span class="text-muted small">Status</span><div>{{ support_status_label(case.status) }}</div></div>
+        <div class="mb-2"><span class="text-muted small">Priority</span><div>{{ case.priority|title }}</div></div>
+        <div><span class="text-muted small">Last updated</span><div>{{ case.updated_at.strftime('%d %b %Y %H:%M') if case.updated_at else '—' }}</div></div>
+      </div>
+    </div>
+
+    {% if is_support_admin %}
+    <div class="card shadow-sm">
+      <div class="card-header bg-white"><strong>Admin controls</strong></div>
+      <div class="card-body">
+        <form method="post" action="/admin/support/cases/{{ case.case_id }}/state">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <div class="mb-3">
+            <label class="form-label">Status</label>
+            <select class="form-select" name="status">
+              {% for value in ['open','in_progress','waiting_customer','resolved','closed'] %}
+                <option value="{{ value }}" {{ 'selected' if case.status == value else '' }}>{{ support_status_label(value) }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Priority</label>
+            <select class="form-select" name="priority">
+              {% for value in ['low','normal','high','urgent'] %}
+                <option value="{{ value }}" {{ 'selected' if case.priority == value else '' }}>{{ value|title }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <button class="btn btn-dark w-100" type="submit">Update case</button>
+        </form>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
