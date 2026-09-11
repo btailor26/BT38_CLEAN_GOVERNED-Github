@@ -91,7 +91,9 @@ jobs:
             services/account_profile_alignment.py \
             services/package_catalog_alignment.py \
             services/revolut_billing.py \
-            services/revolut_subscription_alignment.py
+            services/revolut_subscription_alignment.py \
+            services/billing_invoice_alignment.py \
+            services/support_case_alignment.py
 
       - name: Verify deterministic production build inputs
         shell: bash
@@ -147,4 +149,6 @@ jobs:
             tests/test_google_identity_alignment_contract.py \
             tests/test_package_catalog_alignment_contract.py \
             tests/test_revolut_billing_client_contract.py \
-            tests/test_revolut_subscription_alignment_contract.py
+            tests/test_revolut_subscription_alignment_contract.py \
+            tests/test_billing_invoice_alignment_contract.py \
+            tests/test_support_case_alignment_contract.py
