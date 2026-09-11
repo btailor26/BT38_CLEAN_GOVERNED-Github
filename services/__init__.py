@@ -95,6 +95,12 @@ import services.governed_mcf_amazon_order_identity_alignment  # noqa: F401,E402
 # positive MCF/S02 rows from being absorbed into Pending/FBA. Presentation only.
 import services.governed_fbm_mcf_visibility_alignment  # noqa: F401,E402
 
+# Until each audited fallback/default area is corrected individually, surface it
+# explicitly as "Needs admin attention" rather than allowing uncertainty to look
+# like verified business truth. Review requests use the existing SystemEvent
+# audit stream only and never mutate canonical marketplace/warehouse data.
+import services.governed_truth_attention_alignment  # noqa: F401,E402
+
 # COFI controls extend the existing owner fuse board and persist in SystemConfig.
 # No second settings page, worker, sync path or marketplace execution path.
 import services.cofi_settings_alignment  # noqa: F401,E402
