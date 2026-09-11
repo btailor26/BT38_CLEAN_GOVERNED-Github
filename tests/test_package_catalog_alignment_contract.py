@@ -34,6 +34,13 @@ def test_free_and_paid_tiers_and_revolut_reference_are_explicit():
     assert 'billing_provider == "revolut"' in source
 
 
+def test_assigned_package_cannot_silently_change_free_paid_authority():
+    source = _read("services/package_catalog_alignment.py")
+    assert "if assigned_account_ids and tier_type != package.tier_type:" in source
+    assert "Free/Paid type cannot be changed while this package is assigned." in source
+    assert "reassign the customer instead" in source
+
+
 def test_package_limits_and_features_are_manual_admin_fields():
     source = _read("services/package_catalog_alignment.py")
     template = _read("templates/admin/packages.html")
@@ -50,3 +57,4 @@ def test_billing_page_reads_package_without_global_page_query():
     assert 'return {"bt38_package_for_account": _package_summary}' in source
     assert 'bt38_package_for_account(account.id)' in billing
     assert "Normal BT38 pages pay no DB" in source
+    assert "no separate user or subscription system" in billing
