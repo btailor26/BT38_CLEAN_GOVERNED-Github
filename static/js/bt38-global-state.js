@@ -138,3 +138,18 @@ window.BT38.setPageSession = function(pageName, values = {}) {
 
   document.head.appendChild(script);
 })();
+
+// The owner settings cockpit remains one page. COFI adds a compact control
+// section to that existing fuse board only; it does not create another page.
+(function loadCofiSettingsController() {
+  if (!document.querySelector('[data-bt38-page="settings"]')) return;
+  if (document.querySelector('script[data-bt38-cofi-settings]')) return;
+
+  const script = document.createElement("script");
+  const loaderUrl = new URL(document.currentScript.src, window.location.origin);
+  const assetVersion = loaderUrl.searchParams.get("v") || "bt38-runtime";
+  script.src = `/static/js/cofi-settings.js?v=${encodeURIComponent(assetVersion)}`;
+  script.async = false;
+  script.dataset.bt38CofiSettings = "1";
+  document.head.appendChild(script);
+})();
