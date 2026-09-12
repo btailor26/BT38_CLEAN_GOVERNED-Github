@@ -20,6 +20,24 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Verify current-image recovery delta is bounded
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE=bac23966655e2486799f79b7c6518c825a675be8
+          git fetch --no-tags --depth=1 origin "$BASE"
+          while IFS= read -r FILE; do
+            case "$FILE" in
+              .github/workflows/*|tests/*|services/support_notification_alignment.py|Dockerfile.current-image-alignment|fly.toml)
+                ;;
+              *)
+                echo "BLOCKED: runtime drift outside today's current-image recovery boundary: $FILE"
+                exit 1
+                ;;
+            esac
+          done < <(git diff --name-only "$BASE" HEAD)
+          echo "CURRENT_IMAGE_RUNTIME_DELTA_BOUNDED"
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -99,29 +117,24 @@ jobs:
             services/support_monitoring_alignment.py \
             services/support_notification_alignment.py
 
-      - name: Verify deterministic production build inputs
+      - name: Verify current production image alignment inputs
         shell: bash
         run: |
           set -euo pipefail
           test -f Dockerfile
+          test -f Dockerfile.current-image-alignment
           test -f fly.toml
           test -f pyproject.toml
           test -f uv.lock
           grep -q 'uv sync --frozen --no-dev' Dockerfile
           grep -q 'main:app' Dockerfile
           grep -q 'app = "bt38-prod"' fly.toml
-
-          RESTORE_IMAGE="$(awk -F'"' '/^[[:space:]]*image[[:space:]]*=/ {print $2; exit}' fly.toml)"
-          if [ -n "$RESTORE_IMAGE" ]; then
-            test "${{ github.ref_name }}" = "fix/full-system-release-alignment"
-            test "$RESTORE_IMAGE" = "registry.fly.io/bt38-prod:deployment-01M292M9YJTBX24TT48AT52SJY"
-            ! grep -q '^[[:space:]]*dockerfile[[:space:]]*=' fly.toml
-            echo "GOVERNED_IMAGE_RESTORE_READY=$RESTORE_IMAGE"
-          else
-            grep -q 'dockerfile = "Dockerfile"' fly.toml
-            ! grep -q '^[[:space:]]*image[[:space:]]*=' fly.toml
-            echo "DETERMINISTIC_SOURCE_BUILD_READY"
-          fi
+          grep -q 'dockerfile = "Dockerfile.current-image-alignment"' fly.toml
+          grep -Fq 'FROM registry.fly.io/bt38-prod:deployment-01M2BK6REHCGKJQ34796T3WK8P@sha256:3f7ca913f010fea40a0b8fe20354cae7c010f802328fa0e1eb41258f32168a8b' Dockerfile.current-image-alignment
+          grep -Fq 'COPY services/support_notification_alignment.py /app/services/support_notification_alignment.py' Dockerfile.current-image-alignment
+          ! grep -Eq 'apt-get |pip install|uv sync|npm (install|ci)' Dockerfile.current-image-alignment
+          ! grep -q '^[[:space:]]*image[[:space:]]*=' fly.toml
+          echo "CURRENT_PRODUCTION_IMAGE_ALIGNMENT_READY"
 
       - name: Run deployment readiness contracts
         run: |
@@ -159,4 +172,5 @@ jobs:
             tests/test_support_attachment_alignment_contract.py \
             tests/test_support_monitoring_alignment_contract.py \
             tests/test_support_notification_alignment_contract.py \
-            tests/test_production_startup_registration_contract.py
+            tests/test_production_startup_registration_contract.py \
+            tests/test_current_image_alignment_contract.py
