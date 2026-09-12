@@ -11,7 +11,9 @@ def test_support_attachment_storage_is_private_and_durable():
     assert "db.LargeBinary" in SERVICE
     assert "db.ForeignKey(\"support_cases.id\"" in SERVICE
     assert "db.create_all()" in SERVICE
-    assert "/static" not in SERVICE.split("Private support-case evidence attachments.", 1)[-1].split("from __future__", 1)[0]
+    assert "send_from_directory" not in SERVICE
+    assert "static_folder" not in SERVICE
+    assert "os.path.join" not in SERVICE
     assert "import services.support_attachment_alignment" in INIT
 
 
