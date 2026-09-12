@@ -6,6 +6,11 @@ on:
       - fix/full-system-release-alignment
     paths:
       - '.github/workflows/fly-auth-audit.yml'
+      - '.github/workflows/deploy-fly.yml'
+      - '.github/workflows/deployment-readiness.yml'
+      - 'Dockerfile.current-image-alignment'
+      - 'fly.toml'
+      - 'services/support_notification_alignment.py'
   workflow_dispatch:
 
 permissions:
