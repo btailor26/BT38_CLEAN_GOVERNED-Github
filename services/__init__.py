@@ -123,3 +123,7 @@ import services.revolut_subscription_alignment  # noqa: F401,E402
 # CustomerAccount authority and never reads/writes marketplace, carrier or payment
 # provider truth. The existing public /support page remains separate.
 import services.support_case_alignment  # noqa: F401,E402
+
+# Owner monitoring reads the same support case/message authority and adds only a
+# compact /settings summary. No second queue, worker, provider call or poller.
+import services.support_monitoring_alignment  # noqa: F401,E402
