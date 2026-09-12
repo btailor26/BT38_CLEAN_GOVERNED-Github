@@ -158,4 +158,5 @@ jobs:
             tests/test_support_case_alignment_contract.py \
             tests/test_support_attachment_alignment_contract.py \
             tests/test_support_monitoring_alignment_contract.py \
-            tests/test_support_notification_alignment_contract.py
+            tests/test_support_notification_alignment_contract.py \
+            tests/test_production_startup_registration_contract.py
