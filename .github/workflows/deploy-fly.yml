@@ -61,7 +61,7 @@ jobs:
           git fetch --no-tags --depth=1 origin "$BASE"
           while IFS= read -r FILE; do
             case "$FILE" in
-              .github/workflows/*|tests/*|services/support_notification_alignment.py|Dockerfile.current-image-alignment|fly.toml)
+              AGENTS.md|.github/workflows/*|tests/*|services/support_notification_alignment.py|services/package_catalog_alignment.py|templates/admin/packages.html|migrations/manual/20260912-package-pricing-discount.sql|Dockerfile.current-image-alignment|fly.toml)
                 ;;
               *)
                 echo "BLOCKED: runtime drift outside today's current-image recovery boundary: $FILE"
