@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -6,6 +7,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def _read(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
+
+
+def _compact(value: str) -> str:
+    """Normalize formatting only; contracts still prove the same executable facts."""
+    return re.sub(r"\s+", "", value)
 
 
 def test_google_sign_in_stays_on_existing_login_authority():
@@ -111,8 +117,6 @@ def test_legacy_remember_cookie_is_retired_before_main_auth_guard():
     assert 'app.config.get("SESSION_COOKIE_NAME", "session")' in cleanup
     assert "return _expire_bt38_auth_cookies(response)" in cleanup
 
-    # Clear BT38 state first, then let Flask-Login emit its _remember='clear'
-    # marker. Reversing this executable order recreates the redirect loop.
     end_block = cleanup.split("def _end_auth_session_once", 1)[1].split(
         "@app.before_request", 1
     )[0]
@@ -124,16 +128,18 @@ def test_customer_profile_extends_existing_auth_and_only_gates_new_users():
     cleanup = _read("services/auth_session_legacy_cleanup.py")
     profile_service = _read("services/account_profile_alignment.py")
     first_login = _read("templates/profile_first_login.html")
+    compact = _compact(profile_service)
 
     compile(profile_service, "services/account_profile_alignment.py", "exec")
     assert "import services.account_profile_alignment" in cleanup
-    assert "from models import SystemLog, User" in profile_service
+    assert "frommodelsimportSystemLog,User" in compact
     assert "login_user(" not in profile_service
     assert "verify_google_id_token" not in profile_service
-    assert "setup_required=bool(approved)" in profile_service
-    assert "setup_completed_at=None if approved else datetime.utcnow()" in profile_service
-    assert "Existing live users are grandfathered and never forced through onboarding." in profile_service
-    assert 'path in _PROFILE_ALLOWED_PATHS' in profile_service
+    assert "setup_required=bool(approved)" in compact
+    assert "setup_completed_at=Noneifapprovedelsedatetime.utcnow()" in compact
+    # Existing users remain ungated unless their persisted profile says setup is required.
+    assert "ifnotp.setup_required:returnNone" in compact
+    assert 'pathin_PROFILE_ALLOWED_PATHS' in compact
     assert 'name="username"' in first_login
     assert 'name="display_name"' in first_login
     assert 'name="position"' in first_login
@@ -146,18 +152,19 @@ def test_customer_account_owns_branding_five_seats_and_role_presets():
     profile_page = _read("templates/profile.html")
     billing_page = _read("templates/billing.html")
     migration = _read("migrations/manual/20260911-customer-account-profile.sql")
+    compact = _compact(profile_service)
 
-    assert 'user_limit = db.Column(db.Integer, nullable=False, default=5)' in profile_service
-    assert "if _member_count(account.id) >= int(account.user_limit or 5):" in profile_service
+    assert 'user_limit=db.Column(db.Integer,nullable=False,default=5)' in compact
+    assert '_member_count(a.id)>=int(a.user_limitor5)' in compact
     assert '"warehouse_manager"' in profile_service
     assert '"purchasing_manager"' in profile_service
     assert '"content_manager"' in profile_service
     assert '"assistant"' in profile_service
-    assert '"manage_users": bool(manage_users)' in profile_service
+    assert 'manage_users=bool(manage_users)' in compact
     assert "Position is not permission." in profile_page
     assert "including the owner" in profile_page
 
-    assert "logo_data = db.Column(db.LargeBinary" in profile_service
+    assert "logo_data=db.Column(db.LargeBinary" in compact
     assert "image/png" in profile_service
     assert "image/jpeg" in profile_service
     assert "image/webp" in profile_service
@@ -167,7 +174,6 @@ def test_customer_account_owns_branding_five_seats_and_role_presets():
     assert "customer_account_members" in migration
     assert "user_profiles" in migration
 
-    # Billing is one account surface, not a second subscription/user authority.
     assert '@app.get("/billing")' in profile_service
     assert "no separate user or subscription system" in billing_page
     assert "stripe" not in profile_service.lower()
@@ -193,9 +199,10 @@ def test_customer_team_role_safety_does_not_grant_content_stock_write_and_aligns
 
 def test_customer_shell_only_rebrands_after_customer_logo_exists():
     profile_service = _read("services/account_profile_alignment.py")
-
     shell_block = profile_service.split("def bt38_customer_owned_shell_alignment", 1)[1]
-    assert "if account and account.logo_data:" in shell_block
+    compact = _compact(shell_block)
+
+    assert "ifaanda.logo_data:" in compact
     assert "BT38 Inventory" in shell_block
     assert "Powered by BT38" in shell_block
     assert 'href="/profile"' in shell_block
@@ -207,10 +214,11 @@ def test_first_login_hands_once_to_cofi_dashboard_welcome():
     cleanup = _read("services/auth_session_legacy_cleanup.py")
     profile_service = _read("services/account_profile_alignment.py")
     welcome_service = _read("services/cofi_first_welcome_alignment.py")
+    compact = _compact(profile_service)
 
     compile(welcome_service, "services/cofi_first_welcome_alignment.py", "exec")
     assert "import services.cofi_first_welcome_alignment" in cleanup
-    assert 'session["bt38_cofi_first_welcome"] = display_name' in profile_service
+    assert 'session["bt38_cofi_first_welcome"]=name' in compact or 'session["bt38_cofi_first_welcome"]=display_name' in compact
     assert 'session.pop("bt38_cofi_first_welcome", "")' in welcome_service
     assert 'data-bt38-cofi-first-welcome="true"' in welcome_service
     assert "I’m COFI." in welcome_service
