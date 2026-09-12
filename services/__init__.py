@@ -127,3 +127,8 @@ import services.support_case_alignment  # noqa: F401,E402
 # Owner monitoring reads the same support case/message authority and adds only a
 # compact /settings summary. No second queue, worker, provider call or poller.
 import services.support_monitoring_alignment  # noqa: F401,E402
+
+# Support reply attention extends the already-existing notification bell read.
+# Only safe case metadata is exposed; no message bodies, context secrets, second
+# notification table, worker, poller or external provider call is introduced.
+import services.support_notification_alignment  # noqa: F401,E402
