@@ -184,14 +184,33 @@ jobs:
         run: |
           set -euo pipefail
           CHECK_B64="$(base64 -w0 scripts/verify_production_db_contract.py)"
-          DB_CHECK_OUTPUT=""
-          if DB_CHECK_OUTPUT="$(flyctl ssh console --app bt38-prod --command "sh -lc 'printf %s \"$CHECK_B64\" | base64 -d > /tmp/bt38-db-contract.py && cd /app && .venv/bin/python /tmp/bt38-db-contract.py'" 2>&1)"; then
+          VERIFIED=0
+          for ATTEMPT in 1 2 3 4 5; do
+            set +e
+            DB_CHECK_OUTPUT="$(flyctl ssh console --app bt38-prod --command "sh -lc 'printf %s \"$CHECK_B64\" | base64 -d > /tmp/bt38-db-contract.py && cd /app && .venv/bin/python /tmp/bt38-db-contract.py'" 2>&1)"
+            STATUS=$?
+            set -e
             printf '%s\n' "$DB_CHECK_OUTPUT"
-          else
-            printf '%s\n' "$DB_CHECK_OUTPUT"
-            echo "BLOCKED: current production DB contract could not be verified before source deployment."
+
+            if printf '%s\n' "$DB_CHECK_OUTPUT" | grep -q '^DB_CONTRACT_BLOCKED'; then
+              echo "BLOCKED: production Neon does not satisfy the candidate DB contract."
+              exit 1
+            fi
+
+            if [ "$STATUS" -eq 0 ] && printf '%s\n' "$DB_CHECK_OUTPUT" | grep -q '^DB_CONTRACT_OK:'; then
+              VERIFIED=1
+              break
+            fi
+
+            echo "WAIT: production DB contract verification unavailable through Fly SSH (attempt $ATTEMPT/5)."
+            sleep $((ATTEMPT * 3))
+          done
+
+          if [ "$VERIFIED" -ne 1 ]; then
+            echo "BLOCKED: current production DB contract remained unverifiable after 5 whole-session Fly SSH attempts; no schema mismatch is asserted."
             exit 1
           fi
+          echo "PREDEPLOY_PRODUCTION_DB_CONTRACT_OK"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       - name: Deploy exact GitHub commit with Fly remote builder
