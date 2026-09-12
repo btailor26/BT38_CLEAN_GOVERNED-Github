@@ -1,15 +1,14 @@
 """Align visible BT38 action counters to the existing governed bell action count.
 
-The authority-backed bell reader already returns ``action_count`` from current
-persisted FBM/order/shipment truth while keeping informational shipment history in
-``records``.  The base browser shell still derives its red badge from unread
-records, and the assistant separately parses the Dashboard attention count.
-Those presentation counters can therefore disagree with the governed work queue.
+The authority-backed bell reader returns ``action_count`` from current persisted
+FBM/order/shipment truth. Support can additionally expose a separate
+``support_attention_count`` from the existing case authority. The red bell badge
+shows the combined attention total, while the assistant remains tied only to the
+marketplace ``action_count`` so support cases are never described as marketplace
+actions.
 
-This alignment adds no read, poll, timer, marketplace call, worker or write.  It
-only observes the response from the bell request the browser already performs
-and applies that existing ``action_count`` consistently to the red badge and the
-assistant's normal action-count message.
+This alignment adds no read, poll, timer, marketplace call, worker or write. It
+only observes the response from the bell request the browser already performs.
 """
 from __future__ import annotations
 
@@ -26,6 +25,7 @@ _SCRIPT = r'''
   window.bt38GovernedActionCountUIAligned=true;
 
   var currentCount=null;
+  var currentSupportCount=0;
   var applyingBadge=false;
   var applyingAssistant=false;
   var badgeObserver=null;
@@ -72,25 +72,29 @@ _SCRIPT = r'''
     var bell=document.getElementById('bt38NotificationBell');
     if(!badge)return;
 
-    var value=Math.max(0,Number(currentCount)||0);
+    var marketplaceValue=Math.max(0,Number(currentCount)||0);
+    var supportValue=Math.max(0,Number(currentSupportCount)||0);
+    var value=marketplaceValue+supportValue;
     var expected=value>99?'99+':String(value);
     applyingBadge=true;
     if(badge.textContent!==expected)badge.textContent=expected;
     badge.classList.toggle('d-none',value===0);
     if(bell){
       bell.classList.toggle('text-warning',value>0);
-      bell.setAttribute('aria-label',value>0?'Open notifications - current actions waiting':'Open notifications');
+      bell.setAttribute('aria-label',value>0?'Open notifications - current attention waiting':'Open notifications');
     }
     applyingBadge=false;
   }
 
-  function applyCurrentCount(count){
-    var value=Number(count);
+  function applyCurrentCounts(actionCount,supportCount){
+    var value=Number(actionCount);
     if(!Number.isFinite(value))return;
+    var supportValue=Number(supportCount);
     currentCount=Math.max(0,Math.trunc(value));
+    currentSupportCount=Number.isFinite(supportValue)?Math.max(0,Math.trunc(supportValue)):0;
     applyBadgeCount();
     applyAssistantCount();
-    window.dispatchEvent(new CustomEvent('bt38-governed-action-count',{detail:{count:currentCount}}));
+    window.dispatchEvent(new CustomEvent('bt38-governed-action-count',{detail:{count:currentCount,support_count:currentSupportCount,total_count:currentCount+currentSupportCount}}));
   }
 
   function bindBadgeObserver(){
@@ -125,7 +129,7 @@ _SCRIPT = r'''
     if(isNotificationRead(input)){
       response.clone().json().then(function(payload){
         if(payload&&payload.success===true&&payload.action_count!==undefined){
-          applyCurrentCount(payload.action_count);
+          applyCurrentCounts(payload.action_count,payload.support_attention_count||0);
         }
       }).catch(function(){/* Existing notification error path remains owner. */});
     }
@@ -168,8 +172,8 @@ def install_governed_action_count_ui_alignment() -> None:
 
         app._bt38_action_count_ui_alignment_installed = True
         app.logger.info(
-            "BT38 visible action counters aligned to existing governed bell action_count; "
-            "no extra read, polling, marketplace call or write"
+            "BT38 bell badge aligned to marketplace action_count plus scoped support attention; "
+            "assistant marketplace action wording remains separate"
         )
 
     aligned_install._bt38_action_count_ui_aligned = True
