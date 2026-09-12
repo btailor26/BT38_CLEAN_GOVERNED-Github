@@ -1,0 +1,42 @@
+name: Fly Authentication Audit
+
+on:
+  push:
+    branches:
+      - fix/full-system-release-alignment
+    paths:
+      - '.github/workflows/fly-auth-audit.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-fly-authentication:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Set up Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Verify GitHub Actions can authenticate to bt38-prod
+        shell: bash
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          OUTPUT=""
+          if OUTPUT="$(flyctl status --app bt38-prod 2>&1)"; then
+            echo "FLY_AUTH_OK app=bt38-prod"
+            exit 0
+          fi
+
+          # Do not print the raw Fly error because provider errors can include
+          # token identifiers. Classify only enough information to make the
+          # release gate truthful without exposing credentials.
+          if printf '%s\n' "$OUTPUT" | grep -Eqi 'invalid token|missing third-party discharge token|unauthorized|authentication|not authenticated'; then
+            echo "FLY_AUTH_FAILED: GitHub production FLY_API_TOKEN was rejected by Fly."
+          else
+            echo "FLY_ACCESS_FAILED: Fly authentication could not be proven for bt38-prod; this is not a BT38 DB-contract result."
+          fi
+          exit 1
