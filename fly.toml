@@ -2,7 +2,9 @@ app = "bt38-prod"
 primary_region = "lhr"
 
 [build]
-  dockerfile = "Dockerfile"
+  # Recovery alignment deliberately reuses today's exact production image and
+  # overlays only the audited runtime source delta. Do not rebuild dependencies.
+  dockerfile = "Dockerfile.current-image-alignment"
 
 [env]
   # Webhooks remain the immediate listing path. This enables the existing
