@@ -139,15 +139,23 @@ def support_notification_snapshot(limit: int = 100) -> dict:
     }
 
 
-def _install() -> None:
+def _install() -> bool:
+    """Install against the existing bell once its governed route is registered.
+
+    services is imported while extensions are initialising, before governed_routes
+    has necessarily registered its blueprint. Missing route registration at that
+    moment is therefore a normal startup ordering condition, not a fatal runtime
+    error. The deferred before-request hook below retries installation after route
+    registration and never creates a second notification endpoint.
+    """
     from app import app
 
     endpoint = "governed.governed_ui_notifications"
     original = app.view_functions.get(endpoint)
     if original is None:
-        raise RuntimeError("governed notification endpoint is not registered")
+        return False
     if getattr(original, "_bt38_support_notification_aligned", False):
-        return
+        return True
 
     @wraps(original)
     def support_aligned_notifications(*args, **kwargs):
@@ -181,6 +189,26 @@ def _install() -> None:
         "BT38 support notifications aligned to existing governed bell; "
         "case metadata only, no second notification authority"
     )
+    return True
 
 
-_install()
+def _install_when_ready() -> None:
+    from app import app
+
+    if _install():
+        return
+    if getattr(app, "_bt38_support_notification_install_deferred", False):
+        return
+
+    app._bt38_support_notification_install_deferred = True
+
+    @app.before_request
+    def _bt38_install_support_notification_alignment():
+        # By request time app startup has completed blueprint registration. Keep
+        # this hook harmless if the endpoint is still absent, and idempotent once
+        # the existing bell has been wrapped.
+        _install()
+        return None
+
+
+_install_when_ready()
