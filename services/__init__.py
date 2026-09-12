@@ -117,6 +117,11 @@ if _app_module is not None and getattr(_app_module, "app", None) is not None:
     # No second settings page, worker, sync path or marketplace execution path.
     import services.cofi_settings_alignment  # noqa: F401,E402
 
+    # Package/assignment models must be registered before invoice create_all resolves
+    # invoice foreign keys to account_package_assignments and subscription_packages.
+    # This is schema registration only; package startup makes no provider call.
+    import services.package_catalog_alignment  # noqa: F401,E402
+
     # BT38 owns invoice persistence and PDF/CSV generation. Revolut remains payment
     # authority only; this module makes no provider call and uses no paid document service.
     import services.billing_invoice_alignment  # noqa: F401,E402
