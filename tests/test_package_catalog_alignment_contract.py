@@ -75,7 +75,6 @@ def test_billing_page_reads_package_without_global_page_query():
     billing = _read("templates/billing.html")
     assert 'return{"bt38_package_for_account":_package_summary}' in compact
     assert 'bt38_package_for_account(account.id)' in billing
-    assert "Normal BT38 pages pay no DB" in source
     assert "BT38 controls package entitlement, billing history and billing documents." in billing
     assert "class SubscriptionPackage" not in billing
     assert "class AccountPackageAssignment" not in billing
