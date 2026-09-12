@@ -22,6 +22,8 @@ def test_production_deploy_does_not_run_automatic_recovery_or_catchup():
     for token in forbidden:
         assert token not in workflow
 
-    assert 'Deploy exact GitHub commit with Fly remote builder' in workflow
+    assert 'Build exact candidate image without deploying' in workflow
+    assert 'Verify candidate image DB contract against production Neon' in workflow
+    assert 'Deploy exact audited candidate image' in workflow
     assert 'Verify deployed image DB contract against production Neon' in workflow
     assert 'Restore Packlink callback registration' in workflow
