@@ -179,47 +179,72 @@ jobs:
           ref: ${{ github.sha }}
       - name: Set up Fly CLI
         uses: superfly/flyctl-actions/setup-flyctl@master
-      - name: Verify candidate image DB contract against production Neon
-        shell: bash
-        run: |
-          set -euo pipefail
-          CHECK_B64="$(base64 -w0 scripts/verify_production_db_contract.py)"
-          VERIFIED=0
-          for ATTEMPT in 1 2 3 4 5; do
-            set +e
-            DB_CHECK_OUTPUT="$(flyctl ssh console --app bt38-prod --command "sh -lc 'printf %s \"$CHECK_B64\" | base64 -d > /tmp/bt38-db-contract.py && cd /app && .venv/bin/python /tmp/bt38-db-contract.py'" 2>&1)"
-            STATUS=$?
-            set -e
-            printf '%s\n' "$DB_CHECK_OUTPUT"
-
-            if printf '%s\n' "$DB_CHECK_OUTPUT" | grep -q '^DB_CONTRACT_BLOCKED'; then
-              echo "BLOCKED: production Neon does not satisfy the candidate DB contract."
-              exit 1
-            fi
-
-            if [ "$STATUS" -eq 0 ] && printf '%s\n' "$DB_CHECK_OUTPUT" | grep -q '^DB_CONTRACT_OK:'; then
-              VERIFIED=1
-              break
-            fi
-
-            echo "WAIT: production DB contract verification unavailable through Fly SSH (attempt $ATTEMPT/5)."
-            sleep $((ATTEMPT * 3))
-          done
-
-          if [ "$VERIFIED" -ne 1 ]; then
-            echo "BLOCKED: current production DB contract remained unverifiable after 5 whole-session Fly SSH attempts; no schema mismatch is asserted."
-            exit 1
-          fi
-          echo "PREDEPLOY_PRODUCTION_DB_CONTRACT_OK"
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Deploy exact GitHub commit with Fly remote builder
+      - name: Build exact candidate image without deploying
+        id: candidate_image
         shell: bash
         run: |
           set -euo pipefail
           test "${{ github.ref_name }}" = "fix/full-system-release-alignment"
           test "$(git rev-parse HEAD)" = "${{ inputs.expected_commit }}"
-          flyctl deploy --app bt38-prod --config fly.toml --remote-only --strategy rolling
+          LABEL="candidate-${{ inputs.expected_commit }}"
+          IMAGE="registry.fly.io/bt38-prod:${LABEL}"
+          flyctl deploy \
+            --app bt38-prod \
+            --config fly.toml \
+            --remote-only \
+            --build-only \
+            --push \
+            --image-label "$LABEL"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          echo "CANDIDATE_IMAGE_BUILT=$IMAGE"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Verify candidate image DB contract against production Neon
+        shell: bash
+        run: |
+          set -euo pipefail
+          CANDIDATE_IMAGE="${{ steps.candidate_image.outputs.image }}"
+          test -n "$CANDIDATE_IMAGE"
+          set +e
+          DB_CHECK_OUTPUT="$(flyctl machine run \
+            "$CANDIDATE_IMAGE" \
+            .venv/bin/python /tmp/bt38-db-contract.py \
+            --app bt38-prod \
+            --region lhr \
+            --rm \
+            --restart no \
+            --file-local /tmp/bt38-db-contract.py=scripts/verify_production_db_contract.py \
+            2>&1)"
+          STATUS=$?
+          set -e
+          printf '%s\n' "$DB_CHECK_OUTPUT"
+
+          if printf '%s\n' "$DB_CHECK_OUTPUT" | grep -q '^DB_CONTRACT_BLOCKED'; then
+            echo "BLOCKED: production Neon does not satisfy the exact candidate DB contract."
+            exit 1
+          fi
+
+          if [ "$STATUS" -ne 0 ] || ! printf '%s\n' "$DB_CHECK_OUTPUT" | grep -q '^DB_CONTRACT_OK:'; then
+            echo "BLOCKED: exact candidate image did not prove the production DB contract; no deployment performed."
+            exit 1
+          fi
+
+          echo "PREDEPLOY_CANDIDATE_DB_CONTRACT_OK image=$CANDIDATE_IMAGE"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Deploy exact audited candidate image
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${{ github.ref_name }}" = "fix/full-system-release-alignment"
+          test "$(git rev-parse HEAD)" = "${{ inputs.expected_commit }}"
+          CANDIDATE_IMAGE="${{ steps.candidate_image.outputs.image }}"
+          test -n "$CANDIDATE_IMAGE"
+          flyctl deploy \
+            --app bt38-prod \
+            --config fly.toml \
+            --image "$CANDIDATE_IMAGE" \
+            --strategy rolling
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       - name: Verify critical deployed source in one Fly SSH session
