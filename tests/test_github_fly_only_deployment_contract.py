@@ -26,17 +26,30 @@ def test_manual_workflow_requires_exact_github_commit_and_approval():
     assert "git rev-parse HEAD" in WORKFLOW
 
 
-def test_fly_uses_remote_builder_from_github_checkout_only():
+def test_fly_uses_remote_builder_and_promotes_the_exact_proven_candidate():
     assert "actions/checkout@v4" in WORKFLOW
     assert "--remote-only" in WORKFLOW
     assert "--app bt38-prod" in WORKFLOW
     assert "--strategy rolling" in WORKFLOW
     assert "approved_image" not in WORKFLOW
-    assert "--image" not in WORKFLOW
+
+    build = WORKFLOW.index("Build exact candidate image without deploying")
+    verify = WORKFLOW.index("Verify candidate image DB contract against production Neon")
+    deploy = WORKFLOW.index("Deploy exact audited candidate image")
+    assert build < verify < deploy
+
+    assert "--build-only" in WORKFLOW
+    assert "--push" in WORKFLOW
+    assert 'CANDIDATE_IMAGE="${{ steps.candidate_image.outputs.image }}"' in WORKFLOW
+    assert 'flyctl machine run' in WORKFLOW
+    assert '--rm' in WORKFLOW
+    assert '--file-local /tmp/bt38-db-contract.py=scripts/verify_production_db_contract.py' in WORKFLOW
+    assert '--image "$CANDIDATE_IMAGE"' in WORKFLOW
 
 
-def test_source_integrity_is_checked_before_deploy():
+def test_source_integrity_is_checked_before_candidate_build_and_deploy():
     integrity = WORKFLOW.index("Reject corrupt production source files")
-    deploy = WORKFLOW.index("Deploy exact GitHub commit with Fly remote builder")
-    assert integrity < deploy
+    build = WORKFLOW.index("Build exact candidate image without deploying")
+    deploy = WORKFLOW.index("Deploy exact audited candidate image")
+    assert integrity < build < deploy
     assert "Null bytes found in production source" in WORKFLOW
