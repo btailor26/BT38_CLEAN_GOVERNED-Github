@@ -1,0 +1,91 @@
+name: Fly Production Machine Recovery
+
+on:
+  push:
+    branches:
+      - fix/full-system-release-alignment
+    paths:
+      - '.github/workflows/fly-production-recovery.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bt38-prod-machine-recovery
+  cancel-in-progress: false
+
+jobs:
+  recover-existing-production-machine:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Set up Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Start existing bt38-prod machine if stopped
+        shell: bash
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          MACHINES="$(flyctl machine list --app bt38-prod --json)"
+          COUNT="$(printf '%s' "$MACHINES" | jq 'length')"
+          test "$COUNT" -gt 0 || {
+            echo "BLOCKED: bt38-prod has no Fly Machines. Recovery will not create a replacement implicitly."
+            exit 1
+          }
+
+          STARTED="$(printf '%s' "$MACHINES" | jq '[.[] | select(.state == "started")] | length')"
+          if [ "$STARTED" -gt 0 ]; then
+            echo "BT38_PROD_MACHINE_ALREADY_STARTED count=$STARTED"
+            exit 0
+          fi
+
+          MACHINE_ID="$(printf '%s' "$MACHINES" | jq -r '[.[] | select(.state == "stopped" or .state == "suspended")][0].id // empty')"
+          test -n "$MACHINE_ID" || {
+            printf '%s' "$MACHINES" | jq -r '.[] | "MACHINE_STATE id=\(.id) state=\(.state)"'
+            echo "BLOCKED: no safely restartable stopped/suspended bt38-prod machine was found."
+            exit 1
+          }
+
+          echo "STARTING_EXISTING_BT38_PROD_MACHINE id=$MACHINE_ID"
+          flyctl machine start "$MACHINE_ID" --app bt38-prod
+
+          for ATTEMPT in $(seq 1 20); do
+            STATE="$(flyctl machine list --app bt38-prod --json | jq -r --arg id "$MACHINE_ID" '.[] | select(.id == $id) | .state')"
+            echo "BT38_PROD_MACHINE_STATE attempt=$ATTEMPT state=${STATE:-unknown}"
+            if [ "$STATE" = "started" ]; then
+              echo "BT38_PROD_MACHINE_STARTED id=$MACHINE_ID"
+              exit 0
+            fi
+            sleep 3
+          done
+
+          echo "BLOCKED: bt38-prod machine did not reach started state."
+          exit 1
+
+      - name: Verify Fly application status
+        shell: bash
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          flyctl status --app bt38-prod
+          echo "BT38_PROD_FLY_STATUS_OK"
+
+      - name: Verify public login responds
+        shell: bash
+        run: |
+          set -euo pipefail
+          for ATTEMPT in $(seq 1 12); do
+            if curl --fail --silent --show-error --location --max-time 15 --output /dev/null https://bt38-prod.fly.dev/login; then
+              echo "BT38_PROD_LOGIN_HTTP_OK attempt=$ATTEMPT"
+              exit 0
+            fi
+            echo "WAIT: bt38-prod login not ready attempt=$ATTEMPT/12"
+            sleep 5
+          done
+          echo "BLOCKED: bt38-prod login did not become healthy after machine recovery."
+          exit 1
