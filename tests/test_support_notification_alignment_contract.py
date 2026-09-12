@@ -16,6 +16,17 @@ def test_support_notifications_reuse_existing_bell_and_case_authority():
     assert "import services.support_notification_alignment" in INIT
 
 
+def test_support_bell_install_is_safe_before_governed_blueprint_registration():
+    # services is imported during extension startup, before governed_routes may
+    # have registered its endpoint. That ordering must never crash Gunicorn.
+    assert 'if original is None:\n        return False' in SUPPORT
+    assert 'raise RuntimeError("governed notification endpoint is not registered")' not in SUPPORT
+    assert "def _install_when_ready() -> None:" in SUPPORT
+    assert "@app.before_request" in SUPPORT
+    assert "_bt38_support_notification_install_deferred" in SUPPORT
+    assert "_install_when_ready()" in SUPPORT
+
+
 def test_customer_support_notifications_are_account_scoped():
     assert "_account_for_user(current_user.id)" in SUPPORT
     assert "query = query.filter_by(account_id=account.id)" in SUPPORT
