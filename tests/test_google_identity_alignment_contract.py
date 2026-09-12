@@ -137,7 +137,6 @@ def test_customer_profile_extends_existing_auth_and_only_gates_new_users():
     assert "verify_google_id_token" not in profile_service
     assert "setup_required=bool(approved)" in compact
     assert "setup_completed_at=Noneifapprovedelsedatetime.utcnow()" in compact
-    # Existing users remain ungated unless their persisted profile says setup is required.
     assert "ifnotp.setup_required:returnNone" in compact
     assert 'pathin_PROFILE_ALLOWED_PATHS' in compact
     assert 'name="username"' in first_login
@@ -174,8 +173,13 @@ def test_customer_account_owns_branding_five_seats_and_role_presets():
     assert "customer_account_members" in migration
     assert "user_profiles" in migration
 
+    # Billing remains the account/package surface. It uses the existing account
+    # and package authority rather than defining another user/subscription model.
     assert '@app.get("/billing")' in profile_service
-    assert "no separate user or subscription system" in billing_page
+    assert "bt38_package_for_account(account.id)" in billing_page
+    assert "BT38 controls package entitlement, billing history and billing documents." in billing_page
+    assert "class CustomerAccount" not in billing_page
+    assert "class User" not in billing_page
     assert "stripe" not in profile_service.lower()
     assert "paypal" not in profile_service.lower()
 
