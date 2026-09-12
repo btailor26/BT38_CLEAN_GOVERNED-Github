@@ -19,7 +19,9 @@ def test_owner_cockpit_support_summary_is_settings_admin_only_and_compact():
     assert 'data-bt38-support-monitor="1"' in MONITOR
     for label in ("Active", "Urgent", "Waiting", "First response due", "View cases"):
         assert label in MONITOR
-    assert "bt38-support-monitor-body{display:none" in MONITOR
+    # Source is an f-string, so literal CSS braces are escaped as {{ / }}.
+    assert ".bt38-support-monitor-body{{display:none" in MONITOR
+    assert ".bt38-support-monitor.is-open .bt38-support-monitor-body{{display:block" in MONITOR
 
 
 def test_first_response_attention_uses_explicit_priority_thresholds():
