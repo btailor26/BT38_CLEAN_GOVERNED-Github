@@ -95,6 +95,7 @@ jobs:
             services/revolut_subscription_alignment.py \
             services/billing_invoice_alignment.py \
             services/support_case_alignment.py \
+            services/support_attachment_alignment.py \
             services/support_monitoring_alignment.py \
             services/support_notification_alignment.py
 
@@ -155,5 +156,6 @@ jobs:
             tests/test_revolut_subscription_alignment_contract.py \
             tests/test_billing_invoice_alignment_contract.py \
             tests/test_support_case_alignment_contract.py \
+            tests/test_support_attachment_alignment_contract.py \
             tests/test_support_monitoring_alignment_contract.py \
             tests/test_support_notification_alignment_contract.py
