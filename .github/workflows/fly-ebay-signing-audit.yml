@@ -14,6 +14,24 @@ jobs:
     runs-on: ubuntu-latest
     environment: production
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect governed image recovery
+        id: restore
+        shell: bash
+        run: |
+          set -euo pipefail
+          RESTORE_IMAGE="$(awk -F'"' '/^[[:space:]]*image[[:space:]]*=/ {print $2; exit}' fly.toml)"
+          if [ -n "$RESTORE_IMAGE" ]; then
+            test "${{ github.ref_name }}" = "fix/full-system-release-alignment"
+            test "$RESTORE_IMAGE" = "registry.fly.io/bt38-prod:deployment-01M1HEHKG88QBJ1Y75HJM521QY"
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "GOVERNED_RECOVERY_SIGNING_AUDIT=$RESTORE_IMAGE"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up Fly CLI
         uses: superfly/flyctl-actions/setup-flyctl@master
 
@@ -22,20 +40,30 @@ jobs:
         run: |
           set -euo pipefail
           SECRET_NAMES="$(flyctl secrets list --app bt38-prod | awk 'NR > 1 {print $1}')"
+          FAILED=0
           for KEY in EBAY_SIGNATURE_PRIVATE_KEY EBAY_SIGNATURE_PUBLIC_KEY_JWE; do
             if printf '%s\n' "$SECRET_NAMES" | grep -Fxq "$KEY"; then
               echo "FLY_SECRET_METADATA $KEY=PRESENT"
             else
               echo "FLY_SECRET_METADATA $KEY=MISSING"
+              FAILED=1
             fi
           done
+          test "$FAILED" -eq 0
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
       - name: Check running bt38-prod environment without exposing values
+        if: steps.restore.outputs.enabled != 'true'
         shell: bash
         run: |
           set -euo pipefail
           flyctl ssh console --app bt38-prod --command "sh -lc 'cd /app && .venv/bin/python -c \"import os; keys=(\\\"EBAY_SIGNATURE_PRIVATE_KEY\\\",\\\"EBAY_SIGNATURE_PUBLIC_KEY_JWE\\\"); [print(k + (\\\"=PRESENT length=\\\" + str(len(os.getenv(k) or \\\"\\\")) if os.getenv(k) else \\\"=MISSING\\\")) for k in keys]\"'"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Preserve signing gate during governed image recovery
+        if: steps.restore.outputs.enabled == 'true'
+        run: |
+          echo "Runtime signing-value presence cannot be SSH-audited while bt38-prod has no started VM."
+          echo "Fly secret metadata presence remains mandatory above. Runtime value presence will be re-audited after the pinned known-good image is restored and recovery mode is removed."
