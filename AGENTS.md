@@ -38,6 +38,40 @@ Reverse sync is disabled by default.
 Use existing logging: SystemEvent, ConfigChangeLog, SystemConfig, SystemLog.
 Every change must follow: audit, backup, replace full block, verify, syntax check, git diff, no deploy, approval.
 
+## Mandatory change alignment and enhancement workflow
+
+Every BT38 change must be treated as part of the existing system, not as an isolated feature. A change is not complete merely because its own code works.
+
+Every change must follow this lifecycle:
+
+`CHANGE -> ALIGNMENT -> ENHANCEMENT -> PROOF`
+
+### Change
+
+Implement the requested behaviour through the existing BT38 authorities, services, models, routes, projections and governed paths wherever they already exist. Preserve functionality that is already working and do not replace a proven authority simply to make a new feature easier to implement.
+
+### Alignment
+
+After every change, audit the connected system boundaries affected by it. This includes, where relevant: application startup and import order; existing services and authorities; database/schema contracts; API and route contracts; UI/layout and session behaviour; marketplace/provider authority; governed sync/write rules; Warehouse/Product Linking/FBA/FBM boundaries; workers, queues and schedulers; logging/audit paths; runtime configuration; deployment contracts; and existing regression checks.
+
+A feature that works in isolation but is not aligned with the assembled BT38 system is **incomplete**.
+
+### Enhancement
+
+When a change exposes an outdated assumption, weak integration, missing handoff or obsolete connected behaviour, enhance the existing connected path as part of completing the change. Prefer strengthening the existing authority over adding a workaround.
+
+Enhancement is controlled. Improve only the connected components required to leave the changed path better aligned and more robust. Do not expand into unrelated areas merely because they could also be improved.
+
+Do not create duplicate systems, parallel authorities, unnecessary tables, workers, pollers, routes, event transports, notification systems or workaround layers when an existing BT38 path should be extended or corrected.
+
+### Proof
+
+Every change must prove both the requested behaviour and preservation of connected existing behaviour. Regression proof must cover the affected boundaries, not only the new function.
+
+Before production deployment, the exact candidate GitHub commit must receive the applicable whole-system source-level proof, including startup/import compatibility, compile/syntax, static contracts, database compatibility, UI/API contracts and governed-runtime boundaries. Missing, stale, mismatched or unclear evidence means **NOT PROVEN** and must never be treated as a pass.
+
+Production deployment still requires explicit approval of the exact GitHub commit. After deployment, verify the actual production image/runtime and the affected end-to-end functions before declaring the change complete. A successful workflow or machine start alone is not proof that the application behaviour is healthy.
+
 ## Mandatory event-driven/session-driven workflow
 
 All improvement and alignment work must follow `docs/EVENT_DRIVEN_SESSION_WORKFLOW.md`.
