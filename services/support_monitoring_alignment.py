@@ -72,12 +72,12 @@ def _section(snapshot: dict) -> str:
 @media(max-width:700px){{.bt38-support-monitor-grid{{grid-template-columns:repeat(2,1fr)}}}}
 </style>
 <div class="bt38-support-monitor" id="bt38SupportMonitor" data-bt38-support-monitor="1">
- <div class="bt38-support-monitor-head"><strong>Support</strong><div><a class="bt38-support-monitor-toggle" href="/admin/support/cases">View cases</a> <button class="bt38-support-monitor-toggle" type="button" onclick="bt38ToggleSupportMonitor()">Overdue details</button></div></div>
+ <div class="bt38-support-monitor-head"><strong>Support</strong><div><a class="bt38-support-monitor-toggle" href="/admin/support/cases">View cases</a> <button class="bt38-support-monitor-toggle" type="button" onclick="bt38ToggleSupportMonitor()">First response details</button></div></div>
  <div class="bt38-support-monitor-grid">
-  <a class="bt38-support-monitor-stat" href="/admin/support/cases?status=open"><small>Active</small><strong>{snapshot['open']}</strong></a>
-  <a class="bt38-support-monitor-stat" href="/admin/support/cases?priority=urgent"><small>Urgent</small><strong>{snapshot['urgent']}</strong></a>
+  <a class="bt38-support-monitor-stat" href="/admin/support/cases"><small>Active</small><strong>{snapshot['open']}</strong></a>
+  <a class="bt38-support-monitor-stat" href="/admin/support/cases"><small>Urgent</small><strong>{snapshot['urgent']}</strong></a>
   <a class="bt38-support-monitor-stat" href="/admin/support/cases?status=waiting_customer"><small>Waiting</small><strong>{snapshot['waiting']}</strong></a>
-  <a class="bt38-support-monitor-stat" href="/admin/support/cases?attention=overdue"><small>First response due</small><strong>{snapshot['overdue']}</strong></a>
+  <button class="bt38-support-monitor-stat" type="button" onclick="bt38ToggleSupportMonitor()"><small>First response due</small><strong>{snapshot['overdue']}</strong></button>
  </div>
  <div class="bt38-support-monitor-body"><table><thead><tr><th>Case</th><th>Subject</th><th>Priority</th><th>Attention</th></tr></thead><tbody>{body}</tbody></table></div>
 </div>
@@ -89,7 +89,6 @@ def _inject(html: str) -> str:
     if 'data-bt38-support-monitor="1"' in html:
         return html
     section = _section(support_monitor_snapshot())
-    # Put Support after Needs admin attention when present, otherwise before KPIs.
     marker = '<div class="bt38-kpis">'
     index = html.find(marker)
     return html[:index] + section + html[index:] if index >= 0 else html
