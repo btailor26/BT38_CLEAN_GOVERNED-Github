@@ -1,6 +1,7 @@
 """
 Services package - Business logic and external integrations
 """
+import sys
 
 # Global Amazon FBA settlement rule. Importing the services package installs a
 # narrow wrapper around the existing exact-event runtime so any delayed Amazon
@@ -95,45 +96,51 @@ import services.governed_mcf_amazon_order_identity_alignment  # noqa: F401,E402
 # positive MCF/S02 rows from being absorbed into Pending/FBA. Presentation only.
 import services.governed_fbm_mcf_visibility_alignment  # noqa: F401,E402
 
-# Until each audited fallback/default area is corrected individually, surface it
-# explicitly as "Needs admin attention" rather than allowing uncertainty to look
-# like verified business truth. Review requests use the existing SystemEvent
-# audit stream only and never mutate canonical marketplace/warehouse data.
-import services.governed_truth_attention_alignment  # noqa: F401,E402
+# The modules below register routes/after-request hooks and therefore require an
+# already-created Flask app. A plain ``import services.x`` in contract tests must
+# not bootstrap app.py or demand a Neon URL. In real application startup app.py is
+# loaded first, so these installers still register against the existing app.
+_app_module = sys.modules.get("app")
+if _app_module is not None and getattr(_app_module, "app", None) is not None:
+    # Until each audited fallback/default area is corrected individually, surface it
+    # explicitly as "Needs admin attention" rather than allowing uncertainty to look
+    # like verified business truth. Review requests use the existing SystemEvent
+    # audit stream only and never mutate canonical marketplace/warehouse data.
+    import services.governed_truth_attention_alignment  # noqa: F401,E402
 
-# The owner cockpit consumes the same SystemEvent review stream as one compact,
-# collapsed inbox. Anything explicitly marked under review is surfaced there;
-# no second review table, worker, poller or marketplace path is introduced.
-import services.governed_admin_attention_inbox_alignment  # noqa: F401,E402
+    # The owner cockpit consumes the same SystemEvent review stream as one compact,
+    # collapsed inbox. Anything explicitly marked under review is surfaced there;
+    # no second review table, worker, poller or marketplace path is introduced.
+    import services.governed_admin_attention_inbox_alignment  # noqa: F401,E402
 
-# COFI controls extend the existing owner fuse board and persist in SystemConfig.
-# No second settings page, worker, sync path or marketplace execution path.
-import services.cofi_settings_alignment  # noqa: F401,E402
+    # COFI controls extend the existing owner fuse board and persist in SystemConfig.
+    # No second settings page, worker, sync path or marketplace execution path.
+    import services.cofi_settings_alignment  # noqa: F401,E402
 
-# BT38 owns invoice persistence and PDF/CSV generation. Revolut remains payment
-# authority only; this module makes no provider call and uses no paid document service.
-import services.billing_invoice_alignment  # noqa: F401,E402
+    # BT38 owns invoice persistence and PDF/CSV generation. Revolut remains payment
+    # authority only; this module makes no provider call and uses no paid document service.
+    import services.billing_invoice_alignment  # noqa: F401,E402
 
-# Revolut subscription billing extends the existing package assignment only.
-# It registers explicit owner-start and signed webhook routes, stores provider
-# identifiers in a 1:1 binding row, and makes no provider call on application start.
-import services.revolut_subscription_alignment  # noqa: F401,E402
+    # Revolut subscription billing extends the existing package assignment only.
+    # It registers explicit owner-start and signed webhook routes, stores provider
+    # identifiers in a 1:1 binding row, and makes no provider call on application start.
+    import services.revolut_subscription_alignment  # noqa: F401,E402
 
-# Customer/account support is a case workflow only. It uses the existing
-# CustomerAccount authority and never reads/writes marketplace, carrier or payment
-# provider truth. The existing public /support page remains separate.
-import services.support_case_alignment  # noqa: F401,E402
+    # Customer/account support is a case workflow only. It uses the existing
+    # CustomerAccount authority and never reads/writes marketplace, carrier or payment
+    # provider truth. The existing public /support page remains separate.
+    import services.support_case_alignment  # noqa: F401,E402
 
-# Private case evidence stays on the existing SupportCase authority and is stored
-# durably in Postgres, never under Fly's ephemeral/static filesystem. Downloads
-# re-use the same account/admin case scope and are forced as attachments.
-import services.support_attachment_alignment  # noqa: F401,E402
+    # Private case evidence stays on the existing SupportCase authority and is stored
+    # durably in Postgres, never under Fly's ephemeral/static filesystem. Downloads
+    # re-use the same account/admin case scope and are forced as attachments.
+    import services.support_attachment_alignment  # noqa: F401,E402
 
-# Owner monitoring reads the same support case/message authority and adds only a
-# compact /settings summary. No second queue, worker, provider call or poller.
-import services.support_monitoring_alignment  # noqa: F401,E402
+    # Owner monitoring reads the same support case/message authority and adds only a
+    # compact /settings summary. No second queue, worker, provider call or poller.
+    import services.support_monitoring_alignment  # noqa: F401,E402
 
-# Support reply attention extends the already-existing notification bell read.
-# Only safe case metadata is exposed; no message bodies, context secrets, second
-# notification table, worker, poller or external provider call is introduced.
-import services.support_notification_alignment  # noqa: F401,E402
+    # Support reply attention extends the already-existing notification bell read.
+    # Only safe case metadata is exposed; no message bodies, context secrets, second
+    # notification table, worker, poller or external provider call is introduced.
+    import services.support_notification_alignment  # noqa: F401,E402
