@@ -13,8 +13,27 @@ on:
 jobs:
   deployment-readiness:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: bt38_test
+          POSTGRES_PASSWORD: bt38_test
+          POSTGRES_DB: bt38_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bt38_test -d bt38_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     env:
       PYTHONPATH: ${{ github.workspace }}
+      APP_ENV: dev
+      DEV_DATABASE_URL: postgresql://bt38_test:bt38_test@127.0.0.1:5432/bt38_test
+      DATABASE_URL: postgresql://bt38_test:bt38_test@127.0.0.1:5432/bt38_test
+      SESSION_SECRET: bt38-ci-isolated-session-secret
+      BT38_ALLOW_DATABASE_TESTS: "true"
 
     steps:
       - name: Checkout repository
@@ -28,14 +47,12 @@ jobs:
           set -euo pipefail
           grep -Fq "RUN find /app -mindepth 1 -maxdepth 1 ! -name '.venv' -exec rm -rf {} +" Dockerfile.current-image-alignment
           grep -Fq 'COPY . /app' Dockerfile.current-image-alignment
-
           for PATH_PREFIX in services templates static migrations scripts; do
             if grep -Eq "^${PATH_PREFIX}/$" .dockerignore; then
               echo "BLOCKED: runtime category excluded from exact-head candidate: ${PATH_PREFIX}/"
               exit 1
             fi
           done
-
           git fetch --no-tags origin main
           RUNTIME_COUNT=0
           while IFS= read -r FILE; do
@@ -51,7 +68,6 @@ jobs:
             fi
             RUNTIME_COUNT=$((RUNTIME_COUNT + 1))
           done < <(git diff --name-only origin/main...HEAD)
-
           test "$RUNTIME_COUNT" -gt 0
           echo "EXACT_HEAD_FULL_SOURCE_CANDIDATE_BOUNDARY_OK runtime_changed_files=$RUNTIME_COUNT"
 
