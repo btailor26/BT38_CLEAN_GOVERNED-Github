@@ -17,21 +17,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Detect governed image recovery
-        id: restore
-        shell: bash
-        run: |
-          set -euo pipefail
-          RESTORE_IMAGE="$(awk -F'"' '/^[[:space:]]*image[[:space:]]*=/ {print $2; exit}' fly.toml)"
-          if [ -n "$RESTORE_IMAGE" ]; then
-            test "${{ github.ref_name }}" = "fix/full-system-release-alignment"
-            test "$RESTORE_IMAGE" = "registry.fly.io/bt38-prod:deployment-01M292M9YJTBX24TT48AT52SJY"
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-            echo "GOVERNED_RECOVERY_SIGNING_AUDIT=$RESTORE_IMAGE"
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Set up Fly CLI
         uses: superfly/flyctl-actions/setup-flyctl@master
 
@@ -53,17 +38,42 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
-      - name: Check running bt38-prod environment without exposing values
-        if: steps.restore.outputs.enabled != 'true'
+      - name: Detect running bt38-prod machine
+        id: runtime
         shell: bash
         run: |
           set -euo pipefail
-          flyctl ssh console --app bt38-prod --command "sh -lc 'cd /app && .venv/bin/python -c \"import os; keys=(\\\"EBAY_SIGNATURE_PRIVATE_KEY\\\",\\\"EBAY_SIGNATURE_PUBLIC_KEY_JWE\\\"); [print(k + (\\\"=PRESENT length=\\\" + str(len(os.getenv(k) or \\\"\\\")) if os.getenv(k) else \\\"=MISSING\\\")) for k in keys]\"'"
+          STARTED="$(flyctl machine list --app bt38-prod --json | python -c 'import json,sys; data=json.load(sys.stdin); print(sum(1 for m in data if str(m.get("state") or "").lower() in {"started","running"}))')"
+          if [ "$STARTED" -gt 0 ]; then
+            echo "started=true" >> "$GITHUB_OUTPUT"
+            echo "BT38_PROD_STARTED_MACHINE_PRESENT count=$STARTED"
+          else
+            echo "started=false" >> "$GITHUB_OUTPUT"
+            echo "BT38_PROD_RUNTIME_SIGNING_AUDIT_DEFERRED reason=no_started_machine"
+          fi
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
-      - name: Preserve signing gate during governed image recovery
-        if: steps.restore.outputs.enabled == 'true'
+      - name: Check running bt38-prod environment without exposing values
+        if: steps.runtime.outputs.started == 'true'
+        shell: bash
         run: |
-          echo "Runtime signing-value presence cannot be SSH-audited while bt38-prod has no started VM."
-          echo "Fly secret metadata presence remains mandatory above. Runtime value presence will be re-audited after the pinned known-good image is restored and recovery mode is removed."
+          set -euo pipefail
+          OUTPUT="$(flyctl ssh console --app bt38-prod --command "sh -lc 'cd /app && .venv/bin/python -c \"import os; keys=(\\\"EBAY_SIGNATURE_PRIVATE_KEY\\\",\\\"EBAY_SIGNATURE_PUBLIC_KEY_JWE\\\"); missing=[k for k in keys if not os.getenv(k)]; [print(k + (\\\"=PRESENT length=\\\" + str(len(os.getenv(k) or \\\"\\\")) if os.getenv(k) else \\\"=MISSING\\\")) for k in keys]; raise SystemExit(1 if missing else 0)\"'" 2>&1)" || {
+            printf '%s\n' "$OUTPUT"
+            echo "BLOCKED: a started bt38-prod Machine exists but runtime eBay signing material could not be proven."
+            exit 1
+          }
+          printf '%s\n' "$OUTPUT"
+          echo "EBAY_RUNTIME_SIGNING_MATERIAL_OK"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Preserve signing gate while production runtime is stopped
+        if: steps.runtime.outputs.started != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "No started bt38-prod Machine exists, so runtime value presence cannot be SSH-audited before recovery."
+          echo "Required Fly signing secret metadata was proven above. Runtime signing-value presence remains mandatory after production starts."
+          echo "EBAY_RUNTIME_SIGNING_AUDIT_DEFERRED_NO_STARTED_MACHINE"
