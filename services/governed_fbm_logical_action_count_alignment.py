@@ -1,19 +1,18 @@
-"""Keep the authority-backed FBM bell action count on logical commercial orders.
+"""Keep the passive FBM bell action count on logical commercial orders.
 
 Historical MarketplaceOrder provider-line siblings are retained for audit, but
-must not become separate outstanding dispatch actions. If the existing bell
-projection already contains a persisted shipment lifecycle for an order, every
-stale Ready/Partially-dispatched sale sibling for that logical order is retired.
+must not become separate outstanding dispatch actions. If the existing passive
+bell projection already contains a persisted shipment lifecycle for an order,
+every stale Ready/Partially-dispatched sale sibling for that logical order is
+retired.
 
-This wraps only the existing authority-backed bell reader. It adds no DB query,
-marketplace/provider read, polling, scheduling, write, order import or shipment
-system.
+This wraps only the existing logical bell presentation collapse. It adds no DB
+query, marketplace/provider read, polling, scheduling, write, order import or
+shipment system.
 """
 from __future__ import annotations
 
-from flask import jsonify
-
-from services import governed_fbm_ready_landing_alignment as ready_alignment
+from services import governed_fbm_logical_bell_alignment as bell_alignment
 
 
 _READY_LABELS = {"get ready to dispatch", "partially dispatched"}
@@ -69,29 +68,18 @@ def _collapse_logical_actions(records: list[dict]) -> list[dict]:
 
 
 def install_governed_fbm_logical_action_count_alignment() -> None:
-    original = ready_alignment._event_only_bell_reader
+    original = bell_alignment._collapse_logical_bell_records
     if getattr(original, "_bt38_logical_action_count_aligned", False):
         return
 
-    def aligned_bell_reader():
-        response = original()
-        if isinstance(response, tuple):
-            return response
-        payload = response.get_json(silent=True) if hasattr(response, "get_json") else None
-        if not isinstance(payload, dict) or payload.get("success") is not True:
-            return response
+    def aligned_collapse(records: list[dict], limit: int) -> list[dict]:
+        # First preserve the existing passive bell semantics, then collapse only
+        # duplicate/stale commercial actions already present in that projection.
+        projected = original(records, limit)
+        return _collapse_logical_actions(projected)[:limit]
 
-        records = _collapse_logical_actions(list(payload.get("records") or []))
-        payload["records"] = records
-        payload["action_count"] = sum(
-            1 for record in records if record.get("requires_action") is True
-        )
-        payload["latest_event_at"] = records[0].get("created_at") if records else None
-        payload["logical_action_projection"] = True
-        return jsonify(payload)
-
-    aligned_bell_reader._bt38_logical_action_count_aligned = True
-    ready_alignment._event_only_bell_reader = aligned_bell_reader
+    aligned_collapse._bt38_logical_action_count_aligned = True
+    bell_alignment._collapse_logical_bell_records = aligned_collapse
 
 
 install_governed_fbm_logical_action_count_alignment()
