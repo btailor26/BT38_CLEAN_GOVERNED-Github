@@ -11,10 +11,11 @@ BASE_IMAGE = (
 )
 
 
-def test_recovery_alignment_reuses_today_exact_production_image():
+def test_candidate_alignment_reuses_exact_current_production_runtime_stack():
     assert f"FROM {BASE_IMAGE}" in OVERLAY
     assert 'dockerfile = "Dockerfile.current-image-alignment"' in FLY
     assert '^[[:space:]]*image' not in FLY
+    assert "not a recovery-mode runtime" in OVERLAY
 
 
 def test_alignment_layer_does_not_rebuild_dependencies_or_runtime_stack():
@@ -30,17 +31,29 @@ def test_alignment_layer_does_not_rebuild_dependencies_or_runtime_stack():
         assert token not in OVERLAY
 
 
-def test_alignment_layer_contains_only_the_audited_runtime_delta_and_proof_files():
+def test_alignment_layer_contains_complete_audited_runtime_delta_and_proof_files():
     copy_lines = [line.strip() for line in OVERLAY.splitlines() if line.strip().startswith("COPY ")]
     assert copy_lines == [
         "COPY services/support_notification_alignment.py /app/services/support_notification_alignment.py",
+        "COPY services/package_catalog_alignment.py /app/services/package_catalog_alignment.py",
+        "COPY templates/admin/packages.html /app/templates/admin/packages.html",
+        "COPY migrations/manual/20260912-package-pricing-discount.sql /app/migrations/manual/20260912-package-pricing-discount.sql",
         "COPY fly.toml /app/fly.toml",
         "COPY Dockerfile.current-image-alignment /app/Dockerfile.current-image-alignment",
     ]
 
 
-def test_support_startup_fix_is_the_only_runtime_source_overlay():
+def test_support_startup_fix_remains_in_candidate_runtime_delta():
     support = (ROOT / "services" / "support_notification_alignment.py").read_text(encoding="utf-8")
     assert 'if original is None:\n        return False' in support
     assert 'raise RuntimeError("governed notification endpoint is not registered")' not in support
     assert "_install_when_ready()" in support
+
+
+def test_package_runtime_and_schema_delta_are_carried_together():
+    package_service = (ROOT / "services" / "package_catalog_alignment.py").read_text(encoding="utf-8")
+    migration = (ROOT / "migrations" / "manual" / "20260912-package-pricing-discount.sql").read_text(encoding="utf-8")
+    assert "list_price_pence" in package_service
+    assert "discount_percent" in package_service
+    assert "ADD COLUMN IF NOT EXISTS list_price_pence" in migration
+    assert "ADD COLUMN IF NOT EXISTS discount_percent" in migration
