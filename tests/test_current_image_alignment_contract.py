@@ -38,6 +38,7 @@ def test_alignment_layer_contains_complete_audited_runtime_delta_and_proof_files
         "COPY services/package_catalog_alignment.py /app/services/package_catalog_alignment.py",
         "COPY templates/admin/packages.html /app/templates/admin/packages.html",
         "COPY migrations/manual/20260912-package-pricing-discount.sql /app/migrations/manual/20260912-package-pricing-discount.sql",
+        "COPY scripts/verify_production_db_contract.py /app/scripts/verify_production_db_contract.py",
         "COPY fly.toml /app/fly.toml",
         "COPY Dockerfile.current-image-alignment /app/Dockerfile.current-image-alignment",
     ]
@@ -53,7 +54,11 @@ def test_support_startup_fix_remains_in_candidate_runtime_delta():
 def test_package_runtime_and_schema_delta_are_carried_together():
     package_service = (ROOT / "services" / "package_catalog_alignment.py").read_text(encoding="utf-8")
     migration = (ROOT / "migrations" / "manual" / "20260912-package-pricing-discount.sql").read_text(encoding="utf-8")
+    db_contract = (ROOT / "scripts" / "verify_production_db_contract.py").read_text(encoding="utf-8")
     assert "list_price_pence" in package_service
     assert "discount_percent" in package_service
     assert "ADD COLUMN IF NOT EXISTS list_price_pence" in migration
     assert "ADD COLUMN IF NOT EXISTS discount_percent" in migration
+    assert '"subscription_packages"' in db_contract
+    assert '"list_price_pence"' in db_contract
+    assert '"discount_percent"' in db_contract
