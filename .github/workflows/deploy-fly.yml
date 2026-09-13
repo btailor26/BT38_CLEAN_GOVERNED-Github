@@ -205,26 +205,48 @@ jobs:
           set -euo pipefail
           CANDIDATE_IMAGE="${{ steps.candidate_image.outputs.image }}"
           test -n "$CANDIDATE_IMAGE"
-          set +e
-          DB_CHECK_OUTPUT="$(flyctl machine run \
-            "$CANDIDATE_IMAGE" \
-            .venv/bin/python /tmp/bt38-db-contract.py \
-            --app bt38-prod \
-            --region lhr \
-            --rm \
-            --restart no \
-            --file-local /tmp/bt38-db-contract.py=scripts/verify_production_db_contract.py \
-            2>&1)"
-          STATUS=$?
-          set -e
-          printf '%s\n' "$DB_CHECK_OUTPUT"
+          VERIFIED=0
 
-          if printf '%s\n' "$DB_CHECK_OUTPUT" | grep -q '^DB_CONTRACT_BLOCKED'; then
-            echo "BLOCKED: production Neon does not satisfy the exact candidate DB contract."
+          for ATTEMPT in 1 2 3 4 5; do
+            set +e
+            DB_CHECK_OUTPUT="$(flyctl machine run \
+              "$CANDIDATE_IMAGE" \
+              .venv/bin/python /tmp/bt38-db-contract.py \
+              --app bt38-prod \
+              --region lhr \
+              --rm \
+              --restart no \
+              --file-local /tmp/bt38-db-contract.py=scripts/verify_production_db_contract.py \
+              2>&1)"
+            STATUS=$?
+            set -e
+            printf '%s\n' "$DB_CHECK_OUTPUT"
+
+            if printf '%s\n' "$DB_CHECK_OUTPUT" | grep -q '^DB_CONTRACT_BLOCKED'; then
+              echo "BLOCKED: production Neon does not satisfy the exact candidate DB contract."
+              exit 1
+            fi
+
+            if [ "$STATUS" -eq 0 ] && printf '%s\n' "$DB_CHECK_OUTPUT" | grep -q '^DB_CONTRACT_OK:'; then
+              VERIFIED=1
+              break
+            fi
+
+            if printf '%s\n' "$DB_CHECK_OUTPUT" | grep -q 'MANIFEST_UNKNOWN\|manifest unknown'; then
+              if [ "$ATTEMPT" -lt 5 ]; then
+                echo "WAIT: Fly registry has not propagated the exact candidate manifest yet (attempt $ATTEMPT/5)."
+                sleep 15
+                continue
+              fi
+              echo "BLOCKED: exact candidate manifest remained unavailable in Fly registry after bounded propagation retries; DB contract was not executed."
+              exit 1
+            fi
+
+            echo "BLOCKED: candidate Machine failed for a reason other than the proven Fly registry propagation race; DB contract was not proven."
             exit 1
-          fi
+          done
 
-          if [ "$STATUS" -ne 0 ] || ! printf '%s\n' "$DB_CHECK_OUTPUT" | grep -q '^DB_CONTRACT_OK:'; then
+          if [ "$VERIFIED" -ne 1 ]; then
             echo "BLOCKED: exact candidate image did not prove the production DB contract; no deployment performed."
             exit 1
           fi
