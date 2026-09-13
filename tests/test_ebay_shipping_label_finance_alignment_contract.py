@@ -13,9 +13,15 @@ def test_exact_ebay_hydration_hooks_finance_only_after_shipment_truth():
     assert 'result["shipping_label_finance"] = finance_result' in ALIGNMENT
 
 
-def test_alignment_reuses_existing_exact_hydration_and_is_zero_polling():
-    assert "poll" not in ALIGNMENT.lower().replace("zero-polling", "")
-    assert "worker" not in ALIGNMENT.lower()
+def test_alignment_reuses_existing_exact_hydration_and_adds_no_background_read_path():
+    # Contract executable behaviour rather than prose in the module docstring.
+    # The wrapper is invoked only by the existing exact-hydration call path and
+    # must not introduce its own scheduler/loop/network transport.
+    assert "_ORIGINAL_HYDRATE(" in ALIGNMENT
+    assert "while True" not in ALIGNMENT
+    assert "time.sleep(" not in ALIGNMENT
+    assert "schedule." not in ALIGNMENT
+    assert "threading." not in ALIGNMENT
     assert "FBMShipment(" not in ALIGNMENT
     assert "requests.get(" not in ALIGNMENT
     assert "requests.post(" not in ALIGNMENT
