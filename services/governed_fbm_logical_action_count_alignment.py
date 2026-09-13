@@ -73,9 +73,11 @@ def install_governed_fbm_logical_action_count_alignment() -> None:
         return
 
     def aligned_collapse(records: list[dict], limit: int) -> list[dict]:
-        # First preserve the existing passive bell semantics, then collapse only
-        # duplicate/stale commercial actions already present in that projection.
-        projected = original(records, limit)
+        # Give the existing passive projection the complete persisted record set
+        # before retiring duplicate/stale logical actions. Applying the requested
+        # bell limit first can hide a progressed sibling just beyond that limit
+        # and leave a stale Ready action visible.
+        projected = original(records, max(limit, len(records)))
         return _collapse_logical_actions(projected)[:limit]
 
     aligned_collapse._bt38_logical_action_count_aligned = True
