@@ -6,8 +6,10 @@ SOURCE = (ROOT / "services" / "governed_ebay_shipping_label_finance.py").read_te
 
 
 def test_ebay_shipping_label_finance_read_is_exact_and_read_only():
-    assert 'transactionType:{SHIPPING_LABEL}' in SOURCE
-    assert 'orderId:{{{order_id}}}' in SOURCE
+    # Source-contract the actual f-string representation. The runtime filter
+    # remains exactly SHIPPING_LABEL + the requested eBay order id; doubled
+    # braces here are Python source escaping, not a broader marketplace read.
+    assert 'transactionType:{{SHIPPING_LABEL}},orderId:{{{order_id}}}' in SOURCE
     assert 'EBAY_FINANCES_SCOPE' in SOURCE
     assert 'marketplace_write_started": False' in SOURCE
     assert 'shipment_created": False' in SOURCE
