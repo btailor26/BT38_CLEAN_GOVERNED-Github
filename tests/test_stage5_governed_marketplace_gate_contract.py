@@ -1,4 +1,9 @@
-"""Stage 5 contract tests for the one clean governed marketplace path."""
+"""Stage 5 contracts for the current one clean governed marketplace path.
+
+Current authority:
+UI/governed caller -> governed_execution -> SystemConfig + Store fuse box -> adapter.
+Legacy dual runtime flags and approval dictionaries are retired.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +12,7 @@ from types import SimpleNamespace
 import governed_execution
 import queue_manager
 import shutdown_http_guard
-from services import runtime_gate
+from services import runtime_action_guard
 
 
 def live_payload(**overrides):
@@ -25,36 +30,15 @@ def live_payload(**overrides):
     return payload
 
 
-def approval_for(payload, **overrides):
-    approval = {
-        "approved": True,
-        "approval_type": "amazon_fbm_single_sku_inventory_push",
-        "approved_by": "pytest",
-        "approval_id": "approval-stage5",
-        "source": "bt38_command_center",
-        "scope": {
-            "sku": payload["sku"],
-            "store_id": payload["store_id"],
-            "listing_id": payload["listing_id"],
-            "quantity": payload["quantity"],
-        },
-    }
-    approval.update(overrides)
-    return approval
-
-
-def open_stage5_gate(monkeypatch):
-    monkeypatch.setattr(runtime_gate, "RUNTIME_GATE_FORCE_CLOSED", False)
-    monkeypatch.setattr(runtime_gate, "GOVERNED_AMAZON_FBM_LIVE_ENABLED", True)
-
-
 def patch_valid_store_and_listing(monkeypatch, *, fulfillment="MFN", sku="FBM-STAGE5-01"):
     store = SimpleNamespace(
         id=101,
+        name="Amazon Stage5",
         platform="Amazon",
         is_active=True,
         fbm_sync_enabled=True,
-        fulfillment_type="FBM",
+        store_mode="live",
+        api_key="test-credentials",
     )
     listing = SimpleNamespace(
         id=202,
@@ -67,235 +51,190 @@ def patch_valid_store_and_listing(monkeypatch, *, fulfillment="MFN", sku="FBM-ST
     return store, listing
 
 
-def test_stage5_defaults_remain_closed_before_any_live_validation(monkeypatch):
-    payload = live_payload()
-    patch_valid_store_and_listing(monkeypatch)
-
-    result = governed_execution.submit_governed_marketplace_action(
-        payload,
-        actor="stage5-test",
-        approval=approval_for(payload),
-        dry_run=False,
-    )
-
-    assert result["execution_blocked"] is True
-    assert result["runtime_gate_allowed"] is False
-    assert "disabled" in result["reason"].lower()
-
-
-def test_stage5_dual_flag_gate_requires_both_flags_before_adapter(monkeypatch):
+def test_stage5_dry_run_is_eligible_but_never_executes_live(monkeypatch):
     payload = live_payload()
     patch_valid_store_and_listing(monkeypatch)
     monkeypatch.setattr(
         governed_execution,
-        "_select_adapter",
-        lambda _marketplace: (_ for _ in ()).throw(AssertionError("partial gate must not select adapter")),
+        "_check_fuse_box_authority",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("dry-run must not enter live fuse box")),
+    )
+    monkeypatch.setattr(
+        governed_execution,
+        "_adapter_for",
+        lambda _marketplace: (_ for _ in ()).throw(AssertionError("dry-run must not select adapter")),
     )
 
-    partial_states = [
-        {"RUNTIME_GATE_FORCE_CLOSED": True, "GOVERNED_AMAZON_FBM_LIVE_ENABLED": False},
-        {"RUNTIME_GATE_FORCE_CLOSED": True, "GOVERNED_AMAZON_FBM_LIVE_ENABLED": True},
-        {"RUNTIME_GATE_FORCE_CLOSED": False, "GOVERNED_AMAZON_FBM_LIVE_ENABLED": False},
-    ]
+    result = governed_execution.submit_governed_marketplace_action(
+        payload=payload,
+        actor="stage5-test",
+        dry_run=True,
+    )
 
-    for state in partial_states:
-        monkeypatch.setattr(runtime_gate, "RUNTIME_GATE_FORCE_CLOSED", state["RUNTIME_GATE_FORCE_CLOSED"])
-        monkeypatch.setattr(runtime_gate, "GOVERNED_AMAZON_FBM_LIVE_ENABLED", state["GOVERNED_AMAZON_FBM_LIVE_ENABLED"])
+    assert result["ok"] is True
+    assert result["dry_run"] is True
+    assert result["fuse_box_checked"] is False
+    assert result["execution_started"] is False
+
+
+def test_stage5_fba_and_unknown_fulfillment_fail_before_live_authority(monkeypatch):
+    for payload in (
+        live_payload(sku="FBA-STAGE5-01", amazon_fulfillment_channel="AFN"),
+        live_payload(sku="UNKNOWN-STAGE5-01", amazon_fulfillment_channel=""),
+    ):
+        monkeypatch.setattr(
+            governed_execution,
+            "_check_fuse_box_authority",
+            lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("ineligible Amazon listing must fail before fuse box")),
+        )
         result = governed_execution.submit_governed_marketplace_action(
-            payload,
+            payload=payload,
             actor="stage5-test",
-            approval=approval_for(payload),
             dry_run=False,
         )
-        assert result["execution_blocked"] is True
-        assert result["runtime_gate_allowed"] is False
-        assert result["eligibility_checked"] is False
+        assert result["ok"] is False
+        assert result["governed"] is True
+        assert "read-only" in result["reason"] or "unknown" in result["reason"].lower()
 
 
-def test_stage5_internal_amazon_fbm_live_path_requires_exact_approval_and_valid_listing(monkeypatch):
-    open_stage5_gate(monkeypatch)
+def test_stage5_exact_store_and_listing_validation_precedes_fuse_box(monkeypatch):
+    payload = live_payload()
+    monkeypatch.setattr(governed_execution, "_resolve_store", lambda store_id: None)
+    monkeypatch.setattr(
+        governed_execution,
+        "_check_fuse_box_authority",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("missing store must fail before fuse box")),
+    )
+
+    result = governed_execution.submit_governed_marketplace_action(
+        payload=payload,
+        actor="stage5-test",
+        dry_run=False,
+    )
+
+    assert result["ok"] is False
+    assert "missing store" in result["reason"].lower()
+
+
+def test_stage5_fuse_box_denial_stops_before_adapter(monkeypatch):
+    payload = live_payload()
+    patch_valid_store_and_listing(monkeypatch)
+    monkeypatch.setattr(
+        governed_execution,
+        "_check_fuse_box_authority",
+        lambda *args, **kwargs: {
+            "allowed": False,
+            "reason": "Fuse box runtime_push_enabled is OFF",
+            "fuse_box_checked": True,
+        },
+    )
+    monkeypatch.setattr(
+        governed_execution,
+        "_adapter_for",
+        lambda _marketplace: (_ for _ in ()).throw(AssertionError("denied action must not select adapter")),
+    )
+
+    result = governed_execution.submit_governed_marketplace_action(
+        payload=payload,
+        actor="stage5-test",
+        dry_run=False,
+    )
+
+    assert result["ok"] is False
+    assert result["fuse_box_checked"] is True
+    assert result["execution_started"] is False
+    assert "runtime_push_enabled" in result["reason"]
+
+
+def test_stage5_live_execution_reaches_adapter_only_after_fuse_allow(monkeypatch):
     payload = live_payload()
     patch_valid_store_and_listing(monkeypatch)
     calls = []
 
+    def fuse_allow(command, eligibility, actor_user=None):
+        calls.append("fuse")
+        return {"allowed": True, "reason": "Fuse box allowed action"}
+
     class FakeAdapter:
         def execute(self, action, adapter_payload):
-            calls.append((action, adapter_payload))
-            return {
-                "success": True,
-                "ok": True,
-                "governed": True,
-                "dry_run": False,
-                "execution_blocked": False,
-                "marketplace": "amazon",
-                "adapter": "amazon_fbm",
-                "action": action,
-                "reason": "fake adapter reached",
-            }
+            calls.append("adapter")
+            assert adapter_payload["_governed_fuse_box_checked"] is True
+            assert adapter_payload["_governed_store"].id == 101
+            assert adapter_payload["_governed_listing"].id == 202
+            return {"success": True, "ok": True, "reason": "fake adapter reached"}
 
-    monkeypatch.setattr(governed_execution, "_select_adapter", lambda marketplace: FakeAdapter())
+    monkeypatch.setattr(governed_execution, "_check_fuse_box_authority", fuse_allow)
+    monkeypatch.setattr(governed_execution, "_adapter_for", lambda marketplace: FakeAdapter())
 
     result = governed_execution.submit_governed_marketplace_action(
-        payload,
+        payload=payload,
         actor="stage5-test",
-        approval=approval_for(payload),
         dry_run=False,
+        approval_type="amazon_fbm_single_sku_inventory_push",
+        approval_id="stage5-proof",
     )
 
     assert result["ok"] is True
-    assert result["runtime_gate_allowed"] is True
-    assert result["eligibility_checked"] is True
-    assert result["adapter"] == "amazon_fbm"
-    assert calls and calls[0][0] == "push_inventory"
-    assert calls[0][1]["_governed_dry_run"] is False
-    assert calls[0][1]["_governed_store"].id == 101
-    assert calls[0][1]["_governed_listing"].id == 202
+    assert result["fuse_box_checked"] is True
+    assert calls == ["fuse", "adapter"]
 
 
-def test_stage5_live_path_requires_dry_run_false(monkeypatch):
-    open_stage5_gate(monkeypatch)
-    payload = live_payload()
-    patch_valid_store_and_listing(monkeypatch)
-
-    result = governed_execution.submit_governed_marketplace_action(
-        payload,
-        actor="stage5-test",
-        approval=approval_for(payload),
-        dry_run=True,
-    )
-
-    assert result["dry_run"] is True
-    assert result["execution_blocked"] is True
-    assert result["adapter"] == "amazon_fbm"
-    assert "no live Listings API call" in result["reason"]
-
-
-def test_stage5_approval_must_be_approved_and_typed_and_exactly_scoped(monkeypatch):
-    open_stage5_gate(monkeypatch)
-    payload = live_payload()
-    patch_valid_store_and_listing(monkeypatch)
-    approvals = [
-        approval_for(payload, approved=False),
-        approval_for(payload, approval_type="wrong_type"),
-        approval_for(
-            payload,
-            scope={
-                "sku": payload["sku"],
-                "store_id": payload["store_id"],
-                "listing_id": payload["listing_id"],
-            },
-        ),
-        approval_for(payload, scope={**approval_for(payload)["scope"], "quantity": payload["quantity"] + 1}),
-        approval_for(payload, scope={**approval_for(payload)["scope"], "extra": "not allowed"}),
+def test_stage5_manual_push_uses_manual_fuse_requirements(monkeypatch):
+    required = runtime_action_guard._required_fuses("push", manual=True)
+    assert required == [
+        "push_enabled",
+        "runtime_push_enabled",
+        "marketplace_push_enabled",
+        "manual_push_enabled",
     ]
 
-    monkeypatch.setattr(
-        governed_execution,
-        "_select_adapter",
-        lambda _marketplace: (_ for _ in ()).throw(AssertionError("bad approval must not select adapter")),
-    )
 
-    for approval in approvals:
-        result = governed_execution.submit_governed_marketplace_action(
-            payload,
-            actor="stage5-test",
-            approval=approval,
-            dry_run=False,
+def test_stage5_automatic_webhook_push_uses_same_fuse_box_without_manual_fuse(monkeypatch):
+    payload = live_payload(source="webhook_amazon_order")
+    store, listing = patch_valid_store_and_listing(monkeypatch)
+    command = governed_execution._build_command(payload=payload, dry_run=False, actor="marketplace_webhook")
+    eligibility = governed_execution._check_marketplace_eligibility(command)
+    captured = {}
+
+    def fake_guard(store, action_type, manual=False, context=None):
+        captured.update(
+            store=store,
+            action_type=action_type,
+            manual=manual,
+            context=context,
         )
-        assert result["execution_blocked"] is True
-        assert result["runtime_gate_allowed"] is False
+        return {"allowed": True, "reason": "test"}
+
+    monkeypatch.setattr(runtime_action_guard, "is_runtime_action_allowed", fake_guard)
+    result = governed_execution._check_fuse_box_authority(command, eligibility)
+
+    assert result["allowed"] is True
+    assert captured["store"] is store
+    assert captured["action_type"] == "push"
+    assert captured["manual"] is False
+    assert captured["context"]["automatic_push"] is True
 
 
-def test_stage5_store_and_listing_validation_must_pass_before_adapter(monkeypatch):
-    open_stage5_gate(monkeypatch)
-    payload = live_payload()
-
-    monkeypatch.setattr(governed_execution, "_resolve_store", lambda store_id: None)
-    monkeypatch.setattr(
-        governed_execution,
-        "_select_adapter",
-        lambda _marketplace: (_ for _ in ()).throw(AssertionError("missing store must not select adapter")),
-    )
-
-    result = governed_execution.submit_governed_marketplace_action(
-        payload,
-        actor="stage5-test",
-        approval=approval_for(payload),
-        dry_run=False,
-    )
-
-    assert result["execution_blocked"] is True
-    assert "missing store" in result["reason"]
-
-
-def test_stage5_fba_unknown_and_ebay_live_remain_blocked(monkeypatch):
-    open_stage5_gate(monkeypatch)
-
-    fba_payload = live_payload(sku="FBA-STAGE5-01", amazon_fulfillment_channel="AFN")
-    patch_valid_store_and_listing(monkeypatch, fulfillment="AFN", sku="FBA-STAGE5-01")
-
-    result = governed_execution.submit_governed_marketplace_action(
-        fba_payload,
-        actor="stage5-test",
-        approval=approval_for(fba_payload),
-        dry_run=False,
-    )
-    assert result["execution_blocked"] is True
-    assert "read-only" in result["reason"]
-
-    unknown_payload = live_payload(sku="UNKNOWN-STAGE5-01", amazon_fulfillment_channel="")
-    result = governed_execution.submit_governed_marketplace_action(
-        unknown_payload,
-        actor="stage5-test",
-        approval=approval_for(unknown_payload),
-        dry_run=False,
-    )
-    assert result["execution_blocked"] is True
-    assert "unknown" in result["reason"].lower()
-
-    ebay_payload = {
-        "marketplace": "ebay",
-        "action": "push_inventory",
-        "sku": "EBAY-STAGE5-01",
-        "store_id": 303,
-        "listing_id": 404,
-        "quantity": 3,
-    }
-    result = governed_execution.submit_governed_marketplace_action(
-        ebay_payload,
-        actor="stage5-test",
-        approval=approval_for(ebay_payload),
-        dry_run=False,
-    )
-    assert result["execution_blocked"] is True
-    assert "disabled" in result["reason"].lower() or "ebay live" in result["reason"].lower()
-
-
-def test_real_fba_sku_sr_ay_tc_80g_returns_stop_transfer_reason_before_adapter(monkeypatch):
-    open_stage5_gate(monkeypatch)
+def test_real_fba_sku_sr_ay_tc_80g_stays_read_only_before_adapter(monkeypatch):
     payload = live_payload(
         sku="FBA-SR-AY-TC-80g",
         amazon_fulfillment_channel="AFN",
         quantity=1,
     )
-    patch_valid_store_and_listing(monkeypatch, fulfillment="AFN", sku="FBA-SR-AY-TC-80g")
     monkeypatch.setattr(
         governed_execution,
-        "_select_adapter",
+        "_adapter_for",
         lambda _marketplace: (_ for _ in ()).throw(AssertionError("FBA stop-transfer must not select adapter")),
     )
 
     result = governed_execution.submit_governed_marketplace_action(
-        payload,
+        payload=payload,
         actor="stage5-real-fba-stop-transfer-test",
-        approval=approval_for(payload),
         dry_run=False,
     )
 
     assert result["governed"] is True
-    assert result["execution_blocked"] is True
-    assert result["runtime_gate_allowed"] is True
-    assert result["eligibility_checked"] is True
+    assert result["ok"] is False
     assert result["marketplace"] == "amazon"
     assert result["action"] == "push_inventory"
     assert "FBA/AFN is read-only" in result["reason"]
