@@ -167,7 +167,21 @@ def mutate_warehouse_stock_from_order_line(line: Any, source: str = "governed_or
     if _is_return(line):
         after_available, transaction_type, adjustment_type = before_available + qty, "return", "increase"
     elif is_sale(line):
-        after_available, transaction_type, adjustment_type = max(0, before_available - qty), "sale", "decrease"
+        sellable_available = max(0, before_available - before_reserved - before_allocated)
+        if qty > sellable_available:
+            return {
+                "success": False,
+                "skipped": True,
+                "reason": "insufficient_stock",
+                "sku": stock.sku,
+                "store_id": getattr(listing, "store_id", None),
+                "warehouse_stock_id": stock.id,
+                "available": sellable_available,
+                "required": qty,
+                "reference_id": key,
+                "stock_mutated": False,
+            }
+        after_available, transaction_type, adjustment_type = before_available - qty, "sale", "decrease"
     else:
         return {"success": False, "skipped": True, "reason": "unsupported_order_line_type", "line_type": _line_type(line), "reference_id": key}
 
