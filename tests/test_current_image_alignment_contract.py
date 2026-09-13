@@ -12,12 +12,13 @@ BASE_IMAGE = (
 )
 
 
-def test_candidate_reuses_proven_dependency_stack_but_not_historic_source_assumption():
+def test_candidate_reuses_dependencies_but_replaces_application_source_from_exact_head():
     assert f"FROM {BASE_IMAGE}" in OVERLAY
     assert 'dockerfile = "Dockerfile.current-image-alignment"' in FLY
     assert "COPY . /app" in OVERLAY
-    assert "COMPLETE deployable GitHub source tree" in OVERLAY
-    assert "historic Git commit exactly matches" in OVERLAY
+    assert "! -name '.venv' -exec rm -rf {} +" in OVERLAY
+    assert "Application source is replaced completely" in OVERLAY
+    assert "accidental runtime authority" in OVERLAY
 
 
 def test_alignment_layer_does_not_rebuild_dependencies_or_runtime_stack():
@@ -34,8 +35,6 @@ def test_alignment_layer_does_not_rebuild_dependencies_or_runtime_stack():
 
 
 def test_complete_runtime_source_categories_are_not_excluded_from_build_context():
-    # The complete-source overlay is only truthful if runtime categories remain
-    # available to Docker's build context.
     forbidden_ignores = (
         "services/",
         "templates/",
