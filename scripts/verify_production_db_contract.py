@@ -26,9 +26,7 @@ REQUIRED_COLUMNS = {
         "id", "store_id", "external_sku", "warehouse_stock_id",
         "master_product_group_id",
     },
-    "warehouse_stock": {
-        "id", "sku", "available_quantity",
-    },
+    "warehouse_stock": {"id", "sku", "available_quantity"},
     "fbm_shipments": {
         "id", "store_id", "marketplace_order_id", "provider", "provider_shipment_id",
         "carrier", "service", "tracking_number", "status", "label_purchased_at",
@@ -43,17 +41,26 @@ REQUIRED_COLUMNS = {
         "fulfillment_channel", "shipment_service_level", "latest_ship_at",
         "checked_at", "updated_at",
     },
-    # Current candidate code still contains a compatibility write to this table.
-    # Keep it required only while that code path exists; removing that writer
-    # should remove this table from the release contract in the same commit.
     "fbm_order_operational_state": {
         "store_id", "marketplace_order_id", "platform", "shipping_service",
         "ship_by_at", "earliest_delivery_at", "latest_delivery_at",
         "marketplace_checked_at", "created_at", "updated_at",
     },
-    # The exact candidate overlays the current package catalogue implementation.
-    # Existing tables are not altered by db.create_all(), so the release must
-    # prove the pricing columns introduced by the paired manual migration exist.
+    # Shared account/profile authority used by package, billing and support.
+    "customer_accounts": {
+        "id", "owner_user_id", "business_name", "plan_name", "billing_status",
+        "user_limit", "created_at", "updated_at",
+    },
+    "customer_account_members": {
+        "id", "account_id", "user_id", "access_preset", "is_owner", "created_at",
+    },
+    "user_profiles": {
+        "user_id", "display_name", "position", "setup_required",
+        "setup_completed_at", "created_at", "updated_at",
+    },
+    # COFI uses the existing SystemConfig authority; no second settings table.
+    "system_config": {"key", "value"},
+    # Package entitlement and pricing authority.
     "subscription_packages": {
         "id", "code", "name", "tier_type", "list_price_pence",
         "discount_percent", "price_pence", "currency", "billing_interval",
@@ -64,6 +71,30 @@ REQUIRED_COLUMNS = {
         "id", "account_id", "package_id", "status", "billing_provider",
         "provider_subscription_ref", "starts_at", "ends_at", "created_at",
         "updated_at",
+    },
+    # Revolut provider binding and BT38 invoice persistence.
+    "revolut_subscription_bindings": {
+        "id", "assignment_id", "customer_ref", "subscription_ref",
+        "setup_order_ref", "provider_state", "last_event", "created_at", "updated_at",
+    },
+    "billing_invoices": {
+        "id", "account_id", "assignment_id", "package_id", "provider",
+        "provider_order_ref", "provider_subscription_ref", "invoice_number",
+        "business_name", "package_name", "amount_minor", "currency",
+        "payment_state", "paid_at", "created_at",
+    },
+    # Support case authority, replies and private Postgres evidence attachments.
+    "support_cases": {
+        "id", "case_id", "account_id", "opened_by_user_id", "category", "subject",
+        "description", "priority", "status", "affected_area", "source_page",
+        "context_json", "created_at", "updated_at",
+    },
+    "support_case_messages": {
+        "id", "case_pk", "author_user_id", "author_role", "body", "created_at",
+    },
+    "support_case_attachments": {
+        "id", "case_pk", "uploaded_by_user_id", "uploader_role", "filename",
+        "content_type", "byte_size", "sha256_hex", "payload", "created_at",
     },
 }
 
@@ -100,12 +131,9 @@ def main() -> int:
 
     print("DB_CONTRACT_OK: critical production tables/columns required by this image are present")
 
-    # Informational only. Existing historical drift must not make the structural
-    # compatibility gate unusable; these warnings drive follow-up audits.
     with engine.connect() as connection:
         marketplace_proxy_count = connection.execute(text("""
-            SELECT count(*)
-            FROM fbm_shipments
+            SELECT count(*) FROM fbm_shipments
             WHERE lower(coalesce(provider, '')) = 'marketplace'
         """)).scalar_one()
         if marketplace_proxy_count:
@@ -115,9 +143,7 @@ def main() -> int:
                 "authority cleanup remains required"
             )
 
-        operational_count = connection.execute(text("""
-            SELECT count(*) FROM fbm_order_operational_state
-        """)).scalar_one()
+        operational_count = connection.execute(text("SELECT count(*) FROM fbm_order_operational_state")).scalar_one()
         if operational_count:
             print(
                 "DB_CONTRACT_WARNING: "
