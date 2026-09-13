@@ -3,6 +3,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 INIT = (ROOT / "services" / "__init__.py").read_text(encoding="utf-8")
+COFI = (ROOT / "services" / "cofi_settings_alignment.py").read_text(encoding="utf-8")
 PACKAGE = (ROOT / "services" / "package_catalog_alignment.py").read_text(encoding="utf-8")
 INVOICE = (ROOT / "services" / "billing_invoice_alignment.py").read_text(encoding="utf-8")
 REVOLUT = (ROOT / "services" / "revolut_subscription_alignment.py").read_text(encoding="utf-8")
@@ -19,6 +20,7 @@ def _position(text: str, needle: str) -> int:
 
 
 def test_app_bound_service_registration_order_is_dependency_safe():
+    cofi = _position(INIT, "import services.cofi_settings_alignment")
     package = _position(INIT, "import services.package_catalog_alignment")
     invoice = _position(INIT, "import services.billing_invoice_alignment")
     revolut = _position(INIT, "import services.revolut_subscription_alignment")
@@ -27,8 +29,17 @@ def test_app_bound_service_registration_order_is_dependency_safe():
     support_monitor = _position(INIT, "import services.support_monitoring_alignment")
     support_notification = _position(INIT, "import services.support_notification_alignment")
 
-    assert package < invoice < revolut
+    assert cofi < package < invoice < revolut
     assert revolut < support_case < support_attachment < support_monitor < support_notification
+
+
+def test_cofi_registers_against_existing_app_and_system_config_authority():
+    assert 'from models import SystemConfig' in COFI
+    assert '@app.get("/governed/settings/cofi")' in COFI
+    assert '@app.post("/governed/settings/cofi")' in COFI
+    assert _position(INIT, "import services.cofi_settings_alignment") < _position(
+        INIT, "import services.package_catalog_alignment"
+    )
 
 
 def test_package_tables_are_declared_before_invoice_foreign_keys_can_be_created():
