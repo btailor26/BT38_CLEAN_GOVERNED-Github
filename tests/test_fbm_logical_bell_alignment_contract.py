@@ -18,13 +18,14 @@ def test_historical_pending_unshipped_siblings_choose_stronger_sale_once():
     assert '"pending": 0' in SOURCE
     assert '"unshipped": 1' in SOURCE
     assert "logical_sales[identity]" in SOURCE
-    assert "_prefer_sale(existing, record)" in SOURCE
+    assert "_prefer_sale(existing, aligned)" in SOURCE
 
 
-def test_shipment_progress_retires_stale_sale_for_same_order():
-    assert "small_alignment._BELL_SHIPMENT_LOG_TYPES" in SOURCE
-    assert "progressed_orders" in SOURCE
-    assert "if (identity[0], identity[1]) in progressed_orders:" in SOURCE
+def test_final_persisted_state_retires_stale_sale_for_same_order():
+    assert "_FINAL_BELL_STATUSES" in SOURCE
+    assert '"delivered"' in SOURCE
+    assert "final_orders" in SOURCE
+    assert "if (identity[0], identity[1]) in final_orders:" in SOURCE
     assert "continue" in SOURCE
 
 
