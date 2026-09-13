@@ -53,32 +53,49 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
-      - name: Verify current-image candidate delta is bounded
+          fetch-depth: 0
+
+      - name: Verify exact-head full-source candidate boundary
         shell: bash
         run: |
           set -euo pipefail
-          BASE=bac23966655e2486799f79b7c6518c825a675be8
-          git fetch --no-tags --depth=1 origin "$BASE"
+          grep -Fq "RUN find /app -mindepth 1 -maxdepth 1 ! -name '.venv' -exec rm -rf {} +" Dockerfile.current-image-alignment
+          grep -Fq 'COPY . /app' Dockerfile.current-image-alignment
+          for PATH_PREFIX in services templates static migrations scripts; do
+            if grep -Eq "^${PATH_PREFIX}/$" .dockerignore; then
+              echo "BLOCKED: runtime category excluded from exact-head candidate: ${PATH_PREFIX}/"
+              exit 1
+            fi
+          done
+          git fetch --no-tags origin main
+          RUNTIME_COUNT=0
           while IFS= read -r FILE; do
+            [ -n "$FILE" ] || continue
             case "$FILE" in
-              AGENTS.md|.github/workflows/*|tests/*|scripts/verify_production_db_contract.py|services/support_notification_alignment.py|services/package_catalog_alignment.py|templates/admin/packages.html|migrations/manual/20260912-package-pricing-discount.sql|Dockerfile.current-image-alignment|fly.toml)
-                ;;
-              *)
-                echo "BLOCKED: runtime drift outside current-image candidate alignment boundary: $FILE"
-                exit 1
+              .github/*|tests/*|docs/*|*.md|.gitignore)
+                continue
                 ;;
             esac
-          done < <(git diff --name-only "$BASE" HEAD)
-          echo "CURRENT_IMAGE_CANDIDATE_DELTA_BOUNDED"
+            if [ ! -e "$FILE" ]; then
+              echo "BLOCKED: changed runtime/config path is absent from exact head: $FILE"
+              exit 1
+            fi
+            RUNTIME_COUNT=$((RUNTIME_COUNT + 1))
+          done < <(git diff --diff-filter=ACMRTUXB --name-only origin/main...HEAD)
+          test "$RUNTIME_COUNT" -gt 0
+          echo "EXACT_HEAD_FULL_SOURCE_CANDIDATE_BOUNDARY_OK runtime_changed_files=$RUNTIME_COUNT"
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
       - name: Install locked dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
           uv sync --frozen --no-dev
+
       - name: Verify exact candidate image inputs
         shell: bash
         run: |
@@ -93,14 +110,26 @@ jobs:
           grep -q 'app = "bt38-prod"' fly.toml
           grep -q 'dockerfile = "Dockerfile.current-image-alignment"' fly.toml
           grep -Fq 'FROM registry.fly.io/bt38-prod:deployment-01M2BK6REHCGKJQ34796T3WK8P@sha256:3f7ca913f010fea40a0b8fe20354cae7c010f802328fa0e1eb41258f32168a8b' Dockerfile.current-image-alignment
+          grep -Fq 'COPY . /app' Dockerfile.current-image-alignment
+          grep -Fq 'COPY services/cofi_settings_alignment.py /app/services/cofi_settings_alignment.py' Dockerfile.current-image-alignment
+          grep -Fq 'COPY services/revolut_billing.py /app/services/revolut_billing.py' Dockerfile.current-image-alignment
+          grep -Fq 'COPY services/revolut_subscription_alignment.py /app/services/revolut_subscription_alignment.py' Dockerfile.current-image-alignment
+          grep -Fq 'COPY services/support_case_alignment.py /app/services/support_case_alignment.py' Dockerfile.current-image-alignment
+          grep -Fq 'COPY services/support_attachment_alignment.py /app/services/support_attachment_alignment.py' Dockerfile.current-image-alignment
+          grep -Fq 'COPY services/support_monitoring_alignment.py /app/services/support_monitoring_alignment.py' Dockerfile.current-image-alignment
           grep -Fq 'COPY services/support_notification_alignment.py /app/services/support_notification_alignment.py' Dockerfile.current-image-alignment
-          grep -Fq 'COPY services/package_catalog_alignment.py /app/services/package_catalog_alignment.py' Dockerfile.current-image-alignment
-          grep -Fq 'COPY templates/admin/packages.html /app/templates/admin/packages.html' Dockerfile.current-image-alignment
+          grep -Fq 'COPY migrations/manual/20260911-customer-account-profile.sql /app/migrations/manual/20260911-customer-account-profile.sql' Dockerfile.current-image-alignment
+          grep -Fq 'COPY migrations/manual/20260911-package-catalog.sql /app/migrations/manual/20260911-package-catalog.sql' Dockerfile.current-image-alignment
+          grep -Fq 'COPY migrations/manual/20260911-revolut-subscription-binding.sql /app/migrations/manual/20260911-revolut-subscription-binding.sql' Dockerfile.current-image-alignment
+          grep -Fq 'COPY migrations/manual/20260911-billing-invoices.sql /app/migrations/manual/20260911-billing-invoices.sql' Dockerfile.current-image-alignment
+          grep -Fq 'COPY migrations/manual/20260911-support-cases.sql /app/migrations/manual/20260911-support-cases.sql' Dockerfile.current-image-alignment
           grep -Fq 'COPY migrations/manual/20260912-package-pricing-discount.sql /app/migrations/manual/20260912-package-pricing-discount.sql' Dockerfile.current-image-alignment
+          grep -Fq 'COPY migrations/manual/20260913-support-case-attachments.sql /app/migrations/manual/20260913-support-case-attachments.sql' Dockerfile.current-image-alignment
           grep -Fq 'COPY scripts/verify_production_db_contract.py /app/scripts/verify_production_db_contract.py' Dockerfile.current-image-alignment
           ! grep -Eq 'apt-get |pip install|uv sync|npm (install|ci)' Dockerfile.current-image-alignment
           ! grep -q '^[[:space:]]*image[[:space:]]*=' fly.toml
           echo "EXACT_CANDIDATE_IMAGE_ALIGNMENT_READY"
+
       - name: Reject corrupt production source files
         run: |
           python - <<'PY'
@@ -109,7 +138,7 @@ jobs:
           for path in Path('.').rglob('*'):
               if not path.is_file() or '.git' in path.parts:
                   continue
-              if path.suffix.lower() not in {'.py', '.html', '.js', '.toml', '.md'}:
+              if path.suffix.lower() not in {'.py', '.html', '.js', '.toml', '.md', '.ts', '.json', '.sql'}:
                   continue
               if b'\0' in path.read_bytes():
                   bad.append(str(path))
@@ -117,61 +146,19 @@ jobs:
               raise SystemExit('Null bytes found in production source: ' + ', '.join(bad))
           print('SOURCE_INTEGRITY_OK')
           PY
-      - name: Compile production runtime
+
+      - name: Compile complete tracked Python source
+        shell: bash
         run: |
-          uv run python -m py_compile \
-            main.py app.py models.py fbm_models.py \
-            governed_routes.py governed_group_routes.py governed_group_propagation_routes.py \
-            governed_mcf_routes.py governed_runtime_visibility_routes.py governed_fbm_routes.py governed_fbm_manual_routes.py \
-            governed_packlink_callback_routes.py services/fbm_provider_contract.py \
-            services/fbm_order_mapper.py services/fbm_marketplace_destination.py \
-            services/fbm_amazon_order_profile.py services/fbm_amazon_shipping_adapter.py services/fbm_amazon_vtr.py \
-            services/fbm_packlink_adapter.py services/fbm_packlink_callback.py services/fbm_packlink_event_processor.py \
-            services/fbm_post_purchase.py services/fbm_marketplace_confirmation.py services/fbm_shipping_state.py \
-            services/fbm_db_delivery_promise_alignment.py services/governed_order_clarity_alignment.py \
-            services/governed_fbm_page_alignment.py services/governed_fbm_dispatch_queue_alignment.py \
-            services/governed_fbm_lifecycle_alignment.py services/governed_fbm_db_authority_alignment.py \
-            services/governed_fbm_marketplace_dispatch_authority_alignment.py services/governed_notification_read_alignment.py \
-            services/governed_action_count_ui_alignment.py services/governed_amazon_tracking_readback.py \
-            services/governed_exact_ebay_order_hydration.py services/governed_ebay_oauth_scopes.py \
-            services/governed_ebay_notification_registration.py services/governed_ebay_shipping_notification_alignment.py \
-            services/governed_ebay_post_deploy_alignment.py services/governed_runtime_engine.py \
-            services/governed_webhook_execution.py services/governed_webhook_alignment.py services/governed_push_execution.py \
-            services/governed_ebay_inventory_import.py services/governed_amazon_inventory_import.py \
-            services/governed_amazon_listing_fulfillment_refresh.py services/governed_listing_structure_reconcile.py \
-            services/governed_marketplace_order_import.py services/governed_order_stock_mutation.py \
-            services/governed_mcf_execution.py services/governed_warehouse_sync.py \
-            services/governed_warehouse_inbound_alignment.py services/governed_warehouse_inbound_installer.py \
-            services/google_identity.py services/public_early_access.py services/account_profile_alignment.py \
-            services/cofi_settings_alignment.py services/package_catalog_alignment.py services/revolut_billing.py \
-            services/revolut_subscription_alignment.py services/billing_invoice_alignment.py \
-            services/support_case_alignment.py services/support_attachment_alignment.py \
-            services/support_monitoring_alignment.py services/support_notification_alignment.py \
-            scripts/verify_production_db_contract.py
-      - name: Run deployment contracts
+          set -euo pipefail
+          mapfile -d '' PY_FILES < <(git ls-files -z '*.py')
+          test "${#PY_FILES[@]}" -gt 0
+          uv run python -m py_compile "${PY_FILES[@]}"
+          echo "FULL_TRACKED_PYTHON_COMPILE_OK files=${#PY_FILES[@]}"
+
+      - name: Run complete Python contract suite
         run: |
-          uv run python -m pytest -q \
-            tests/test_runtime_deployment_contract.py tests/test_fba_targeted_update_contract.py \
-            tests/test_webhook_scoped_reconcile_contract.py tests/test_webhook_push_alignment_contract.py \
-            tests/test_ui_production_alignment_contract.py tests/test_amazon_eventbridge_listing_subscription_contract.py \
-            tests/test_listing_structure_sync_contract.py tests/test_github_fly_only_deployment_contract.py \
-            tests/test_amazon_public_appstore_alignment_contract.py tests/test_fbm_page_bounded_alignment_contract.py \
-            tests/test_fbm_packlink_contract.py tests/test_fbm_packlink_import_alignment_contract.py \
-            tests/test_fbm_amazon_tracking_contract.py tests/test_fbm_amazon_confirmation_payload.py \
-            tests/test_fbm_manual_shipping_order_contract.py tests/test_fbm_ebay_shipping_tracking_alignment_contract.py \
-            tests/test_fbm_db_delivery_performance_authority_contract.py tests/test_fbm_marketplace_dispatch_runtime_order_contract.py \
-            tests/test_ebay_return_notification_registration_contract.py tests/test_order_clarity_alignment_contract.py \
-            tests/test_marketplace_tracking_readback_contract.py tests/test_marketplace_dispatch_truth_recovery_contract.py \
-            tests/test_fbm_marketplace_lifecycle_authority_contract.py tests/test_fbm_handoff_bell_alignment_contract.py \
-            tests/test_marketplace_return_refund_alignment_contract.py tests/test_governed_warehouse_inbound_contract.py \
-            tests/test_production_db_contract_gate.py tests/test_event_runtime_zero_recovery_contract.py \
-            tests/test_deploy_no_recovery_contract.py tests/test_google_identity_alignment_contract.py \
-            tests/test_package_catalog_alignment_contract.py tests/test_package_pricing_discount_contract.py \
-            tests/test_revolut_billing_client_contract.py tests/test_revolut_subscription_alignment_contract.py \
-            tests/test_billing_invoice_alignment_contract.py tests/test_support_case_alignment_contract.py \
-            tests/test_support_attachment_alignment_contract.py tests/test_support_monitoring_alignment_contract.py \
-            tests/test_support_notification_alignment_contract.py tests/test_production_startup_registration_contract.py \
-            tests/test_current_image_alignment_contract.py
+          uv run python -m pytest -q tests test_concurrent_sales.py
 
   deploy:
     needs: audit
@@ -182,8 +169,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
+          fetch-depth: 0
+
       - name: Set up Fly CLI
         uses: superfly/flyctl-actions/setup-flyctl@master
+
       - name: Build exact candidate image without deploying
         id: candidate_image
         shell: bash
@@ -204,6 +194,7 @@ jobs:
           echo "CANDIDATE_IMAGE_BUILT=$IMAGE"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
       - name: Verify candidate image DB contract against production Neon
         shell: bash
         run: |
@@ -289,6 +280,7 @@ jobs:
           trap - EXIT
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
       - name: Deploy exact audited candidate image
         shell: bash
         run: |
@@ -304,73 +296,59 @@ jobs:
             --strategy rolling
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Verify critical deployed source in one Fly SSH session
+
+      - name: Verify all changed deployed runtime source in one Fly SSH session
         shell: bash
         run: |
           set -euo pipefail
-          FILES=(
-            Dockerfile
-            Dockerfile.current-image-alignment
-            fly.toml
-            main.py
-            app.py
-            governed_routes.py
-            governed_fbm_routes.py
-            governed_fbm_manual_routes.py
-            templates/fbm.html
-            templates/admin/packages.html
-            templates/public_landing.html
-            templates/forgot_password.html
-            templates/reset_password.html
-            static/js/fbm_tracking_journey.js
-            static/js/fbm_delivery_promise_journey_alignment.js
-            services/__init__.py
-            services/account_profile_alignment.py
-            services/cofi_settings_alignment.py
-            services/package_catalog_alignment.py
-            services/billing_invoice_alignment.py
-            services/revolut_subscription_alignment.py
-            services/support_case_alignment.py
-            services/support_attachment_alignment.py
-            services/support_monitoring_alignment.py
-            services/support_notification_alignment.py
-            services/fbm_db_delivery_promise_alignment.py
-            services/governed_order_clarity_alignment.py
-            services/governed_fbm_page_alignment.py
-            services/governed_fbm_lifecycle_alignment.py
-            services/fbm_marketplace_confirmation.py
-            services/fbm_post_purchase.py
-            services/governed_runtime_engine.py
-            services/governed_webhook_execution.py
-            services/google_identity.py
-            services/public_early_access.py
-            migrations/manual/20260912-package-pricing-discount.sql
-            scripts/verify_production_db_contract.py
-          )
-
+          git fetch --no-tags origin main
           MANIFEST="$(mktemp)"
-          for FILE in "${FILES[@]}"; do
-            test -f "$FILE" || { echo "BLOCKED: audited GitHub source is missing '$FILE'."; exit 1; }
+          ABSENT="$(mktemp)"
+
+          include_runtime_path() {
+            case "$1" in
+              .github/*|tests/*|docs/*|*.md|.gitignore)
+                return 1
+                ;;
+              *)
+                return 0
+                ;;
+            esac
+          }
+
+          while IFS= read -r FILE; do
+            [ -n "$FILE" ] || continue
+            include_runtime_path "$FILE" || continue
+            test -f "$FILE" || { echo "BLOCKED: audited exact-head runtime file is missing: $FILE"; exit 1; }
             HASH="$(sha256sum "$FILE" | awk '{print $1}')"
             printf '%s  /app/%s\n' "$HASH" "$FILE" >> "$MANIFEST"
-          done
+          done < <(git diff --diff-filter=ACMRTUXB --name-only origin/main...HEAD)
+
+          while IFS= read -r FILE; do
+            [ -n "$FILE" ] || continue
+            include_runtime_path "$FILE" || continue
+            printf '/app/%s\n' "$FILE" >> "$ABSENT"
+          done < <(git diff --diff-filter=D --name-only origin/main...HEAD)
+
+          test -s "$MANIFEST"
           MANIFEST_B64="$(base64 -w0 "$MANIFEST")"
+          ABSENT_B64="$(base64 -w0 "$ABSENT")"
 
           VERIFIED=0
           for ATTEMPT in 1 2 3 4 5; do
             set +e
-            OUTPUT="$(flyctl ssh console --app bt38-prod --command "sh -lc 'set -eu; printf %s \"$MANIFEST_B64\" | base64 -d > /tmp/bt38-source.sha256; if sha256sum -c /tmp/bt38-source.sha256; then echo CRITICAL_REMOTE_SOURCE_OK; else echo CRITICAL_REMOTE_SOURCE_MISMATCH; exit 42; fi'" 2>&1)"
+            OUTPUT="$(flyctl ssh console --app bt38-prod --command "sh -lc 'set -eu; printf %s \"$MANIFEST_B64\" | base64 -d > /tmp/bt38-source.sha256; printf %s \"$ABSENT_B64\" | base64 -d > /tmp/bt38-source-absent.txt; sha256sum -c /tmp/bt38-source.sha256; while IFS= read -r FILE; do [ -z \"$FILE\" ] || [ ! -e \"$FILE\" ] || { echo STALE_REMOTE_SOURCE_PRESENT:$FILE; exit 43; }; done < /tmp/bt38-source-absent.txt; echo COMPLETE_CHANGED_RUNTIME_SOURCE_OK'" 2>&1)"
             STATUS=$?
             set -e
             printf '%s\n' "$OUTPUT"
 
-            if [ "$STATUS" -eq 0 ] && printf '%s\n' "$OUTPUT" | grep -q 'CRITICAL_REMOTE_SOURCE_OK'; then
+            if [ "$STATUS" -eq 0 ] && printf '%s\n' "$OUTPUT" | grep -q 'COMPLETE_CHANGED_RUNTIME_SOURCE_OK'; then
               VERIFIED=1
               break
             fi
 
-            if printf '%s\n' "$OUTPUT" | grep -q 'CRITICAL_REMOTE_SOURCE_MISMATCH'; then
-              echo "BLOCKED: deployed source is missing or differs from the audited GitHub source."
+            if printf '%s\n' "$OUTPUT" | grep -q 'FAILED\|STALE_REMOTE_SOURCE_PRESENT'; then
+              echo "BLOCKED: deployed runtime source differs from the audited GitHub exact head."
               exit 1
             fi
 
@@ -379,12 +357,21 @@ jobs:
           done
 
           if [ "$VERIFIED" -ne 1 ]; then
-            echo "BLOCKED: deployed-source verification remained unavailable after 5 whole-session attempts; no source mismatch is asserted."
+            echo "BLOCKED: complete changed-runtime verification remained unavailable after 5 whole-session attempts."
             exit 1
           fi
-          echo "CRITICAL_DEPLOYED_SOURCE_OK commit=${{ inputs.expected_commit }}"
+          echo "COMPLETE_CHANGED_RUNTIME_DEPLOYED_SOURCE_OK commit=${{ inputs.expected_commit }}"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Verify aligned feature registration
+        shell: bash
+        run: |
+          set -euo pipefail
+          flyctl ssh console --app bt38-prod --command "sh -lc 'cd /app && .venv/bin/python -c \"from app import app; import services; rules={r.rule for r in app.url_map.iter_rules()}; required={\\\"/governed/settings/cofi\\\",\\\"/billing/revolut/start\\\",\\\"/webhooks/revolut\\\",\\\"/admin/revolut/webhook/provision\\\",\\\"/support/cases\\\",\\\"/support/cases/<case_id>\\\",\\\"/support/cases/<case_id>/attachments\\\"}; missing=sorted(required-rules); assert not missing, f\\\"missing routes: {missing}\\\"; print(\\\"ALIGNED_FEATURE_REGISTRATION_OK cofi=True revolut=True support=True\\\")\"'"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
       - name: Verify effective Google auth and browser session policy
         shell: bash
         run: |
@@ -392,6 +379,7 @@ jobs:
           flyctl ssh console --app bt38-prod --command "sh -lc 'cd /app && .venv/bin/python -c \"import os; from app import app; import services.public_early_access; cid=str(os.getenv(\\\"GOOGLE_CLIENT_ID\\\") or \\\"\\\").strip(); lifetime=app.config.get(\\\"PERMANENT_SESSION_LIFETIME\\\"); lifetime_seconds=int(lifetime.total_seconds()) if hasattr(lifetime,\\\"total_seconds\\\") else int(lifetime); assert app.config.get(\\\"SESSION_COOKIE_SECURE\\\") is True; assert app.config.get(\\\"SESSION_COOKIE_HTTPONLY\\\") is True; assert app.config.get(\\\"SESSION_COOKIE_SAMESITE\\\") == \\\"Lax\\\"; assert app.config.get(\\\"SESSION_REFRESH_EACH_REQUEST\\\") is True; assert app.config.get(\\\"SESSION_PERMANENT\\\") is True; assert lifetime_seconds == 1800; assert app.config.get(\\\"SESSION_COOKIE_DOMAIN\\\") is None; assert app.config.get(\\\"REMEMBER_COOKIE_SECURE\\\") is True; assert app.config.get(\\\"REMEMBER_COOKIE_HTTPONLY\\\") is True; assert app.config.get(\\\"REMEMBER_COOKIE_SAMESITE\\\") == \\\"Lax\\\"; assert cid.endswith(\\\".apps.googleusercontent.com\\\"); print(\\\"AUTH_SESSION_POLICY_OK samesite=Lax secure=True httponly=True sliding_seconds=1800 host_only=True google_client_configured=True\\\")\"'"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
       - name: Verify deployed image DB contract against production Neon
         shell: bash
         run: |
@@ -399,6 +387,7 @@ jobs:
           flyctl ssh console --app bt38-prod --command "sh -lc 'cd /app && .venv/bin/python scripts/verify_production_db_contract.py'"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
       - name: Restore Packlink callback secret setting
         shell: bash
         run: |
@@ -408,6 +397,7 @@ jobs:
           flyctl secrets set --app bt38-prod PACKLINK_CALLBACK_SECRET="$CALLBACK_SECRET"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
       - name: Restore Packlink callback registration
         shell: bash
         run: |
@@ -415,13 +405,16 @@ jobs:
           flyctl ssh console --app bt38-prod --command "sh -lc \"cd /app && .venv/bin/python -c 'from app import app; from services.fbm_packlink_adapter import PacklinkAdapter; from governed_packlink_callback_routes import _register_callback; ctx=app.test_request_context(base_url=\\\"https://bt38-prod.fly.dev\\\"); ctx.push(); callback_url=_register_callback(PacklinkAdapter()); print(\\\"PACKLINK_CALLBACK_REGISTERED=ok\\\")'\""
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
       - name: Set up Node for post-deploy browser proof
         uses: actions/setup-node@v4
         with:
           node-version: 20
+
       - name: Install browser proof dependencies
         run: |
           npm ci
           npx playwright install --with-deps chromium
+
       - name: Verify deployed application with Playwright
         run: npx playwright test
