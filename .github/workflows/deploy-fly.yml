@@ -268,7 +268,7 @@ jobs:
           fi
 
           set +e
-          DB_CHECK_OUTPUT="$(flyctl machine exec "$MACHINE_ID" "sh -lc 'cd /app && .venv/bin/python /tmp/bt38-db-contract.py'" --app bt38-prod --timeout 120 2>&1)"
+          DB_CHECK_OUTPUT="$(flyctl machine exec "$MACHINE_ID" '.venv/bin/python /tmp/bt38-db-contract.py' --app bt38-prod --timeout 120 2>&1)"
           DB_STATUS=$?
           set -e
           printf '%s\n' "$DB_CHECK_OUTPUT"
