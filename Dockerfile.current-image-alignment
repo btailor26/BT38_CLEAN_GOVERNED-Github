@@ -21,8 +21,20 @@ COPY . /app
 # release deltas. They are redundant with COPY . /app by design and resolve from
 # the same exact GitHub checkout.
 COPY services/support_notification_alignment.py /app/services/support_notification_alignment.py
+COPY services/support_case_alignment.py /app/services/support_case_alignment.py
+COPY services/support_attachment_alignment.py /app/services/support_attachment_alignment.py
+COPY services/support_monitoring_alignment.py /app/services/support_monitoring_alignment.py
+COPY services/cofi_settings_alignment.py /app/services/cofi_settings_alignment.py
 COPY services/package_catalog_alignment.py /app/services/package_catalog_alignment.py
+COPY services/billing_invoice_alignment.py /app/services/billing_invoice_alignment.py
+COPY services/revolut_billing.py /app/services/revolut_billing.py
+COPY services/revolut_subscription_alignment.py /app/services/revolut_subscription_alignment.py
 COPY templates/admin/packages.html /app/templates/admin/packages.html
+COPY migrations/manual/20260911-customer-account-profile.sql /app/migrations/manual/20260911-customer-account-profile.sql
+COPY migrations/manual/20260911-package-catalog.sql /app/migrations/manual/20260911-package-catalog.sql
+COPY migrations/manual/20260911-revolut-subscription-binding.sql /app/migrations/manual/20260911-revolut-subscription-binding.sql
+COPY migrations/manual/20260911-billing-invoices.sql /app/migrations/manual/20260911-billing-invoices.sql
+COPY migrations/manual/20260911-support-cases.sql /app/migrations/manual/20260911-support-cases.sql
 COPY migrations/manual/20260912-package-pricing-discount.sql /app/migrations/manual/20260912-package-pricing-discount.sql
 COPY scripts/verify_production_db_contract.py /app/scripts/verify_production_db_contract.py
 COPY fly.toml /app/fly.toml
