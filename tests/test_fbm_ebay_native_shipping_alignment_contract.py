@@ -72,10 +72,15 @@ def test_native_ebay_handler_is_loaded_before_preserved_legacy_tracking_handlers
     bootstrap = BOOTSTRAP.read_text(encoding="utf-8")
     legacy = LEGACY_TRACKING.read_text(encoding="utf-8")
 
-    assert "/static/js/fbm_ebay_shipping_alignment.js" in bootstrap
-    assert "/static/js/fbm_tracking_journey_legacy.js" in bootstrap
-    assert "nativeScript.onload = loadLegacy" in bootstrap
-    assert bootstrap.index("fbm_ebay_shipping_alignment.js") < bootstrap.index("fbm_tracking_journey_legacy.js")
+    # Runtime order is controlled by the loader dependency, not by where the
+    # helper function text appears in the source file: native is appended first
+    # and only its load/error continuation is allowed to append the legacy asset.
+    assert "const nativeScript = document.createElement('script');" in bootstrap
+    assert "nativeScript.src = assetUrl('/static/js/fbm_ebay_shipping_alignment.js');" in bootstrap
+    assert "nativeScript.onload = loadLegacy;" in bootstrap
+    assert "nativeScript.onerror = loadLegacy;" in bootstrap
+    assert "document.head.appendChild(nativeScript);" in bootstrap
+    assert "legacy.src = assetUrl('/static/js/fbm_tracking_journey_legacy.js');" in bootstrap
     assert "openEbayShipping" in legacy
     assert "window.location.assign" in legacy
 
