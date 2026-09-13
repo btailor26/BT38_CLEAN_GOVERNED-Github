@@ -27,7 +27,7 @@ def test_deploy_workflow_checks_db_on_exact_candidate_before_and_after_rollout()
     assert '--restart no' in workflow
     assert '--file-local /tmp/bt38-db-contract.py=scripts/verify_production_db_contract.py' in workflow
     assert 'flyctl machine exec "$MACHINE_ID"' in workflow
-    assert "'.venv/bin/python /tmp/bt38-db-contract.py'" in workflow
+    assert '"sh -lc \'cd /app && .venv/bin/python /tmp/bt38-db-contract.py\'"' in workflow
     assert '--timeout 120' in workflow
     assert 'flyctl machine destroy "$MACHINE_ID" --app bt38-prod --force' in workflow
     assert 'trap cleanup_candidate_machine EXIT' in workflow
