@@ -5,9 +5,10 @@ must not become separate outstanding dispatch actions. If the existing bell
 projection already contains a persisted shipment lifecycle for an order, every
 stale Ready/Partially-dispatched sale sibling for that logical order is retired.
 
-This wraps only the existing authority-backed bell reader. It adds no DB query,
-marketplace/provider read, polling, scheduling, write, order import or shipment
-system.
+This wraps only the legacy authority-backed bell reader when that reader still
+exists. Current bell implementations that no longer expose that legacy hook are
+left untouched. It adds no DB query, marketplace/provider read, polling,
+scheduling, write, order import or shipment system.
 """
 from __future__ import annotations
 
@@ -69,7 +70,12 @@ def _collapse_logical_actions(records: list[dict]) -> list[dict]:
 
 
 def install_governed_fbm_logical_action_count_alignment() -> None:
-    original = ready_alignment._event_only_bell_reader
+    original = getattr(ready_alignment, "_event_only_bell_reader", None)
+    if not callable(original):
+        # The current bell architecture no longer exposes this legacy reader.
+        # This compatibility shim must remain inert instead of breaking every
+        # services import during application startup or contract collection.
+        return
     if getattr(original, "_bt38_logical_action_count_aligned", False):
         return
 
