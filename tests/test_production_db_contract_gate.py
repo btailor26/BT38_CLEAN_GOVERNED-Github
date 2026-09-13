@@ -27,6 +27,17 @@ def test_deploy_workflow_checks_db_on_exact_candidate_before_and_after_rollout()
     assert '--file-local /tmp/bt38-db-contract.py=scripts/verify_production_db_contract.py' in workflow
     assert 'PREDEPLOY_CANDIDATE_DB_CONTRACT_OK' in workflow
 
+    # Fly can briefly return MANIFEST_UNKNOWN immediately after a two-stage
+    # build+push. Only that exact registry propagation failure is retryable.
+    # A real DB contract block must still fail immediately.
+    assert 'for ATTEMPT in 1 2 3 4 5; do' in workflow
+    assert "grep -q 'MANIFEST_UNKNOWN\\|manifest unknown'" in workflow
+    assert 'sleep 15' in workflow
+    assert 'Fly registry has not propagated the exact candidate manifest yet' in workflow
+    assert "grep -q '^DB_CONTRACT_BLOCKED'" in workflow
+    assert workflow.index("grep -q '^DB_CONTRACT_BLOCKED'") < workflow.index("grep -q 'MANIFEST_UNKNOWN\\|manifest unknown'")
+    assert 'candidate Machine failed for a reason other than the proven Fly registry propagation race' in workflow
+
     # Production rollout must promote the same already-proven image rather than
     # silently rebuilding a second image after the candidate proof.
     assert '--image "$CANDIDATE_IMAGE"' in workflow
