@@ -1,6 +1,6 @@
 """Read-only production DB compatibility check for the governed Fly release.
 
-This intentionally checks only critical structures the current production image
+This intentionally checks only critical structures the exact candidate image
 actively depends on. Extra tables/columns do not fail the release. Historical
 architecture drift is reported as a warning, not used as a schema blocker.
 """
@@ -50,6 +50,20 @@ REQUIRED_COLUMNS = {
         "store_id", "marketplace_order_id", "platform", "shipping_service",
         "ship_by_at", "earliest_delivery_at", "latest_delivery_at",
         "marketplace_checked_at", "created_at", "updated_at",
+    },
+    # The exact candidate overlays the current package catalogue implementation.
+    # Existing tables are not altered by db.create_all(), so the release must
+    # prove the pricing columns introduced by the paired manual migration exist.
+    "subscription_packages": {
+        "id", "code", "name", "tier_type", "list_price_pence",
+        "discount_percent", "price_pence", "currency", "billing_interval",
+        "user_limit", "marketplace_limit", "monthly_order_limit", "features",
+        "revolut_plan_ref", "is_active", "created_at", "updated_at",
+    },
+    "account_package_assignments": {
+        "id", "account_id", "package_id", "status", "billing_provider",
+        "provider_subscription_ref", "starts_at", "ends_at", "created_at",
+        "updated_at",
     },
 }
 
