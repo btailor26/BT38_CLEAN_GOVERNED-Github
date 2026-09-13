@@ -36,6 +36,7 @@ COPY migrations/manual/20260911-revolut-subscription-binding.sql /app/migrations
 COPY migrations/manual/20260911-billing-invoices.sql /app/migrations/manual/20260911-billing-invoices.sql
 COPY migrations/manual/20260911-support-cases.sql /app/migrations/manual/20260911-support-cases.sql
 COPY migrations/manual/20260912-package-pricing-discount.sql /app/migrations/manual/20260912-package-pricing-discount.sql
+COPY migrations/manual/20260913-support-case-attachments.sql /app/migrations/manual/20260913-support-case-attachments.sql
 COPY scripts/verify_production_db_contract.py /app/scripts/verify_production_db_contract.py
 COPY fly.toml /app/fly.toml
 COPY Dockerfile.current-image-alignment /app/Dockerfile.current-image-alignment
