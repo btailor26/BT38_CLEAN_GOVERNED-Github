@@ -55,9 +55,22 @@ def test_complete_runtime_source_categories_are_not_excluded_from_build_context(
 def test_critical_release_files_remain_explicit_fail_fast_copies():
     required = (
         "COPY services/support_notification_alignment.py /app/services/support_notification_alignment.py",
+        "COPY services/support_case_alignment.py /app/services/support_case_alignment.py",
+        "COPY services/support_attachment_alignment.py /app/services/support_attachment_alignment.py",
+        "COPY services/support_monitoring_alignment.py /app/services/support_monitoring_alignment.py",
+        "COPY services/cofi_settings_alignment.py /app/services/cofi_settings_alignment.py",
         "COPY services/package_catalog_alignment.py /app/services/package_catalog_alignment.py",
+        "COPY services/billing_invoice_alignment.py /app/services/billing_invoice_alignment.py",
+        "COPY services/revolut_billing.py /app/services/revolut_billing.py",
+        "COPY services/revolut_subscription_alignment.py /app/services/revolut_subscription_alignment.py",
         "COPY templates/admin/packages.html /app/templates/admin/packages.html",
+        "COPY migrations/manual/20260911-customer-account-profile.sql /app/migrations/manual/20260911-customer-account-profile.sql",
+        "COPY migrations/manual/20260911-package-catalog.sql /app/migrations/manual/20260911-package-catalog.sql",
+        "COPY migrations/manual/20260911-revolut-subscription-binding.sql /app/migrations/manual/20260911-revolut-subscription-binding.sql",
+        "COPY migrations/manual/20260911-billing-invoices.sql /app/migrations/manual/20260911-billing-invoices.sql",
+        "COPY migrations/manual/20260911-support-cases.sql /app/migrations/manual/20260911-support-cases.sql",
         "COPY migrations/manual/20260912-package-pricing-discount.sql /app/migrations/manual/20260912-package-pricing-discount.sql",
+        "COPY migrations/manual/20260913-support-case-attachments.sql /app/migrations/manual/20260913-support-case-attachments.sql",
         "COPY scripts/verify_production_db_contract.py /app/scripts/verify_production_db_contract.py",
         "COPY fly.toml /app/fly.toml",
         "COPY Dockerfile.current-image-alignment /app/Dockerfile.current-image-alignment",
@@ -84,3 +97,29 @@ def test_package_runtime_and_schema_delta_are_carried_together():
     assert '"subscription_packages"' in db_contract
     assert '"list_price_pence"' in db_contract
     assert '"discount_percent"' in db_contract
+
+
+def test_revolut_cofi_and_support_runtime_and_schema_are_carried_together():
+    db_contract = (ROOT / "scripts" / "verify_production_db_contract.py").read_text(encoding="utf-8")
+    attachment_migration = (ROOT / "migrations" / "manual" / "20260913-support-case-attachments.sql").read_text(encoding="utf-8")
+    for source_path in (
+        "services/cofi_settings_alignment.py",
+        "services/revolut_billing.py",
+        "services/revolut_subscription_alignment.py",
+        "services/billing_invoice_alignment.py",
+        "services/support_case_alignment.py",
+        "services/support_attachment_alignment.py",
+        "services/support_monitoring_alignment.py",
+        "services/support_notification_alignment.py",
+    ):
+        assert (ROOT / source_path).is_file()
+    for table in (
+        '"system_config"',
+        '"revolut_subscription_bindings"',
+        '"billing_invoices"',
+        '"support_cases"',
+        '"support_case_messages"',
+        '"support_case_attachments"',
+    ):
+        assert table in db_contract
+    assert "CREATE TABLE IF NOT EXISTS support_case_attachments" in attachment_migration
