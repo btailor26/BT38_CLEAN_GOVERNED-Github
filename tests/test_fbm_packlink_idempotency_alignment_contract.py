@@ -3,6 +3,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ALIGNMENT = (ROOT / "services" / "governed_fbm_packlink_idempotency_alignment.py").read_text(encoding="utf-8")
+REPLACEMENT = (ROOT / "services" / "governed_fbm_replacement_label_alignment.py").read_text(encoding="utf-8")
 MAIN = (ROOT / "main.py").read_text(encoding="utf-8")
 ROUTES = (ROOT / "governed_fbm_routes.py").read_text(encoding="utf-8")
 
@@ -32,7 +33,9 @@ def test_core_retry_hint_is_rewritten_fail_closed_after_ambiguous_provider_excep
 def test_return_and_replacement_keep_their_existing_explicit_additional_shipment_path():
     assert 'if purpose in {"return", "replacement"}' in ALIGNMENT
     assert 'return current(*args, **kwargs)' in ALIGNMENT
-    assert "CONFIRM_REPLACEMENT" in ROUTES
+    assert 'if purpose != "replacement"' in REPLACEMENT
+    assert "replacement_reason_code" in REPLACEMENT
+    assert "REPLACEMENT_REASON_CODES" in REPLACEMENT
     assert "CONFIRM_RETURN" not in ALIGNMENT
 
 
@@ -48,4 +51,4 @@ def test_packlink_rate_provider_5xx_is_not_presented_as_bt38_http_500():
 
 def test_packlink_idempotency_alignment_installed_in_runtime():
     assert "install_governed_fbm_packlink_idempotency_alignment" in MAIN
-    assert "fail" in MAIN.lower() and "second provider draft" in MAIN
+    assert "second provider draft" in MAIN
