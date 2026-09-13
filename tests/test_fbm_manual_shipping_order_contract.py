@@ -58,9 +58,17 @@ def test_manual_shipping_preserves_full_destination_and_reuses_saved_order():
 def test_release_gates_cover_manual_shipping_runtime_and_contract():
     deploy = (ROOT / ".github" / "workflows" / "deploy-fly.yml").read_text(encoding="utf-8")
     readiness = (ROOT / ".github" / "workflows" / "deployment-readiness.yml").read_text(encoding="utf-8")
+    candidate = (ROOT / "Dockerfile.current-image-alignment").read_text(encoding="utf-8")
 
-    for workflow in (deploy, readiness):
-        assert "governed_fbm_manual_routes.py" in workflow
-        assert "services/fbm_marketplace_destination.py" in workflow
-        assert "services/governed_exact_ebay_order_hydration.py" in workflow
-        assert "tests/test_fbm_manual_shipping_order_contract.py" in workflow
+    # The release gate now proves the complete exact-head source tree rather than
+    # maintaining a brittle per-file allowlist. Manual shipping is covered because
+    # the complete checkout is copied into the candidate and the complete Python
+    # contract suite is executed in readiness/deploy proof.
+    assert "COPY . /app" in candidate
+    assert "git diff --name-only origin/main...HEAD" in readiness
+    assert "uv run python -m pytest -q tests test_concurrent_sales.py" in readiness
+    assert "governed_fbm_manual_routes.py" not in readiness
+
+    assert "COPY . /app" in deploy
+    assert "python -m py_compile" in deploy
+    assert "python -m pytest -q tests test_concurrent_sales.py" in deploy
