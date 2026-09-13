@@ -2,8 +2,9 @@ app = "bt38-prod"
 primary_region = "lhr"
 
 [build]
-  # Recovery alignment deliberately reuses today's exact production image and
-  # overlays only the audited runtime source delta. Do not rebuild dependencies.
+  # Build each exact candidate from the current production image dependency/runtime
+  # stack and overlay every audited runtime delta on this branch. The governed
+  # deployment workflow proves the candidate before promoting that same image.
   dockerfile = "Dockerfile.current-image-alignment"
 
 [env]
