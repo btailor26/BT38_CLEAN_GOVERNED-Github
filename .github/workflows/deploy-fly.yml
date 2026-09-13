@@ -210,34 +210,45 @@ jobs:
           set -euo pipefail
           CANDIDATE_IMAGE="${{ steps.candidate_image.outputs.image }}"
           test -n "$CANDIDATE_IMAGE"
-          VERIFIED=0
+          MACHINE_NAME="candidate-db-${{ inputs.expected_commit }}"
+          MACHINE_NAME="${MACHINE_NAME:0:48}"
+          MACHINE_ID=""
 
+          cleanup_candidate_machine() {
+            if [ -n "$MACHINE_ID" ]; then
+              flyctl machine destroy "$MACHINE_ID" --app bt38-prod --force >/dev/null 2>&1 || true
+            fi
+          }
+          trap cleanup_candidate_machine EXIT
+
+          CREATED=0
           for ATTEMPT in 1 2 3 4 5; do
             set +e
-            DB_CHECK_OUTPUT="$(flyctl machine run \
+            CREATE_OUTPUT="$(flyctl machine run \
               "$CANDIDATE_IMAGE" \
-              .venv/bin/python /tmp/bt38-db-contract.py \
+              sleep infinity \
               --app bt38-prod \
               --region lhr \
-              --rm \
+              --name "$MACHINE_NAME" \
+              --detach \
               --restart no \
               --file-local /tmp/bt38-db-contract.py=scripts/verify_production_db_contract.py \
               2>&1)"
-            STATUS=$?
+            CREATE_STATUS=$?
             set -e
-            printf '%s\n' "$DB_CHECK_OUTPUT"
+            printf '%s\n' "$CREATE_OUTPUT"
 
-            if printf '%s\n' "$DB_CHECK_OUTPUT" | grep -q '^DB_CONTRACT_BLOCKED'; then
-              echo "BLOCKED: production Neon does not satisfy the exact candidate DB contract."
-              exit 1
-            fi
-
-            if [ "$STATUS" -eq 0 ] && printf '%s\n' "$DB_CHECK_OUTPUT" | grep -q '^DB_CONTRACT_OK:'; then
-              VERIFIED=1
+            if [ "$CREATE_STATUS" -eq 0 ]; then
+              MACHINE_ID="$(flyctl machine list --app bt38-prod --json | python -c 'import json,sys; name=sys.argv[1]; rows=json.load(sys.stdin); matches=[str(r.get("id") or "") for r in rows if r.get("name")==name]; print(matches[0] if len(matches)==1 else "")' "$MACHINE_NAME")"
+              if [ -z "$MACHINE_ID" ]; then
+                echo "BLOCKED: exact candidate verifier Machine started but its unique Machine ID could not be resolved."
+                exit 1
+              fi
+              CREATED=1
               break
             fi
 
-            if printf '%s\n' "$DB_CHECK_OUTPUT" | grep -q 'MANIFEST_UNKNOWN\|manifest unknown'; then
+            if printf '%s\n' "$CREATE_OUTPUT" | grep -q 'MANIFEST_UNKNOWN\|manifest unknown'; then
               if [ "$ATTEMPT" -lt 5 ]; then
                 echo "WAIT: Fly registry has not propagated the exact candidate manifest yet (attempt $ATTEMPT/5)."
                 sleep 15
@@ -247,16 +258,35 @@ jobs:
               exit 1
             fi
 
-            echo "BLOCKED: candidate Machine failed for a reason other than the proven Fly registry propagation race; DB contract was not proven."
+            echo "BLOCKED: candidate verifier Machine could not be created for a reason other than the proven Fly registry propagation race."
             exit 1
           done
 
-          if [ "$VERIFIED" -ne 1 ]; then
-            echo "BLOCKED: exact candidate image did not prove the production DB contract; no deployment performed."
+          if [ "$CREATED" -ne 1 ]; then
+            echo "BLOCKED: exact candidate verifier Machine was not created; no deployment performed."
             exit 1
           fi
 
-          echo "PREDEPLOY_CANDIDATE_DB_CONTRACT_OK image=$CANDIDATE_IMAGE"
+          set +e
+          DB_CHECK_OUTPUT="$(flyctl machine exec "$MACHINE_ID" '.venv/bin/python /tmp/bt38-db-contract.py' --app bt38-prod --timeout 120 2>&1)"
+          DB_STATUS=$?
+          set -e
+          printf '%s\n' "$DB_CHECK_OUTPUT"
+
+          if printf '%s\n' "$DB_CHECK_OUTPUT" | grep -q '^DB_CONTRACT_BLOCKED'; then
+            echo "BLOCKED: production Neon does not satisfy the exact candidate DB contract."
+            exit 1
+          fi
+
+          if [ "$DB_STATUS" -ne 0 ] || ! printf '%s\n' "$DB_CHECK_OUTPUT" | grep -q '^DB_CONTRACT_OK:'; then
+            echo "BLOCKED: exact candidate Machine executed the DB proof but did not return DB_CONTRACT_OK."
+            exit 1
+          fi
+
+          echo "PREDEPLOY_CANDIDATE_DB_CONTRACT_OK image=$CANDIDATE_IMAGE machine=$MACHINE_ID"
+          cleanup_candidate_machine
+          MACHINE_ID=""
+          trap - EXIT
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       - name: Deploy exact audited candidate image
@@ -385,3 +415,13 @@ jobs:
           flyctl ssh console --app bt38-prod --command "sh -lc \"cd /app && .venv/bin/python -c 'from app import app; from services.fbm_packlink_adapter import PacklinkAdapter; from governed_packlink_callback_routes import _register_callback; ctx=app.test_request_context(base_url=\\\"https://bt38-prod.fly.dev\\\"); ctx.push(); callback_url=_register_callback(PacklinkAdapter()); print(\\\"PACKLINK_CALLBACK_REGISTERED=ok\\\")'\""
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      - name: Set up Node for post-deploy browser proof
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install browser proof dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: Verify deployed application with Playwright
+        run: npx playwright test
