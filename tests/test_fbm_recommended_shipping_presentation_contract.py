@@ -1,52 +1,53 @@
 from pathlib import Path
 
-from services.governed_order_clarity_alignment import _delivery_days, _cutoff_key
+
+ROUTES = Path("governed_fbm_routes.py").read_text(encoding="utf-8")
+CLARITY = Path("services/governed_order_clarity_alignment.py").read_text(encoding="utf-8")
+TEMPLATE = Path("templates/fbm.html").read_text(encoding="utf-8")
 
 
-SOURCE = Path("services/governed_order_clarity_alignment.py").read_text(encoding="utf-8")
+def test_fbm_page_is_db_only_and_provider_reads_stay_on_explicit_shipping_actions():
+    assert "Page GETs must\nnot recover, reconcile, hydrate, or call marketplace/provider APIs." in CLARITY
+    assert "_inject_db_delivery_truth" in CLARITY
+    assert "PacklinkAdapter" not in CLARITY
+    assert "FBMRateQuote" not in CLARITY
+    assert "urlopen(" not in CLARITY
+    assert "setInterval(" not in CLARITY
+
+    assert '@governed_fbm_bp.get("/fbm")' in ROUTES
+    assert '@governed_fbm_bp.post("/fbm/orders/<int:order_id>/packlink/rates")' in ROUTES
+    assert "PacklinkAdapter().get_rates(order=order, parcel=parcel)" in ROUTES
 
 
-def test_same_page_shipping_recommendation_is_db_first_and_never_guesses_cutoff():
-    assert "FBMRateQuote.query" in SOURCE
-    assert "quote.rates" in SOURCE
-    assert "fbm_carrier_cutoff:" in SOURCE
-    assert "source':'user_confirmed'" in SOURCE
-    assert "BT38 never guesses" in SOURCE
-    assert "PacklinkAdapter().get_rates" not in SOURCE
-    assert "urlopen(" not in SOURCE
-    assert "setInterval(" not in SOURCE
+def test_shipping_options_are_explicit_and_do_not_turn_page_load_into_rate_fetch():
+    assert "Shipping options" in TEMPLATE
+    assert 'class="btn btn-sm btn-outline-primary fbm-shipping-options"' in TEMPLATE
+    assert '@governed_fbm_bp.get("/fbm/shipping-options")' in ROUTES
+    assert "_shipping_provider_options(row, profile, profile_error)" in ROUTES
+    assert "Packlink PRO live rates and shipment drafting are connected" in ROUTES
 
 
-def test_shipping_options_only_present_for_parcel_attention_or_change():
-    assert "Parcel details required" in SOURCE
-    assert "Add / change parcel" in SOURCE
-    assert "Change parcel" in SOURCE
-    assert ">Recommended shipping</button>" not in SOURCE
+def test_packlink_rates_are_persisted_once_and_reused_by_exact_quote_identity():
+    assert "rates = PacklinkAdapter().get_rates(order=order, parcel=parcel)" in ROUTES
+    assert "FBMRateQuote(" in ROUTES
+    assert "expires_at=datetime.utcnow() + timedelta(minutes=15)" in ROUTES
+    assert "quote_id" in ROUTES
+    assert "quote = db.session.get(FBMRateQuote, quote_id)" in ROUTES
+    assert "Packlink rate quote does not belong to this order." in ROUTES
+    assert "Packlink rate quote expired. Get fresh rates." in ROUTES
 
 
-def test_saved_rates_are_explicitly_reused_before_refresh():
-    assert "Rates not saved" in SOURCE
-    assert "Get rates once. BT38 then reuses the saved quote until it expires" in SOURCE
-    assert "bt38-get-saved-rates" in SOURCE
-    assert "/packlink/rates" in SOURCE
+def test_packlink_draft_requires_explicit_confirmation_and_selected_saved_rate():
+    assert 'body.get("confirm_create") != "CREATE_PACKLINK_DRAFT"' in ROUTES
+    assert "Explicit CREATE_PACKLINK_DRAFT confirmation is required." in ROUTES
+    assert "selected = _find_rate(quote, rate_id)" in ROUTES
+    assert "Selected Packlink service is not in the stored quote." in ROUTES
+    assert "awaiting_provider_payment" in ROUTES
+    assert '"label_ready": False' in ROUTES
 
 
-def test_cutoff_entry_requires_user_choice_and_real_time():
-    assert "Choose carrier/service" in SOURCE
-    assert "For drop-off, confirm it with the shop" in SOURCE
-    assert "for collection, use your known collection time" in SOURCE
-    assert "type=\"time\"" in SOURCE
-    assert _cutoff_key("packlink", "Evri", "Standard Drop Off") == "fbm_carrier_cutoff:packlink|evri|standard drop off"
-
-
-def test_recommendation_only_uses_delivery_evidence_that_can_be_parsed():
-    assert _delivery_days({"delivery": "2 working days"}) == 2
-    assert _delivery_days({"delivery": {"transit_days": 1}}) == 1
-    assert _delivery_days({"delivery": "unknown"}) is None
-
-
-def test_paid_label_boundary_is_preserved_inline():
-    assert "Payment required before the label is assigned or printable." in SOURCE
-    assert "CREATE_PACKLINK_DRAFT" in SOURCE
-    assert "Pay in Packlink" in SOURCE
-    assert "Check payment / label" in SOURCE
+def test_prime_sfp_never_falls_through_to_external_shipping():
+    assert "Prime/SFP orders must use Amazon Buy Shipping." in ROUTES
+    assert '"prime_locked": is_prime' in ROUTES
+    assert "external_allowed = platform != \"amazon\" or not is_prime" in ROUTES
+    assert "manual_allowed = platform != \"amazon\" or not is_prime" in ROUTES
