@@ -53,3 +53,11 @@ def test_db_contract_is_targeted_not_full_schema_equality():
     assert 'marketplace_orders' in source
     assert 'fbm_shipments' in source
     assert 'warehouse_stock' in source
+
+
+def test_db_contract_includes_schema_required_by_package_runtime_overlay():
+    source = Path('scripts/verify_production_db_contract.py').read_text(encoding='utf-8')
+    assert '"subscription_packages"' in source
+    assert '"list_price_pence"' in source
+    assert '"discount_percent"' in source
+    assert '"account_package_assignments"' in source
