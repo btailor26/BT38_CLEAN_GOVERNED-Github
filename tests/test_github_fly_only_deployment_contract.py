@@ -41,8 +41,12 @@ def test_fly_uses_remote_builder_and_promotes_the_exact_proven_candidate():
     assert "--build-only" in WORKFLOW
     assert "--push" in WORKFLOW
     assert 'CANDIDATE_IMAGE="${{ steps.candidate_image.outputs.image }}"' in WORKFLOW
-    assert 'flyctl machine run' in WORKFLOW
-    assert '--rm' in WORKFLOW
+    assert "flyctl machine run" in WORKFLOW
+    assert "cleanup_candidate_machine()" in WORKFLOW
+    assert "trap cleanup_candidate_machine EXIT" in WORKFLOW
+    assert 'flyctl machine destroy "$MACHINE_ID" --app bt38-prod --force' in WORKFLOW
+    assert 'MACHINE_ID=""' in WORKFLOW
+    assert "trap - EXIT" in WORKFLOW
     assert '--file-local /tmp/bt38-db-contract.py=scripts/verify_production_db_contract.py' in WORKFLOW
     assert '--image "$CANDIDATE_IMAGE"' in WORKFLOW
 
