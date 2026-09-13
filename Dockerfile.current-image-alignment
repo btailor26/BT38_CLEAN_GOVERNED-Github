@@ -13,6 +13,7 @@ COPY services/support_notification_alignment.py /app/services/support_notificati
 COPY services/package_catalog_alignment.py /app/services/package_catalog_alignment.py
 COPY templates/admin/packages.html /app/templates/admin/packages.html
 COPY migrations/manual/20260912-package-pricing-discount.sql /app/migrations/manual/20260912-package-pricing-discount.sql
+COPY scripts/verify_production_db_contract.py /app/scripts/verify_production_db_contract.py
 
 # Keep deployed-source/image proof truthful for the candidate configuration.
 COPY fly.toml /app/fly.toml
