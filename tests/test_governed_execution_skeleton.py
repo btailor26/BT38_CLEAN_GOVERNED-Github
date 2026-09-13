@@ -1,15 +1,11 @@
-"""Proof tests for the governed execution skeleton.
-
-Stage 2 only: no route wiring, no workers, no schedulers, no queue consumers,
-no background loops, and no live marketplace calls.
-"""
+"""Proof tests for the current governed execution choke point."""
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import governed_execution
 from marketplace_adapters.amazon_fbm import AmazonFbmAdapter
 from marketplace_adapters.ebay import EbayAdapter
-from services import runtime_gate
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -18,73 +14,139 @@ def read(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
 
-def test_runtime_gate_remains_force_closed_and_dry_run_stays_blocked():
-    assert runtime_gate.RUNTIME_GATE_FORCE_CLOSED is True
-    assert runtime_gate.is_runtime_allowed(object()) is False
+def test_one_governed_entry_point_and_dry_run_never_executes_live(monkeypatch):
+    assert governed_execution.ONE_GOVERNED_ENTRY_POINT == "submit_governed_marketplace_action"
+
+    monkeypatch.setattr(
+        governed_execution,
+        "_check_fuse_box_authority",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("dry run must not enter live fuse box")),
+    )
+    monkeypatch.setattr(
+        governed_execution,
+        "_adapter_for",
+        lambda marketplace: (_ for _ in ()).throw(AssertionError("dry run must not select live adapter")),
+    )
 
     result = governed_execution.submit_governed_marketplace_action(
-        {
+        payload={
             "marketplace": "amazon",
             "action": "push_inventory",
             "sku": "FBM-SAFE-01",
             "amazon_fulfillment_channel": "MFN",
         },
         actor="test",
-        approval={"approved": True, "source": "test"},
         dry_run=True,
     )
 
     assert result["governed"] is True
     assert result["dry_run"] is True
-    assert result["execution_blocked"] is True
-    assert result["runtime_gate_checked"] is True
-    assert result["runtime_gate_allowed"] is False
-    assert result["eligibility_checked"] is True
-    assert result["dispatched_by"] == governed_execution.ONE_GOVERNED_DISPATCHER
-    assert result["executed_by"] == governed_execution.ONE_GOVERNED_EXECUTOR
-    assert "no live Listings API call" in result["reason"]
+    assert result["ok"] is True
+    assert result["fuse_box_checked"] is False
+    assert result["execution_started"] is False
 
 
-def test_missing_approval_blocks_before_runtime_dispatch(monkeypatch):
-    def fail_if_dispatched(_command):
-        raise AssertionError("dispatcher must not run without approval")
-
-    monkeypatch.setattr(governed_execution, "dispatch_governed_action", fail_if_dispatched)
+def test_live_action_must_pass_fuse_box_before_adapter(monkeypatch):
+    store = SimpleNamespace(
+        id=1,
+        name="Amazon",
+        platform="Amazon",
+        is_active=True,
+        fbm_sync_enabled=True,
+        store_mode="live",
+        api_key="credentials",
+    )
+    listing = SimpleNamespace(
+        id=2,
+        store_id=1,
+        external_sku="FBM-SAFE-01",
+        amazon_fulfillment_channel="MFN",
+    )
+    monkeypatch.setattr(governed_execution, "_resolve_store", lambda store_id: store)
+    monkeypatch.setattr(governed_execution, "_resolve_listing", lambda listing_id: listing)
+    monkeypatch.setattr(
+        governed_execution,
+        "_check_fuse_box_authority",
+        lambda *args, **kwargs: {"allowed": False, "reason": "Fuse box push_enabled is OFF"},
+    )
+    monkeypatch.setattr(
+        governed_execution,
+        "_adapter_for",
+        lambda marketplace: (_ for _ in ()).throw(AssertionError("blocked live action must not select adapter")),
+    )
 
     result = governed_execution.submit_governed_marketplace_action(
-        {"marketplace": "ebay", "action": "push_inventory", "sku": "EB-OD-CR-100g-X3"},
+        payload={
+            "marketplace": "amazon",
+            "action": "push_inventory",
+            "sku": "FBM-SAFE-01",
+            "store_id": 1,
+            "listing_id": 2,
+            "quantity": 4,
+            "amazon_fulfillment_channel": "MFN",
+        },
         actor="test",
+        dry_run=False,
     )
 
-    assert result["governed"] is True
-    assert result["execution_blocked"] is True
-    assert result["runtime_gate_checked"] is False
-    assert "approval" in result["reason"].lower()
+    assert result["ok"] is False
+    assert result["fuse_box_checked"] is True
+    assert result["execution_started"] is False
+    assert "Fuse box" in result["reason"]
 
 
-def test_dispatcher_enters_single_executor_when_called_directly(monkeypatch):
+def test_fuse_approved_live_action_enters_exact_marketplace_adapter(monkeypatch):
+    store = SimpleNamespace(
+        id=1,
+        name="Amazon",
+        platform="Amazon",
+        is_active=True,
+        fbm_sync_enabled=True,
+        store_mode="live",
+        api_key="credentials",
+    )
+    listing = SimpleNamespace(
+        id=2,
+        store_id=1,
+        external_sku="FBM-SAFE-01",
+        amazon_fulfillment_channel="MFN",
+    )
     calls = []
-
-    def fake_executor(command):
-        calls.append(command.command_id)
-        return {"ok": False, "execution_blocked": True, "command_id": command.command_id}
-
-    monkeypatch.setattr(governed_execution, "execute_governed_action", fake_executor)
-    command = governed_execution.GovernedCommand(
-        command_id="cmd-test",
-        marketplace="ebay",
-        action="push_inventory",
-        payload={"sku": "EB-OD-CR-100g-X3"},
-        approval={"approved": True},
+    monkeypatch.setattr(governed_execution, "_resolve_store", lambda store_id: store)
+    monkeypatch.setattr(governed_execution, "_resolve_listing", lambda listing_id: listing)
+    monkeypatch.setattr(
+        governed_execution,
+        "_check_fuse_box_authority",
+        lambda *args, **kwargs: {"allowed": True, "reason": "Fuse box allowed action"},
     )
 
-    result = governed_execution.dispatch_governed_action(command)
+    class FakeAdapter:
+        def execute(self, action, payload):
+            calls.append((action, payload))
+            return {"ok": True, "success": True, "reason": "done"}
 
-    assert calls == ["cmd-test"]
-    assert result["command_id"] == "cmd-test"
+    monkeypatch.setattr(governed_execution, "_adapter_for", lambda marketplace: FakeAdapter())
+    result = governed_execution.submit_governed_marketplace_action(
+        payload={
+            "marketplace": "amazon",
+            "action": "push_inventory",
+            "sku": "FBM-SAFE-01",
+            "store_id": 1,
+            "listing_id": 2,
+            "quantity": 4,
+            "amazon_fulfillment_channel": "MFN",
+        },
+        actor="test",
+        dry_run=False,
+    )
+
+    assert result["ok"] is True
+    assert len(calls) == 1
+    assert calls[0][0] == "push_inventory"
+    assert calls[0][1]["_governed_fuse_box_checked"] is True
 
 
-def test_amazon_adapter_blocks_fba_unknown_and_fbm_dry_run_without_live_call():
+def test_amazon_adapter_blocks_fba_unknown_and_unprepared_live_payload():
     adapter = AmazonFbmAdapter()
 
     fba = adapter.execute(
@@ -104,47 +166,39 @@ def test_amazon_adapter_blocks_fba_unknown_and_fbm_dry_run_without_live_call():
     assert "read-only" in fba["reason"]
     assert unknown["execution_blocked"] is True
     assert "unknown" in unknown["reason"].lower()
-    assert fbm["dry_run"] is True
     assert fbm["execution_blocked"] is True
-    assert "no live Listings API call" in fbm["reason"]
 
 
-def test_ebay_adapter_returns_dry_run_blocked_contract_without_live_call():
+def test_ebay_adapter_fails_closed_before_network_without_governed_store(monkeypatch):
+    import marketplace_adapters.ebay as ebay_module
+
+    monkeypatch.setattr(
+        ebay_module.requests,
+        "post",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("network must not run without governed store")),
+    )
     result = EbayAdapter().execute(
         "push_inventory",
         {"sku": "EB-OD-CR-100g-X3", "marketplace": "ebay"},
     )
 
     assert result["marketplace"] == "ebay"
-    assert result["dry_run"] is True
     assert result["execution_blocked"] is True
-    assert "no live eBay API call" in result["reason"]
+    assert "Missing store" in result["reason"]
 
 
-def test_skeleton_has_no_network_or_old_service_imports():
+def test_execution_choke_point_has_no_worker_scheduler_or_queue_execution():
     governed = read("governed_execution.py")
-    base_source = read("marketplace_adapters/base.py")
-    amazon_source = read("marketplace_adapters/amazon_fbm.py")
-    ebay_source = read("marketplace_adapters/ebay.py")
-    forbidden_everywhere = [
-        "requests",
-        "ebay_service",
-        "amazon_auth",
-        "amazon_rest_api",
-        "sp_api",
+    forbidden = [
         "threading",
         "BackgroundScheduler",
         "APScheduler",
         "enqueue_sync_job",
+        "queue_manager",
     ]
-
-    for marker in forbidden_everywhere:
+    for marker in forbidden:
         assert marker not in governed, marker
-        assert marker not in base_source, marker
-        assert marker not in amazon_source, marker
-        assert marker not in ebay_source, marker
 
-    assert "amazon_service" not in governed
-    assert "amazon_service" not in base_source
-    assert "amazon_service" not in ebay_source
-    assert "from amazon_service import AmazonAPIService" in amazon_source
+    assert "def submit_governed_marketplace_action" in governed
+    assert "_check_fuse_box_authority" in governed
+    assert "_adapter_for(command.marketplace)" in governed
