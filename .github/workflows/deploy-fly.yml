@@ -48,6 +48,23 @@ jobs:
   audit:
     needs: source-deploy-guard
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: bt38_ci
+          POSTGRES_PASSWORD: bt38_ci
+          POSTGRES_DB: bt38_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U bt38_ci -d bt38_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DEV_DATABASE_URL: postgresql://bt38_ci:bt38_ci@127.0.0.1:5432/bt38_ci
+      BT38_ALLOW_DATABASE_TESTS: "true"
     steps:
       - name: Checkout exact governed commit
         uses: actions/checkout@v4
