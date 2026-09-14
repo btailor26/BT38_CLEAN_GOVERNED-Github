@@ -129,6 +129,17 @@ def test_ebay_exact_tracking_hydration_remains_existing_order_only():
     assert 'FBMShipment(' not in EBAY_TRACKING
 
 
+def test_ebay_tracking_recovery_hydrates_complete_exact_order_truth():
+    assert 'item.get("lineItemCost")' in EBAY_TRACKING
+    assert 'row.quantity = exact_quantity' in EBAY_TRACKING
+    assert 'row.unit_price = exact_unit_price' in EBAY_TRACKING
+    assert 'row.line_total = exact_line_total' in EBAY_TRACKING
+    assert 'row.shipping_charged = exact_order_shipping_charged' in EBAY_TRACKING
+    assert '"line_economics_updates": line_economics_updates' in EBAY_TRACKING
+    assert '"price_updates": price_updates' in EBAY_TRACKING
+    assert '"marketplace_write_started": False' in EBAY_TRACKING
+
+
 def test_ebay_shipped_notification_refresh_uses_persisted_grant_scope_set():
     assert 'governed_ebay_refresh_scopes' in EBAY_SHIPPING_NOTIFICATION
     assert 'refresh_scopes = governed_ebay_refresh_scopes(creds)' in EBAY_SHIPPING_NOTIFICATION
