@@ -1,21 +1,18 @@
-"""Align FBM health and history to the governed browser-session model.
+"""Align FBM history, health and page-size controls to the governed page model.
 
-Default FBM scope is the last 7 days. Users can explicitly widen that scope to
-30/90 days, one year, or an arbitrary custom date range; that explicit action is
-allowed to read the persisted order history. Orders are never removed from BT38
-history merely because they fall outside the current view.
+Normal FBM page loads stay bounded to the selected presentation size.  The
+selected history window defaults to seven days and may be widened explicitly by
+the user.  Health cards describe the selected history window, while the order
+table only reads the number of rows the user asked to display.
 
-The selected history window is loaded once for the request and then browser-side
-pagination owns presentation. Health cards describe the selected date window,
-not just the currently visible page. No marketplace/provider calls or writes
-occur here.
+No marketplace/provider calls or writes occur here.
 """
 from __future__ import annotations
 
 from datetime import datetime, timedelta
 from html import escape
 
-from flask import g, request
+from flask import g, request, session
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
 
@@ -31,6 +28,7 @@ _RANGE_DAYS = {
     "90d": (90, "Last 90 days"),
     "1y": (365, "Last 1 year"),
 }
+_PAGE_SIZES = (15, 30, 50, 100)
 
 
 def _parse_day(value: str) -> datetime | None:
@@ -55,13 +53,39 @@ def _selected_history_window() -> tuple[str, datetime, datetime, str, str, str]:
                 start_at, end_day = end_day, start_at
                 raw_from, raw_to = raw_to, raw_from
             end_at = end_day + timedelta(days=1)
-            return mode, start_at, end_at, f"{start_at.strftime('%d %b %Y')} – {end_day.strftime('%d %b %Y')}", raw_from, raw_to
+            return (
+                mode,
+                start_at,
+                end_at,
+                f"{start_at.strftime('%d %b %Y')} – {end_day.strftime('%d %b %Y')}",
+                raw_from,
+                raw_to,
+            )
         mode = "7d"
 
     days, label = _RANGE_DAYS.get(mode, _RANGE_DAYS["7d"])
     if mode not in _RANGE_DAYS:
         mode = "7d"
     return mode, now - timedelta(days=days), now + timedelta(seconds=1), label, "", ""
+
+
+def _persisted_page_size() -> int:
+    """Keep the user's 15/30/50/100 choice for the authenticated browser session."""
+    requested = str(request.args.get("limit") or "").strip()
+    if requested:
+        try:
+            parsed = int(requested)
+        except (TypeError, ValueError):
+            parsed = 15
+        value = parsed if parsed in _PAGE_SIZES else 15
+        session["bt38_fbm_page_size"] = value
+        return value
+
+    try:
+        stored = int(session.get("bt38_fbm_page_size", 15) or 15)
+    except (TypeError, ValueError):
+        stored = 15
+    return stored if stored in _PAGE_SIZES else 15
 
 
 def install_governed_fbm_all_orders_health_alignment(app) -> None:
@@ -75,15 +99,69 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
     original_guide_html = page_alignment._guide_html
 
     def selected_range_snapshot_rows() -> tuple[list[MarketplaceOrder], bool]:
-        """Read the selected persisted history window once for this request.
+        """Load only the rows required for the current table presentation.
 
-        There is deliberately no newest-N history ceiling here. The date window
-        is the bound. Default 7-day reads stay narrow; wider history is queried
-        only when the user explicitly asks for it.
+        The history date window is the authority; the page-size choice is only a
+        presentation bound.  Wider reads happen only after the user changes the
+        range or page size.
         """
         cached = getattr(g, "_bt38_fbm_session_rows", None)
         if cached is not None:
-            return list(cached), False
+            return list(cached), bool(getattr(g, "_bt38_fbm_session_truncated", False))
+
+        mode, start_at, end_at, label, raw_from, raw_to = _selected_history_window()
+        visible_limit = _persisted_page_size()
+        eligible = (
+            func.upper(func.coalesce(MarketplaceOrder.fulfillment_type, "")).notin_(("FBA", "AFN", "MCF")),
+            ~func.lower(func.coalesce(MarketplaceOrder.status, "")).like("mcf_%"),
+        )
+        candidate_limit = min(401, (visible_limit * 4) + 1)
+        candidates = (
+            db.session.query(MarketplaceOrder)
+            .filter(
+                *eligible,
+                MarketplaceOrder.store_id.isnot(None),
+                MarketplaceOrder.marketplace_order_id.isnot(None),
+                MarketplaceOrder.created_at >= start_at,
+                MarketplaceOrder.created_at < end_at,
+            )
+            .options(joinedload(MarketplaceOrder.store), joinedload(MarketplaceOrder.warehouse_stock))
+            .order_by(MarketplaceOrder.id.desc())
+            .limit(candidate_limit)
+            .all()
+        )
+
+        canonical = global_search._canonical_order_rows(candidates)
+        profiles = page_alignment._profile_map([
+            row for row in canonical if _platform(row).strip().lower() == "amazon"
+        ])
+        rows: list[MarketplaceOrder] = []
+        for row in canonical:
+            key = (int(row.store_id), str(row.marketplace_order_id))
+            profile = profiles.get(key) if _platform(row).strip().lower() == "amazon" else None
+            if page_alignment._workspace_fbm_eligible(row, profile):
+                rows.append(row)
+            if len(rows) >= visible_limit:
+                break
+
+        truncated = len(candidates) >= candidate_limit or len(canonical) > visible_limit
+        g._bt38_fbm_session_rows = rows
+        g._bt38_fbm_session_truncated = truncated
+        g._bt38_fbm_history_window = {
+            "mode": mode,
+            "start_at": start_at,
+            "end_at": end_at,
+            "label": label,
+            "from": raw_from,
+            "to": raw_to,
+        }
+        return list(rows), truncated
+
+    def _health_rows() -> list[MarketplaceOrder]:
+        """Read the selected health range without loading Warehouse product payloads."""
+        cached = getattr(g, "_bt38_fbm_health_rows", None)
+        if cached is not None:
+            return list(cached)
 
         _mode, start_at, end_at, _label, _raw_from, _raw_to = _selected_history_window()
         eligible = (
@@ -99,40 +177,22 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
                 MarketplaceOrder.created_at >= start_at,
                 MarketplaceOrder.created_at < end_at,
             )
-            .options(joinedload(MarketplaceOrder.store), joinedload(MarketplaceOrder.warehouse_stock))
+            .options(joinedload(MarketplaceOrder.store))
             .order_by(MarketplaceOrder.id.desc())
             .all()
         )
+        rows = global_search._canonical_order_rows(candidates)
+        g._bt38_fbm_health_rows = rows
+        return list(rows)
 
-        canonical = global_search._canonical_order_rows(candidates)
-        profiles = page_alignment._profile_map([
-            row for row in canonical if _platform(row).strip().lower() == "amazon"
-        ])
-        rows: list[MarketplaceOrder] = []
-        for row in canonical:
-            key = (int(row.store_id), str(row.marketplace_order_id))
-            profile = profiles.get(key) if _platform(row).strip().lower() == "amazon" else None
-            if page_alignment._workspace_fbm_eligible(row, profile):
-                rows.append(row)
-
-        g._bt38_fbm_session_rows = rows
-        g._bt38_fbm_session_truncated = False
-        g._bt38_fbm_history_window = {
-            "mode": _mode,
-            "start_at": start_at,
-            "end_at": end_at,
-            "label": _label,
-            "from": _raw_from,
-            "to": _raw_to,
-        }
-        return list(rows), False
-
-    # Replace the later newest-N snapshot cap with the selected date window.
-    # The default remains narrow (7 days); months/years are explicit user reads.
+    # The page projection is bounded and date-scoped.  This replaces the older
+    # 300-row newest-N snapshot and prevents a normal GET from rendering the
+    # entire seven-day history.
     global_search._session_snapshot_rows = selected_range_snapshot_rows
+    page_alignment._requested_limit = _persisted_page_size
 
     def session_health_summary() -> dict:
-        rows, _truncated = global_search._session_snapshot_rows()
+        rows = _health_rows()
         mode, start_at, end_at, label, raw_from, raw_to = _selected_history_window()
 
         profiles = page_alignment._profile_map([
@@ -148,7 +208,7 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
         shipments = page_alignment._shipment_map([row for row, _ in order_rows])
         dispatch_due = dispatched = awaiting = overdue = mapping_review = 0
         returns = replacements = refund_issues = 0
-        platform_counts = {}
+        platform_counts: dict[str, int] = {}
 
         for row, _profile in order_rows:
             platform = _platform(row).strip() or "Other"
@@ -212,8 +272,9 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
         mode = str(health.get("period_mode") or "7d")
         raw_from = str(health.get("range_from") or "")
         raw_to = str(health.get("range_to") or "")
+        page_size = _persisted_page_size()
         preserved = []
-        for name in ("platform", "status", "search", "q"):
+        for name in ("platform", "status", "search", "q", "fbm_tab"):
             value = str(request.args.get(name) or "").strip()
             if value:
                 preserved.append(
@@ -223,6 +284,10 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
         for value, text in (("7d", "7 days"), ("30d", "30 days"), ("90d", "90 days"), ("1y", "1 year"), ("custom", "Custom")):
             selected = " selected" if mode == value else ""
             options.append(f'<option value="{value}"{selected}>{text}</option>')
+        size_options = []
+        for value in _PAGE_SIZES:
+            selected = " selected" if page_size == value else ""
+            size_options.append(f'<option value="{value}"{selected}>{value}</option>')
         return (
             '<form id="bt38FbmHistoryControls" class="fbm-period-controls" method="get" action="/fbm" aria-label="FBM order history controls">'
             + "".join(preserved)
@@ -233,8 +298,9 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
             + f'<input class="form-control form-control-sm" style="width:145px" type="date" name="fbm_to" value="{escape(raw_to)}" aria-label="FBM to date">'
             + '<button class="btn btn-sm btn-outline-primary" type="submit">Apply</button>'
             + '<span class="small text-muted ms-1">Show</span>'
-            + '<select id="bt38ResultsPerPageSelect" class="form-select form-select-sm" style="width:auto" aria-label="FBM orders per page">'
-              '<option value="15">15</option><option value="30">30</option><option value="50">50</option><option value="100">100</option></select>'
+            + '<select id="bt38ResultsPerPageSelect" class="form-select form-select-sm" name="limit" style="width:auto" aria-label="FBM orders per page" onchange="this.form.submit()">'
+            + "".join(size_options)
+            + '</select>'
             + '</form>'
         )
 
@@ -259,5 +325,5 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
     page_alignment._guide_html = operational_guide_html
     app._bt38_fbm_all_orders_health_alignment_installed = True
     app.logger.info(
-        "BT38 FBM history aligned: 7-day default; explicit 30/90/day/year/custom history reads; history never dropped by newest-N cap; health follows selected date range"
+        "BT38 FBM history aligned: bounded 15/30/50/100 page read; 7-day default; explicit wider/custom history; health remains selected-range DB truth"
     )
