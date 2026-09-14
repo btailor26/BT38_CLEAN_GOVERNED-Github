@@ -39,11 +39,35 @@ def governed_ebay_oauth_scopes() -> str:
     return " ".join(aligned)
 
 
-def governed_ebay_refresh_scopes(credentials: dict | None = None) -> str:
-    """Refresh only already granted scopes; legacy tokens stay usable until reauth."""
+def governed_ebay_refresh_scopes(credentials: dict | None = None) -> str | None:
+    """Return a safe optional scope parameter for an eBay refresh request.
+
+    eBay allows the scope parameter to be omitted; in that case the refreshed
+    access token inherits the scopes from the seller's original consent grant.
+    BT38 historically persisted ``oauth_granted_scope`` from the requested
+    scope list when eBay's token response omitted ``scope``. When those two
+    stored values are identical they therefore cannot prove the actual grant.
+    Omitting ``scope`` is the only non-speculative way to preserve exactly what
+    the refresh token was consented for and avoids falsely forcing a scope that
+    the token may not contain.
+
+    A distinct persisted granted value remains safe to request explicitly so
+    older/legacy tokens continue to refresh only their known grant.
+    """
 
     credentials = credentials or {}
     granted = str(credentials.get("oauth_granted_scope") or "").strip()
+    requested = str(credentials.get("oauth_requested_scope") or "").strip()
+
+    if granted and requested:
+        granted_set = set(granted.split())
+        requested_set = set(requested.split())
+        if granted_set == requested_set:
+            return None
+
     if granted:
         return granted
-    return " ".join(LEGACY_EBAY_OAUTH_SCOPES)
+
+    # With no durable proof of the granted set, omit scope and let eBay bind the
+    # new access token to the refresh token's real seller-consent grant.
+    return None
