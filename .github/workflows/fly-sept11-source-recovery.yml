@@ -1,0 +1,166 @@
+name: Fly Sept 11 Source Recovery
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_recovery:
+        description: 'Type RECOVER_BT38_PROD_TO_SEPT11_SOURCE'
+        required: true
+      rollback_commit:
+        description: 'Exact Sept 11 source commit'
+        required: true
+        default: '9faa03e63fec0dd83d6a89beb40f7f8073079443'
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: bt38-prod-governed-deploy
+  cancel-in-progress: false
+
+env:
+  PYTHONPATH: ${{ github.workspace }}
+
+jobs:
+  recover-sept11-source:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Guard bounded recovery request
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "${{ inputs.confirm_recovery }}" = "RECOVER_BT38_PROD_TO_SEPT11_SOURCE"
+          test "${{ github.ref_name }}" = "fix/full-system-release-alignment"
+          test "${{ inputs.rollback_commit }}" = "9faa03e63fec0dd83d6a89beb40f7f8073079443"
+          PR_JSON="$(gh api repos/${{ github.repository }}/pulls/528)"
+          test "$(printf '%s' "$PR_JSON" | jq -r '.state')" = "open"
+          test "$(printf '%s' "$PR_JSON" | jq -r '.merged')" = "false"
+          test "$(printf '%s' "$PR_JSON" | jq -r '.head.ref')" = "fix/full-system-release-alignment"
+          echo "BOUNDED_RECOVERY_APPROVED source=${{ inputs.rollback_commit }}"
+
+      - name: Checkout exact Sept 11 application source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.rollback_commit }}
+
+      - name: Verify rollback source boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "9faa03e63fec0dd83d6a89beb40f7f8073079443"
+          test -f Dockerfile
+          test -f fly.toml
+          test -f scripts/verify_production_db_contract.py
+          grep -q 'app = "bt38-prod"' fly.toml
+          grep -q 'dockerfile = "Dockerfile"' fly.toml
+          ! grep -q '^[[:space:]]*image[[:space:]]*=' fly.toml
+          if grep -R --line-number --fixed-strings 'import services.support_notification_alignment' services/__init__.py services 2>/dev/null; then
+            echo 'BLOCKED: fatal post-Sept-11 support notification startup import is present.'
+            exit 1
+          fi
+          echo 'SEPT11_SOURCE_BOUNDARY_OK'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install locked dependencies and compile recovery surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install uv
+          uv sync --frozen --no-dev
+          uv run python -m py_compile \
+            main.py app.py models.py \
+            services/__init__.py \
+            services/account_profile_alignment.py \
+            services/package_catalog_alignment.py \
+            services/revolut_billing.py \
+            services/revolut_subscription_alignment.py \
+            services/billing_invoice_alignment.py \
+            services/support_case_alignment.py \
+            scripts/verify_production_db_contract.py
+
+      - name: Set up Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy exact Sept 11 source only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${{ inputs.rollback_commit }}"
+          flyctl deploy --app bt38-prod --config fly.toml --remote-only --strategy rolling
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Verify production DB contract after recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          for ATTEMPT in 1 2 3 4 5 6; do
+            if flyctl ssh console --app bt38-prod --command "sh -lc 'cd /app && .venv/bin/python scripts/verify_production_db_contract.py'"; then
+              echo 'PRODUCTION_DB_CONTRACT_OK'
+              exit 0
+            fi
+            echo "WAIT: production SSH/DB contract not ready attempt=$ATTEMPT"
+            sleep $((ATTEMPT * 5))
+          done
+          echo 'BLOCKED: production DB contract did not verify after recovery.'
+          exit 1
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Verify critical deployed source fingerprints
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILES=(
+            main.py
+            app.py
+            services/__init__.py
+            services/account_profile_alignment.py
+            services/package_catalog_alignment.py
+            services/revolut_subscription_alignment.py
+            services/billing_invoice_alignment.py
+            services/support_case_alignment.py
+            scripts/verify_production_db_contract.py
+          )
+          for FILE in "${FILES[@]}"; do
+            EXPECTED="$(sha256sum "$FILE" | awk '{print $1}')"
+            REMOTE="$(flyctl ssh console --app bt38-prod --command "sh -lc 'sha256sum /app/$FILE'" | tail -n 1 | awk '{print $1}' | tr -d '\r')"
+            test "$REMOTE" = "$EXPECTED"
+            echo "SOURCE_OK: $FILE"
+          done
+          echo 'SEPT11_DEPLOYED_SOURCE_OK'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Verify public login health
+        shell: bash
+        run: |
+          set -euo pipefail
+          URL='https://bt38-prod.fly.dev/login'
+          for ATTEMPT in $(seq 1 18); do
+            CODE="$(curl -L -sS -o /tmp/login.html -w '%{http_code}' --max-time 15 "$URL" || true)"
+            if [ "$CODE" = '200' ]; then
+              echo "PUBLIC_LOGIN_OK attempt=$ATTEMPT"
+              exit 0
+            fi
+            echo "WAIT: /login http=$CODE attempt=$ATTEMPT"
+            sleep 10
+          done
+          echo 'BLOCKED: public /login did not return HTTP 200.'
+          exit 1
+
+      - name: Confirm frozen integration boundary
+        shell: bash
+        run: |
+          echo 'PACKLINK_UNTOUCHED=true'
+          echo 'NO_MERGE_PERFORMED=true'
+          echo 'SEPT11_RECOVERY_COMPLETE=true'
