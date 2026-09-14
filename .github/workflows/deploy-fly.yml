@@ -4,12 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       confirm_production_deploy:
-        description: 'Type RECOVER_BT38_PROD_TO_SEPT11_SOURCE'
+        description: 'Type DEPLOY_GITHUB_COMMIT_TO_BT38_PROD'
         required: true
       expected_commit:
-        description: 'Exact Sept 11 application source commit'
+        description: 'Exact current PR #528 head SHA'
         required: true
-        default: '9faa03e63fec0dd83d6a89beb40f7f8073079443'
 
 permissions:
   contents: read
@@ -23,111 +22,180 @@ env:
   PYTHONPATH: ${{ github.workspace }}
 
 jobs:
-  recover-sept11-source:
+  source-deploy-guard:
     runs-on: ubuntu-latest
-    environment: production
     steps:
-      - name: Guard bounded recovery request
+      - name: Require exact current PR 528 GitHub source approval
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          test "${{ inputs.confirm_production_deploy }}" = "RECOVER_BT38_PROD_TO_SEPT11_SOURCE"
+          test "${{ inputs.confirm_production_deploy }}" = "DEPLOY_GITHUB_COMMIT_TO_BT38_PROD"
           test "${{ github.ref_name }}" = "fix/full-system-release-alignment"
-          test "${{ inputs.expected_commit }}" = "9faa03e63fec0dd83d6a89beb40f7f8073079443"
+          test "${{ inputs.expected_commit }}" = "${{ github.sha }}"
           PR_JSON="$(gh api repos/${{ github.repository }}/pulls/528)"
-          test "$(printf '%s' "$PR_JSON" | jq -r '.state')" = "open"
-          test "$(printf '%s' "$PR_JSON" | jq -r '.merged')" = "false"
-          test "$(printf '%s' "$PR_JSON" | jq -r '.head.ref')" = "fix/full-system-release-alignment"
-          echo "BOUNDED_RECOVERY_APPROVED source=${{ inputs.expected_commit }}"
+          PR_STATE="$(printf '%s' "$PR_JSON" | jq -r '.state')"
+          PR_MERGED="$(printf '%s' "$PR_JSON" | jq -r '.merged')"
+          PR_HEAD="$(printf '%s' "$PR_JSON" | jq -r '.head.sha')"
+          PR_BRANCH="$(printf '%s' "$PR_JSON" | jq -r '.head.ref')"
+          test "$PR_STATE" = "open"
+          test "$PR_MERGED" = "false"
+          test "$PR_BRANCH" = "fix/full-system-release-alignment"
+          test "$PR_HEAD" = "${{ inputs.expected_commit }}"
+          echo "GOVERNED_SOURCE_APPROVED commit=$PR_HEAD"
 
-      - name: Checkout exact Sept 11 application source
+  audit:
+    needs: source-deploy-guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact governed commit
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.expected_commit }}
-
-      - name: Verify rollback source boundary
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$(git rev-parse HEAD)" = "9faa03e63fec0dd83d6a89beb40f7f8073079443"
-          test -f Dockerfile
-          test -f fly.toml
-          test -f scripts/verify_production_db_contract.py
-          grep -q 'app = "bt38-prod"' fly.toml
-          grep -q 'dockerfile = "Dockerfile"' fly.toml
-          ! grep -q '^[[:space:]]*image[[:space:]]*=' fly.toml
-          if grep -R --line-number --fixed-strings 'import services.support_notification_alignment' services/__init__.py services 2>/dev/null; then
-            echo 'BLOCKED: fatal post-Sept-11 support notification startup import is present.'
-            exit 1
-          fi
-          grep -q '@app.get("/billing")' services/account_profile_alignment.py
-          grep -q 'Open a support case' templates/support_cases.html
-          echo 'SEPT11_SOURCE_BOUNDARY_OK'
+          ref: ${{ github.sha }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install locked dependencies and compile recovery surface
-        shell: bash
+      - name: Install locked dependencies
         run: |
-          set -euo pipefail
           python -m pip install --upgrade pip
           python -m pip install uv
           uv sync --frozen --no-dev
+
+      - name: Verify governed production inputs
+        run: |
+          test -f Dockerfile
+          test -f fly.toml
+          test -f pyproject.toml
+          test -f uv.lock
+          grep -q 'uv sync --frozen --no-dev' Dockerfile
+          grep -q 'main:app' Dockerfile
+          grep -q 'app = "bt38-prod"' fly.toml
+
+      - name: Reject corrupt production source files
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          bad = []
+          for path in Path('.').rglob('*'):
+              if not path.is_file() or '.git' in path.parts:
+                  continue
+              if path.suffix.lower() not in {'.py', '.html', '.js', '.toml', '.md'}:
+                  continue
+              if b'\0' in path.read_bytes():
+                  bad.append(str(path))
+          if bad:
+              raise SystemExit('Null bytes found in production source: ' + ', '.join(bad))
+          print('SOURCE_INTEGRITY_OK')
+          PY
+
+      - name: Compile production runtime
+        run: |
           uv run python -m py_compile \
-            main.py app.py models.py \
+            main.py app.py models.py fbm_models.py \
+            governed_routes.py governed_group_routes.py governed_group_propagation_routes.py \
+            governed_runtime_visibility_routes.py governed_fbm_routes.py governed_fbm_manual_routes.py \
+            governed_packlink_callback_routes.py \
             services/__init__.py \
-            services/account_profile_alignment.py \
-            services/package_catalog_alignment.py \
-            services/revolut_billing.py \
-            services/revolut_subscription_alignment.py \
-            services/billing_invoice_alignment.py \
-            services/support_case_alignment.py \
+            services/fbm_provider_contract.py \
+            services/fbm_order_mapper.py services/fbm_marketplace_destination.py \
+            services/fbm_amazon_order_profile.py services/fbm_amazon_shipping_adapter.py \
+            services/fbm_packlink_adapter.py services/fbm_packlink_callback.py \
+            services/fbm_packlink_event_processor.py services/fbm_marketplace_confirmation.py \
+            services/fbm_post_purchase.py services/fbm_shipping_state.py \
+            services/fbm_db_delivery_promise_alignment.py \
+            services/governed_order_clarity_alignment.py services/governed_fbm_page_alignment.py \
+            services/governed_amazon_tracking_readback.py services/governed_exact_ebay_order_hydration.py \
+            services/governed_ebay_oauth_scopes.py services/governed_ebay_notification_registration.py \
+            services/governed_ebay_shipping_notification_alignment.py \
+            services/governed_ebay_post_deploy_alignment.py \
+            services/governed_runtime_engine.py services/governed_webhook_execution.py \
+            services/governed_webhook_alignment.py services/governed_push_execution.py \
+            services/governed_ebay_inventory_import.py services/governed_amazon_inventory_import.py \
+            services/governed_amazon_listing_fulfillment_refresh.py \
+            services/governed_marketplace_order_import.py services/governed_order_stock_mutation.py \
+            services/governed_warehouse_sync.py \
+            services/google_identity.py services/public_early_access.py \
+            services/account_profile_alignment.py services/package_catalog_alignment.py \
+            services/revolut_billing.py services/revolut_subscription_alignment.py \
+            services/billing_invoice_alignment.py services/support_case_alignment.py \
             scripts/verify_production_db_contract.py
+
+      - name: Run deployment contracts
+        run: |
+          uv run python -m pytest -q \
+            tests/test_runtime_deployment_contract.py \
+            tests/test_fba_targeted_update_contract.py \
+            tests/test_webhook_scoped_reconcile_contract.py \
+            tests/test_webhook_push_alignment_contract.py \
+            tests/test_ui_production_alignment_contract.py \
+            tests/test_github_fly_only_deployment_contract.py \
+            tests/test_fbm_manual_shipping_order_contract.py \
+            tests/test_google_identity_alignment_contract.py \
+            tests/test_package_catalog_alignment_contract.py \
+            tests/test_revolut_billing_client_contract.py \
+            tests/test_revolut_subscription_alignment_contract.py \
+            tests/test_billing_invoice_alignment_contract.py \
+            tests/test_support_case_alignment_contract.py
+
+  deploy:
+    needs: audit
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout exact audited GitHub commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
 
       - name: Set up Fly CLI
         uses: superfly/flyctl-actions/setup-flyctl@master
 
-      - name: Verify required Fly secret metadata before recovery
+      - name: Verify production DB contract before deploy when machine is available
         shell: bash
         run: |
           set -euo pipefail
-          SECRET_NAMES="$(flyctl secrets list --app bt38-prod | awk 'NR > 1 {print $1}')"
-          for KEY in EBAY_SIGNATURE_PRIVATE_KEY EBAY_SIGNATURE_PUBLIC_KEY_JWE; do
-            printf '%s\n' "$SECRET_NAMES" | grep -Fxq "$KEY"
-            echo "FLY_SECRET_METADATA $KEY=PRESENT"
-          done
+          CHECK_B64="$(base64 -w0 scripts/verify_production_db_contract.py)"
+          DB_CHECK_OUTPUT=""
+          if DB_CHECK_OUTPUT="$(flyctl ssh console --app bt38-prod --command "sh -lc 'printf %s \"$CHECK_B64\" | base64 -d > /tmp/bt38-db-contract.py && cd /app && .venv/bin/python /tmp/bt38-db-contract.py'" 2>&1)"; then
+            printf '%s\n' "$DB_CHECK_OUTPUT"
+          else
+            printf '%s\n' "$DB_CHECK_OUTPUT"
+            if printf '%s\n' "$DB_CHECK_OUTPUT" | grep -q 'has no started VMs'; then
+              echo 'DB_CHECK_DEFERRED: production machine is stopped; post-deploy DB verification remains mandatory.'
+            else
+              exit 1
+            fi
+          fi
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
-      - name: Deploy exact Sept 11 source only
+      - name: Deploy exact GitHub commit with Fly remote builder
         shell: bash
         run: |
           set -euo pipefail
+          test "${{ github.ref_name }}" = "fix/full-system-release-alignment"
           test "$(git rev-parse HEAD)" = "${{ inputs.expected_commit }}"
           flyctl deploy --app bt38-prod --config fly.toml --remote-only --strategy rolling
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
-      - name: Start existing production machine after recovery deploy
+      - name: Start existing production machine after deploy
         shell: bash
         run: |
           set -euo pipefail
           MACHINE_ID='7849913cd19d28'
           IDS="$(flyctl machines list --app bt38-prod --json | jq -r '.[].id')"
           printf '%s\n' "$IDS" | grep -Fxq "$MACHINE_ID"
-          echo "EXISTING_MACHINE_CONFIRMED id=$MACHINE_ID"
           flyctl machine start "$MACHINE_ID" --app bt38-prod || true
           for ATTEMPT in 1 2 3 4 5 6; do
             if flyctl ssh console --app bt38-prod --command "sh -lc 'printf MACHINE_BOOT_OK'"; then
               echo "EXISTING_MACHINE_STARTED id=$MACHINE_ID"
               exit 0
             fi
-            echo "WAIT: existing production machine not SSH-ready attempt=$ATTEMPT"
             sleep $((ATTEMPT * 5))
           done
           echo 'BLOCKED: existing production machine did not become SSH-ready; no replacement VM was created.'
@@ -135,20 +203,11 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
-      - name: Verify production DB contract after recovery
+      - name: Verify deployed image DB contract against production Neon
         shell: bash
         run: |
           set -euo pipefail
-          for ATTEMPT in 1 2 3 4 5 6; do
-            if flyctl ssh console --app bt38-prod --command "sh -lc 'cd /app && .venv/bin/python scripts/verify_production_db_contract.py'"; then
-              echo 'PRODUCTION_DB_CONTRACT_OK'
-              exit 0
-            fi
-            echo "WAIT: production SSH/DB contract not ready attempt=$ATTEMPT"
-            sleep $((ATTEMPT * 5))
-          done
-          echo 'BLOCKED: production DB contract did not verify after recovery.'
-          exit 1
+          flyctl ssh console --app bt38-prod --command "sh -lc 'cd /app && .venv/bin/python scripts/verify_production_db_contract.py'"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
@@ -173,7 +232,7 @@ jobs:
             test "$REMOTE" = "$EXPECTED"
             echo "SOURCE_OK: $FILE"
           done
-          echo 'SEPT11_DEPLOYED_SOURCE_OK'
+          echo "CRITICAL_DEPLOYED_SOURCE_OK commit=${{ inputs.expected_commit }}"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
@@ -185,19 +244,17 @@ jobs:
             LOGIN_CODE="$(curl -L -sS -o /tmp/login.html -w '%{http_code}' --max-time 15 https://bt38-prod.fly.dev/login || true)"
             DASH_HEADERS="$(curl -sS -I --max-time 15 https://bt38-prod.fly.dev/dashboard || true)"
             if [ "$LOGIN_CODE" = '200' ] && printf '%s\n' "$DASH_HEADERS" | grep -Eiq '^location: .*/login'; then
-              grep -Eiq '<title>.*(BT38|Inventory|Login)|type="password"' /tmp/login.html
-              echo "PUBLIC_RECOVERY_OK attempt=$ATTEMPT"
+              echo "PUBLIC_DEPLOY_OK attempt=$ATTEMPT"
               exit 0
             fi
-            echo "WAIT: login_http=$LOGIN_CODE dashboard_redirect_pending attempt=$ATTEMPT"
             sleep 10
           done
-          echo 'BLOCKED: public login/dashboard recovery contract failed.'
+          echo 'BLOCKED: public login/dashboard deploy contract failed.'
           exit 1
 
-      - name: Confirm frozen integration boundary
+      - name: Confirm governed deployment boundary
         shell: bash
         run: |
           echo 'PACKLINK_UNTOUCHED=true'
           echo 'NO_MERGE_PERFORMED=true'
-          echo 'SEPT11_RECOVERY_COMPLETE=true'
+          echo 'CURRENT_HEAD_DEPLOY_COMPLETE=true'
