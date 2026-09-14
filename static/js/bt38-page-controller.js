@@ -38,7 +38,7 @@ window.BT38.pages = window.BT38.pages || {};
     return;
   }
 
-  const allowedPageSizes = [15, 25, 50, 100];
+  const allowedPageSizes = [15, 25, 30, 50, 100];
 
   function text(value) {
     return String(value == null ? "" : value).trim();
