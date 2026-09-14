@@ -2,9 +2,10 @@
 
 The durable marketplace path already identifies and creates MarketplaceOrder.
 This module reads only that exact eBay order and its exact shipping fulfillments,
-then updates marketplace-owned delivery/lifecycle/tracking fields on those same
-rows. Exact eBay line-item fulfillment instructions are also persisted into the
-existing FBM profile/operational-state promise fields when they are unambiguous.
+then updates marketplace-owned order identity, line economics, delivery,
+lifecycle and tracking fields on those same rows. Exact eBay line-item
+fulfillment instructions are also persisted into the existing FBM
+profile/operational-state promise fields when they are unambiguous.
 It does not create orders, mutate Warehouse stock, push marketplaces, or submit MCF.
 """
 from __future__ import annotations
@@ -23,6 +24,8 @@ from services.governed_marketplace_order_import import (
     EBAY_ORDERS_URL,
     _ebay_access_token,
     _parse_ebay_datetime,
+    _safe_float,
+    _safe_int,
     _text,
 )
 
@@ -408,6 +411,20 @@ def hydrate_exact_ebay_order(*, store, marketplace_order_id: str, source: str) -
     tracking_updates = 0
     lifecycle_updates = 0
     fulfillment_lifecycle_rows = 0
+    quantity_updates = 0
+    price_updates = 0
+    line_economics_updates = 0
+    shipping_charged_updates = 0
+
+    pricing_summary = order.get("pricingSummary") or {}
+    delivery_cost = (
+        pricing_summary.get("deliveryCost")
+        if isinstance(pricing_summary, dict)
+        else None
+    )
+    exact_order_shipping_charged = None
+    if len(rows) == 1 and isinstance(delivery_cost, dict) and delivery_cost.get("value") not in (None, ""):
+        exact_order_shipping_charged = _safe_float(delivery_cost.get("value"))
 
     for row in rows:
         row_changed = False
@@ -447,6 +464,44 @@ def hydrate_exact_ebay_order(*, store, marketplace_order_id: str, source: str) -
                         "conflicting_row_id": conflict.id,
                         "line_item_id": line_id,
                     })
+
+            exact_quantity = None
+            if item.get("quantity") not in (None, ""):
+                exact_quantity = _safe_int(
+                    item.get("quantity"),
+                    default=int(getattr(row, "quantity", 1) or 1),
+                )
+            price = item.get("lineItemCost") or {}
+            exact_unit_price = None
+            if isinstance(price, dict) and price.get("value") not in (None, ""):
+                exact_unit_price = _safe_float(price.get("value"))
+
+            economics_changed = False
+            if exact_quantity is not None and int(getattr(row, "quantity", 0) or 0) != exact_quantity:
+                row.quantity = exact_quantity
+                quantity_updates += 1
+                economics_changed = True
+
+            if exact_unit_price is not None:
+                effective_quantity = int(exact_quantity or getattr(row, "quantity", 1) or 1)
+                exact_line_total = exact_unit_price * effective_quantity
+                if float(getattr(row, "unit_price", 0.0) or 0.0) != exact_unit_price:
+                    row.unit_price = exact_unit_price
+                    price_updates += 1
+                    economics_changed = True
+                if float(getattr(row, "line_total", 0.0) or 0.0) != exact_line_total:
+                    row.line_total = exact_line_total
+                    economics_changed = True
+
+            if economics_changed:
+                line_economics_updates += 1
+                row_changed = True
+
+        if exact_order_shipping_charged is not None:
+            if float(getattr(row, "shipping_charged", 0.0) or 0.0) != exact_order_shipping_charged:
+                row.shipping_charged = exact_order_shipping_charged
+                shipping_charged_updates += 1
+                row_changed = True
 
         # eBay's exact shipping_fulfillment resource is marketplace lifecycle
         # truth. A matched fulfillment establishes that row as shipped even when
@@ -538,6 +593,10 @@ def hydrate_exact_ebay_order(*, store, marketplace_order_id: str, source: str) -
         "fulfillment_lifecycle_rows": fulfillment_lifecycle_rows,
         "tracking_updates": tracking_updates,
         "lifecycle_updates": lifecycle_updates,
+        "quantity_updates": quantity_updates,
+        "price_updates": price_updates,
+        "line_economics_updates": line_economics_updates,
+        "shipping_charged_updates": shipping_charged_updates,
         "promise_persisted": promise_persisted,
         "fulfillment_error": fulfillment_error,
         "marketplace_write_started": False,
