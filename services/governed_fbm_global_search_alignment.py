@@ -13,6 +13,7 @@ all outrank database row recency.
 from __future__ import annotations
 
 from html import escape
+from urllib.parse import urlencode
 
 from flask import g, request
 from sqlalchemy import func
@@ -145,13 +146,7 @@ def _row_matches_term(row: MarketplaceOrder, term: str) -> bool:
 
 
 def _prime_shipment_relationships(shipments) -> None:
-    """Bulk-load persisted shipment relationships used by the FBM page.
-
-    ``mapping_review`` and ``provider_cases`` are lazy backrefs on FBMShipment.
-    Touching them once per rendered order creates an N+1 read pattern.  Prime
-    both relationships in bounded bulk queries and mark them committed on the
-    already-loaded shipment objects so page rendering performs no per-row SQL.
-    """
+    """Bulk-load persisted shipment relationships used by the FBM page."""
     by_id = {
         int(shipment.id): shipment
         for shipment in shipments
@@ -273,17 +268,33 @@ def _search_rows(limit: int):
     return matched[:limit], len(matched) > limit or truncated
 
 
+def _preserved_search_args() -> list[tuple[str, str]]:
+    fields = ("fbm_range", "fbm_from", "fbm_to", "limit", "platform", "status", "fbm_tab")
+    return [
+        (name, str(request.args.get(name) or "").strip())
+        for name in fields
+        if str(request.args.get(name) or "").strip()
+    ]
+
+
 def _search_form_html() -> str:
+    term = _search_term()
+    hidden = "".join(
+        f'<input type="hidden" name="{escape(name)}" value="{escape(value)}">'
+        for name, value in _preserved_search_args()
+    )
+    clear_args = dict(_preserved_search_args())
+    clear_url = "/fbm"
+    if clear_args:
+        clear_url += "?" + urlencode(clear_args)
     return (
-        '<form id="bt38FbmGlobalSearch" class="d-flex gap-2 align-items-center flex-wrap" '
-        'method="get" action="/fbm" onsubmit="event.preventDefault();return false;">'
-        '<input id="bt38FbmGlobalSearchInput" class="form-control form-control-sm" style="width:min(360px,70vw)" '
-        'type="search" name="search" autocomplete="off" '
-        'placeholder="Search loaded FBM orders, SKU, tracking or product">'
-        '<button class="btn btn-sm btn-outline-primary" type="submit">Search</button>'
-        '<button id="bt38FbmGlobalSearchClear" class="btn btn-sm btn-outline-secondary" type="button">Clear</button>'
-        '<span class="small text-muted">Search stays in this browser session.</span>'
-        '</form>'
+        '<form id="bt38FbmGlobalSearch" class="d-flex gap-2 align-items-center flex-wrap" method="get" action="/fbm">'
+        + hidden
+        + f'<input id="bt38FbmGlobalSearchInput" class="form-control form-control-sm" style="width:min(360px,70vw)" type="search" name="search" autocomplete="off" value="{escape(term)}" placeholder="Search order, SKU, tracking, carrier or status">'
+        + '<button class="btn btn-sm btn-outline-primary" type="submit">Search</button>'
+        + f'<a id="bt38FbmGlobalSearchClear" class="btn btn-sm btn-outline-secondary" href="{escape(clear_url)}">Clear</a>'
+        + '<span class="small text-muted">Search queries the selected history window only when submitted.</span>'
+        + '</form>'
     )
 
 
@@ -384,5 +395,5 @@ def install_governed_fbm_global_search_alignment(app) -> None:
 
     app._bt38_fbm_global_search_alignment_installed = True
     app.logger.info(
-        "BT38 FBM browser session aligned: one canonical DB snapshot; local search/tabs/page; request-cached profiles, shipments and shipment relationships; no marketplace/provider reads"
+        "BT38 FBM browser session aligned: bounded canonical DB snapshot; explicit GET search; request-cached profiles, shipments and shipment relationships; no marketplace/provider reads"
     )
