@@ -40,7 +40,24 @@ jobs:
           test "$(printf '%s' "$PR_JSON" | jq -r '.state')" = "open"
           test "$(printf '%s' "$PR_JSON" | jq -r '.merged')" = "false"
           test "$(printf '%s' "$PR_JSON" | jq -r '.head.ref')" = "fix/full-system-release-alignment"
-          echo "BOUNDED_RECOVERY_APPROVED source=${{ inputs.rollback_commit }}"
+          test "$(printf '%s' "$PR_JSON" | jq -r '.head.sha')" = "${{ github.sha }}"
+          echo "BOUNDED_RECOVERY_APPROVED source=${{ inputs.rollback_commit }} control=${{ github.sha }}"
+
+      - name: Checkout recovery control head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Prove dispatcher differs from Sept 11 only by this recovery workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "${{ inputs.rollback_commit }}^{commit}"
+          CHANGED="$(git diff --name-only "${{ inputs.rollback_commit }}" "${{ github.sha }}")"
+          printf '%s\n' "$CHANGED"
+          test "$CHANGED" = '.github/workflows/fly-sept11-source-recovery.yml'
+          echo 'RECOVERY_CONTROL_ONLY_DELTA_OK'
 
       - name: Checkout exact Sept 11 application source
         uses: actions/checkout@v4
@@ -55,14 +72,25 @@ jobs:
           test -f Dockerfile
           test -f fly.toml
           test -f scripts/verify_production_db_contract.py
+          test -f services/account_profile_alignment.py
+          test -f services/revolut_subscription_alignment.py
+          test -f services/billing_invoice_alignment.py
+          test -f services/support_case_alignment.py
+          test -f templates/billing.html
+          test -f templates/support_cases.html
           grep -q 'app = "bt38-prod"' fly.toml
           grep -q 'dockerfile = "Dockerfile"' fly.toml
           ! grep -q '^[[:space:]]*image[[:space:]]*=' fly.toml
+          test ! -f services/support_notification_alignment.py
           if grep -R --line-number --fixed-strings 'import services.support_notification_alignment' services/__init__.py services 2>/dev/null; then
             echo 'BLOCKED: fatal post-Sept-11 support notification startup import is present.'
             exit 1
           fi
-          echo 'SEPT11_SOURCE_BOUNDARY_OK'
+          grep -q 'provider="revolut"' services/billing_invoice_alignment.py
+          grep -q '/billing' services/account_profile_alignment.py
+          grep -q '/support/cases' services/support_case_alignment.py
+          grep -qi 'Open a support case' templates/support_cases.html
+          echo 'SEPT11_SOURCE_BOUNDARY_OK billing=revolut support_top_box=present fatal_notification_import=absent'
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -89,6 +117,19 @@ jobs:
 
       - name: Set up Fly CLI
         uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Verify required Fly secret metadata before recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          SECRET_NAMES="$(flyctl secrets list --app bt38-prod | awk 'NR > 1 {print $1}')"
+          for KEY in EBAY_SIGNATURE_PRIVATE_KEY EBAY_SIGNATURE_PUBLIC_KEY_JWE; do
+            printf '%s\n' "$SECRET_NAMES" | grep -Fxq "$KEY"
+            echo "REQUIRED_FLY_SECRET $KEY=PRESENT"
+          done
+          echo 'REQUIRED_FLY_SECRET_METADATA_OK'
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
       - name: Deploy exact Sept 11 source only
         shell: bash
@@ -129,11 +170,23 @@ jobs:
             services/revolut_subscription_alignment.py
             services/billing_invoice_alignment.py
             services/support_case_alignment.py
+            templates/billing.html
+            templates/support_cases.html
             scripts/verify_production_db_contract.py
           )
           for FILE in "${FILES[@]}"; do
             EXPECTED="$(sha256sum "$FILE" | awk '{print $1}')"
-            REMOTE="$(flyctl ssh console --app bt38-prod --command "sh -lc 'sha256sum /app/$FILE'" | tail -n 1 | awk '{print $1}' | tr -d '\r')"
+            REMOTE=""
+            for ATTEMPT in 1 2 3 4 5; do
+              if REMOTE_LINE="$(flyctl ssh console --app bt38-prod --command "sh -lc 'sha256sum /app/$FILE'" 2>/tmp/fly-source-error | tail -n 1 | tr -d '\r')"; then
+                REMOTE="$(printf '%s\n' "$REMOTE_LINE" | awk '{print $1}')"
+                break
+              fi
+              echo "WAIT: source verification $FILE attempt=$ATTEMPT"
+              cat /tmp/fly-source-error || true
+              sleep $((ATTEMPT * 3))
+            done
+            test -n "$REMOTE"
             test "$REMOTE" = "$EXPECTED"
             echo "SOURCE_OK: $FILE"
           done
@@ -141,22 +194,30 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
-      - name: Verify public login health
+      - name: Verify public login health and dashboard protection
         shell: bash
         run: |
           set -euo pipefail
-          URL='https://bt38-prod.fly.dev/login'
+          LOGIN='https://bt38-prod.fly.dev/login'
+          DASHBOARD='https://bt38-prod.fly.dev/dashboard'
           for ATTEMPT in $(seq 1 18); do
-            CODE="$(curl -L -sS -o /tmp/login.html -w '%{http_code}' --max-time 15 "$URL" || true)"
-            if [ "$CODE" = '200' ]; then
+            CODE="$(curl -sS -o /tmp/login.html -w '%{http_code}' --max-time 15 "$LOGIN" || true)"
+            if [ "$CODE" = '200' ] && grep -Eqi '<title>[^<]*(BT38|Inventory|Login)' /tmp/login.html; then
               echo "PUBLIC_LOGIN_OK attempt=$ATTEMPT"
-              exit 0
+              break
+            fi
+            if [ "$ATTEMPT" = '18' ]; then
+              echo 'BLOCKED: public /login did not return the expected HTTP 200 login page.'
+              exit 1
             fi
             echo "WAIT: /login http=$CODE attempt=$ATTEMPT"
             sleep 10
           done
-          echo 'BLOCKED: public /login did not return HTTP 200.'
-          exit 1
+          HEADERS="$(mktemp)"
+          DASH_CODE="$(curl -sS -o /dev/null -D "$HEADERS" -w '%{http_code}' --max-time 15 "$DASHBOARD" || true)"
+          test "$DASH_CODE" = '302' -o "$DASH_CODE" = '303'
+          grep -Eqi '^location: .*/login' "$HEADERS"
+          echo "DASHBOARD_AUTH_REDIRECT_OK http=$DASH_CODE"
 
       - name: Confirm frozen integration boundary
         shell: bash
