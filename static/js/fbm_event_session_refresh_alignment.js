@@ -9,6 +9,8 @@
   if (window.bt38FbmEventSessionRefreshInstalled) return;
   window.bt38FbmEventSessionRefreshInstalled = true;
 
+  const allowedPageSizes = [15, 30, 50, 100];
+
   function onFbm() {
     return String(window.location.pathname || '').replace(/\/$/, '') === '/fbm';
   }
@@ -20,9 +22,41 @@
     return Object.assign({}, defaults || {});
   }
 
+  function setSessionState(values) {
+    if (window.BT38 && typeof window.BT38.setPageSession === 'function') {
+      return window.BT38.setPageSession('fbm', values || {});
+    }
+    return values || {};
+  }
+
   function pageState() {
     const pages = window.BT38 && window.BT38.pages;
     return pages && (pages.fbm || pages.FBM);
+  }
+
+  function restorePageSize() {
+    const select = document.getElementById('bt38ResultsPerPageSelect');
+    if (!select) return;
+    const session = getSessionState({pageSize: 15});
+    const stored = Number.parseInt(session && session.pageSize, 10);
+    const pageSize = allowedPageSizes.includes(stored) ? stored : 15;
+    select.value = String(pageSize);
+
+    const page = pageState();
+    const controller = window.BT38 && window.BT38.PageController;
+    if (page && page.ready === true && controller && typeof controller.renderPage === 'function') {
+      page.currentPage = 1;
+      controller.renderPage(page.name);
+    }
+
+    if (!select.dataset.bt38FbmSessionBound) {
+      select.dataset.bt38FbmSessionBound = '1';
+      select.addEventListener('change', function () {
+        const selected = Number.parseInt(select.value, 10);
+        const normalized = allowedPageSizes.includes(selected) ? selected : 15;
+        setSessionState({pageSize: normalized});
+      });
+    }
   }
 
   function rowMatchesSession(row) {
@@ -62,6 +96,7 @@
       return false;
     }
 
+    restorePageSize();
     const session = getSessionState({tab: 'pending'});
     const activeTab = String(session && session.tab || 'pending');
     const selectedTab = document.querySelector('.fbm-lifecycle-tab[data-fbm-tab="' + activeTab + '"]')
@@ -78,8 +113,10 @@
 
   function reconcileSessionAfterPageController() {
     if (!onFbm()) return;
+    restorePageSize();
     applySessionTabAfterPageController();
     window.addEventListener('load', function () {
+      restorePageSize();
       applySessionTabAfterPageController();
       alignAllRowVisibility();
     }, {once: true});
