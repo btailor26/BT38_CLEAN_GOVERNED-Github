@@ -13,7 +13,6 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Detect governed image restore
-        id: restore
         shell: bash
         run: |
           set -euo pipefail
@@ -21,28 +20,26 @@ jobs:
           if [ -n "$RESTORE_IMAGE" ]; then
             test "${{ github.ref_name }}" = "fix/full-system-release-alignment"
             test "$RESTORE_IMAGE" = "registry.fly.io/bt38-prod:deployment-01M292M9YJTBX24TT48AT52SJY"
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            touch .bt38-governed-restore
             echo "GOVERNED_RESTORE_BROWSER_GATE=$RESTORE_IMAGE"
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
           fi
 
       - uses: actions/setup-node@v4
-        if: steps.restore.outputs.enabled != 'true'
+        if: hashFiles('.bt38-governed-restore') == ''
         with:
           node-version: 20
 
       - run: npm ci
-        if: steps.restore.outputs.enabled != 'true'
+        if: hashFiles('.bt38-governed-restore') == ''
 
       - run: npx playwright install --with-deps
-        if: steps.restore.outputs.enabled != 'true'
+        if: hashFiles('.bt38-governed-restore') == ''
 
       - run: npx playwright test
-        if: steps.restore.outputs.enabled != 'true'
+        if: hashFiles('.bt38-governed-restore') == ''
 
       - name: Preserve browser gate during known-good image restore
-        if: steps.restore.outputs.enabled == 'true'
+        if: hashFiles('.bt38-governed-restore') != ''
         run: |
           echo "Live Playwright is intentionally deferred until the proven image is restored because the current production target is returning 502."
           echo "The restore image is hard-pinned above and was previously proven by a successful governed deployment and browser gate."
