@@ -102,7 +102,7 @@ def test_shared_page_controller_searches_cached_rows_then_paginates_locally():
 def test_default_page_size_is_15_and_can_expand_without_server_request():
     source = _source(CONTROLLER)
 
-    assert "const allowedPageSizes = [15, 25, 50, 100]" in source
+    assert "const allowedPageSizes = [15, 25, 30, 50, 100]" in source
     assert "perPage: 15" in source
     assert "allowedPageSizes.includes(parsed) ? parsed : 15" in source
     assert 'select.addEventListener("change"' in source
