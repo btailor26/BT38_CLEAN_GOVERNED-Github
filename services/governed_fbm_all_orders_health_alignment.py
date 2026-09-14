@@ -1,9 +1,11 @@
-"""Align FBM health to the same browser-session snapshot used by the workspace.
+"""Align FBM health to the same visible browser-session window used by the workspace.
 
 Warehouse is the reference model: the page reads its governed operational dataset
-once and every presentation layer works from that same in-memory request snapshot.
-FBM health therefore never performs an independent all-history MarketplaceOrder
-scan.  No marketplace/provider calls or writes occur here.
+once and presentation works from the currently visible bounded window. FBM health
+must therefore reflect the same 15-order window the user is looking at, expanding
+only when the user explicitly expands the page. It never performs an independent
+all-history MarketplaceOrder scan. No marketplace/provider calls or writes occur
+here.
 """
 from __future__ import annotations
 
@@ -22,7 +24,11 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
     original_guide_html = page_alignment._guide_html
 
     def session_health_summary() -> dict:
-        rows, truncated = global_search._session_snapshot_rows()
+        session_rows, session_truncated = global_search._session_snapshot_rows()
+        visible_limit = page_alignment._requested_limit()
+        rows = list(session_rows[:visible_limit])
+        truncated = bool(session_truncated or len(session_rows) > visible_limit)
+
         profiles = page_alignment._profile_map([
             row for row in rows if _platform(row).strip().lower() == "amazon"
         ])
@@ -74,7 +80,7 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
         health_score = max(0, min(100, round(100 * (health_base - risk_actions) / health_base)))
         return {
             "period_mode": "operational",
-            "period_label": "Current FBM work",
+            "period_label": f"Current FBM work · {len(order_rows)} visible",
             "period_start": None,
             "period_end": None,
             "total": total,
@@ -90,23 +96,15 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
             "platform_counts": dict(sorted(platform_counts.items(), key=lambda item: (-item[1], item[0].lower()))),
             "health_score": health_score,
             "risk_actions": risk_actions,
-            # Cofi's headline is the current Ready-to-dispatch workload. Carrier
-            # overdue remains a separate risk metric and must not inflate the
-            # number of orders the user still needs to dispatch.
             "shipping_actions": dispatch_due,
-            "truncated": bool(truncated),
+            "truncated": truncated,
         }
 
     def operational_controls(health: dict) -> str:
-        scope_note = (
-            "Loaded FBM session snapshot; refresh the page to take a new governed snapshot."
-            if health.get("truncated")
-            else "Ready to dispatch is active work; dispatched orders remain in history."
-        )
         return (
             '<div class="fbm-period-controls" aria-label="FBM work scope">'
-            '<span class="badge bg-light text-dark border">Current FBM work</span>'
-            f'<span class="small text-muted">{scope_note}</span>'
+            '<span class="badge bg-light text-dark border">Visible FBM session</span>'
+            '<span class="small text-muted">Cards follow the same 15-order window; expanding the page expands the counts.</span>'
             '</div>'
         )
 
@@ -130,4 +128,4 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
     page_alignment._health_html = operational_health_html
     page_alignment._guide_html = operational_guide_html
     app._bt38_fbm_all_orders_health_alignment_installed = True
-    app.logger.info("BT38 FBM health aligned: same request/session snapshot; Ready-to-dispatch owns headline action count; no independent order-history scan")
+    app.logger.info("BT38 FBM health aligned: visible 15-order session window owns cards; explicit expansion expands counts; no independent order-history scan")
