@@ -128,3 +128,8 @@ import services.revolut_subscription_alignment  # noqa: F401,E402
 # CustomerAccount authority and never reads/writes marketplace, carrier or payment
 # provider truth. The existing public /support page remains separate.
 import services.support_case_alignment  # noqa: F401,E402
+
+# FBM history controls are native GET reads over the selected persisted window.
+# Keep 7 days as the default, exact 15/30/50/100 page sizes, and custom history
+# without introducing polling, marketplace reads or another order authority.
+import services.governed_fbm_history_controls_alignment  # noqa: F401,E402
