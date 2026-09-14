@@ -30,6 +30,7 @@ jobs:
     env:
       PYTHONPATH: ${{ github.workspace }}
       DEV_DATABASE_URL: postgresql://bt38_ci:bt38_ci@127.0.0.1:5432/bt38_ci
+      BT38_ALLOW_DATABASE_TESTS: "true"
 
     steps:
       - name: Checkout repository
