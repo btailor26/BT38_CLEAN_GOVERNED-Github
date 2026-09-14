@@ -110,6 +110,11 @@ import services.governed_admin_attention_inbox_alignment  # noqa: F401,E402
 # No second settings page, worker, sync path or marketplace execution path.
 import services.cofi_settings_alignment  # noqa: F401,E402
 
+# Invoice rows reference the existing package catalogue. Load that dependency
+# before invoice schema registration so a clean isolated CI database has the
+# same model dependency order as the already-populated production database.
+import services.package_catalog_alignment  # noqa: F401,E402
+
 # BT38 owns invoice persistence and PDF/CSV generation. Revolut remains payment
 # authority only; this module makes no provider call and uses no paid document service.
 import services.billing_invoice_alignment  # noqa: F401,E402
