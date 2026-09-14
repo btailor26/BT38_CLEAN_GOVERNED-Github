@@ -59,7 +59,18 @@ def test_command_center_approval_scope_must_be_exact():
     assert governed_approval.approval_scope_is_exact(extra) is False
 
 
-def test_command_center_approval_matches_runtime_gate_contract(monkeypatch):
+def _command(payload, approval):
+    return SimpleNamespace(
+        marketplace="amazon",
+        action="push_inventory",
+        dry_run=False,
+        payload=payload,
+        approval=approval,
+    )
+
+
+def test_command_center_approval_uses_current_fuse_box_runtime_authority(monkeypatch):
+    """Legacy approval metadata cannot replace the SystemConfig/store fuse-box decision."""
     payload = {
         "marketplace": "amazon",
         "action": "push_inventory",
@@ -76,21 +87,33 @@ def test_command_center_approval_matches_runtime_gate_contract(monkeypatch):
         quantity=payload["quantity"],
         approved_by="pytest-user",
     )
-    command = SimpleNamespace(
-        marketplace="amazon",
-        action="push_inventory",
-        dry_run=False,
-        payload=payload,
-        approval=approval,
-    )
+    command = _command(payload, approval)
+    store = SimpleNamespace(id=101, name="Amazon-Test")
+    calls = []
 
-    monkeypatch.setattr(runtime_gate, "RUNTIME_GATE_FORCE_CLOSED", False)
-    monkeypatch.setattr(runtime_gate, "GOVERNED_AMAZON_FBM_LIVE_ENABLED", True)
+    monkeypatch.setattr(runtime_gate, "_resolve_store", lambda _command: store)
+
+    def allowed(**kwargs):
+        calls.append(kwargs)
+        return {"allowed": True, "reason": "Fuse box allowed action"}
+
+    monkeypatch.setattr(runtime_gate, "is_runtime_action_allowed", allowed)
 
     assert runtime_gate.is_runtime_allowed(command) is True
+    assert calls == [{
+        "store": store,
+        "action_type": "push",
+        "manual": False,
+        "context": {
+            "source": "runtime_gate",
+            "command_action": "push_inventory",
+            "marketplace": "amazon",
+        },
+    }]
 
 
-def test_command_center_approval_mismatch_fails_runtime_gate(monkeypatch):
+def test_command_center_approval_cannot_bypass_fuse_box_block(monkeypatch):
+    """Even exact approval metadata remains subordinate to the current fuse-box authority."""
     payload = {
         "marketplace": "amazon",
         "action": "push_inventory",
@@ -104,18 +127,15 @@ def test_command_center_approval_mismatch_fails_runtime_gate(monkeypatch):
         sku=payload["sku"],
         store_id=payload["store_id"],
         listing_id=payload["listing_id"],
-        quantity=payload["quantity"] + 1,
+        quantity=payload["quantity"],
         approved_by="pytest-user",
     )
-    command = SimpleNamespace(
-        marketplace="amazon",
-        action="push_inventory",
-        dry_run=False,
-        payload=payload,
-        approval=approval,
-    )
+    command = _command(payload, approval)
 
-    monkeypatch.setattr(runtime_gate, "RUNTIME_GATE_FORCE_CLOSED", False)
-    monkeypatch.setattr(runtime_gate, "GOVERNED_AMAZON_FBM_LIVE_ENABLED", True)
+    monkeypatch.setattr(
+        runtime_gate,
+        "is_runtime_action_allowed",
+        lambda **_kwargs: {"allowed": False, "reason": "Fuse box push_enabled is OFF"},
+    )
 
     assert runtime_gate.is_runtime_allowed(command) is False
