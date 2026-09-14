@@ -67,4 +67,5 @@ def test_billing_page_reads_package_without_global_page_query():
     assert 'return {"bt38_package_for_account": _package_summary}' in source
     assert 'bt38_package_for_account(account.id)' in billing
     assert "Normal BT38 pages pay no DB" in source
-    assert "no separate user or subscription system" in billing
+    assert "SubscriptionPackage.query" not in billing
+    assert "AccountPackageAssignment.query" not in billing
