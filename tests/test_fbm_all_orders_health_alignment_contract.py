@@ -7,12 +7,14 @@ SEARCH = (ROOT / "services" / "governed_fbm_global_search_alignment.py").read_te
 CLARITY = (ROOT / "services" / "governed_order_clarity_alignment.py").read_text(encoding="utf-8")
 
 
-def test_fbm_health_uses_operational_dispatch_scope_not_historical_action_count():
+def test_fbm_health_uses_visible_operational_scope_not_hidden_session_rows():
     assert "install_governed_fbm_all_orders_health_alignment" in CLARITY
     assert '"period_mode": "operational"' in HEALTH
-    assert '"period_label": "Current FBM work"' in HEALTH
+    assert 'visible_limit = page_alignment._requested_limit()' in HEALTH
+    assert 'rows = list(session_rows[:visible_limit])' in HEALTH
+    assert '"period_label": f"Current FBM work · {len(order_rows)} visible"' in HEALTH
     assert "dispatch_due" in HEALTH
-    assert "dispatched orders remain in history" in HEALTH.lower()
+    assert "Cards follow the same 15-order window" in HEALTH
 
 
 def test_fbm_health_reuses_the_browser_session_snapshot_without_an_order_rescan():
