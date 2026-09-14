@@ -1,9 +1,7 @@
 // FBM browser-session presentation alignment.
-// Warehouse is the reference model: the page is a bounded projection of persisted DB truth.
-// Committed-event refresh ownership stays in fbm_tracking_journey.js, which reuses the
-// application shell's single governed event and performs one DB-backed snapshot read.
-// This helper never polls, never opens a second live transport, never reloads or fetches the page,
-// and never subscribes to marketplace events. With no event, the FBM session sleeps.
+// No polling or marketplace/provider reads are owned here.  The server renders
+// the explicitly selected 15/30/50/100 order window; browser session state only
+// remembers presentation choices and local workflow/search state.
 (function () {
   'use strict';
   if (window.bt38FbmEventSessionRefreshInstalled) return;
@@ -29,25 +27,17 @@
     return values || {};
   }
 
-  function pageState() {
-    const pages = window.BT38 && window.BT38.pages;
-    return pages && (pages.fbm || pages.FBM);
-  }
-
-  function restorePageSize() {
+  function syncPageSize() {
     const select = document.getElementById('bt38ResultsPerPageSelect');
     if (!select) return;
-    const session = getSessionState({pageSize: 15});
-    const stored = Number.parseInt(session && session.pageSize, 10);
-    const pageSize = allowedPageSizes.includes(stored) ? stored : 15;
-    select.value = String(pageSize);
 
-    const page = pageState();
-    const controller = window.BT38 && window.BT38.PageController;
-    if (page && page.ready === true && controller && typeof controller.renderPage === 'function') {
-      page.currentPage = 1;
-      controller.renderPage(page.name);
-    }
+    // The server value is authoritative because it controls how many rows were
+    // actually read from Neon.  Do not make a 15-row DOM pretend it contains 30,
+    // 50 or 100 rows.  Persist the server-selected value for browser continuity.
+    const rendered = Number.parseInt(select.value, 10);
+    const pageSize = allowedPageSizes.includes(rendered) ? rendered : 15;
+    if (select.value !== String(pageSize)) select.value = String(pageSize);
+    setSessionState({pageSize});
 
     if (!select.dataset.bt38FbmSessionBound) {
       select.dataset.bt38FbmSessionBound = '1';
@@ -55,6 +45,9 @@
         const selected = Number.parseInt(select.value, 10);
         const normalized = allowedPageSizes.includes(selected) ? selected : 15;
         setSessionState({pageSize: normalized});
+        // The select lives inside bt38FbmHistoryControls and its inline onchange
+        // submits that GET form.  That explicit user action is the only time a
+        // wider order window is read from Neon.
       });
     }
   }
@@ -66,20 +59,16 @@
     const search = String(session && session.search || '').trim().toLowerCase();
     const queue = String(row.dataset.fbmQueue || '');
     const searchText = String(row.dataset.fbmSearch || row.textContent || '').toLowerCase();
+    if (!queue) return !search || searchText.indexOf(search) >= 0;
     return queue === activeTab && (!search || searchText.indexOf(search) >= 0);
   }
 
   function alignRowVisibility(row) {
     if (!row || !row.classList || !row.classList.contains('fbm-order-row')) return;
-    if (!row.dataset.fbmQueue) {
-      row.style.display = row.hidden ? 'none' : '';
-      return;
-    }
+    if (!row.dataset.fbmQueue) return;
     const shouldShow = rowMatchesSession(row);
-    if (!shouldShow) {
-      row.hidden = true;
-      row.style.display = 'none';
-    }
+    row.hidden = !shouldShow;
+    row.style.display = shouldShow ? '' : 'none';
   }
 
   function alignAllRowVisibility() {
@@ -87,45 +76,24 @@
     document.querySelectorAll('tr.fbm-order-row').forEach(alignRowVisibility);
   }
 
-  function applySessionTabAfterPageController() {
-    if (!onFbm()) return false;
-    const page = pageState();
-    const controller = window.BT38 && window.BT38.PageController;
-    if (!page || page.ready !== true || !controller || typeof controller.renderPage !== 'function') {
-      alignAllRowVisibility();
-      return false;
-    }
-
-    restorePageSize();
+  function restoreLifecycleTab() {
+    if (!onFbm()) return;
     const session = getSessionState({tab: 'pending'});
     const activeTab = String(session && session.tab || 'pending');
     const selectedTab = document.querySelector('.fbm-lifecycle-tab[data-fbm-tab="' + activeTab + '"]')
       || document.querySelector('.fbm-lifecycle-tab[data-fbm-tab="pending"]');
-    if (selectedTab) {
-      selectedTab.click();
-    } else {
-      page.currentPage = 1;
-      controller.renderPage(page.name);
-    }
-    alignAllRowVisibility();
-    return true;
-  }
-
-  function reconcileSessionAfterPageController() {
-    if (!onFbm()) return;
-    restorePageSize();
-    applySessionTabAfterPageController();
-    window.addEventListener('load', function () {
-      restorePageSize();
-      applySessionTabAfterPageController();
-      alignAllRowVisibility();
-    }, {once: true});
+    if (selectedTab && !selectedTab.classList.contains('active')) selectedTab.click();
   }
 
   function initialise() {
     if (!onFbm()) return;
-    reconcileSessionAfterPageController();
+    syncPageSize();
+    restoreLifecycleTab();
     alignAllRowVisibility();
+    window.addEventListener('load', function () {
+      syncPageSize();
+      alignAllRowVisibility();
+    }, {once: true});
   }
 
   if (document.readyState === 'loading') {
