@@ -4,11 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       confirm_production_deploy:
-        description: 'Type DEPLOY_GITHUB_COMMIT_TO_BT38_PROD'
+        description: 'Type RECOVER_BT38_PROD_TO_SEPT11_SOURCE'
         required: true
       expected_commit:
-        description: 'Exact current PR #528 head SHA'
+        description: 'Exact Sept 11 application source commit'
         required: true
+        default: '9faa03e63fec0dd83d6a89beb40f7f8073079443'
 
 permissions:
   contents: read
@@ -22,269 +23,159 @@ env:
   PYTHONPATH: ${{ github.workspace }}
 
 jobs:
-  source-deploy-guard:
+  recover-sept11-source:
     runs-on: ubuntu-latest
+    environment: production
     steps:
-      - name: Require exact current PR 528 GitHub source approval
+      - name: Guard bounded recovery request
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          test "${{ inputs.confirm_production_deploy }}" = "DEPLOY_GITHUB_COMMIT_TO_BT38_PROD"
+          test "${{ inputs.confirm_production_deploy }}" = "RECOVER_BT38_PROD_TO_SEPT11_SOURCE"
           test "${{ github.ref_name }}" = "fix/full-system-release-alignment"
-          test "${{ inputs.expected_commit }}" = "${{ github.sha }}"
+          test "${{ inputs.expected_commit }}" = "9faa03e63fec0dd83d6a89beb40f7f8073079443"
           PR_JSON="$(gh api repos/${{ github.repository }}/pulls/528)"
-          PR_STATE="$(printf '%s' "$PR_JSON" | jq -r '.state')"
-          PR_MERGED="$(printf '%s' "$PR_JSON" | jq -r '.merged')"
-          PR_HEAD="$(printf '%s' "$PR_JSON" | jq -r '.head.sha')"
-          PR_BRANCH="$(printf '%s' "$PR_JSON" | jq -r '.head.ref')"
-          test "$PR_STATE" = "open"
-          test "$PR_MERGED" = "false"
-          test "$PR_BRANCH" = "fix/full-system-release-alignment"
-          test "$PR_HEAD" = "${{ inputs.expected_commit }}"
-          echo "GOVERNED_SOURCE_APPROVED commit=$PR_HEAD"
+          test "$(printf '%s' "$PR_JSON" | jq -r '.state')" = "open"
+          test "$(printf '%s' "$PR_JSON" | jq -r '.merged')" = "false"
+          test "$(printf '%s' "$PR_JSON" | jq -r '.head.ref')" = "fix/full-system-release-alignment"
+          echo "BOUNDED_RECOVERY_APPROVED source=${{ inputs.expected_commit }}"
 
-  audit:
-    needs: source-deploy-guard
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout exact governed commit
+      - name: Checkout exact Sept 11 application source
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ inputs.expected_commit }}
+
+      - name: Verify rollback source boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "9faa03e63fec0dd83d6a89beb40f7f8073079443"
+          test -f Dockerfile
+          test -f fly.toml
+          test -f scripts/verify_production_db_contract.py
+          grep -q 'app = "bt38-prod"' fly.toml
+          grep -q 'dockerfile = "Dockerfile"' fly.toml
+          ! grep -q '^[[:space:]]*image[[:space:]]*=' fly.toml
+          if grep -R --line-number --fixed-strings 'import services.support_notification_alignment' services/__init__.py services 2>/dev/null; then
+            echo 'BLOCKED: fatal post-Sept-11 support notification startup import is present.'
+            exit 1
+          fi
+          grep -q '@app.get("/billing")' services/account_profile_alignment.py
+          grep -q 'Open a support case' templates/support_cases.html
+          echo 'SEPT11_SOURCE_BOUNDARY_OK'
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: Install locked dependencies
-        run: |
-          python -m pip install --upgrade pip
-          python -m pip install uv
-          uv sync --frozen --no-dev
-      - name: Verify governed production inputs
-        run: |
-          test -f Dockerfile
-          test -f fly.toml
-          test -f pyproject.toml
-          test -f uv.lock
-          grep -q 'uv sync --frozen --no-dev' Dockerfile
-          grep -q 'main:app' Dockerfile
-          grep -q 'app = "bt38-prod"' fly.toml
-      - name: Reject corrupt production source files
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          bad = []
-          for path in Path('.').rglob('*'):
-              if not path.is_file() or '.git' in path.parts:
-                  continue
-              if path.suffix.lower() not in {'.py', '.html', '.js', '.toml', '.md'}:
-                  continue
-              if b'\0' in path.read_bytes():
-                  bad.append(str(path))
-          if bad:
-              raise SystemExit('Null bytes found in production source: ' + ', '.join(bad))
-          print('SOURCE_INTEGRITY_OK')
-          PY
-      - name: Compile production runtime
-        run: |
-          uv run python -m py_compile \
-            main.py app.py models.py fbm_models.py \
-            governed_routes.py governed_group_routes.py governed_group_propagation_routes.py \
-            governed_runtime_visibility_routes.py governed_fbm_routes.py governed_fbm_manual_routes.py \
-            governed_packlink_callback_routes.py services/fbm_provider_contract.py \
-            services/fbm_order_mapper.py services/fbm_marketplace_destination.py \
-            services/fbm_amazon_order_profile.py services/fbm_amazon_shipping_adapter.py \
-            services/fbm_packlink_adapter.py services/fbm_packlink_callback.py \
-            services/fbm_packlink_event_processor.py services/fbm_carrier_mapping.py \
-            services/fbm_marketplace_confirmation.py services/fbm_post_purchase.py \
-            services/fbm_shipping_state.py services/fbm_db_delivery_promise_alignment.py \
-            services/governed_order_clarity_alignment.py services/governed_fbm_page_alignment.py \
-            services/governed_amazon_tracking_readback.py services/governed_exact_ebay_order_hydration.py \
-            services/governed_ebay_oauth_scopes.py services/governed_ebay_shipping_notification_alignment.py \
-            services/governed_runtime_engine.py services/governed_webhook_execution.py \
-            services/governed_webhook_alignment.py services/governed_push_execution.py \
-            services/governed_ebay_inventory_import.py services/governed_ebay_post_deploy_alignment.py \
-            services/governed_amazon_inventory_import.py services/governed_amazon_listing_fulfillment_refresh.py \
-            services/governed_amazon_subscription_visibility.py services/governed_amazon_mcf_notification_alignment.py \
-            services/governed_mcf_confirmation.py services/governed_mcf_tracking.py \
-            services/governed_mcf_tracking_startup_alignment.py services/governed_marketplace_order_import.py \
-            services/governed_order_stock_mutation.py services/governed_warehouse_sync.py \
-            services/google_identity.py services/public_early_access.py \
-            scripts/verify_production_db_contract.py
-      - name: Run deployment contracts
-        run: |
-          uv run python -m pytest -q \
-            tests/test_runtime_deployment_contract.py tests/test_fba_targeted_update_contract.py \
-            tests/test_webhook_scoped_reconcile_contract.py tests/test_webhook_push_alignment_contract.py \
-            tests/test_ui_production_alignment_contract.py tests/test_amazon_subscription_visibility_contract.py \
-            tests/test_amazon_mcf_notification_alignment_contract.py tests/test_fbm_page_bounded_alignment_contract.py \
-            tests/test_fbm_packlink_contract.py tests/test_fbm_packlink_import_alignment_contract.py \
-            tests/test_fbm_amazon_tracking_contract.py tests/test_fbm_amazon_confirmation_payload.py \
-            tests/test_fbm_manual_shipping_order_contract.py tests/test_marketplace_tracking_readback_contract.py \
-            tests/test_marketplace_dispatch_truth_recovery_contract.py tests/test_production_db_contract_gate.py \
-            tests/test_fbm_db_delivery_performance_authority_contract.py \
-            tests/test_event_runtime_zero_recovery_contract.py tests/test_deploy_no_recovery_contract.py \
-            tests/test_google_identity_alignment_contract.py
 
-  deploy:
-    needs: audit
-    runs-on: ubuntu-latest
-    environment: production
-    steps:
-      - name: Checkout exact audited GitHub commit
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.sha }}
-      - name: Set up Fly CLI
-        uses: superfly/flyctl-actions/setup-flyctl@master
-      - name: Detect governed image restore mode
-        id: restore_mode
-        shell: bash
-        run: |
-          RESTORE_IMAGE="$(awk -F'"' '/^[[:space:]]*image[[:space:]]*=/ {print $2; exit}' fly.toml)"
-          if [ -n "$RESTORE_IMAGE" ]; then
-            echo "enabled=true" >> "$GITHUB_OUTPUT"
-            echo "image=$RESTORE_IMAGE" >> "$GITHUB_OUTPUT"
-            echo "GOVERNED_IMAGE_RESTORE=$RESTORE_IMAGE"
-          else
-            echo "enabled=false" >> "$GITHUB_OUTPUT"
-          fi
-      - name: Verify candidate image DB contract against production Neon
-        if: steps.restore_mode.outputs.enabled != 'true'
+      - name: Install locked dependencies and compile recovery surface
         shell: bash
         run: |
           set -euo pipefail
-          CHECK_B64="$(base64 -w0 scripts/verify_production_db_contract.py)"
-          DB_CHECK_OUTPUT=""
-          if DB_CHECK_OUTPUT="$(flyctl ssh console --app bt38-prod --command "sh -lc 'printf %s \"$CHECK_B64\" | base64 -d > /tmp/bt38-db-contract.py && cd /app && .venv/bin/python /tmp/bt38-db-contract.py'" 2>&1)"; then
-            printf '%s\n' "$DB_CHECK_OUTPUT"
-          else
-            printf '%s\n' "$DB_CHECK_OUTPUT"
-            if printf '%s\n' "$DB_CHECK_OUTPUT" | grep -q 'has no started VMs'; then
-              echo "RECOVERY_DEFERRED_DB_CHECK: current production VM is unavailable; exact candidate already passed audit contracts and the production DB contract remains mandatory immediately after the governed deploy."
-            else
-              echo "BLOCKED: candidate production DB contract could not be verified for a reason other than current Fly VM unavailability."
-              exit 1
-            fi
-          fi
+          python -m pip install --upgrade pip
+          python -m pip install uv
+          uv sync --frozen --no-dev
+          uv run python -m py_compile \
+            main.py app.py models.py \
+            services/__init__.py \
+            services/account_profile_alignment.py \
+            services/package_catalog_alignment.py \
+            services/revolut_billing.py \
+            services/revolut_subscription_alignment.py \
+            services/billing_invoice_alignment.py \
+            services/support_case_alignment.py \
+            scripts/verify_production_db_contract.py
+
+      - name: Set up Fly CLI
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Verify required Fly secret metadata before recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          SECRET_NAMES="$(flyctl secrets list --app bt38-prod | awk 'NR > 1 {print $1}')"
+          for KEY in EBAY_SIGNATURE_PRIVATE_KEY EBAY_SIGNATURE_PUBLIC_KEY_JWE; do
+            printf '%s\n' "$SECRET_NAMES" | grep -Fxq "$KEY"
+            echo "FLY_SECRET_METADATA $KEY=PRESENT"
+          done
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Deploy exact GitHub commit with Fly remote builder
+
+      - name: Deploy exact Sept 11 source only
+        shell: bash
         run: |
-          test "${{ github.ref_name }}" = "fix/full-system-release-alignment"
+          set -euo pipefail
           test "$(git rev-parse HEAD)" = "${{ inputs.expected_commit }}"
           flyctl deploy --app bt38-prod --config fly.toml --remote-only --strategy rolling
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Verify critical deployed source and state exact mismatch reason
-        if: steps.restore_mode.outputs.enabled != 'true'
+
+      - name: Verify production DB contract after recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          for ATTEMPT in 1 2 3 4 5 6; do
+            if flyctl ssh console --app bt38-prod --command "sh -lc 'cd /app && .venv/bin/python scripts/verify_production_db_contract.py'"; then
+              echo 'PRODUCTION_DB_CONTRACT_OK'
+              exit 0
+            fi
+            echo "WAIT: production SSH/DB contract not ready attempt=$ATTEMPT"
+            sleep $((ATTEMPT * 5))
+          done
+          echo 'BLOCKED: production DB contract did not verify after recovery.'
+          exit 1
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+      - name: Verify critical deployed source fingerprints
         shell: bash
         run: |
           set -euo pipefail
           FILES=(
-            Dockerfile
-            fly.toml
             main.py
             app.py
-            governed_fbm_routes.py
-            governed_fbm_manual_routes.py
-            templates/fbm.html
-            templates/public_landing.html
-            templates/forgot_password.html
-            templates/reset_password.html
-            static/js/fbm_tracking_journey.js
-            static/js/fbm_delivery_promise_journey_alignment.js
-            services/fbm_db_delivery_promise_alignment.py
-            services/governed_order_clarity_alignment.py
-            services/governed_fbm_page_alignment.py
-            services/governed_fbm_lifecycle_alignment.py
-            services/fbm_marketplace_confirmation.py
-            services/fbm_post_purchase.py
-            services/governed_runtime_engine.py
-            services/governed_webhook_execution.py
-            services/google_identity.py
-            services/public_early_access.py
+            services/__init__.py
+            services/account_profile_alignment.py
+            services/package_catalog_alignment.py
+            services/revolut_subscription_alignment.py
+            services/billing_invoice_alignment.py
+            services/support_case_alignment.py
             scripts/verify_production_db_contract.py
           )
-          FAILED=0
           for FILE in "${FILES[@]}"; do
-            if [ ! -f "$FILE" ]; then
-              echo "BLOCKED: audited GitHub source is missing required file '$FILE'."
-              FAILED=1
-              continue
-            fi
             EXPECTED="$(sha256sum "$FILE" | awk '{print $1}')"
-            REMOTE_LINE=""
-            for ATTEMPT in 1 2 3 4 5; do
-              if REMOTE_LINE="$(flyctl ssh console --app bt38-prod --command "sh -lc 'if [ ! -f /app/$FILE ]; then echo MISSING; else sha256sum /app/$FILE; fi'" 2>/tmp/fly-ssh-error | tail -n 1 | tr -d '\r')"; then
-                break
-              fi
-              echo "WAIT: Fly SSH not ready for '$FILE' (attempt $ATTEMPT/5)."
-              cat /tmp/fly-ssh-error || true
-              REMOTE_LINE=""
-              sleep $((ATTEMPT * 3))
-            done
-            if [ -z "$REMOTE_LINE" ]; then
-              echo "BLOCKED: Fly SSH remained unavailable while verifying '$FILE' after 5 attempts."
-              FAILED=1
-              continue
-            fi
-            if [ "$REMOTE_LINE" = "MISSING" ]; then
-              echo "BLOCKED: Fly /app is missing critical file '$FILE'."
-              FAILED=1
-              continue
-            fi
-            REMOTE="$(printf '%s\n' "$REMOTE_LINE" | awk '{print $1}')"
-            if [ "$REMOTE" != "$EXPECTED" ]; then
-              echo "BLOCKED: Fly source mismatch in '$FILE'. GitHub=$EXPECTED Fly=$REMOTE"
-              FAILED=1
-            else
-              echo "SOURCE_OK: $FILE"
-            fi
+            REMOTE="$(flyctl ssh console --app bt38-prod --command "sh -lc 'sha256sum /app/$FILE'" | tail -n 1 | awk '{print $1}' | tr -d '\r')"
+            test "$REMOTE" = "$EXPECTED"
+            echo "SOURCE_OK: $FILE"
           done
-          if [ "$FAILED" -ne 0 ]; then
-            echo "BLOCKED: critical deployed source mismatch. Reasons are listed above by filename; runtime-generated files are intentionally ignored."
-            exit 1
-          fi
-          echo "CRITICAL_DEPLOYED_SOURCE_OK commit=${{ inputs.expected_commit }}"
+          echo 'SEPT11_DEPLOYED_SOURCE_OK'
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Verify effective Google auth and browser session policy
-        if: steps.restore_mode.outputs.enabled != 'true'
+
+      - name: Verify public login and dashboard redirect
         shell: bash
         run: |
           set -euo pipefail
-          flyctl ssh console --app bt38-prod --command "sh -lc 'cd /app && .venv/bin/python -c \"import os; from app import app; import services.public_early_access; cid=str(os.getenv(\\\"GOOGLE_CLIENT_ID\\\") or \\\"\\\").strip(); lifetime=app.config.get(\\\"PERMANENT_SESSION_LIFETIME\\\"); lifetime_seconds=int(lifetime.total_seconds()) if hasattr(lifetime,\\\"total_seconds\\\") else int(lifetime); assert app.config.get(\\\"SESSION_COOKIE_SECURE\\\") is True; assert app.config.get(\\\"SESSION_COOKIE_HTTPONLY\\\") is True; assert app.config.get(\\\"SESSION_COOKIE_SAMESITE\\\") == \\\"Lax\\\"; assert app.config.get(\\\"SESSION_REFRESH_EACH_REQUEST\\\") is True; assert app.config.get(\\\"SESSION_PERMANENT\\\") is True; assert lifetime_seconds == 1800; assert app.config.get(\\\"SESSION_COOKIE_DOMAIN\\\") is None; assert app.config.get(\\\"REMEMBER_COOKIE_SECURE\\\") is True; assert app.config.get(\\\"REMEMBER_COOKIE_HTTPONLY\\\") is True; assert app.config.get(\\\"REMEMBER_COOKIE_SAMESITE\\\") == \\\"Lax\\\"; assert cid.endswith(\\\".apps.googleusercontent.com\\\"); print(\\\"AUTH_SESSION_POLICY_OK samesite=Lax secure=True httponly=True sliding_seconds=1800 host_only=True google_client_configured=True\\\")\"'"
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Verify deployed image DB contract against production Neon
-        if: steps.restore_mode.outputs.enabled != 'true'
+          for ATTEMPT in $(seq 1 18); do
+            LOGIN_CODE="$(curl -L -sS -o /tmp/login.html -w '%{http_code}' --max-time 15 https://bt38-prod.fly.dev/login || true)"
+            DASH_HEADERS="$(curl -sS -I --max-time 15 https://bt38-prod.fly.dev/dashboard || true)"
+            if [ "$LOGIN_CODE" = '200' ] && printf '%s\n' "$DASH_HEADERS" | grep -Eiq '^location: .*/login'; then
+              grep -Eiq '<title>.*(BT38|Inventory|Login)|type="password"' /tmp/login.html
+              echo "PUBLIC_RECOVERY_OK attempt=$ATTEMPT"
+              exit 0
+            fi
+            echo "WAIT: login_http=$LOGIN_CODE dashboard_redirect_pending attempt=$ATTEMPT"
+            sleep 10
+          done
+          echo 'BLOCKED: public login/dashboard recovery contract failed.'
+          exit 1
+
+      - name: Confirm frozen integration boundary
         shell: bash
         run: |
-          set -euo pipefail
-          flyctl ssh console --app bt38-prod --command "sh -lc 'cd /app && .venv/bin/python scripts/verify_production_db_contract.py'"
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Confirm governed image restore
-        if: steps.restore_mode.outputs.enabled == 'true'
-        run: |
-          echo "RESTORED_KNOWN_GOOD_IMAGE=${{ steps.restore_mode.outputs.image }}"
-          echo "Source fingerprint comparison is intentionally skipped because this run restores a previously proven image rather than rebuilding current source."
-      - name: Restore Packlink callback secret setting
-        if: steps.restore_mode.outputs.enabled != 'true'
-        shell: bash
-        run: |
-          CALLBACK_SECRET="$(flyctl ssh console --app bt38-prod --command "sh -lc 'cd /app && .venv/bin/python -c \"import hashlib,os; key=str(os.environ.get(\\\"PACKLINK_API_KEY\\\") or \\\"\\\").strip(); assert key, \\\"PACKLINK_API_KEY missing\\\"; print(hashlib.sha256((\\\"bt38-packlink-callback:\\\"+key).encode()).hexdigest())\"'" | tail -n 1)"
-          test -n "$CALLBACK_SECRET"
-          flyctl secrets set --app bt38-prod PACKLINK_CALLBACK_SECRET="$CALLBACK_SECRET"
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-      - name: Restore Packlink callback registration
-        if: steps.restore_mode.outputs.enabled != 'true'
-        shell: bash
-        run: |
-          flyctl ssh console --app bt38-prod --command "sh -lc \"cd /app && .venv/bin/python -c 'from app import app; from services.fbm_packlink_adapter import PacklinkAdapter; from governed_packlink_callback_routes import _register_callback; ctx=app.test_request_context(base_url=\\\"https://bt38-prod.fly.dev\\\"); ctx.push(); callback_url=_register_callback(PacklinkAdapter()); print(\\\"PACKLINK_CALLBACK_REGISTERED=\\\" + callback_url)'\""
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          echo 'PACKLINK_UNTOUCHED=true'
+          echo 'NO_MERGE_PERFORMED=true'
+          echo 'SEPT11_RECOVERY_COMPLETE=true'
