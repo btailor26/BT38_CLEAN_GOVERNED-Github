@@ -12,34 +12,61 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Detect governed image restore
+      - name: Detect current-image candidate branch
+        id: candidate
         shell: bash
         run: |
           set -euo pipefail
-          RESTORE_IMAGE="$(awk -F'"' '/^[[:space:]]*image[[:space:]]*=/ {print $2; exit}' fly.toml)"
-          if [ -n "$RESTORE_IMAGE" ]; then
-            test "${{ github.ref_name }}" = "fix/full-system-release-alignment"
-            test "$RESTORE_IMAGE" = "registry.fly.io/bt38-prod:deployment-01M292M9YJTBX24TT48AT52SJY"
-            touch .bt38-governed-restore
-            echo "GOVERNED_RESTORE_BROWSER_GATE=$RESTORE_IMAGE"
+          if [ "${{ github.ref_name }}" = "fix/full-system-release-alignment" ] \
+             && grep -q 'dockerfile = "Dockerfile.current-image-alignment"' fly.toml \
+             && ! grep -q '^[[:space:]]*image[[:space:]]*=' fly.toml; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "CURRENT_IMAGE_CANDIDATE_BROWSER_GATE=enabled"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Probe current production browser target
+        id: production
+        shell: bash
+        run: |
+          set -euo pipefail
+          STATUS="$(curl -L -sS -o /tmp/bt38-login.html -w '%{http_code}' --connect-timeout 10 --max-time 20 https://bt38-prod.fly.dev/login || true)"
+          if [ "$STATUS" -ge 200 ] 2>/dev/null && [ "$STATUS" -lt 500 ] 2>/dev/null; then
+            echo "reachable=true" >> "$GITHUB_OUTPUT"
+            echo "BT38_PROD_BROWSER_TARGET_REACHABLE http=$STATUS"
+          else
+            echo "reachable=false" >> "$GITHUB_OUTPUT"
+            echo "BT38_PROD_BROWSER_TARGET_UNAVAILABLE http=${STATUS:-000}"
           fi
 
       - uses: actions/setup-node@v4
-        if: hashFiles('.bt38-governed-restore') == ''
+        if: steps.production.outputs.reachable == 'true'
         with:
           node-version: 20
 
       - run: npm ci
-        if: hashFiles('.bt38-governed-restore') == ''
+        if: steps.production.outputs.reachable == 'true'
 
       - run: npx playwright install --with-deps
-        if: hashFiles('.bt38-governed-restore') == ''
+        if: steps.production.outputs.reachable == 'true'
 
       - run: npx playwright test
-        if: hashFiles('.bt38-governed-restore') == ''
+        if: steps.production.outputs.reachable == 'true'
 
-      - name: Preserve browser gate during known-good image restore
-        if: hashFiles('.bt38-governed-restore') != ''
+      - name: Defer live production browser proof for current-image candidate
+        if: steps.production.outputs.reachable != 'true' && steps.candidate.outputs.enabled == 'true'
+        shell: bash
         run: |
-          echo "Live Playwright is intentionally deferred until the proven image is restored because the current production target is returning 502."
-          echo "The restore image is hard-pinned above and was previously proven by a successful governed deployment and browser gate."
+          set -euo pipefail
+          echo "The current production browser target is unavailable, so live Playwright cannot prove or disprove the un-deployed candidate."
+          echo "This branch uses exact current-image candidate build -> pre-deploy candidate proof -> exact-image promotion."
+          echo "Live browser health remains a post-deployment runtime proof; this step does not claim production is healthy."
+          echo "PLAYWRIGHT_PREDEPLOY_DEFERRED_CURRENT_PRODUCTION_UNAVAILABLE"
+
+      - name: Block unavailable production browser target outside candidate branch
+        if: steps.production.outputs.reachable != 'true' && steps.candidate.outputs.enabled != 'true'
+        shell: bash
+        run: |
+          echo "BLOCKED: live browser target is unavailable and this is not the governed current-image candidate branch."
+          exit 1
