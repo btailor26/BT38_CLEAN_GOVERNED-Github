@@ -39,10 +39,18 @@ def test_governed_reauthorization_includes_shipping_finances_and_returns():
     assert "EBAY_RETURN_WRITE_SCOPE" in default_block
 
 
-def test_existing_legacy_refresh_token_is_not_forced_to_ungranted_scopes():
+def test_refresh_does_not_treat_requested_scope_copy_as_proven_grant():
     source = _text(SCOPES)
     assert 'granted = str(credentials.get("oauth_granted_scope") or "").strip()' in source
+    assert 'requested = str(credentials.get("oauth_requested_scope") or "").strip()' in source
+    assert "if granted_set == requested_set:\n            return None" in source
+    assert "refresh token's real seller-consent grant" in source
+
+
+def test_distinct_proven_legacy_grant_remains_refreshable_without_scope_expansion():
+    source = _text(SCOPES)
     assert "if granted:\n        return granted" in source
+    assert "return None" in source
 
 
 def test_runtime_imports_ebay_order_identity_alignment():
