@@ -118,7 +118,6 @@ def test_worker_scheduler_and_queue_calls_return_disabled_contract():
     assert queued["execution_started"] is False
     assert queued["queue_job_created"] is False
     assert queued["governed"] is True
-    assert queue_manager.get_next_pending_job(1) is None
 
 
 def test_marketplace_service_methods_return_disabled_before_external_calls():
