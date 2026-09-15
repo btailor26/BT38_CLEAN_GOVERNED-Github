@@ -32,6 +32,10 @@ _DISPATCHED_MARKETPLACE_STATUSES = {
     "pickedupbycarrier", "in_transit", "intransit", "out_for_delivery",
     "outfordelivery",
 }
+_ADDITIONAL_SHIPMENT_PREFIXES = (
+    "packlink_return:",
+    "packlink_replacement:",
+)
 
 
 def _marketplace_platform_for(row: MarketplaceOrder) -> str:
@@ -44,8 +48,22 @@ def _marketplace_platform_for(row: MarketplaceOrder) -> str:
     ).strip().lower()
 
 
+def _outbound_label_handoff_reached(shipment) -> bool:
+    """Treat only the original outbound label as the browser dispatch handoff."""
+    if shipment is None:
+        return False
+    purchase_key = str(getattr(shipment, "purchase_key", "") or "").strip().lower()
+    if purchase_key.startswith(_ADDITIONAL_SHIPMENT_PREFIXES):
+        return False
+    purchase_status = str(getattr(shipment, "purchase_status", "") or "").strip().lower()
+    return bool(
+        getattr(shipment, "label_purchased_at", None) is not None
+        or purchase_status == "purchased"
+    )
+
+
 def _dispatch_truth_reached(row: MarketplaceOrder, shipment=None) -> bool:
-    """Return persisted dispatch truth; buying a label alone is not dispatch."""
+    """Return persisted dispatch truth independently of the browser label handoff."""
     status = str(getattr(row, "status", "") or "").strip().lower()
     return bool(
         status in _DISPATCHED_MARKETPLACE_STATUSES
@@ -68,6 +86,8 @@ def _aligned_workflow_queue_for(row: MarketplaceOrder, shipment=None) -> str:
         return "pending"
     if reason:
         return reason
+    if _outbound_label_handoff_reached(shipment):
+        return "dispatched"
     return "dispatched" if _dispatch_truth_reached(row, shipment) else "ready_dispatch"
 
 
@@ -266,4 +286,4 @@ def install_governed_fbm_dispatch_queue_alignment(app) -> None:
 
     app.view_functions[endpoint] = aligned_fbm_page
     app._bt38_fbm_dispatch_queue_alignment_installed = True
-    app.logger.info("BT38 FBM lifecycle aligned: one selected-history truth hierarchy; all local tabs obey identical row filter and pager boundary; no label-only dispatch promotion")
+    app.logger.info("BT38 FBM lifecycle aligned: one selected-history truth hierarchy; outbound label handoff preserved; all local tabs obey identical row filter and pager boundary")
