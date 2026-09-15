@@ -1,8 +1,8 @@
 // FBM browser-session presentation alignment.
 // No polling or marketplace/provider reads are owned here. The server renders
-// the explicitly selected 15/30/50/100 order window; explicit user controls
-// submit one native GET event only when a different persisted dataset is needed.
-// With no event, the FBM session sleeps.
+// the explicitly selected history snapshot, then the existing 15/30/50/100
+// page-size control limits presentation inside that snapshot only.
+// With no explicit user event, the FBM session sleeps.
 (function () {
   'use strict';
   if (window.bt38FbmEventSessionRefreshInstalled) return;
@@ -31,8 +31,7 @@
 
   function submitControls(form) {
     if (!form) return;
-    // This is an explicit user GET. Use the form's native submit path so no
-    // other submit-event controller can delay or cancel the timeframe refresh.
+    // Explicit user GET only. History and page-size changes never poll.
     form.submit();
   }
 
@@ -98,6 +97,46 @@
     }
   }
 
+  function committedSnapshotIds() {
+    const node = document.getElementById('bt38FbmLifecycleTabsData');
+    if (!node) return null;
+    try {
+      const payload = JSON.parse(node.textContent || '{}');
+      return new Set(Object.keys(payload || {}));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function bindPagerToCommittedSnapshot() {
+    if (!onFbm()) return;
+    const allowed = committedSnapshotIds();
+    if (!allowed) return;
+
+    // The server's selected-history payload is the absolute row universe.
+    // Remove any stale/legacy DOM row outside it before lifecycle or paging can
+    // act. Page size may hide rows inside this set; it can never add rows to it.
+    document.querySelectorAll('tr.fbm-order-row').forEach(function (row) {
+      if (!allowed.has(String(row.dataset.orderId || ''))) row.remove();
+    });
+
+    const pages = window.BT38 && window.BT38.pages;
+    const state = pages && (pages.fbm || pages.FBM);
+    if (state && Array.isArray(state.rows)) {
+      state.rows = state.rows.filter(function (entry) {
+        const row = entry && entry.el;
+        return row && row.isConnected && allowed.has(String(row.dataset.orderId || ''));
+      });
+      if (Array.isArray(state.filteredRows)) {
+        state.filteredRows = state.filteredRows.filter(function (entry) {
+          const row = entry && entry.el;
+          return row && row.isConnected && allowed.has(String(row.dataset.orderId || ''));
+        });
+      }
+      state.currentPage = 1;
+    }
+  }
+
   function rowMatchesSession(row) {
     if (!row || !row.classList || !row.classList.contains('fbm-order-row')) return false;
     const session = getSessionState({tab: 'pending', search: ''});
@@ -119,6 +158,7 @@
 
   function alignAllRowVisibility() {
     if (!onFbm()) return;
+    bindPagerToCommittedSnapshot();
     document.querySelectorAll('tr.fbm-order-row').forEach(alignRowVisibility);
   }
 
@@ -135,11 +175,13 @@
     if (!onFbm()) return;
     syncHistoryControls();
     syncPageSize();
+    bindPagerToCommittedSnapshot();
     restoreLifecycleTab();
     alignAllRowVisibility();
     window.addEventListener('load', function () {
       syncHistoryControls();
       syncPageSize();
+      bindPagerToCommittedSnapshot();
       alignAllRowVisibility();
     }, {once: true});
   }
