@@ -1,15 +1,9 @@
-"""Align visible BT38 action counters to the existing governed bell action count.
+"""Align visible BT38 action counters and FBM lifecycle presentation.
 
-The authority-backed bell reader already returns ``action_count`` from current
-persisted FBM/order/shipment truth. The base browser shell can derive its red
-badge from a different presentation count, and the assistant separately parses
-the Dashboard attention count. Those presentation counters must stay aligned to
-the governed action surface.
-
-This alignment adds no read, poll, timer, marketplace call, worker or write. It
-only observes the response from the bell request the browser already performs,
-applies that existing ``action_count`` consistently, and gives the existing bell
-badge enough local spacing to avoid overlapping the adjacent admin identity.
+The governed bell action count remains authority-backed. FBM lifecycle badges are
+bound to the existing selected-history workflow snapshot rather than depending on
+request ordering. This adds no marketplace/provider read, polling, worker or write.
+The existing header structure is preserved; only local badge/avatar sizing is aligned.
 """
 from __future__ import annotations
 
@@ -20,8 +14,9 @@ from services import governed_fbm_small_alignment as small_alignment
 
 _SCRIPT = r'''
 <style id="bt38GovernedActionBadgeSpacing">
-#bt38NotificationBell{position:relative;margin-right:.45rem}
-#bt38NotificationBadge{right:-.35rem!important;top:-.35rem!important;transform:none!important}
+#bt38NotificationBell{position:relative;margin-right:.55rem}
+#bt38NotificationBadge{right:-.2rem!important;top:-.25rem!important;transform:none!important;font-size:.62rem!important;min-width:1.15rem;padding:.22rem .32rem!important}
+.navbar .ms-auto .rounded-circle:not(#bt38NotificationBadge){width:28px!important;height:28px!important;min-width:28px!important;font-size:.72rem!important}
 </style>
 <script id="bt38GovernedActionCountUIAlignment">
 (function(){
@@ -75,7 +70,6 @@ _SCRIPT = r'''
     var badge=document.getElementById('bt38NotificationBadge');
     var bell=document.getElementById('bt38NotificationBell');
     if(!badge)return;
-
     var value=Math.max(0,Number(currentCount)||0);
     var expected=value>99?'99+':String(value);
     applyingBadge=true;
@@ -114,13 +108,8 @@ _SCRIPT = r'''
 
   bindBadgeObserver();
   if(document.readyState==='loading'){
-    document.addEventListener('DOMContentLoaded',function(){
-      bindAssistantObserver();
-      applyBadgeCount();
-    },{once:true});
-  }else{
-    bindAssistantObserver();
-  }
+    document.addEventListener('DOMContentLoaded',function(){bindAssistantObserver();applyBadgeCount();},{once:true});
+  }else{bindAssistantObserver();}
   window.addEventListener('load',bindAssistantObserver,{once:true});
 
   var previousFetch=window.fetch.bind(window);
@@ -128,9 +117,7 @@ _SCRIPT = r'''
     var response=await previousFetch(input,init);
     if(isNotificationRead(input)){
       response.clone().json().then(function(payload){
-        if(payload&&payload.success===true&&payload.action_count!==undefined){
-          applyCurrentCount(payload.action_count);
-        }
+        if(payload&&payload.success===true&&payload.action_count!==undefined){applyCurrentCount(payload.action_count);}
       }).catch(function(){/* Existing notification error path remains owner. */});
     }
     return response;
@@ -148,14 +135,36 @@ def _inject(html: str) -> str:
     return value.replace(marker, _SCRIPT + marker, 1) if marker in value else value + _SCRIPT
 
 
+def _align_fbm_lifecycle_counts() -> None:
+    """Make lifecycle badges consume the same selected-history workflow snapshot."""
+    from services import governed_fbm_dispatch_queue_alignment as dispatch_queue
+    from services import governed_fbm_global_search_alignment as global_search
+
+    current = dispatch_queue._selected_history_counts
+    if getattr(current, "_bt38_selected_snapshot_aligned", False):
+        return
+
+    def selected_history_counts() -> dict[str, int]:
+        snapshot = global_search._persisted_workflow_snapshot()
+        counts = snapshot.get("counts", {}) if isinstance(snapshot, dict) else {}
+        return {
+            name: int(counts.get(name, 0) or 0)
+            for name in dispatch_queue._WORKFLOW_LABELS
+        }
+
+    selected_history_counts._bt38_selected_snapshot_aligned = True
+    dispatch_queue._selected_history_counts = selected_history_counts
+
+
 def install_governed_action_count_ui_alignment() -> None:
-    """Patch the final bell installer so the client alignment is registered at startup."""
+    """Patch final presentation only; preserve existing authorities and structure."""
     original_install = small_alignment._install_final_bell_alignment
     if getattr(original_install, "_bt38_action_count_ui_aligned", False):
         return
 
     def aligned_install(app) -> None:
         original_install(app)
+        _align_fbm_lifecycle_counts()
         if getattr(app, "_bt38_action_count_ui_alignment_installed", False):
             return
 
@@ -172,9 +181,7 @@ def install_governed_action_count_ui_alignment() -> None:
 
         app._bt38_action_count_ui_alignment_installed = True
         app.logger.info(
-            "BT38 visible action counters aligned to existing governed bell action_count; "
-            "existing badge locally spaced from admin identity; no extra read, polling, "
-            "marketplace call or write"
+            "BT38 FBM lifecycle badges aligned to selected-history snapshot; visible action counters remain on governed bell action_count; existing header badges locally compacted; no extra marketplace read, polling or write"
         )
 
     aligned_install._bt38_action_count_ui_aligned = True
