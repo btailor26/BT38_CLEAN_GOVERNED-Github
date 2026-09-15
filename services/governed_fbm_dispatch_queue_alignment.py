@@ -78,13 +78,7 @@ def _outbound_label_handoff_reached(shipment) -> bool:
 
 
 def _aligned_workflow_queue_for(row: MarketplaceOrder, shipment=None) -> str:
-    """Classify workflow from persisted marketplace and shipment truth.
-
-    Amazon Pending is payment/order verification truth and remains non-actionable.
-    Returns/replacements/cancellations retain their existing lifecycle queues. A
-    persisted outbound label is the exact Ready -> Dispatched work handoff, while
-    carrier acceptance and later milestones remain journey enrichment only.
-    """
+    """Classify workflow from persisted marketplace and shipment truth."""
     status = str(getattr(row, "status", "") or "").strip().lower()
     reason = global_search._status_reason(status)
     if status in global_search._CANCELLED_STATUSES or status.startswith("cancel"):
@@ -161,6 +155,42 @@ def _counts_from_payload(payload: dict[str, dict]) -> dict[str, int]:
     counts = {name: 0 for name in _WORKFLOW_LABELS}
     for info in payload.values():
         queue = str(info.get("queue") or "")
+        if queue in counts:
+            counts[queue] += 1
+    return counts
+
+
+def _selected_history_counts() -> dict[str, int]:
+    """Count lifecycle tabs from the complete selected persisted history.
+
+    The page renderer intentionally keeps ``_bt38_fbm_session_rows`` bounded to
+    15/30/50/100 rows.  The all-orders health alignment has already loaded and
+    canonicalised the complete selected history into ``_bt38_fbm_health_rows``.
+    Reuse that request-local DB truth for badge counts so a presentation limit
+    can never change operational totals.  No marketplace/provider read or write
+    is introduced here.
+    """
+    rows = list(getattr(g, "_bt38_fbm_health_rows", []) or [])
+    if not rows:
+        return _counts_from_payload({})
+
+    profiles = page_alignment._profile_map([
+        row for row in rows if _marketplace_platform_for(row) == "amazon"
+    ])
+    eligible_rows: list[MarketplaceOrder] = []
+    for row in rows:
+        if row.store_id is None or not row.marketplace_order_id:
+            continue
+        key = (int(row.store_id), str(row.marketplace_order_id))
+        profile = profiles.get(key) if _marketplace_platform_for(row) == "amazon" else None
+        if page_alignment._workspace_fbm_eligible(row, profile):
+            eligible_rows.append(row)
+
+    shipments = page_alignment._shipment_map(eligible_rows)
+    counts = {name: 0 for name in _WORKFLOW_LABELS}
+    for row in eligible_rows:
+        shipment = shipments.get((int(row.store_id), str(row.marketplace_order_id)))
+        queue = workflow_queue_for(row, shipment)
         if queue in counts:
             counts[queue] += 1
     return counts
@@ -325,10 +355,11 @@ def install_governed_fbm_dispatch_queue_alignment(app) -> None:
             rows, _ = global_search._session_snapshot_rows()
         truncated = bool(getattr(g, "_bt38_fbm_session_truncated", False))
         payload = _presentation(rows)
+        full_counts = _selected_history_counts()
         response.set_data(_inject(
             response.get_data(as_text=True),
             payload,
-            _counts_from_payload(payload),
+            full_counts,
             _fba_count(),
             truncated,
         ))
@@ -336,4 +367,4 @@ def install_governed_fbm_dispatch_queue_alignment(app) -> None:
 
     app.view_functions[endpoint] = aligned_fbm_page
     app._bt38_fbm_dispatch_queue_alignment_installed = True
-    app.logger.info("BT38 FBM aligned to Warehouse session model: one snapshot; local Ready/Pending/Dispatched/Cancelled/search; existing page pagination preserved; manual shipping preserved")
+    app.logger.info("BT38 FBM aligned to Warehouse session model: bounded row payload; full selected-history lifecycle badge counts; local Ready/Pending/Dispatched/Cancelled/search; existing page pagination preserved; manual shipping preserved")
