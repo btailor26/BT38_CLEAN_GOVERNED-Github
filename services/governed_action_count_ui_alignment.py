@@ -1,9 +1,9 @@
 """Align visible BT38 action counters and FBM lifecycle presentation.
 
 The governed bell action count remains authority-backed. FBM lifecycle badges are
-bound to the existing selected-history workflow snapshot rather than depending on
-request ordering. This adds no marketplace/provider read, polling, worker or write.
-The existing header structure is preserved; only local badge/avatar sizing is aligned.
+bound to the existing selected-history workflow snapshot when that legacy hook is
+present. Browser-local FBM working-set lifecycle counts remain owner when the hook
+has been retired. This adds no marketplace/provider read, polling, worker or write.
 """
 from __future__ import annotations
 
@@ -136,11 +136,13 @@ def _inject(html: str) -> str:
 
 
 def _align_fbm_lifecycle_counts() -> None:
-    """Make lifecycle badges consume the same selected-history workflow snapshot."""
+    """Align the legacy server count hook only while that hook still exists."""
     from services import governed_fbm_dispatch_queue_alignment as dispatch_queue
     from services import governed_fbm_global_search_alignment as global_search
 
-    current = dispatch_queue._selected_history_counts
+    current = getattr(dispatch_queue, "_selected_history_counts", None)
+    if current is None:
+        return
     if getattr(current, "_bt38_selected_snapshot_aligned", False):
         return
 
@@ -181,7 +183,7 @@ def install_governed_action_count_ui_alignment() -> None:
 
         app._bt38_action_count_ui_alignment_installed = True
         app.logger.info(
-            "BT38 FBM lifecycle badges aligned to selected-history snapshot; visible action counters remain on governed bell action_count; existing header badges locally compacted; no extra marketplace read, polling or write"
+            "BT38 visible action counters remain on governed bell action_count; retired FBM server lifecycle hook is optional; browser-local working-set counts remain owner; no extra marketplace read, polling or write"
         )
 
     aligned_install._bt38_action_count_ui_aligned = True
