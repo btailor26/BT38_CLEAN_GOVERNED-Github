@@ -2,7 +2,7 @@
 // No polling or marketplace/provider reads are owned here. The server renders
 // the explicitly selected history snapshot, then the existing 15/30/50/100
 // page-size control limits presentation inside that snapshot only.
-// With no explicit user event, the FBM session sleeps.
+// With no event, the FBM session sleeps.
 (function () {
   'use strict';
   if (window.bt38FbmEventSessionRefreshInstalled) return;
