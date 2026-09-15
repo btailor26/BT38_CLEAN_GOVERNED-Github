@@ -1,8 +1,8 @@
 """Wire FBM history controls to one server-backed governed order reader.
 
 Presentation/read alignment only: no marketplace/provider read, worker, poller,
-writer or inventory path. History/search/page-size changes are explicit server
-requests; lifecycle tabs stay inside the existing browser-session controller.
+writer or inventory path. History/search/page-size changes are explicit user
+events; lifecycle tabs stay inside the existing browser-session controller.
 """
 from __future__ import annotations
 
@@ -62,8 +62,11 @@ health_alignment._selected_history_window = _selected_history_window
 
 
 # Keep exactly one control/search surface beside the Data Truth Review area.
-# History and page-size are explicit native GET controls. Search is submitted
-# from this same form; no second browser-only search authority is introduced.
+# This module renders controls only.  The existing
+# fbm_event_session_refresh_alignment.js is the single browser event authority
+# for range/page-size changes; do not add a second onchange/submit controller
+# here. Apply remains a native explicit GET event so a genuinely different
+# history dataset can be requested from persisted BT38 truth.
 def _controls_html() -> str:
     mode = controls._range_key()
     limit = controls._page_size()
@@ -102,7 +105,6 @@ def _controls_html() -> str:
         + '<button class="btn btn-sm btn-primary" type="submit">Apply</button>'
         + f'<a id="bt38FbmGlobalSearchClear" class="btn btn-sm btn-outline-secondary" href="{escape(clear_url)}">Clear search</a>'
         + '</form>'
-        + '<script>(function(){var f=document.getElementById("bt38FbmControls"),r=document.getElementById("bt38FbmRange"),a=document.getElementById("bt38FbmFrom"),b=document.getElementById("bt38FbmTo"),s=document.getElementById("bt38ResultsPerPageSelect");if(!f||!r||!s)return;function c(){var on=r.value==="custom";if(a)a.style.display=on?"":"none";if(b)b.style.display=on?"":"none";}c();r.addEventListener("change",function(){c();if(r.value!=="custom")f.submit();});s.addEventListener("change",function(){f.submit();});})();</script>'
         + '</div>'
     )
 
