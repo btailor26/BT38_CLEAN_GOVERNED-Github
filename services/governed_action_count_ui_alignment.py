@@ -1,15 +1,15 @@
 """Align visible BT38 action counters to the existing governed bell action count.
 
 The authority-backed bell reader already returns ``action_count`` from current
-persisted FBM/order/shipment truth while keeping informational shipment history in
-``records``.  The base browser shell still derives its red badge from unread
-records, and the assistant separately parses the Dashboard attention count.
-Those presentation counters can therefore disagree with the governed work queue.
+persisted FBM/order/shipment truth. The base browser shell can derive its red
+badge from a different presentation count, and the assistant separately parses
+the Dashboard attention count. Those presentation counters must stay aligned to
+the governed action surface.
 
-This alignment adds no read, poll, timer, marketplace call, worker or write.  It
-only observes the response from the bell request the browser already performs
-and applies that existing ``action_count`` consistently to the red badge and the
-assistant's normal action-count message.
+This alignment adds no read, poll, timer, marketplace call, worker or write. It
+only observes the response from the bell request the browser already performs,
+applies that existing ``action_count`` consistently, and gives the existing bell
+badge enough local spacing to avoid overlapping the adjacent admin identity.
 """
 from __future__ import annotations
 
@@ -19,6 +19,10 @@ from services import governed_fbm_small_alignment as small_alignment
 
 
 _SCRIPT = r'''
+<style id="bt38GovernedActionBadgeSpacing">
+#bt38NotificationBell{position:relative;margin-right:.45rem}
+#bt38NotificationBadge{right:-.35rem!important;top:-.35rem!important;transform:none!important}
+</style>
 <script id="bt38GovernedActionCountUIAlignment">
 (function(){
   'use strict';
@@ -169,7 +173,8 @@ def install_governed_action_count_ui_alignment() -> None:
         app._bt38_action_count_ui_alignment_installed = True
         app.logger.info(
             "BT38 visible action counters aligned to existing governed bell action_count; "
-            "no extra read, polling, marketplace call or write"
+            "existing badge locally spaced from admin identity; no extra read, polling, "
+            "marketplace call or write"
         )
 
     aligned_install._bt38_action_count_ui_aligned = True
