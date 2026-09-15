@@ -1,8 +1,8 @@
 """Wire FBM history controls to one server-backed governed order reader.
 
 Presentation/read alignment only: no marketplace/provider read, worker, poller,
-writer or inventory path. History/search/page-size changes are explicit user
-events; lifecycle tabs stay inside the existing browser-session controller.
+writer or inventory path. History/search changes are explicit user events;
+lifecycle tabs stay inside the existing browser-session controller.
 """
 from __future__ import annotations
 
@@ -48,11 +48,11 @@ controls._range_key = _range_key
 
 
 # Keep exactly one control/search surface beside the Data Truth Review area.
-# This module renders controls only. The all-orders health alignment owns the
-# selected DB history window; this module must never replace that authority.
+# The all-orders health alignment owns the selected DB timestamp window. There is
+# deliberately no page-size selector: the selected history snapshot is the row
+# universe and the existing browser controller owns presentation only.
 def _controls_html() -> str:
     mode = controls._range_key()
-    limit = controls._page_size()
     term = controls._search_term()
     from_value = str(request.args.get("fbm_from") or "")
     to_value = str(request.args.get("fbm_to") or "")
@@ -68,11 +68,7 @@ def _controls_html() -> str:
             ("90d", "90 days"), ("1y", "Last year"), ("custom", "Custom"),
         )
     )
-    sizes = "".join(
-        f'<option value="{value}"{" selected" if limit == value else ""}>{value}</option>'
-        for value in controls._PAGE_SIZES
-    )
-    clear_args = controls._query_args_without("search", "fbm_tab")
+    clear_args = controls._query_args_without("search", "fbm_tab", "limit")
     clear_url = "/fbm" + (("?" + urlencode(clear_args)) if clear_args else "")
     return (
         '<div class="card-header border-bottom-0 pb-0">'
@@ -82,8 +78,6 @@ def _controls_html() -> str:
         + f'<select id="bt38FbmRange" class="form-select form-select-sm" style="width:auto" name="fbm_range">{options}</select>'
         + f'<input id="bt38FbmFrom" class="form-control form-control-sm" style="width:auto" type="date" name="fbm_from" value="{escape(from_value)}" aria-label="From date">'
         + f'<input id="bt38FbmTo" class="form-control form-control-sm" style="width:auto" type="date" name="fbm_to" value="{escape(to_value)}" aria-label="To date">'
-        + '<label class="small text-muted mb-0">Show</label>'
-        + f'<select id="bt38ResultsPerPageSelect" class="form-select form-select-sm" style="width:auto" name="limit">{sizes}</select>'
         + f'<input id="bt38FbmGlobalSearchInput" class="form-control form-control-sm" style="width:min(300px,65vw)" type="search" name="search" autocomplete="off" value="{escape(term)}" placeholder="Order, SKU, tracking, carrier or status">'
         + '<button class="btn btn-sm btn-primary" type="submit">Apply</button>'
         + f'<a id="bt38FbmGlobalSearchClear" class="btn btn-sm btn-outline-secondary" href="{escape(clear_url)}">Clear search</a>'
@@ -147,15 +141,16 @@ if not getattr(page, "_bt38_history_controls_aligned", False):
             loaded.update(missing_keys)
         return {key: cache.get(key) for key in keys if cache.get(key) is not None}
 
-    def _selected_rows(limit: int):
-        # Search and normal rendering both derive from the same selected DB snapshot.
-        search_result = controls._search_rows(limit)
-        if search_result is not None:
-            return search_result
+    def _selected_rows(_limit: int):
+        # The timestamp-selected DB snapshot is the complete row universe. Search
+        # filters that same universe; it must never be sliced by a stale Show/page
+        # size before lifecycle classification or browser rendering.
         rows, truncated = controls._session_snapshot_rows()
-        return rows[:limit], bool(truncated or len(rows) > limit)
+        term = controls._search_term()
+        if term:
+            rows = [row for row in rows if controls._row_matches_term(row, term)]
+        return list(rows), bool(truncated)
 
-    page._requested_limit = controls._page_size
     page._profile_map = _cached_profile_map
     page._shipment_map = _cached_shipment_map
     page._latest_distinct_fbm_rows = _selected_rows
