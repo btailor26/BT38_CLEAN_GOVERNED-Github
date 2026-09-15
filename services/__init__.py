@@ -130,6 +130,10 @@ import services.revolut_subscription_alignment  # noqa: F401,E402
 import services.support_case_alignment  # noqa: F401,E402
 
 # FBM history controls are native GET reads over the selected persisted window.
-# Keep 7 days as the default, exact 15/30/50/100 page sizes, and custom history
-# without introducing polling, marketplace reads or another order authority.
+# Three days is the fresh-session default; 3/7/30/90/last-year/custom all use the
+# same server-backed workflow/search authority before pagination.
 import services.governed_fbm_history_controls_alignment  # noqa: F401,E402
+
+# The all-orders health installer runs later in app startup. Wrap it so it cannot
+# restore a second top controls/search surface after the final FBM alignment.
+import services.governed_fbm_history_postinstall_alignment  # noqa: F401,E402
