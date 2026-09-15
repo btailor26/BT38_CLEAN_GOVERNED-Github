@@ -31,8 +31,9 @@
 
   function submitControls(form) {
     if (!form) return;
-    if (typeof form.requestSubmit === 'function') form.requestSubmit();
-    else form.submit();
+    // This is an explicit user GET. Use the form's native submit path so no
+    // other submit-event controller can delay or cancel the timeframe refresh.
+    form.submit();
   }
 
   function syncHistoryControls() {
