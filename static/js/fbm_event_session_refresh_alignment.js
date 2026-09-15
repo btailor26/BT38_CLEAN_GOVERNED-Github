@@ -1,13 +1,14 @@
 // FBM browser-session presentation alignment.
-// No polling or marketplace/provider reads are owned here.  The server renders
-// the explicitly selected 15/30/50/100 order window; browser session state only
-// remembers presentation choices and local workflow/search state.
+// No polling or marketplace/provider reads are owned here. The server renders
+// the explicitly selected 15/30/50/100 order window; explicit user controls
+// submit native GET requests for wider/different persisted history windows.
 (function () {
   'use strict';
   if (window.bt38FbmEventSessionRefreshInstalled) return;
   window.bt38FbmEventSessionRefreshInstalled = true;
 
   const allowedPageSizes = [15, 30, 50, 100];
+  const allowedRanges = ['7d', '30d', '90d', '1y', 'custom'];
 
   function onFbm() {
     return String(window.location.pathname || '').replace(/\/$/, '') === '/fbm';
@@ -27,17 +28,61 @@
     return values || {};
   }
 
+  function submitControls(form) {
+    if (!form) return;
+    if (typeof form.requestSubmit === 'function') form.requestSubmit();
+    else form.submit();
+  }
+
+  function syncHistoryControls() {
+    const form = document.getElementById('bt38FbmControls');
+    const range = document.getElementById('bt38FbmRange');
+    const from = document.getElementById('bt38FbmFrom');
+    const to = document.getElementById('bt38FbmTo');
+    if (!form || !range) return;
+
+    function showCustom() {
+      const custom = range.value === 'custom';
+      if (from) from.style.display = custom ? '' : 'none';
+      if (to) to.style.display = custom ? '' : 'none';
+    }
+
+    showCustom();
+    if (!range.dataset.bt38FbmBound) {
+      range.dataset.bt38FbmBound = '1';
+      range.addEventListener('change', function () {
+        const selected = allowedRanges.includes(range.value) ? range.value : '7d';
+        setSessionState({historyRange: selected});
+        try { sessionStorage.setItem('bt38_fbm_range', selected); } catch (_) {}
+        showCustom();
+        if (selected !== 'custom') submitControls(form);
+      });
+    }
+
+    if (from && !from.dataset.bt38FbmBound) {
+      from.dataset.bt38FbmBound = '1';
+      from.addEventListener('change', function () {
+        try { sessionStorage.setItem('bt38_fbm_from', from.value); } catch (_) {}
+      });
+    }
+    if (to && !to.dataset.bt38FbmBound) {
+      to.dataset.bt38FbmBound = '1';
+      to.addEventListener('change', function () {
+        try { sessionStorage.setItem('bt38_fbm_to', to.value); } catch (_) {}
+      });
+    }
+  }
+
   function syncPageSize() {
     const select = document.getElementById('bt38ResultsPerPageSelect');
+    const form = document.getElementById('bt38FbmControls');
     if (!select) return;
 
-    // The server value is authoritative because it controls how many rows were
-    // actually read from Neon.  Do not make a 15-row DOM pretend it contains 30,
-    // 50 or 100 rows.  Persist the server-selected value for browser continuity.
     const rendered = Number.parseInt(select.value, 10);
     const pageSize = allowedPageSizes.includes(rendered) ? rendered : 15;
     if (select.value !== String(pageSize)) select.value = String(pageSize);
     setSessionState({pageSize});
+    try { sessionStorage.setItem('bt38_fbm_limit', String(pageSize)); } catch (_) {}
 
     if (!select.dataset.bt38FbmSessionBound) {
       select.dataset.bt38FbmSessionBound = '1';
@@ -45,9 +90,8 @@
         const selected = Number.parseInt(select.value, 10);
         const normalized = allowedPageSizes.includes(selected) ? selected : 15;
         setSessionState({pageSize: normalized});
-        // The select lives inside bt38FbmHistoryControls and its inline onchange
-        // submits that GET form.  That explicit user action is the only time a
-        // wider order window is read from Neon.
+        try { sessionStorage.setItem('bt38_fbm_limit', String(normalized)); } catch (_) {}
+        submitControls(form || select.form);
       });
     }
   }
@@ -87,10 +131,12 @@
 
   function initialise() {
     if (!onFbm()) return;
+    syncHistoryControls();
     syncPageSize();
     restoreLifecycleTab();
     alignAllRowVisibility();
     window.addEventListener('load', function () {
+      syncHistoryControls();
       syncPageSize();
       alignAllRowVisibility();
     }, {once: true});
