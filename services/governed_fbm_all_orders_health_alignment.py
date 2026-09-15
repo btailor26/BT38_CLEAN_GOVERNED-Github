@@ -164,6 +164,15 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
         }
         return list(rows)
 
+    def _selected_shipment_map(rows: list[MarketplaceOrder]) -> dict:
+        """Load shipment truth once for this selected-history request working set."""
+        cached = getattr(g, "_bt38_fbm_selected_shipment_map", None)
+        if cached is not None:
+            return cached
+        shipments = page_alignment._shipment_map(rows)
+        g._bt38_fbm_selected_shipment_map = shipments
+        return shipments
+
     def selected_range_snapshot_rows() -> tuple[list[MarketplaceOrder], bool]:
         """Return the same complete selected-history snapshot used by every tab."""
         rows = _selected_fbm_rows()
@@ -179,7 +188,7 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
             return cached
 
         rows = _selected_fbm_rows()
-        shipments = page_alignment._shipment_map(rows)
+        shipments = _selected_shipment_map(rows)
         grouped = {name: [] for name in global_search._WORKFLOW_TABS}
         for row in rows:
             shipment = shipments.get((int(row.store_id), str(row.marketplace_order_id)))
@@ -202,7 +211,7 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
     def session_health_summary() -> dict:
         rows = _selected_fbm_rows()
         mode, start_at, end_at, label, raw_from, raw_to = _selected_history_window()
-        shipments = page_alignment._shipment_map(rows)
+        shipments = _selected_shipment_map(rows)
         dispatch_due = dispatched = awaiting = overdue = mapping_review = 0
         returns = replacements = refund_issues = 0
         platform_counts: dict[str, int] = {}
@@ -320,5 +329,5 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
     page_alignment._guide_html = operational_guide_html
     app._bt38_fbm_all_orders_health_alignment_installed = True
     app.logger.info(
-        "BT38 FBM history aligned: persisted DB created_at is timestamp truth; Europe/London calendar-day ranges; rendered rows, lifecycle tabs and badges share one selected-history snapshot; page size presentation only"
+        "BT38 FBM history aligned: persisted DB created_at is timestamp truth; Europe/London calendar-day ranges; rendered rows, lifecycle tabs and badges share one selected-history snapshot and one shipment working set; page size presentation only"
     )
