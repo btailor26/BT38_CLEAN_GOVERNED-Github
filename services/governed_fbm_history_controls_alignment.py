@@ -6,8 +6,10 @@ events; lifecycle tabs stay inside the existing browser-session controller.
 """
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from html import escape
 from urllib.parse import urlencode
+from zoneinfo import ZoneInfo
 
 from flask import g, request
 
@@ -16,9 +18,10 @@ import services.governed_fbm_page_alignment as page
 import services.governed_fbm_all_orders_health_alignment as health_alignment
 
 
+_TZ = ZoneInfo("Europe/London")
+
 # One history vocabulary everywhere. Three days is the default for a fresh FBM
-# request; wider history is always explicit. The actual DB window authority stays
-# in governed_fbm_all_orders_health_alignment._selected_history_window.
+# request; wider history is always explicit.
 controls._RANGE_DAYS = {"3d": 3, "7d": 7, "30d": 30, "90d": 90, "1y": 365}
 health_alignment._RANGE_DAYS = {
     "3d": (3, "Last 3 days"),
@@ -44,12 +47,56 @@ def _range_key():
     return raw if raw in {*controls._RANGE_DAYS, "custom"} else "3d"
 
 
+def _parse_date(value: str):
+    try:
+        return datetime.strptime(str(value or "").strip(), "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return None
+
+
+def _range_bounds():
+    """One timestamp boundary authority; every invalid/missing range falls to 3d."""
+    mode = _range_key()
+    today = datetime.now(_TZ).date()
+    if mode == "custom":
+        start_date = _parse_date(request.args.get("fbm_from"))
+        end_date = _parse_date(request.args.get("fbm_to"))
+        if start_date is not None and end_date is not None and start_date <= end_date:
+            start_local = datetime(start_date.year, start_date.month, start_date.day, tzinfo=_TZ)
+            end_local = datetime(end_date.year, end_date.month, end_date.day, tzinfo=_TZ) + timedelta(days=1)
+            return (
+                "custom",
+                start_local.astimezone(timezone.utc).replace(tzinfo=None),
+                end_local.astimezone(timezone.utc).replace(tzinfo=None),
+                f"{start_date.strftime('%d %b %Y')} – {end_date.strftime('%d %b %Y')}",
+            )
+        mode = "3d"
+
+    days = controls._RANGE_DAYS.get(mode, 3)
+    if mode not in controls._RANGE_DAYS:
+        mode, days = "3d", 3
+    start_date = today - timedelta(days=days - 1)
+    start_local = datetime(start_date.year, start_date.month, start_date.day, tzinfo=_TZ)
+    end_local = datetime(today.year, today.month, today.day, tzinfo=_TZ) + timedelta(days=1)
+    labels = {
+        "3d": "Last 3 days", "7d": "Last 7 days", "30d": "Last 30 days",
+        "90d": "Last 90 days", "1y": "Last year",
+    }
+    return (
+        mode,
+        start_local.astimezone(timezone.utc).replace(tzinfo=None),
+        end_local.astimezone(timezone.utc).replace(tzinfo=None),
+        labels.get(mode, "Last 3 days"),
+    )
+
+
+# Replace both inherited 7-day fallbacks, not only the dropdown selection.
 controls._range_key = _range_key
+controls._range_bounds = _range_bounds
 
 
 # Keep exactly one history/search surface beside the Data Truth Review area.
-# Page size remains the existing bottom-of-page presentation control. The
-# all-orders health alignment alone owns the selected DB timestamp window.
+# Page size remains the existing bottom-of-page presentation control.
 def _controls_html() -> str:
     mode = controls._range_key()
     term = controls._search_term()
@@ -142,8 +189,7 @@ if not getattr(page, "_bt38_history_controls_aligned", False):
 
     def _selected_rows(limit: int):
         # History membership is decided first by the canonical DB timestamp
-        # snapshot. Search narrows that snapshot. Page size is presentation only:
-        # it may show fewer rows, but can never widen the selected history range.
+        # snapshot. Search narrows that snapshot. Page size is presentation only.
         rows, truncated = controls._session_snapshot_rows()
         term = controls._search_term()
         if term:
