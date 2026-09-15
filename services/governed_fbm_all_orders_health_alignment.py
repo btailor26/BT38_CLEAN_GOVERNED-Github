@@ -103,7 +103,10 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
         """Complete canonical eligible FBM snapshot for the selected date range."""
         cached = getattr(g, "_bt38_fbm_health_rows", None)
         if cached is not None:
-            return list(cached)
+            rows = list(cached)
+            g._bt38_fbm_session_rows = rows
+            g._bt38_fbm_session_truncated = False
+            return rows
 
         mode, start_at, end_at, label, raw_from, raw_to = _selected_history_window()
         candidates = (
@@ -132,6 +135,8 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
                 rows.append(row)
 
         g._bt38_fbm_health_rows = rows
+        g._bt38_fbm_session_rows = rows
+        g._bt38_fbm_session_truncated = False
         g._bt38_fbm_history_window = {
             "mode": mode,
             "start_at": start_at,
@@ -144,12 +149,7 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
 
     def selected_range_snapshot_rows() -> tuple[list[MarketplaceOrder], bool]:
         """Return the same complete selected-history snapshot used by every tab."""
-        cached = getattr(g, "_bt38_fbm_session_rows", None)
-        if cached is not None:
-            return list(cached), False
         rows = _selected_fbm_rows()
-        g._bt38_fbm_session_rows = rows
-        g._bt38_fbm_session_truncated = False
         return list(rows), False
 
     def _health_rows() -> list[MarketplaceOrder]:
@@ -303,5 +303,5 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
     page_alignment._guide_html = operational_guide_html
     app._bt38_fbm_all_orders_health_alignment_installed = True
     app.logger.info(
-        "BT38 FBM history aligned: 3-day default; wider ranges explicit; all lifecycle tabs share one complete selected-history snapshot; page size presentation only"
+        "BT38 FBM history aligned: 3-day default; wider ranges explicit; rendered rows, lifecycle tabs and badges share one selected-history snapshot; page size presentation only"
     )
