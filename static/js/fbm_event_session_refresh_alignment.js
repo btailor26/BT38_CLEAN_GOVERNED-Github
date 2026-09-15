@@ -57,7 +57,7 @@
         try { sessionStorage.setItem('bt38_fbm_range', selected); } catch (_) {}
         showCustom();
         // governed_fbm_dispatch_queue_alignment owns the local history render.
-        // Deliberately no form.submit(), fetch(), DB read or page reload here.
+        // Deliberately no form submission, network request, DB read or page reload here.
       });
     }
 
