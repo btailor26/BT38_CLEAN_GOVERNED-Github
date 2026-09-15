@@ -1,7 +1,7 @@
 // FBM browser-session presentation alignment.
 // No polling or marketplace/provider reads are owned here. The server renders
 // the explicitly selected 15/30/50/100 order window; explicit user controls
-// submit native GET requests for wider/different persisted history windows.
+// submit one native GET event only when a different persisted dataset is needed.
 // With no event, the FBM session sleeps.
 (function () {
   'use strict';
@@ -9,7 +9,7 @@
   window.bt38FbmEventSessionRefreshInstalled = true;
 
   const allowedPageSizes = [15, 30, 50, 100];
-  const allowedRanges = ['7d', '30d', '90d', '1y', 'custom'];
+  const allowedRanges = ['3d', '7d', '30d', '90d', '1y', 'custom'];
 
   function onFbm() {
     return String(window.location.pathname || '').replace(/\/$/, '') === '/fbm';
@@ -52,7 +52,7 @@
     if (!range.dataset.bt38FbmBound) {
       range.dataset.bt38FbmBound = '1';
       range.addEventListener('change', function () {
-        const selected = allowedRanges.includes(range.value) ? range.value : '7d';
+        const selected = allowedRanges.includes(range.value) ? range.value : '3d';
         setSessionState({historyRange: selected});
         try { sessionStorage.setItem('bt38_fbm_range', selected); } catch (_) {}
         showCustom();
@@ -99,8 +99,8 @@
 
   function rowMatchesSession(row) {
     if (!row || !row.classList || !row.classList.contains('fbm-order-row')) return false;
-    const session = getSessionState({tab: 'pending', search: ''});
-    const activeTab = String(session && session.tab || 'pending');
+    const session = getSessionState({tab: 'ready_dispatch', search: ''});
+    const activeTab = String(session && session.tab || 'ready_dispatch');
     const search = String(session && session.search || '').trim().toLowerCase();
     const queue = String(row.dataset.fbmQueue || '');
     const searchText = String(row.dataset.fbmSearch || row.textContent || '').toLowerCase();
@@ -123,10 +123,10 @@
 
   function restoreLifecycleTab() {
     if (!onFbm()) return;
-    const session = getSessionState({tab: 'pending'});
-    const activeTab = String(session && session.tab || 'pending');
+    const session = getSessionState({tab: 'ready_dispatch'});
+    const activeTab = String(session && session.tab || 'ready_dispatch');
     const selectedTab = document.querySelector('.fbm-lifecycle-tab[data-fbm-tab="' + activeTab + '"]')
-      || document.querySelector('.fbm-lifecycle-tab[data-fbm-tab="pending"]');
+      || document.querySelector('.fbm-lifecycle-tab[data-fbm-tab="ready_dispatch"]');
     if (selectedTab && !selectedTab.classList.contains('active')) selectedTab.click();
   }
 
