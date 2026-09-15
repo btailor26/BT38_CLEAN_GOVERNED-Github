@@ -185,10 +185,44 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
         g._bt38_fbm_health_rows = rows
         return list(rows)
 
-    # The page projection is bounded and date-scoped.  This replaces the older
-    # 300-row newest-N snapshot and prevents a normal GET from rendering the
-    # entire seven-day history.
+    def selected_range_workflow_snapshot() -> dict:
+        """Count workflow queues from the full selected history, never page-size rows."""
+        cached = getattr(g, "_bt38_fbm_workflow_snapshot", None)
+        if cached is not None:
+            return cached
+
+        rows = _health_rows()
+        profiles = page_alignment._profile_map([
+            row for row in rows if _platform(row).strip().lower() == "amazon"
+        ])
+        eligible_rows: list[MarketplaceOrder] = []
+        for row in rows:
+            key = (int(row.store_id), str(row.marketplace_order_id))
+            profile = profiles.get(key) if _platform(row).strip().lower() == "amazon" else None
+            if page_alignment._workspace_fbm_eligible(row, profile):
+                eligible_rows.append(row)
+
+        shipments = page_alignment._shipment_map(eligible_rows)
+        grouped = {name: [] for name in global_search._WORKFLOW_TABS}
+        for row in eligible_rows:
+            shipment = shipments.get((int(row.store_id), str(row.marketplace_order_id)))
+            queue = global_search.workflow_queue_for(row, shipment)
+            if queue in grouped:
+                grouped[queue].append(row)
+
+        snapshot = {
+            "rows": grouped,
+            "counts": {name: len(grouped[name]) for name in global_search._WORKFLOW_TABS},
+            "truncated": False,
+        }
+        g._bt38_fbm_workflow_snapshot = snapshot
+        return snapshot
+
+    # The order table remains bounded by page size. Workflow badges/tabs use the
+    # complete selected persisted history so presentation limits cannot change
+    # operational truth.
     global_search._session_snapshot_rows = selected_range_snapshot_rows
+    global_search._persisted_workflow_snapshot = selected_range_workflow_snapshot
     page_alignment._requested_limit = _persisted_page_size
 
     def session_health_summary() -> dict:
@@ -325,5 +359,5 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
     page_alignment._guide_html = operational_guide_html
     app._bt38_fbm_all_orders_health_alignment_installed = True
     app.logger.info(
-        "BT38 FBM history aligned: bounded 15/30/50/100 page read; 7-day default; explicit wider/custom history; health remains selected-range DB truth"
+        "BT38 FBM history aligned: bounded 15/30/50/100 page read; full selected-range workflow truth; health remains selected-range DB truth"
     )
