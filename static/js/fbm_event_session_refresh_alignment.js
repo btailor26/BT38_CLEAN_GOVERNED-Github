@@ -2,6 +2,7 @@
 // No polling or marketplace/provider reads are owned here. The server renders
 // the explicitly selected 15/30/50/100 order window; explicit user controls
 // submit native GET requests for wider/different persisted history windows.
+// With no event, the FBM session sleeps.
 (function () {
   'use strict';
   if (window.bt38FbmEventSessionRefreshInstalled) return;
