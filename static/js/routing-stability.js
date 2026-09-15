@@ -1,6 +1,7 @@
 /**
  * SECTION X: URL Freeze / Routing Stability Fix
- * Passive navigation guard: no polling, no timed self-redirects.
+ * Event-driven session guard: no polling, no idle timers, no timed redirects.
+ * No event = no work. Requests are supervised only while an explicit event is active.
  */
 
 (function() {
@@ -9,26 +10,22 @@
     const RoutingStability = {
         config: {
             apiTimeout: 4000,
-            pageLoadTimeout: 4000,
             dashboardUrl: '/'
         },
 
         state: {
-            pageLoadStart: Date.now(),
             loadingOverlayActive: false,
             currentRoute: window.location.pathname,
-            failedRoutes: [],
-            overlayDelayId: null
+            failedRoutes: []
         },
 
         init: function() {
             this.injectStyles();
             this.createLoadingOverlay();
             this.wrapFetch();
-            this.setupPageLoadTimeout();
             this.setupNavigationMonitor();
             this.logRouteAccess();
-            console.log('[RoutingStability] Initialized - passive navigation, zero polling');
+            console.log('[RoutingStability] Initialized - event-driven session, idle=sleep');
         },
 
         injectStyles: function() {
@@ -40,7 +37,6 @@
                 #rs-loading-spinner { width:50px;height:50px;border:4px solid rgba(255,255,255,.3);border-top-color:#4dabf7;border-radius:50%;animation:rs-spin 1s linear infinite;margin:0 auto 20px; }
                 @keyframes rs-spin { to { transform:rotate(360deg); } }
                 #rs-loading-message { font-size:16px;margin-bottom:15px; }
-                #rs-loading-timer { font-size:12px;color:#adb5bd;margin-bottom:15px; }
                 .rs-btn { padding:10px 20px;border:none;border-radius:5px;cursor:pointer;margin:5px;font-size:14px; }
                 .rs-btn-primary { background:#4dabf7;color:white; }
                 .rs-btn-secondary { background:#6c757d;color:white; }
@@ -56,7 +52,6 @@
                 <div id="rs-loading-content">
                     <div id="rs-loading-spinner"></div>
                     <div id="rs-loading-message">Loading...</div>
-                    <div id="rs-loading-timer"></div>
                     <div id="rs-loading-actions" style="display:none;">
                         <button class="rs-btn rs-btn-primary" onclick="RoutingStability.retryLoad()">Retry</button>
                         <button class="rs-btn rs-btn-secondary" onclick="RoutingStability.goToDashboard()">Go to Dashboard</button>
@@ -70,10 +65,12 @@
             const overlay = document.getElementById('rs-loading-overlay');
             const msgEl = document.getElementById('rs-loading-message');
             const actionsEl = document.getElementById('rs-loading-actions');
+            const spinnerEl = document.getElementById('rs-loading-spinner');
             if (overlay) {
                 overlay.classList.add('active');
                 if (msgEl) msgEl.textContent = message || 'Loading...';
                 if (actionsEl) actionsEl.style.display = 'none';
+                if (spinnerEl) spinnerEl.style.display = 'block';
             }
         },
 
@@ -87,14 +84,20 @@
             const msgEl = document.getElementById('rs-loading-message');
             const actionsEl = document.getElementById('rs-loading-actions');
             const spinnerEl = document.getElementById('rs-loading-spinner');
-            if (msgEl) msgEl.textContent = message || 'Page load failed';
+            if (msgEl) msgEl.textContent = message || 'Request failed';
             if (actionsEl) actionsEl.style.display = 'block';
             if (spinnerEl) spinnerEl.style.display = 'none';
             this.logRouteFailure(this.state.currentRoute, message);
         },
 
-        retryLoad: function() { window.location.reload(); },
-        goToDashboard: function() { window.location.href = this.config.dashboardUrl; },
+        retryLoad: function() {
+            this.hideLoading();
+            if (typeof window.bt38UpdateStateOnly === 'function') window.bt38UpdateStateOnly();
+        },
+
+        goToDashboard: function() {
+            window.location.href = this.config.dashboardUrl;
+        },
 
         wrapFetch: function() {
             const originalFetch = window.fetch;
@@ -116,20 +119,6 @@
             };
         },
 
-        setupPageLoadTimeout: function() {
-            const self = this;
-            window.addEventListener('load', function() {
-                self.hideLoading();
-                console.log('[RoutingStability] Page loaded successfully');
-            });
-            setTimeout(function() {
-                if (document.readyState !== 'complete') {
-                    self.showLoading('Page taking longer than expected...');
-                    self.showLoadingError('Page load is taking longer than 4 seconds. Retry or return to dashboard.');
-                }
-            }, self.config.pageLoadTimeout);
-        },
-
         setupNavigationMonitor: function() {
             const self = this;
             document.addEventListener('click', function(e) {
@@ -139,16 +128,8 @@
                     if (isInternal && !link.href.includes('#')) self.state.currentRoute = new URL(link.href).pathname;
                 }
             });
-            window.addEventListener('beforeunload', function() {
-                if (self.state.overlayDelayId) clearTimeout(self.state.overlayDelayId);
-                self.state.overlayDelayId = setTimeout(function() {
-                    self.showLoading('Navigating...');
-                }, 200);
-            });
-            window.addEventListener('pagehide', function() {
-                if (self.state.overlayDelayId) clearTimeout(self.state.overlayDelayId);
-                self.hideLoading();
-            });
+            window.addEventListener('load', function() { self.hideLoading(); });
+            window.addEventListener('pagehide', function() { self.hideLoading(); });
         },
 
         logRouteAccess: function() {
