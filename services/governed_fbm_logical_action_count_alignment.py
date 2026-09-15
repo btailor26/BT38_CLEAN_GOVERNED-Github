@@ -5,6 +5,10 @@ must not become separate outstanding dispatch actions. If the existing bell
 projection already contains a persisted shipment lifecycle for an order, every
 stale Ready/Partially-dispatched sale sibling for that logical order is retired.
 
+The visible bell is an action surface: after logical collapse it presents only
+records that still require user action. Informational/progress history remains
+in its persisted authorities and does not displace a current action from view.
+
 This wraps only the existing authority-backed bell reader. It adds no DB query,
 marketplace/provider read, polling, scheduling, write, order import or shipment
 system.
@@ -81,13 +85,16 @@ def install_governed_fbm_logical_action_count_alignment() -> None:
         if not isinstance(payload, dict) or payload.get("success") is not True:
             return response
 
-        records = _collapse_logical_actions(list(payload.get("records") or []))
+        collapsed = _collapse_logical_actions(list(payload.get("records") or []))
+        records = [
+            record for record in collapsed
+            if record.get("requires_action") is True
+        ]
         payload["records"] = records
-        payload["action_count"] = sum(
-            1 for record in records if record.get("requires_action") is True
-        )
+        payload["action_count"] = len(records)
         payload["latest_event_at"] = records[0].get("created_at") if records else None
         payload["logical_action_projection"] = True
+        payload["action_only_presentation"] = True
         return jsonify(payload)
 
     aligned_bell_reader._bt38_logical_action_count_aligned = True
