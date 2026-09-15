@@ -101,11 +101,18 @@ install_governed_fbm_order_projection_alignment()
 # marketplace promise instead of falling through to Pending.
 install_fbm_db_delivery_promise_alignment(app)
 install_governed_fbm_global_search_alignment(app)
-# Keep the existing canonical browser-session snapshot, but cap ordinary page
-# discovery at 301 candidates so /fbm cannot hydrate 1,201 rows before render.
-install_governed_fbm_render_budget_alignment(app)
+# Health/history owns the selected period semantics, then the existing render
+# budget remains final authority for the browser-session working set. This keeps
+# ordinary /fbm opens bounded instead of rebuilding the selected/all-order set.
 install_governed_fbm_all_orders_health_alignment(app)
+install_governed_fbm_render_budget_alignment(app)
+# Preserve the existing bounded browser-session row selector before lifecycle UI
+# decoration is installed. The dispatch alignment must not replace that selector
+# with its later complete-history loader.
+from services import governed_fbm_page_alignment as _fbm_page_alignment
+_fbm_bounded_session_rows = _fbm_page_alignment._latest_distinct_fbm_rows
 install_governed_fbm_dispatch_queue_alignment(app)
+_fbm_page_alignment._latest_distinct_fbm_rows = _fbm_bounded_session_rows
 # FBA/AFN stays read-only but uses the same FBM workflow surface: Pending stays
 # Pending; exact persisted Amazon lifecycle after dispatch moves the row to FBA.
 import services.governed_fbm_fba_visibility_alignment  # noqa: F401,E402
