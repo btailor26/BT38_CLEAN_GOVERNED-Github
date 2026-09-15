@@ -219,7 +219,7 @@
       button.dataset.bt38SessionBound = '1';
       button.addEventListener('click', function () {
         setSessionState({tab: String(button.dataset.fbmTab || 'pending')});
-        window.setTimeout(alignAllRowVisibility, 0);
+        alignAllRowVisibility();
       });
     });
 
