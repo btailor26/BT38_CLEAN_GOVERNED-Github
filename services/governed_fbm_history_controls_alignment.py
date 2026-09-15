@@ -6,7 +6,6 @@ events; lifecycle tabs stay inside the existing browser-session controller.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
 from html import escape
 from urllib.parse import urlencode
 
@@ -18,7 +17,8 @@ import services.governed_fbm_all_orders_health_alignment as health_alignment
 
 
 # One history vocabulary everywhere. Three days is the default for a fresh FBM
-# request; wider history is always explicit.
+# request; wider history is always explicit. The actual DB window authority stays
+# in governed_fbm_all_orders_health_alignment._selected_history_window.
 controls._RANGE_DAYS = {"3d": 3, "7d": 7, "30d": 30, "90d": 90, "1y": 365}
 health_alignment._RANGE_DAYS = {
     "3d": (3, "Last 3 days"),
@@ -27,8 +27,6 @@ health_alignment._RANGE_DAYS = {
     "90d": (90, "Last 90 days"),
     "1y": (365, "Last year"),
 }
-
-_original_range_key = controls._range_key
 
 
 def _range_key():
@@ -48,25 +46,10 @@ def _range_key():
 
 controls._range_key = _range_key
 
-_original_health_window = health_alignment._selected_history_window
-
-
-def _selected_history_window():
-    if str(request.args.get("fbm_range") or "").strip():
-        return _original_health_window()
-    now = datetime.utcnow()
-    return "3d", now - timedelta(days=3), now + timedelta(seconds=1), "Last 3 days", "", ""
-
-
-health_alignment._selected_history_window = _selected_history_window
-
 
 # Keep exactly one control/search surface beside the Data Truth Review area.
-# This module renders controls only.  The existing
-# fbm_event_session_refresh_alignment.js is the single browser event authority
-# for range/page-size changes; do not add a second onchange/submit controller
-# here. Apply remains a native explicit GET event so a genuinely different
-# history dataset can be requested from persisted BT38 truth.
+# This module renders controls only. The all-orders health alignment owns the
+# selected DB history window; this module must never replace that authority.
 def _controls_html() -> str:
     mode = controls._range_key()
     limit = controls._page_size()
@@ -113,12 +96,8 @@ controls._controls_html = _controls_html
 
 
 # Lifecycle tabs intentionally keep the dispatch controller's existing local
-# browser-session click handler.  Do not replace it with window.location.assign:
-# a tab change is presentation state, not a new /fbm navigation.  Also strip any
-# legacy fbm_tab query from subsequent history/search/page-size requests so an
-# old server-side queue selection cannot become a second tab authority.
-
-
+# browser-session click handler. Do not replace it with a second server tab
+# authority.
 if not getattr(page, "_bt38_history_controls_aligned", False):
     _original_profile_map = page._profile_map
     _original_shipment_map = page._shipment_map
@@ -169,7 +148,7 @@ if not getattr(page, "_bt38_history_controls_aligned", False):
         return {key: cache.get(key) for key in keys if cache.get(key) is not None}
 
     def _selected_rows(limit: int):
-        # Search is server-backed; lifecycle tab state is browser-session only.
+        # Search and normal rendering both derive from the same selected DB snapshot.
         search_result = controls._search_rows(limit)
         if search_result is not None:
             return search_result
