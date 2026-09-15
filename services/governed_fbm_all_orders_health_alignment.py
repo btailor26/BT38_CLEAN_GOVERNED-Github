@@ -5,12 +5,17 @@ when the user explicitly selects them. Every lifecycle tab, badge and health
 count derives from the same complete selected-history FBM snapshot; page size is
 presentation only.
 
+The persisted MarketplaceOrder.created_at column is the single timestamp truth
+for history membership. Range instructions are interpreted as Europe/London
+calendar days and converted to naive UTC boundaries for the database query.
+
 No marketplace/provider calls or writes occur here.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from html import escape
+from zoneinfo import ZoneInfo
 
 from flask import g, request, session
 from sqlalchemy import func
@@ -30,35 +35,43 @@ _RANGE_DAYS = {
     "1y": (365, "Last 1 year"),
 }
 _PAGE_SIZES = (15, 30, 50, 100)
+_TZ = ZoneInfo("Europe/London")
 
 
-def _parse_day(value: str) -> datetime | None:
+def _parse_day(value: str):
     try:
-        return datetime.strptime(str(value or "").strip(), "%Y-%m-%d")
+        return datetime.strptime(str(value or "").strip(), "%Y-%m-%d").date()
     except (TypeError, ValueError):
         return None
 
 
+def _utc_db_boundary(day) -> datetime:
+    """Convert a Europe/London calendar-day boundary to naive UTC for DB truth."""
+    local = datetime(day.year, day.month, day.day, tzinfo=_TZ)
+    return local.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 def _selected_history_window() -> tuple[str, datetime, datetime, str, str, str]:
-    """Return the explicit persisted-order window; fresh default is three days."""
+    """Return the instructed calendar-day window over persisted DB created_at."""
     mode = str(request.args.get("fbm_range") or "3d").strip().lower()
-    now = datetime.utcnow()
+    today = datetime.now(_TZ).date()
 
     if mode == "custom":
         raw_from = str(request.args.get("fbm_from") or "").strip()
         raw_to = str(request.args.get("fbm_to") or "").strip()
-        start_at = _parse_day(raw_from)
+        start_day = _parse_day(raw_from)
         end_day = _parse_day(raw_to)
-        if start_at is not None and end_day is not None:
-            if start_at > end_day:
-                start_at, end_day = end_day, start_at
+        if start_day is not None and end_day is not None:
+            if start_day > end_day:
+                start_day, end_day = end_day, start_day
                 raw_from, raw_to = raw_to, raw_from
-            end_at = end_day + timedelta(days=1)
+            start_at = _utc_db_boundary(start_day)
+            end_at = _utc_db_boundary(end_day + timedelta(days=1))
             return (
                 mode,
                 start_at,
                 end_at,
-                f"{start_at.strftime('%d %b %Y')} – {end_day.strftime('%d %b %Y')}",
+                f"{start_day.strftime('%d %b %Y')} – {end_day.strftime('%d %b %Y')}",
                 raw_from,
                 raw_to,
             )
@@ -67,7 +80,11 @@ def _selected_history_window() -> tuple[str, datetime, datetime, str, str, str]:
     days, label = _RANGE_DAYS.get(mode, _RANGE_DAYS["3d"])
     if mode not in _RANGE_DAYS:
         mode = "3d"
-    return mode, now - timedelta(days=days), now + timedelta(seconds=1), label, "", ""
+        days, label = _RANGE_DAYS["3d"]
+    start_day = today - timedelta(days=days - 1)
+    start_at = _utc_db_boundary(start_day)
+    end_at = _utc_db_boundary(today + timedelta(days=1))
+    return mode, start_at, end_at, label, "", ""
 
 
 def _persisted_page_size() -> int:
@@ -100,7 +117,7 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
     original_guide_html = page_alignment._guide_html
 
     def _selected_fbm_rows() -> list[MarketplaceOrder]:
-        """Complete canonical eligible FBM snapshot for the selected date range."""
+        """Complete canonical eligible FBM snapshot for the selected DB date range."""
         cached = getattr(g, "_bt38_fbm_health_rows", None)
         if cached is not None:
             rows = list(cached)
@@ -303,5 +320,5 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
     page_alignment._guide_html = operational_guide_html
     app._bt38_fbm_all_orders_health_alignment_installed = True
     app.logger.info(
-        "BT38 FBM history aligned: 3-day default; wider ranges explicit; rendered rows, lifecycle tabs and badges share one selected-history snapshot; page size presentation only"
+        "BT38 FBM history aligned: persisted DB created_at is timestamp truth; Europe/London calendar-day ranges; rendered rows, lifecycle tabs and badges share one selected-history snapshot; page size presentation only"
     )
