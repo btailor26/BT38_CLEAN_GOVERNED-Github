@@ -27,19 +27,10 @@ try:
         )
 except Exception:
     app.logger.exception("eBay post-deploy alignment failed after app startup")
-# eBay ORDER_CONFIRMATION carries orderLineItemId separately from listingId.
-# Normalize that exact line identity before the governed executor, then let
-# terminal shipment events trigger only their existing exact readback path.
 import services.governed_ebay_order_identity_alignment  # noqa: F401
 import services.governed_fbm_shipment_event_alignment  # noqa: F401
-# Retire pre-alignment Flask-Login remember cookies before the main auth guard
-# evaluates request freshness, so old browsers reach /login once instead of
-# being restored into a redirect loop.
 import services.auth_session_legacy_cleanup  # noqa: F401
 import services.public_early_access  # noqa: F401
-# Customer profile/account ownership stays the existing workspace authority.
-# Packages extend that authority with manually managed free/paid entitlements;
-# they do not introduce another user, workspace or payment-session system.
 import services.account_profile_alignment  # noqa: F401
 import services.package_catalog_alignment  # noqa: F401
 from services.governed_notification_read_alignment import install_governed_notification_read_alignment
@@ -65,9 +56,7 @@ from services.governed_sds_scan_alignment import install_governed_sds_scan_align
 from services.governed_sds_scanner_lookup_alignment import install_governed_sds_scanner_lookup_alignment
 from services.governed_warehouse_inbound_installer import install as install_governed_warehouse_inbound
 from services.governed_ebay_return_intake_alignment import install_governed_ebay_return_intake_alignment
-from services.governed_fbm_small_alignment import (
-    install_governed_fbm_small_alignment,
-)
+from services.governed_fbm_small_alignment import install_governed_fbm_small_alignment
 from services.governed_fbm_ready_landing_alignment import install_governed_fbm_ready_landing_alignment
 from services.governed_exact_record_event_alignment import install_governed_exact_record_event_alignment
 from services.governed_bell_event_projection_alignment import install_governed_bell_event_projection_alignment
@@ -83,38 +72,20 @@ from services.governed_royal_mail_click_drop_alignment import install_governed_r
 
 install_governed_notification_read_alignment(app)
 install_governed_fbm_page_alignment(app)
-# A paid physical outbound shipment is stronger authority than a later
-# marketplace proxy carrying the same tracking number. Keep the original
-# shipment ahead of return/replacement rows and use marketplace tracking only
-# as fallback. This is a DB-only read selector.
 install_governed_fbm_shipment_selection_alignment(app)
-# Unverified provider drafts are not physical shipment authority. Apply the
-# existing DB-only marketplace-dispatch fallback after the canonical selector so
-# abandoned/timed-out Packlink choices cannot mask persisted marketplace truth.
 install_governed_fbm_marketplace_dispatch_authority_alignment()
-# Historical eBay listingId-as-lineId siblings remain in the DB for auditability.
-# Project the strongest persisted logical order into FBM reads and parcel prep so
-# sparse ghost rows cannot hide delivery truth or double the physical quantity.
 install_governed_fbm_order_projection_alignment()
-# The FBM template already renders delivery_promise. Install its existing
-# persisted DB-backed injector so Ship by / Deliver by receive the stored
-# marketplace promise instead of falling through to Pending.
 install_fbm_db_delivery_promise_alignment(app)
 install_governed_fbm_global_search_alignment(app)
-# Health/history owns the selected period semantics, then the existing render
-# budget remains final authority for the browser-session working set. This keeps
-# ordinary /fbm opens bounded instead of rebuilding the selected/all-order set.
 install_governed_fbm_all_orders_health_alignment(app)
 install_governed_fbm_render_budget_alignment(app)
-# Preserve the existing bounded browser-session row selector before lifecycle UI
-# decoration is installed. The dispatch alignment must not replace that selector
-# with its later complete-history loader.
-from services import governed_fbm_page_alignment as _fbm_page_alignment
-_fbm_bounded_session_rows = _fbm_page_alignment._latest_distinct_fbm_rows
+# FBM lifecycle/history/search/page-size all need one rendered working set, like
+# Warehouse's browser table controller. Install dispatch last for the row selector
+# and keep its complete persisted FBM working set instead of restoring the older
+# history-limited selector. Filter actions themselves remain browser-only.
 install_governed_fbm_dispatch_queue_alignment(app)
-_fbm_page_alignment._latest_distinct_fbm_rows = _fbm_bounded_session_rows
-# FBA/AFN stays read-only but uses the same FBM workflow surface: Pending stays
-# Pending; exact persisted Amazon lifecycle after dispatch moves the row to FBA.
+# FBA/AFN is read-only and is projected into that same local lifecycle working
+# set. It is not a separate route and does not create another filter authority.
 import services.governed_fbm_fba_visibility_alignment  # noqa: F401,E402
 install_product_linking_unlink_alignment(app)
 install_governed_ebay_native_shipping_alignment(app)
@@ -132,39 +103,14 @@ install_governed_warehouse_inbound(app)
 install_governed_ebay_return_intake_alignment()
 install_governed_fbm_small_alignment(app)
 install_governed_fbm_ready_landing_alignment(app)
-# Packing/consolidation is DB-first: Shipping Options reads persisted facts,
-# unknown parcel combinations go to mapping review, and same-address orders are
-# only offered for explicit one-box confirmation. No provider call occurs here.
 install_governed_fbm_parcel_grouping_alignment(app)
-# Extend the existing external confirmation path only after a paid/confirmed
-# physical shipment exists. Explicitly linked same-marketplace orders receive
-# the same tracking independently; no second shipment or postage purchase path.
 install_governed_fbm_shared_shipment_confirmation_alignment()
-# Dispatched orders may need a legitimate replacement label. Keep that on the
-# existing Packlink/FBMShipment path, but require and persist the purchase reason
-# before another label can be prepared; the original shipment remains unchanged.
 install_governed_fbm_replacement_label_alignment(app)
-# Royal Mail Click & Drop is another merchant-owned label authority. Connection
-# and exact reads are explicit only: no order import loop, no background polling,
-# no label purchase path and no second shipment table.
 install_governed_royal_mail_click_drop_alignment(app)
-# Amazon ORDER_CHANGE already carries Prime/program and, when supplied, promise
-# truth. Persist that exact event into the existing FBM profile/operational rows
-# once; there is no broad startup recovery.
 install_governed_amazon_fbm_profile_event_alignment(app)
-# If a current Ready-to-dispatch Amazon order predates that event persistence and
-# has no profile, the existing exact Amazon profile reader hydrates that one
-# current desk record before /fbm renders. This is not a bell or recovery path.
-install_governed_fbm_current_amazon_profile_alignment(app)
-# Exact committed events drive the browser-observed bell cache. Successful
-# webhook order events must publish even when stock/page state is unchanged.
 install_governed_webhook_bell_event_alignment(app)
-# The bell projection below is the final notification endpoint owner and must
-# remain zero-query against Neon and zero-read against marketplace/provider APIs.
 install_governed_exact_record_event_alignment(app)
 install_governed_bell_event_projection_alignment(app)
-# Preserve tracking authority: Packlink purchases open BT38's existing live
-# provider journey; marketplace-supplied tracking remains a marketplace link.
 install_governed_fbm_tracking_authority_restore(app)
 
 from services.governed_ebay_notification_challenge import install_ebay_notification_challenge_handler
