@@ -1,7 +1,7 @@
 // FBM browser-session presentation alignment.
 // No polling or marketplace/provider reads are owned here. History, lifecycle,
 // search and page-size controls operate only on the maintained FBM page/session
-// working set. With no event or user presentation change, the FBM session sleeps.
+// working set. With no event, the FBM session sleeps.
 (function () {
   'use strict';
   if (window.bt38FbmEventSessionRefreshInstalled) return;
