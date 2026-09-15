@@ -1,13 +1,15 @@
 """Wire FBM history controls to one server-backed governed order reader.
 
 Presentation/read alignment only: no marketplace/provider read, worker, poller,
-writer or inventory path. Workflow tabs request their selected DB-backed slice
-before pagination; browser-local rows are never the order authority.
+writer or inventory path. Workflow tabs use the already-rendered governed rows
+when that payload is complete and fall back to a server-backed selected-history
+queue before pagination when the local payload is incomplete.
 """
 from __future__ import annotations
 
 from datetime import datetime, timedelta
 from html import escape
+from urllib.parse import urlencode
 
 from flask import g, request
 
@@ -30,6 +32,7 @@ health_alignment._RANGE_DAYS = {
 
 _original_range_key = controls._range_key
 
+
 def _range_key():
     if not str(request.args.get("fbm_range") or "").strip():
         return "3d"
@@ -44,9 +47,11 @@ def _range_key():
     raw = aliases.get(raw, raw)
     return raw if raw in {*controls._RANGE_DAYS, "custom"} else "3d"
 
+
 controls._range_key = _range_key
 
 _original_health_window = health_alignment._selected_history_window
+
 
 def _selected_history_window():
     if str(request.args.get("fbm_range") or "").strip():
@@ -54,11 +59,13 @@ def _selected_history_window():
     now = datetime.utcnow()
     return "3d", now - timedelta(days=3), now + timedelta(seconds=1), "Last 3 days", "", ""
 
+
 health_alignment._selected_history_window = _selected_history_window
 
 
 # Keep exactly one control/search surface beside the Data Truth Review area.
-# The older health-header controls are retired rather than hidden in the browser.
+# History and page-size are explicit native GET controls. Search is submitted
+# from this same form; no second browser-only search authority is introduced.
 def _controls_html() -> str:
     mode = controls._range_key()
     limit = controls._page_size()
@@ -82,7 +89,6 @@ def _controls_html() -> str:
         for value in controls._PAGE_SIZES
     )
     clear_args = controls._query_args_without("search")
-    from urllib.parse import urlencode
     clear_url = "/fbm" + (("?" + urlencode(clear_args)) if clear_args else "")
     return (
         '<div class="card-header border-bottom-0 pb-0">'
@@ -98,24 +104,38 @@ def _controls_html() -> str:
         + '<button class="btn btn-sm btn-primary" type="submit">Apply</button>'
         + f'<a id="bt38FbmGlobalSearchClear" class="btn btn-sm btn-outline-secondary" href="{escape(clear_url)}">Clear search</a>'
         + '</form>'
-        + '<script>(function(){var r=document.getElementById("bt38FbmRange"),a=document.getElementById("bt38FbmFrom"),b=document.getElementById("bt38FbmTo");if(!r)return;function c(){var on=r.value==="custom";if(a)a.style.display=on?"":"none";if(b)b.style.display=on?"":"none";}c();r.addEventListener("change",c);})();</script>'
+        + '<script>(function(){var f=document.getElementById("bt38FbmControls"),r=document.getElementById("bt38FbmRange"),a=document.getElementById("bt38FbmFrom"),b=document.getElementById("bt38FbmTo"),s=document.getElementById("bt38ResultsPerPageSelect");if(!f||!r||!s)return;function c(){var on=r.value==="custom";if(a)a.style.display=on?"":"none";if(b)b.style.display=on?"":"none";}c();r.addEventListener("change",function(){c();if(r.value!=="custom")f.submit();});s.addEventListener("change",function(){f.submit();});})();</script>'
         + '</div>'
     )
+
 
 controls._controls_html = _controls_html
 
 
-# Dispatch tabs must cause a native GET so the server selects the complete
-# selected-history queue first and only then applies the 15/30/50/100 bound.
+# Hybrid lifecycle navigation:
+# - if every row for a queue is already in the governed browser payload, switch
+#   locally with no page reload/spinner;
+# - if the selected-history badge proves more rows exist than are locally
+#   present, request that queue from the server before pagination.
 _original_dispatch_inject = dispatch_alignment._inject
 
-def _server_backed_dispatch_inject(html, payload, counts, fba_count, truncated):
+
+def _hybrid_dispatch_inject(html, payload, counts, fba_count, truncated):
     rendered = _original_dispatch_inject(html, payload, counts, fba_count, truncated)
     local_click = "button.addEventListener('click',function(){active=name;saveSession();render();});"
-    server_click = "button.addEventListener('click',function(){var u=new URL(window.location.href);u.searchParams.set('fbm_tab',name);u.searchParams.delete('page');window.location.assign(u.toString());});"
-    return rendered.replace(local_click, server_click)
+    hybrid_click = (
+        "button.addEventListener('click',function(){"
+        "var local=rows.filter(function(row){return row.dataset.fbmQueue===name;}).length;"
+        "var total=Number(counts[name]||0);"
+        "if(local>=total){active=name;saveSession();render();return;}"
+        "var u=new URL(window.location.href);u.searchParams.set('fbm_tab',name);"
+        "u.searchParams.delete('page');window.location.assign(u.toString());"
+        "});"
+    )
+    return rendered.replace(local_click, hybrid_click)
 
-dispatch_alignment._inject = _server_backed_dispatch_inject
+
+dispatch_alignment._inject = _hybrid_dispatch_inject
 
 
 if not getattr(page, "_bt38_history_controls_aligned", False):
@@ -183,8 +203,6 @@ if not getattr(page, "_bt38_history_controls_aligned", False):
     page._shipment_map = _cached_shipment_map
     page._latest_distinct_fbm_rows = _selected_rows
     page._health_period = controls._range_bounds
-    # Remove the duplicate top controls. The single controls/search surface is
-    # injected immediately above the order workspace after Data Truth Review.
     page._period_controls = lambda _health: ""
     page._expand_control = lambda html, *, visible_limit, has_more: html
     page._bt38_history_controls_aligned = True
