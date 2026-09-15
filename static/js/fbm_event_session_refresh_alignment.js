@@ -99,8 +99,8 @@
 
   function rowMatchesSession(row) {
     if (!row || !row.classList || !row.classList.contains('fbm-order-row')) return false;
-    const session = getSessionState({tab: 'ready_dispatch', search: ''});
-    const activeTab = String(session && session.tab || 'ready_dispatch');
+    const session = getSessionState({tab: 'pending', search: ''});
+    const activeTab = String(session && session.tab || 'pending');
     const search = String(session && session.search || '').trim().toLowerCase();
     const queue = String(row.dataset.fbmQueue || '');
     const searchText = String(row.dataset.fbmSearch || row.textContent || '').toLowerCase();
@@ -123,10 +123,10 @@
 
   function restoreLifecycleTab() {
     if (!onFbm()) return;
-    const session = getSessionState({tab: 'ready_dispatch'});
-    const activeTab = String(session && session.tab || 'ready_dispatch');
+    const session = getSessionState({tab: 'pending'});
+    const activeTab = String(session && session.tab || 'pending');
     const selectedTab = document.querySelector('.fbm-lifecycle-tab[data-fbm-tab="' + activeTab + '"]')
-      || document.querySelector('.fbm-lifecycle-tab[data-fbm-tab="ready_dispatch"]');
+      || document.querySelector('.fbm-lifecycle-tab[data-fbm-tab="pending"]');
     if (selectedTab && !selectedTab.classList.contains('active')) selectedTab.click();
   }
 
