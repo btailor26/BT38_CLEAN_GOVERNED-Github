@@ -274,12 +274,18 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
         }
 
     def operational_controls(health: dict) -> str:
+        """Render the single authoritative FBM history form.
+
+        The shared global-search after_request hook recognises bt38FbmControls and
+        therefore cannot inject its older 7-day/sessionStorage control surface.
+        The URL request is the only history instruction.
+        """
         mode = str(health.get("period_mode") or "3d")
         raw_from = str(health.get("range_from") or "")
         raw_to = str(health.get("range_to") or "")
         page_size = _persisted_page_size()
         preserved = []
-        for name in ("platform", "status", "search", "q"):
+        for name in ("platform", "status", "search", "q", "fbm_tab"):
             value = str(request.args.get(name) or "").strip()
             if value:
                 preserved.append(
@@ -294,7 +300,7 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
             selected = " selected" if page_size == value else ""
             size_options.append(f'<option value="{value}"{selected}>{value}</option>')
         return (
-            '<form id="bt38FbmHistoryControls" class="fbm-period-controls" method="get" action="/fbm" aria-label="FBM order history controls">'
+            '<form id="bt38FbmControls" class="fbm-period-controls" method="get" action="/fbm" aria-label="FBM order history controls">'
             + "".join(preserved)
             + '<label class="small text-muted" for="bt38FbmRangeSelect">Orders</label>'
             + '<select id="bt38FbmRangeSelect" class="form-select form-select-sm" name="fbm_range" style="width:auto">' + "".join(options) + '</select>'
@@ -329,5 +335,5 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
     page_alignment._guide_html = operational_guide_html
     app._bt38_fbm_all_orders_health_alignment_installed = True
     app.logger.info(
-        "BT38 FBM history aligned: persisted DB created_at is timestamp truth; Europe/London calendar-day ranges; rendered rows, lifecycle tabs and badges share one selected-history snapshot and one shipment working set; page size presentation only"
+        "BT38 FBM history aligned: one URL-request history authority; persisted DB created_at is timestamp truth; Europe/London calendar-day ranges; rendered rows, lifecycle tabs and badges share one selected-history snapshot and one shipment working set; page size presentation only"
     )
