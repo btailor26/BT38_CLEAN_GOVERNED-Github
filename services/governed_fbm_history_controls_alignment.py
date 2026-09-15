@@ -1,8 +1,8 @@
 """Wire FBM history controls to one server-backed governed order reader.
 
 Presentation/read alignment only: no marketplace/provider read, worker, poller,
-writer or inventory path. History/search changes are explicit user events;
-lifecycle tabs stay inside the existing browser-session controller.
+writer or inventory path. History/search/page-size changes are explicit user
+events; lifecycle tabs stay inside the existing browser-session controller.
 """
 from __future__ import annotations
 
@@ -47,16 +47,15 @@ def _range_key():
 controls._range_key = _range_key
 
 
-# Keep exactly one control/search surface beside the Data Truth Review area.
-# The all-orders health alignment owns the selected DB timestamp window. There is
-# deliberately no page-size selector: the selected history snapshot is the row
-# universe and the existing browser controller owns presentation only.
+# Keep exactly one history/search surface beside the Data Truth Review area.
+# Page size remains the existing bottom-of-page presentation control. The
+# all-orders health alignment alone owns the selected DB timestamp window.
 def _controls_html() -> str:
     mode = controls._range_key()
     term = controls._search_term()
     from_value = str(request.args.get("fbm_from") or "")
     to_value = str(request.args.get("fbm_to") or "")
-    preserved = controls._query_args_without("fbm_range", "fbm_from", "fbm_to", "limit", "search", "fbm_tab")
+    preserved = controls._query_args_without("fbm_range", "fbm_from", "fbm_to", "search", "fbm_tab")
     hidden = "".join(
         f'<input type="hidden" name="{escape(name)}" value="{escape(value)}">'
         for name, value in preserved.items()
@@ -68,7 +67,7 @@ def _controls_html() -> str:
             ("90d", "90 days"), ("1y", "Last year"), ("custom", "Custom"),
         )
     )
-    clear_args = controls._query_args_without("search", "fbm_tab", "limit")
+    clear_args = controls._query_args_without("search", "fbm_tab")
     clear_url = "/fbm" + (("?" + urlencode(clear_args)) if clear_args else "")
     return (
         '<div class="card-header border-bottom-0 pb-0">'
@@ -141,16 +140,18 @@ if not getattr(page, "_bt38_history_controls_aligned", False):
             loaded.update(missing_keys)
         return {key: cache.get(key) for key in keys if cache.get(key) is not None}
 
-    def _selected_rows(_limit: int):
-        # The timestamp-selected DB snapshot is the complete row universe. Search
-        # filters that same universe; it must never be sliced by a stale Show/page
-        # size before lifecycle classification or browser rendering.
+    def _selected_rows(limit: int):
+        # History membership is decided first by the canonical DB timestamp
+        # snapshot. Search narrows that snapshot. Page size is presentation only:
+        # it may show fewer rows, but can never widen the selected history range.
         rows, truncated = controls._session_snapshot_rows()
         term = controls._search_term()
         if term:
             rows = [row for row in rows if controls._row_matches_term(row, term)]
-        return list(rows), bool(truncated)
+        visible = list(rows[:limit])
+        return visible, bool(truncated or len(rows) > limit)
 
+    page._requested_limit = health_alignment._persisted_page_size
     page._profile_map = _cached_profile_map
     page._shipment_map = _cached_shipment_map
     page._latest_distinct_fbm_rows = _selected_rows
