@@ -1,8 +1,7 @@
 // FBM browser-session presentation alignment.
-// No polling or marketplace/provider reads are owned here. The server renders
-// the explicitly selected history snapshot, then the existing 15/30/50/100
-// page-size control limits presentation inside that snapshot only.
-// With no event, the FBM session sleeps.
+// No polling or marketplace/provider reads are owned here. History, lifecycle,
+// search and page-size controls operate only on the maintained FBM page/session
+// working set. With no event or user presentation change, the FBM session sleeps.
 (function () {
   'use strict';
   if (window.bt38FbmEventSessionRefreshInstalled) return;
@@ -29,18 +28,19 @@
     return values || {};
   }
 
-  function submitControls(form) {
-    if (!form) return;
-    // Explicit user GET only. History and page-size changes never poll.
-    form.submit();
-  }
-
   function syncHistoryControls() {
     const form = document.getElementById('bt38FbmControls');
-    const range = document.getElementById('bt38FbmRange');
+    const range = document.getElementById('bt38FbmRangeSelect') || document.getElementById('bt38FbmRange');
     const from = document.getElementById('bt38FbmFrom');
     const to = document.getElementById('bt38FbmTo');
     if (!form || !range) return;
+
+    // Legacy server controls used inline form.submit(). FBM filtering is now a
+    // presentation concern, so those attributes must never escape to /fbm.
+    form.removeAttribute('onsubmit');
+    range.removeAttribute('onchange');
+    if (from) from.removeAttribute('onchange');
+    if (to) to.removeAttribute('onchange');
 
     function showCustom() {
       const custom = range.value === 'custom';
@@ -53,22 +53,25 @@
       range.dataset.bt38FbmBound = '1';
       range.addEventListener('change', function () {
         const selected = allowedRanges.includes(range.value) ? range.value : '3d';
-        setSessionState({historyRange: selected});
+        setSessionState({historyRange: selected, range: selected});
         try { sessionStorage.setItem('bt38_fbm_range', selected); } catch (_) {}
         showCustom();
-        if (selected !== 'custom') submitControls(form);
+        // governed_fbm_dispatch_queue_alignment owns the local history render.
+        // Deliberately no form.submit(), fetch(), DB read or page reload here.
       });
     }
 
     if (from && !from.dataset.bt38FbmBound) {
       from.dataset.bt38FbmBound = '1';
       from.addEventListener('change', function () {
+        setSessionState({from: from.value});
         try { sessionStorage.setItem('bt38_fbm_from', from.value); } catch (_) {}
       });
     }
     if (to && !to.dataset.bt38FbmBound) {
       to.dataset.bt38FbmBound = '1';
       to.addEventListener('change', function () {
+        setSessionState({to: to.value});
         try { sessionStorage.setItem('bt38_fbm_to', to.value); } catch (_) {}
       });
     }
@@ -76,8 +79,11 @@
 
   function syncPageSize() {
     const select = document.getElementById('bt38ResultsPerPageSelect');
-    const form = document.getElementById('bt38FbmControls');
     if (!select) return;
+
+    // Page size is presentation only. Remove any retired server-submit hook;
+    // bt38-page-controller.js renders the maintained local working set.
+    select.removeAttribute('onchange');
 
     const rendered = Number.parseInt(select.value, 10);
     const pageSize = allowedPageSizes.includes(rendered) ? rendered : 15;
@@ -92,7 +98,7 @@
         const normalized = allowedPageSizes.includes(selected) ? selected : 15;
         setSessionState({pageSize: normalized});
         try { sessionStorage.setItem('bt38_fbm_limit', String(normalized)); } catch (_) {}
-        submitControls(form || select.form);
+        // bt38-page-controller.js owns local pagination. No server request.
       });
     }
   }
@@ -113,9 +119,6 @@
     const allowed = committedSnapshotIds();
     if (!allowed) return;
 
-    // The server's selected-history payload is the absolute row universe.
-    // Remove any stale/legacy DOM row outside it before lifecycle or paging can
-    // act. Page size may hide rows inside this set; it can never add rows to it.
     document.querySelectorAll('tr.fbm-order-row').forEach(function (row) {
       if (!allowed.has(String(row.dataset.orderId || ''))) row.remove();
     });
