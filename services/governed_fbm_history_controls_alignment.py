@@ -1,9 +1,8 @@
 """Wire FBM history controls to one server-backed governed order reader.
 
 Presentation/read alignment only: no marketplace/provider read, worker, poller,
-writer or inventory path. Workflow tabs use the already-rendered governed rows
-when that payload is complete and fall back to a server-backed selected-history
-queue before pagination when the local payload is incomplete.
+writer or inventory path. History/search/page-size changes are explicit server
+requests; lifecycle tabs stay inside the existing browser-session controller.
 """
 from __future__ import annotations
 
@@ -16,7 +15,6 @@ from flask import g, request
 import services.governed_fbm_global_search_alignment as controls
 import services.governed_fbm_page_alignment as page
 import services.governed_fbm_all_orders_health_alignment as health_alignment
-import services.governed_fbm_dispatch_queue_alignment as dispatch_alignment
 
 
 # One history vocabulary everywhere. Three days is the default for a fresh FBM
@@ -72,7 +70,7 @@ def _controls_html() -> str:
     term = controls._search_term()
     from_value = str(request.args.get("fbm_from") or "")
     to_value = str(request.args.get("fbm_to") or "")
-    preserved = controls._query_args_without("fbm_range", "fbm_from", "fbm_to", "limit", "search")
+    preserved = controls._query_args_without("fbm_range", "fbm_from", "fbm_to", "limit", "search", "fbm_tab")
     hidden = "".join(
         f'<input type="hidden" name="{escape(name)}" value="{escape(value)}">'
         for name, value in preserved.items()
@@ -88,7 +86,7 @@ def _controls_html() -> str:
         f'<option value="{value}"{" selected" if limit == value else ""}>{value}</option>'
         for value in controls._PAGE_SIZES
     )
-    clear_args = controls._query_args_without("search")
+    clear_args = controls._query_args_without("search", "fbm_tab")
     clear_url = "/fbm" + (("?" + urlencode(clear_args)) if clear_args else "")
     return (
         '<div class="card-header border-bottom-0 pb-0">'
@@ -112,30 +110,11 @@ def _controls_html() -> str:
 controls._controls_html = _controls_html
 
 
-# Hybrid lifecycle navigation:
-# - if every row for a queue is already in the governed browser payload, switch
-#   locally with no page reload/spinner;
-# - if the selected-history badge proves more rows exist than are locally
-#   present, request that queue from the server before pagination.
-_original_dispatch_inject = dispatch_alignment._inject
-
-
-def _hybrid_dispatch_inject(html, payload, counts, fba_count, truncated):
-    rendered = _original_dispatch_inject(html, payload, counts, fba_count, truncated)
-    local_click = "button.addEventListener('click',function(){active=name;saveSession();render();});"
-    hybrid_click = (
-        "button.addEventListener('click',function(){"
-        "var local=rows.filter(function(row){return row.dataset.fbmQueue===name;}).length;"
-        "var total=Number(counts[name]||0);"
-        "if(local>=total){active=name;saveSession();render();return;}"
-        "var u=new URL(window.location.href);u.searchParams.set('fbm_tab',name);"
-        "u.searchParams.delete('page');window.location.assign(u.toString());"
-        "});"
-    )
-    return rendered.replace(local_click, hybrid_click)
-
-
-dispatch_alignment._inject = _hybrid_dispatch_inject
+# Lifecycle tabs intentionally keep the dispatch controller's existing local
+# browser-session click handler.  Do not replace it with window.location.assign:
+# a tab change is presentation state, not a new /fbm navigation.  Also strip any
+# legacy fbm_tab query from subsequent history/search/page-size requests so an
+# old server-side queue selection cannot become a second tab authority.
 
 
 if not getattr(page, "_bt38_history_controls_aligned", False):
@@ -188,10 +167,7 @@ if not getattr(page, "_bt38_history_controls_aligned", False):
         return {key: cache.get(key) for key in keys if cache.get(key) is not None}
 
     def _selected_rows(limit: int):
-        # Workflow/search authority comes before the presentation limit.
-        workflow_result = controls._workflow_rows(limit)
-        if workflow_result is not None:
-            return workflow_result
+        # Search is server-backed; lifecycle tab state is browser-session only.
         search_result = controls._search_rows(limit)
         if search_result is not None:
             return search_result
