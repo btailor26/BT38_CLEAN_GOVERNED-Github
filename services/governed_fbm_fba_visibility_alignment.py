@@ -123,13 +123,13 @@ def _insert_rows(html: str, rows: list[MarketplaceOrder]):
     fba_count = 0
     for row in rows:
         row_id = str(int(row.id))
-        if f'data-order-id="{row_id}"' in html:
-            continue
         queue = _queue_for(row)
         if queue is None:
             continue
         if queue == "fba":
             fba_count += 1
+        if f'data-order-id="{row_id}"' in html:
+            continue
         created = _date_value(row)
         payload[row_id] = {
             "queue": queue,
