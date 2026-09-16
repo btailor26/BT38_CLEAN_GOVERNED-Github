@@ -10,8 +10,8 @@ from __future__ import annotations
 from datetime import datetime
 import json
 
-from flask import jsonify, request
-from flask_login import current_user
+from flask import jsonify, request, render_template, abort
+from flask_login import current_user, login_required
 
 from extensions import db
 from models import SystemLog
@@ -72,6 +72,14 @@ def _safe_text(value, limit=160):
     return str(value or "").replace("\x00", "").strip()[:limit]
 
 
+def _details(row):
+    try:
+        value = json.loads(row.details or "{}")
+    except Exception:
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
 def install_governed_customer_behaviour_recorder(app):
     if getattr(app, "_bt38_customer_behaviour_recorder_installed", False):
         return
@@ -81,7 +89,6 @@ def install_governed_customer_behaviour_recorder(app):
     def bt38_customer_behaviour_event():
         if request.content_length and request.content_length > _MAX_BODY:
             return jsonify({"ok": False}), 413
-        # Browser recorder is first-party only. Do not accept cross-site posts.
         if str(request.headers.get("Sec-Fetch-Site") or "").lower() == "cross-site":
             return jsonify({"ok": False}), 403
         payload = request.get_json(silent=True)
@@ -91,7 +98,6 @@ def install_governed_customer_behaviour_recorder(app):
         if event not in _ALLOWED_EVENTS:
             return jsonify({"ok": False}), 400
         details = {k: payload.get(k) for k in _ALLOWED_KEYS if k in payload}
-        # Never accept arbitrary nested data or form/input values.
         for key, value in list(details.items()):
             if isinstance(value, (dict, list)):
                 details.pop(key, None)
@@ -109,6 +115,46 @@ def install_governed_customer_behaviour_recorder(app):
         db.session.add(row)
         db.session.commit()
         return jsonify({"ok": True}), 202
+
+    @app.get("/admin/customer-behaviour")
+    @login_required
+    def bt38_customer_behaviour_admin():
+        if getattr(current_user, "role", "") != "admin":
+            abort(403)
+        rows = (
+            SystemLog.query
+            .filter(SystemLog.log_type == "customer_behaviour")
+            .order_by(SystemLog.created_at.desc(), SystemLog.id.desc())
+            .limit(2000)
+            .all()
+        )
+        grouped = {}
+        for row in reversed(rows):
+            details = _details(row)
+            journey_id = _safe_text(details.get("journey_id"), 100) or "unknown"
+            journey = grouped.setdefault(journey_id, {
+                "journey_id": journey_id,
+                "user_id": details.get("user_id"),
+                "first_at": row.created_at,
+                "last_at": row.created_at,
+                "events": [],
+            })
+            journey["last_at"] = row.created_at
+            if details.get("user_id") is not None:
+                journey["user_id"] = details.get("user_id")
+            journey["events"].append({
+                "created_at": row.created_at,
+                "event": _safe_text(details.get("event"), 40),
+                "page": _safe_text(details.get("page"), 300),
+                "section": _safe_text(details.get("section"), 100),
+                "target": _safe_text(details.get("target"), 120),
+                "target_text": _safe_text(details.get("target_text"), 100),
+                "form": _safe_text(details.get("form"), 100),
+                "scroll_depth": details.get("scroll_depth"),
+                "engaged_ms": details.get("engaged_ms"),
+            })
+        journeys = sorted(grouped.values(), key=lambda item: item["last_at"], reverse=True)
+        return render_template("admin/customer_behaviour.html", journeys=journeys)
 
     @app.after_request
     def bt38_customer_behaviour_script(response):
