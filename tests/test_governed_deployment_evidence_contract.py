@@ -14,8 +14,19 @@ def test_deployment_evidence_recorder_is_secret_free_and_fail_closed():
         assert name not in text
 
 
+def test_source_manifest_is_automatic_and_secret_safe():
+    text = Path("scripts/verify_governed_production_source.py").read_text(encoding="utf-8")
+    assert "tracked-production-files.txt" in text
+    assert "source-production-hashes.txt" in text
+    assert '".github/"' in text
+    assert '"tests/"' in text
+    assert '".env"' in text
+    assert "sha256" in text
+
+
 def test_deploy_workflow_must_wire_evidence_recorder():
     workflow = Path(".github/workflows/deploy-fly.yml").read_text(encoding="utf-8")
-    # This intentionally fails until the workflow is wired. It prevents the recorder
-    # from being mistaken for active protection merely because the script exists.
+    # Intentionally red until the production workflow invokes both components.
+    # This prevents passive files from being mistaken for active protection.
+    assert "verify_governed_production_source.py" in workflow
     assert "record_governed_deployment_evidence.py" in workflow
