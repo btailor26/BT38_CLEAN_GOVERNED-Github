@@ -34,7 +34,11 @@ def test_runtime_registration_records_names_only():
 
 def test_deploy_workflow_must_wire_evidence_recorder():
     workflow = Path(".github/workflows/deploy-fly.yml").read_text(encoding="utf-8")
-    # Intentionally red until the production workflow invokes all evidence components.
     assert "verify_governed_production_source.py" in workflow
     assert "verify_governed_runtime_registration.py" in workflow
     assert "record_governed_deployment_evidence.py" in workflow
+    # flyctl must not inherit the manifest loop's stdin: otherwise it consumes
+    # the remaining hash lines and falsely reports success after one file.
+    assert 'flyctl ssh console --app bt38-prod --command "sh -lc \'sha256sum /app/$FILE\'" </dev/null' in workflow
+    assert 'EXPECTED_SOURCE_COUNT="$(wc -l < deployment-evidence/source-production-hashes.txt)"' in workflow
+    assert 'test "$PRODUCTION_SOURCE_COUNT" = "$EXPECTED_SOURCE_COUNT"' in workflow
