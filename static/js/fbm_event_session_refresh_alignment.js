@@ -28,6 +28,29 @@
     return values || {};
   }
 
+  function committedSnapshot() {
+    const node = document.getElementById('bt38FbmLifecycleTabsData');
+    if (!node) return null;
+    try {
+      const payload = JSON.parse(node.textContent || '{}');
+      return payload && typeof payload === 'object' ? payload : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function hydrateRowsFromCommittedSnapshot() {
+    const payload = committedSnapshot();
+    if (!payload) return;
+    document.querySelectorAll('tr.fbm-order-row').forEach(function (row) {
+      const info = payload[String(row.dataset.orderId || '')];
+      if (!info) return;
+      row.dataset.fbmQueue = String(info.queue || '');
+      row.dataset.fbmCreatedAt = String(info.created_at || '');
+      row.dataset.fbmSearch = String(row.textContent || '').toLowerCase();
+    });
+  }
+
   function localDay(value) {
     if (!value) return null;
     const date = new Date(value);
@@ -129,7 +152,7 @@
     const search = String(session.search || '').trim().toLowerCase();
     const queue = String(row.dataset.fbmQueue || '');
     const searchText = String(row.dataset.fbmSearch || row.textContent || '').toLowerCase();
-    if (queue && queue !== activeTab) return false;
+    if (queue !== activeTab) return false;
     return !search || searchText.indexOf(search) >= 0;
   }
 
@@ -160,6 +183,7 @@
 
   function alignAllRowVisibility() {
     if (!onFbm()) return;
+    hydrateRowsFromCommittedSnapshot();
     const session = getSessionState({tab: 'pending', search: '', range: '3d', from: '', to: '', pageSize: 15, currentPage: 1});
     const matched = [];
     document.querySelectorAll('tr.fbm-order-row').forEach(function (row) {
@@ -175,10 +199,13 @@
     if (state && Array.isArray(state.rows) && controller && typeof controller.renderPage === 'function') {
       const matchedSet = new Set(matched);
       state.filteredRows = state.rows.filter(function (entry) {
-        return entry && matchedSet.has(entry.el);
+        return entry && entry.el && entry.el.isConnected && matchedSet.has(entry.el);
       });
       state.currentPage = Number.parseInt(String(session.currentPage || 1), 10) || 1;
       controller.renderPage(state.name);
+      document.querySelectorAll('tr.fbm-order-row').forEach(function (row) {
+        if (!matchedSet.has(row)) row.hidden = true;
+      });
     } else {
       renderLocalPage(matched, session);
     }
@@ -268,6 +295,7 @@
 
   function initialise() {
     if (!onFbm()) return;
+    hydrateRowsFromCommittedSnapshot();
     syncHistoryControls();
     bindLifecycleControls();
     bindSearch();
@@ -275,6 +303,7 @@
     restoreLifecycleTab();
     alignAllRowVisibility();
     window.addEventListener('load', function () {
+      hydrateRowsFromCommittedSnapshot();
       syncHistoryControls();
       bindLifecycleControls();
       bindSearch();
