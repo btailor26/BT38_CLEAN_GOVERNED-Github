@@ -121,7 +121,7 @@ def _controls_html() -> str:
         '<form id="bt38FbmControls" class="d-flex gap-2 align-items-center flex-wrap" method="get" action="/fbm">'
         + hidden
         + '<label class="small text-muted mb-0">History</label>'
-        + f'<select id="bt38FbmRange" class="form-select form-select-sm" style="width:auto" name="fbm_range">{options}</select>'
+        + f'<select id="bt38FbmRange" class="form-select form-select-sm" style="width:auto" name="fbm_range" onchange="if(this.value!==\'custom\'){{this.form.submit();}}">{options}</select>'
         + f'<input id="bt38FbmFrom" class="form-control form-control-sm" style="width:auto" type="date" name="fbm_from" value="{escape(from_value)}" aria-label="From date">'
         + f'<input id="bt38FbmTo" class="form-control form-control-sm" style="width:auto" type="date" name="fbm_to" value="{escape(to_value)}" aria-label="To date">'
         + f'<input id="bt38FbmGlobalSearchInput" class="form-control form-control-sm" style="width:min(300px,65vw)" type="search" name="search" autocomplete="off" value="{escape(term)}" placeholder="Order, SKU, tracking, carrier or status">'
