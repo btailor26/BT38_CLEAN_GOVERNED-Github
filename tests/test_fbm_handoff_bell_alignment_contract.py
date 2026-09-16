@@ -6,6 +6,7 @@ NOTIFICATIONS = (ROOT / "services" / "governed_notification_read_alignment.py").
 DISPATCH = (ROOT / "services" / "governed_fbm_dispatch_queue_alignment.py").read_text(encoding="utf-8")
 JOURNEY = (ROOT / "static" / "js" / "fbm_tracking_journey.js").read_text(encoding="utf-8")
 SESSION = (ROOT / "static" / "js" / "fbm_event_session_refresh_alignment.js").read_text(encoding="utf-8")
+PAGE_CONTROLLER = (ROOT / "static" / "js" / "bt38-page-controller.js").read_text(encoding="utf-8")
 OVERLAY_PATH = ROOT / "services" / "governed_fbm_small_alignment.py"
 OVERLAY = OVERLAY_PATH.read_text(encoding="utf-8")
 MAIN = (ROOT / "main.py").read_text(encoding="utf-8")
@@ -75,8 +76,11 @@ def test_pending_is_first_and_returns_are_separate_from_refunds():
     assert "var sessionDefaults={tab:'pending',search:'',dirty:false};" in OVERLAY
     assert "addWorkflowButton(tabBar,'pending','Pending');\\n  addWorkflowButton(tabBar,'ready_dispatch','Ready to dispatch');" in OVERLAY
     assert "addWorkflowButton(tabBar,'returns','Returns');" in OVERLAY
-    assert "getSessionState({tab: 'pending'" in SESSION
-    assert "data-fbm-tab=\"pending\"" in SESSION
+    assert 'existing FBM page/lifecycle controller owns history, tabs, search' in SESSION
+    assert 'this file must not create another controller, pager, filter, timer, fetch' in SESSION
+    assert 'if (!fbmSessionOwned) wireForm(page);' in PAGE_CONTROLLER
+    assert 'fetch(' not in SESSION
+    assert 'setInterval(' not in SESSION
 
 
 def test_final_browser_guard_can_only_hide_rows_outside_the_active_queue():
