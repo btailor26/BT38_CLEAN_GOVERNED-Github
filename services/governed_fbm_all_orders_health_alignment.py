@@ -300,7 +300,7 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
             selected = " selected" if page_size == value else ""
             size_options.append(f'<option value="{value}"{selected}>{value}</option>')
         return (
-            '<form id="bt38FbmControls" class="fbm-period-controls" method="get" action="/fbm" aria-label="FBM order history controls">'
+            '<form id="bt38FbmHistoryControls" class="fbm-period-controls" method="get" action="/fbm" aria-label="FBM order history controls">'
             + "".join(preserved)
             + '<label class="small text-muted" for="bt38FbmRangeSelect">Orders</label>'
             + '<select id="bt38FbmRangeSelect" class="form-select form-select-sm" name="fbm_range" style="width:auto">' + "".join(options) + '</select>'
