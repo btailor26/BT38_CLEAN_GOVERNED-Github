@@ -75,16 +75,13 @@ install_governed_fbm_local_controls_alignment(app)
 install_governed_fbm_all_orders_health_alignment(app)
 install_governed_fbm_render_budget_alignment(app)
 
-# Keep one bounded rendered FBM browser working set. Dispatch may classify that
-# set, but it must not replace the page selector with an unbounded .all() query.
-from services import governed_fbm_page_alignment as _fbm_page_alignment
-_fbm_bounded_rows = _fbm_page_alignment._latest_distinct_fbm_rows
-
-def _fbm_browser_working_rows(_requested_limit):
-    return _fbm_bounded_rows(_fbm_page_alignment._FBM_MAX_EXPANDED)
-
+# Dispatch may add browser classification behaviour, but the final FBM row
+# authority must remain the complete user-selected persisted history snapshot.
+# Import this alignment after dispatch so it restores the canonical server-backed
+# selector and keeps 15/30/50/100 as presentation only. It performs no
+# marketplace/provider reads or writes.
 install_governed_fbm_dispatch_queue_alignment(app)
-_fbm_page_alignment._latest_distinct_fbm_rows = _fbm_browser_working_rows
+import services.governed_fbm_history_controls_alignment  # noqa: F401,E402
 
 import services.governed_fbm_fba_visibility_alignment  # noqa: F401,E402
 install_product_linking_unlink_alignment(app)
