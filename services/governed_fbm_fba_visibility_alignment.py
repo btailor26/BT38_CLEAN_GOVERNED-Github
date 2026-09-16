@@ -169,6 +169,11 @@ def _install() -> None:
             1,
         )
         rendered = rendered.replace(
+            "var result={ready_dispatch:0,pending:0,dispatched:0,cancelled:0,replacements:0,refunds:0};",
+            "var result={ready_dispatch:0,pending:0,dispatched:0,cancelled:0,fba:0,replacements:0,refunds:0};",
+            1,
+        )
+        rendered = rendered.replace(
             f"addTruthLink(tabBar,'FBA','/governed/amazon-fba-stock',{int(local_fba_count)});",
             "addWorkflowButton(tabBar,'fba','FBA');",
             1,
