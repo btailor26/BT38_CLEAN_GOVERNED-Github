@@ -8,23 +8,14 @@ if "governed_mcf" not in app.blueprints:
 import services.governed_mcf_compat  # noqa: F401
 import services.governed_ui_event_signal  # noqa: F401
 import services.governed_webhook_rejection_recovery  # noqa: F401
-# Keep the existing eBay notification registration aligned with the already-
-# implemented ITEM_MARKED_SHIPPED capability. This adds no importer or poller.
 import services.governed_ebay_shipping_notification_registration_alignment  # noqa: F401
-# app.py starts the governed runtime before main.py is imported, so the runtime
-# wrapper above cannot affect that already-running thread. Run the existing
-# bounded post-deploy eBay reconciler once here, after the Flask app is fully
-# initialized. This is one-shot deployment/restart recovery only.
 try:
     from services.governed_ebay_post_deploy_alignment import (
         align_ebay_notifications_and_recover_missed_changes,
     )
 
     with app.app_context():
-        align_ebay_notifications_and_recover_missed_changes(
-            store_id=23,
-            max_days=7,
-        )
+        align_ebay_notifications_and_recover_missed_changes(store_id=23, max_days=7)
 except Exception:
     app.logger.exception("eBay post-deploy alignment failed after app startup")
 import services.governed_ebay_order_identity_alignment  # noqa: F401
@@ -81,13 +72,19 @@ install_fbm_db_delivery_promise_alignment(app)
 install_governed_fbm_global_search_alignment(app)
 install_governed_fbm_all_orders_health_alignment(app)
 install_governed_fbm_render_budget_alignment(app)
-# FBM lifecycle/history/search/page-size all need one rendered working set, like
-# Warehouse's browser table controller. Install dispatch last for the row selector
-# and keep its complete persisted FBM working set instead of restoring the older
-# history-limited selector. Filter actions themselves remain browser-only.
+
+# Keep one bounded rendered FBM browser working set. Dispatch may classify that
+# set, but it must not replace the page selector with an unbounded .all() query.
+from services import governed_fbm_page_alignment as _fbm_page_alignment
+_fbm_bounded_rows = _fbm_page_alignment._latest_distinct_fbm_rows
+
+def _fbm_browser_working_rows(_requested_limit):
+    return _fbm_bounded_rows(_fbm_page_alignment._FBM_MAX_EXPANDED)
+
 install_governed_fbm_dispatch_queue_alignment(app)
-# FBA/AFN is read-only and is projected into that same local lifecycle working
-# set. It is not a separate route and does not create another filter authority.
+_fbm_page_alignment._latest_distinct_fbm_rows = _fbm_browser_working_rows
+
+# FBA/AFN stays read-only and is projected into the same local lifecycle workspace.
 import services.governed_fbm_fba_visibility_alignment  # noqa: F401,E402
 install_product_linking_unlink_alignment(app)
 install_governed_ebay_native_shipping_alignment(app)
