@@ -10,6 +10,8 @@ AMAZON = (ROOT / "services" / "governed_amazon_tracking_readback.py").read_text(
 UI_SIGNAL = (ROOT / "services" / "governed_ui_event_signal.py").read_text(encoding="utf-8")
 JOURNEY = (ROOT / "static" / "js" / "fbm_tracking_journey.js").read_text(encoding="utf-8")
 LEGACY_JOURNEY = (ROOT / "static" / "js" / "fbm_tracking_journey_legacy.js").read_text(encoding="utf-8")
+SESSION = (ROOT / "static" / "js" / "fbm_event_session_refresh_alignment.js").read_text(encoding="utf-8")
+PAGE_CONTROLLER = (ROOT / "static" / "js" / "bt38-page-controller.js").read_text(encoding="utf-8")
 FBM_TEMPLATE = (ROOT / "templates" / "fbm.html").read_text(encoding="utf-8")
 BASE_TEMPLATE = (ROOT / "templates" / "base.html").read_text(encoding="utf-8")
 
@@ -220,17 +222,16 @@ def test_tracking_numbers_have_no_link_underline_before_or_after_journey_alignme
     assert 'text-decoration:none!important' in FBM_TEMPLATE
 
 
-def test_fbm_search_stays_inside_the_current_browser_session():
-    search = JOURNEY.split('function installFbmSearch() {', 1)[1].split('\n    function alignPersistedLifecycle()', 1)[0]
-    assert "const fbmSearchSessionKey = 'bt38:fbm:search';" in JOURNEY
-    assert 'window.sessionStorage.setItem(fbmSearchSessionKey' in search
-    assert 'window.sessionStorage.getItem(fbmSearchSessionKey)' in search
-    assert "Array.from(table.querySelectorAll('.fbm-order-row')).map" in search
-    assert 'No DB, marketplace, provider,' in search
-    assert 'fetch(' not in search
-    assert 'XMLHttpRequest' not in search
-    assert 'new EventSource(' not in search
-    assert 'setInterval(' not in search
+def test_fbm_search_stays_inside_the_single_session_owner():
+    assert 'function installFbmSearch() {' not in JOURNEY
+    assert "fbmSearchSessionKey" not in JOURNEY
+    assert 'session/lifecycle controller owns history, lifecycle and search' in PAGE_CONTROLLER
+    assert 'if (!fbmSessionOwned) wireForm(page);' in PAGE_CONTROLLER
+    assert 'if (fbmSessionOwned && typeof window.BT38FBMApplyCommittedSnapshot === "function")' in PAGE_CONTROLLER
+    assert 'existing FBM page/lifecycle controller owns history, tabs, search' in SESSION
+    assert 'fetch(' not in SESSION
+    assert 'new EventSource(' not in SESSION
+    assert 'setInterval(' not in SESSION
 
 
 def test_alignment_does_not_create_parallel_runtime_or_browser_polling():
