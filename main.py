@@ -23,6 +23,7 @@ import services.auth_session_legacy_cleanup  # noqa: F401
 import services.public_early_access  # noqa: F401
 import services.account_profile_alignment  # noqa: F401
 import services.package_catalog_alignment  # noqa: F401
+from services.governed_customer_behaviour_recorder import install_governed_customer_behaviour_recorder
 from services.governed_notification_read_alignment import install_governed_notification_read_alignment
 from services.governed_fbm_page_alignment import install_governed_fbm_page_alignment
 from services.governed_fbm_shipment_selection_alignment import install_governed_fbm_shipment_selection_alignment
@@ -64,6 +65,7 @@ from services.governed_fbm_replacement_label_alignment import install_governed_f
 from services.governed_fbm_order_projection_alignment import install_governed_fbm_order_projection_alignment
 from services.governed_royal_mail_click_drop_alignment import install_governed_royal_mail_click_drop_alignment
 
+install_governed_customer_behaviour_recorder(app)
 install_governed_notification_read_alignment(app)
 install_governed_fbm_page_alignment(app)
 install_governed_fbm_shipment_selection_alignment(app)
