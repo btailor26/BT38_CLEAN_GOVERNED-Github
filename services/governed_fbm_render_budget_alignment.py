@@ -1,64 +1,35 @@
-"""Keep the existing FBM browser-session snapshot inside the visible-page budget.
+"""Align the existing FBM bottom order-flow controls to the browser working set.
 
-This is alignment only. The existing governed browser-session snapshot remains
-FBM read authority; ordinary /fbm opens hydrate only the visible 15 orders.
-Explicit Show 15 more requests expand that same snapshot in 15-row steps. No
-marketplace/provider call, polling loop, write path or background worker is
-introduced here.
+History owns the date scope. The bottom controls own only how many matching rows
+are shown at once. They never submit /fbm, query the DB, call a marketplace or
+change the selected History period.
 """
 from __future__ import annotations
 
-from html import escape
-from urllib.parse import urlencode
-
-from flask import g, request
-from sqlalchemy import func
-from sqlalchemy.orm import joinedload
-
-from extensions import db
-from models import MarketplaceOrder
-from governed_fbm_routes import _platform
 
 _PAGE_SIZE = 15
-_MAX_EXPANDED = 300
-
-
-def _visible_limit() -> int:
-    try:
-        requested = int(request.args.get("limit") or _PAGE_SIZE)
-    except (TypeError, ValueError):
-        requested = _PAGE_SIZE
-    requested = max(_PAGE_SIZE, requested)
-    return min(_MAX_EXPANDED, ((requested + _PAGE_SIZE - 1) // _PAGE_SIZE) * _PAGE_SIZE)
+_PAGE_SIZES = (15, 30, 50, 100)
 
 
 def _expand_control(html: str, *, visible_limit: int, has_more: bool) -> str:
-    params = {}
-    for name in ("platform", "status", "health_period", "health_date", "health_month"):
-        value = str(request.args.get(name) or "").strip()
-        if value:
-            params[name] = value
-
-    actions = []
-    if visible_limit > _PAGE_SIZE:
-        collapse = dict(params)
-        collapse["limit"] = _PAGE_SIZE
-        actions.append(
-            f'<a class="btn btn-sm btn-outline-secondary" href="{escape(request.path)}?{urlencode(collapse)}">Show latest 15</a>'
-        )
-    if has_more and visible_limit < _MAX_EXPANDED:
-        expand = dict(params)
-        expand["limit"] = min(_MAX_EXPANDED, visible_limit + _PAGE_SIZE)
-        actions.append(
-            f'<a id="fbmExpandOrders" class="btn btn-sm btn-outline-primary" href="{escape(request.path)}?{urlencode(expand)}">Show 15 more</a>'
-        )
-    if not actions:
-        return html
-
+    """Render the existing bottom flow as browser-local presentation controls."""
+    del visible_limit, has_more
+    options = "".join(
+        f'<option value="{size}"{" selected" if size == _PAGE_SIZE else ""}>{size}</option>'
+        for size in _PAGE_SIZES
+    )
     control = (
-        '<div class="card-footer d-flex justify-content-between align-items-center flex-wrap gap-2">'
-        f'<span class="small text-muted">Showing the latest {visible_limit} FBM orders. Older orders load only when expanded.</span>'
-        f'<div class="d-flex gap-2">{"".join(actions)}</div></div>'
+        '<div class="card-footer d-flex justify-content-between align-items-center flex-wrap gap-2" id="bt38FbmOrderFlow">'
+        '<span class="small text-muted bt38-table-count">Showing matching FBM orders</span>'
+        '<div class="d-flex gap-2 align-items-center">'
+        '<label class="small text-muted mb-0" for="bt38ResultsPerPageSelect">Show</label>'
+        f'<select id="bt38ResultsPerPageSelect" class="form-select form-select-sm" style="width:auto" aria-label="FBM orders per page">{options}</select>'
+        '<nav class="bt38-page-nav d-flex gap-1" aria-label="FBM order pages">'
+        '<button class="btn btn-sm btn-outline-secondary bt38-page-link" id="bt38FbmPreviousPage" type="button">Previous</button>'
+        '<span class="small text-muted bt38-page-status align-self-center px-1">Page 1</span>'
+        '<button class="btn btn-sm btn-outline-secondary bt38-page-link" id="bt38FbmNextPage" type="button">Next</button>'
+        '</nav>'
+        '</div></div>'
     )
     marker = "</tbody></table></div>\n</div>"
     if marker not in html:
@@ -70,54 +41,13 @@ def install_governed_fbm_render_budget_alignment(app) -> None:
     if getattr(app, "_bt38_fbm_render_budget_alignment_installed", False):
         return
 
-    from services import governed_fbm_global_search_alignment as session_alignment
     from services import governed_fbm_page_alignment as page_alignment
 
-    def visible_session_snapshot_rows():
-        cached = getattr(g, "_bt38_fbm_session_rows", None)
-        if cached is not None:
-            return list(cached), bool(getattr(g, "_bt38_fbm_session_truncated", False))
-
-        limit = _visible_limit()
-        eligible = (
-            func.upper(func.coalesce(MarketplaceOrder.fulfillment_type, "")).notin_(("FBA", "AFN", "MCF")),
-            ~func.lower(func.coalesce(MarketplaceOrder.status, "")).like("mcf_%"),
-        )
-        candidate_limit = min((_MAX_EXPANDED * 4) + 1, ((limit + 1) * 4) + 1)
-        candidates = (
-            db.session.query(MarketplaceOrder)
-            .filter(*eligible)
-            .filter(MarketplaceOrder.store_id.isnot(None), MarketplaceOrder.marketplace_order_id.isnot(None))
-            .options(joinedload(MarketplaceOrder.store), joinedload(MarketplaceOrder.warehouse_stock))
-            .order_by(MarketplaceOrder.id.desc())
-            .limit(candidate_limit)
-            .all()
-        )
-        canonical = session_alignment._canonical_order_rows(candidates)
-        candidate_truncated = len(candidates) >= candidate_limit
-        canonical_truncated = len(canonical) > limit
-        canonical = canonical[: limit + 1]
-
-        profiles = page_alignment._profile_map([
-            row for row in canonical if _platform(row).strip().lower() == "amazon"
-        ])
-        rows = []
-        for row in canonical:
-            key = (int(row.store_id), str(row.marketplace_order_id))
-            profile = profiles.get(key) if _platform(row).strip().lower() == "amazon" else None
-            if page_alignment._workspace_fbm_eligible(row, profile):
-                rows.append(row)
-
-        has_more = candidate_truncated or canonical_truncated or len(rows) > limit
-        rows = rows[:limit]
-        g._bt38_fbm_session_rows = rows
-        g._bt38_fbm_session_truncated = has_more
-        return list(rows), has_more
-
-    session_alignment._session_snapshot_rows = visible_session_snapshot_rows
+    # The page/session working set is established by the existing FBM event/session
+    # path. Do not replace it with the old 15-row request-scoped DB snapshot.
     page_alignment._expand_control = _expand_control
 
     app._bt38_fbm_render_budget_alignment_installed = True
     app.logger.info(
-        "BT38 FBM render budget aligned: 15-row session snapshot by default; explicit 15-row expansion only; no marketplace/provider page reads"
+        "BT38 FBM bottom flow aligned: History owns scope; 15/30/50/100 and Previous/Next are browser-local; no expansion GET/DB read"
     )
