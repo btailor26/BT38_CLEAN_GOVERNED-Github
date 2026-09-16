@@ -3,6 +3,10 @@
 
 Input is the repository's tracked-file list. Output contains only hashes and paths;
 file contents and environment/configuration values are never emitted.
+
+The runtime manifest must not select paths that the production Docker context
+explicitly excludes. Keep these exclusions aligned with .dockerignore so the
+post-deploy fingerprint check proves files that can actually exist under /app.
 """
 from __future__ import annotations
 
@@ -15,10 +19,14 @@ LIST = Path(os.getenv("BT38_TRACKED_FILES_FILE", "tracked-production-files.txt")
 OUT = Path(os.getenv("BT38_SOURCE_HASH_FILE", "source-production-hashes.txt"))
 
 EXCLUDED_PREFIXES = (
-    ".git/", ".github/", "docs/", "tests/", ".venv/", "venv/", "node_modules/",
-    "static/uploads/", "instance/",
+    ".git/", ".github/", "docs/", "tests/", "_retired_tests/",
+    ".venv/", "venv/", "env/", "node_modules/",
+    "static/uploads/", "instance/", "fake_db/",
+    "audit/", "_bt38_backups/", "recovery_reports/", "reports/", "attached_assets/",
 )
-EXCLUDED_NAMES = {".env", ".env.production", ".env.local"}
+EXCLUDED_NAMES = {
+    ".env", ".env.production", ".env.local", "PR_DESCRIPTION.md", "nul", "idle",
+}
 ALLOWED_SUFFIXES = {".py", ".html", ".js", ".css", ".toml", ".json"}
 ALLOWED_NAMES = {"Dockerfile", "Procfile"}
 
