@@ -20,8 +20,36 @@ def test_source_manifest_is_automatic_and_secret_safe():
     assert "source-production-hashes.txt" in text
     assert '".github/"' in text
     assert '"tests/"' in text
+    assert '"_retired_tests/"' in text
+    assert '"env/"' in text
+    assert '"fake_db/"' in text
+    assert '"audit/"' in text
+    assert '"_bt38_backups/"' in text
+    assert '"recovery_reports/"' in text
+    assert '"reports/"' in text
+    assert '"attached_assets/"' in text
     assert '".env"' in text
     assert "sha256" in text
+
+
+def test_source_manifest_tracks_docker_runtime_exclusions():
+    source = Path("scripts/verify_governed_production_source.py").read_text(encoding="utf-8")
+    dockerignore = Path(".dockerignore").read_text(encoding="utf-8")
+    for excluded in (
+        "tests/",
+        "_retired_tests/",
+        "env/",
+        "instance/",
+        "static/uploads/",
+        "fake_db/",
+        "audit/",
+        "_bt38_backups/",
+        "recovery_reports/",
+        "reports/",
+        "attached_assets/",
+    ):
+        assert excluded in dockerignore
+        assert f'"{excluded}"' in source
 
 
 def test_runtime_registration_records_names_only():
