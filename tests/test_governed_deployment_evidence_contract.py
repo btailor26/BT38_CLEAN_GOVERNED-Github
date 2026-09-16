@@ -14,9 +14,12 @@ def test_deployment_evidence_recorder_is_secret_free_and_fail_closed():
         assert name not in text
 
 
-def test_source_manifest_is_automatic_and_secret_safe():
+def test_source_manifest_is_event_driven_and_secret_safe():
     text = Path("scripts/verify_governed_production_source.py").read_text(encoding="utf-8")
-    assert "tracked-production-files.txt" in text
+    assert "deployment-evidence/changed-files.txt" in text
+    assert "BT38_CHANGED_FILES_FILE" in text
+    assert 'return EVENT_LIST, "deploy-event"' in text
+    assert "tracked-production-files.txt" in text  # local/CI fallback only
     assert "source-production-hashes.txt" in text
     assert '".github/"' in text
     assert '"tests/"' in text
@@ -60,11 +63,12 @@ def test_runtime_registration_records_names_only():
     assert "app.config" not in text
 
 
-def test_deploy_workflow_must_wire_evidence_recorder():
+def test_deploy_workflow_must_wire_event_evidence_recorder():
     workflow = Path(".github/workflows/deploy-fly.yml").read_text(encoding="utf-8")
     assert "verify_governed_production_source.py" in workflow
     assert "verify_governed_runtime_registration.py" in workflow
     assert "record_governed_deployment_evidence.py" in workflow
+    assert "deployment-evidence/changed-files.txt" in workflow
     # flyctl must not inherit the manifest loop's stdin: otherwise it consumes
     # the remaining hash lines and falsely reports success after one file.
     assert 'flyctl ssh console --app bt38-prod --command "sh -lc \'sha256sum /app/$FILE\'" </dev/null' in workflow
