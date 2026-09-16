@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Customer Behaviour | BT38 Inventory{% endblock %}
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+      <h1 class="h3 mb-1">Customer Behaviour</h1>
+      <p class="text-muted mb-0">Event-driven customer journeys. No form values, passwords, credentials, payment details or keystrokes are recorded.</p>
+    </div>
+    <span class="badge bg-secondary">{{ journeys|length }} journeys</span>
+  </div>
+  {% if journeys %}
+    {% for journey in journeys %}
+    <div class="card mb-3">
+      <div class="card-header d-flex justify-content-between flex-wrap gap-2">
+        <div><strong>{{ journey.journey_id }}</strong>{% if journey.user_id %} <span class="badge bg-primary">User {{ journey.user_id }}</span>{% else %} <span class="badge bg-light text-dark">Anonymous</span>{% endif %}</div>
+        <div class="text-muted small">{{ journey.first_at }} → {{ journey.last_at }} · {{ journey.events|length }} events</div>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm table-hover mb-0 align-middle">
+            <thead><tr><th>Time</th><th>Event</th><th>Page</th><th>What they looked at / clicked</th><th>Engagement</th></tr></thead>
+            <tbody>
+            {% for event in journey.events %}
+              <tr>
+                <td class="text-nowrap small">{{ event.created_at }}</td>
+                <td><span class="badge bg-light text-dark">{{ event.event }}</span></td>
+                <td><code>{{ event.page }}</code></td>
+                <td>{{ event.section or event.target_text or event.form or event.target or '—' }}</td>
+                <td class="small">{% if event.scroll_depth is not none %}{{ event.scroll_depth }}%{% endif %}{% if event.engaged_ms %} · {{ (event.engaged_ms / 1000)|round(1) }}s{% endif %}</td>
+              </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <div class="alert alert-info">No customer behaviour events have been recorded yet.</div>
+  {% endif %}
+</div>
+{% endblock %}
