@@ -40,10 +40,6 @@
         'delivered'
     ]);
     const movementStates = new Set(['in_transit', 'out_for_delivery', 'delivered']);
-    const fbmPageSizes = [15, 30, 50, 100];
-    const fbmMaxLoaded = 300;
-    const fbmPagerAnchor = 'bt38FbmPager';
-    const fbmSearchSessionKey = 'bt38:fbm:search';
 
     function lifecycleLabel(status) {
         const labels = {
@@ -94,151 +90,10 @@
         String(stateClass || '').split(/\s+/).filter(Boolean).forEach(name => badge.classList.add(name));
     }
 
-    function installFbmSearch() {
-        if (document.getElementById('bt38FbmSearchForm')) return;
-        const table = document.querySelector('.fbm-order-row')?.closest('table');
-        if (!table) return;
-        const card = table.closest('.card');
-        const tableWrap = table.closest('.table-responsive');
-        if (!card || !tableWrap) return;
-
-        const form = document.createElement('form');
-        form.id = 'bt38FbmSearchForm';
-        form.className = 'p-3 border-bottom';
-        form.setAttribute('role', 'search');
-        form.innerHTML = '<div class="d-flex gap-2" style="max-width:760px">' +
-            '<input id="bt38FbmSearchInput" class="form-control" name="q" type="search" autocomplete="off" ' +
-            'placeholder="Search by order, SKU, product, marketplace, postcode, carrier or tracking..." aria-label="Search FBM orders">' +
-            '<button class="btn btn-dark px-4" type="submit">Search</button>' +
-            '</div><div id="bt38FbmSearchResult" class="small text-muted mt-2 d-none"></div>';
-        card.insertBefore(form, tableWrap);
-
-        const input = form.querySelector('#bt38FbmSearchInput');
-        const result = form.querySelector('#bt38FbmSearchResult');
-
-        // Match Warehouse's local-filter model: cache server-rendered row text once,
-        // then search that bounded in-memory cache. No DB, marketplace, provider,
-        // shipment-status or network request is allowed from this search path.
-        const rows = Array.from(table.querySelectorAll('.fbm-order-row')).map(element => ({
-            el: element,
-            text: String(element.textContent || '').trim().toLowerCase(),
-            dataset: Object.assign({}, element.dataset)
-        }));
-
-        const params = new URLSearchParams(window.location.search);
-        const requestedPageSize = Number.parseInt(params.get('page_size') || '15', 10);
-        const pageSize = fbmPageSizes.includes(requestedPageSize) ? requestedPageSize : 15;
-        const requestedPage = Math.max(1, Number.parseInt(params.get('page') || '1', 10) || 1);
-        const requestedLimit = Math.max(pageSize, Number.parseInt(params.get('limit') || String(pageSize), 10) || pageSize);
-
-        let footer = Array.from(card.children).find(element => element.classList && element.classList.contains('card-footer')) || null;
-        const serverHasMore = Boolean(footer && footer.querySelector('#fbmExpandOrders'));
-        if (!footer) {
-            footer = document.createElement('div');
-            footer.className = 'card-footer';
-            card.appendChild(footer);
-        }
-        footer.id = fbmPagerAnchor;
-
-        const loadedPages = Math.max(1, Math.ceil(rows.length / pageSize));
-        const currentPage = Math.min(requestedPage, loadedPages);
-
-        function rowMatches(row, query) {
-            if (!query) return true;
-            const haystack = `${row.text} ${Object.values(row.dataset).join(' ')}`.toLowerCase();
-            return haystack.includes(query);
-        }
-
-        function buildUrl(targetPage, targetPageSize, targetLimit) {
-            const next = new URLSearchParams(window.location.search);
-            next.set('page_size', String(targetPageSize));
-            next.set('page', String(targetPage));
-            next.set('limit', String(Math.min(fbmMaxLoaded, Math.max(targetPageSize, targetLimit))));
-            return `${window.location.pathname}?${next.toString()}#${fbmPagerAnchor}`;
-        }
-
-        function renderPager() {
-            const knownPages = Math.max(1, Math.ceil(rows.length / pageSize));
-            const maxPages = Math.max(1, Math.ceil(fbmMaxLoaded / pageSize));
-            const canLoadAnotherPage = serverHasMore && requestedLimit < fbmMaxLoaded;
-            const pageLinksThrough = Math.min(maxPages, knownPages + (canLoadAnotherPage ? 1 : 0));
-
-            const sizeLinks = fbmPageSizes.map(size => {
-                const active = size === pageSize;
-                return `<a class="btn btn-sm ${active ? 'btn-dark' : 'btn-outline-secondary'}" href="${buildUrl(1, size, size)}" aria-current="${active ? 'page' : 'false'}">${size}</a>`;
-            }).join('');
-
-            const pageLinks = [];
-            for (let page = 1; page <= pageLinksThrough; page += 1) {
-                const active = page === currentPage;
-                const targetLimit = page <= knownPages ? requestedLimit : Math.max(requestedLimit, page * pageSize);
-                pageLinks.push(`<a class="btn btn-sm ${active ? 'btn-dark' : 'btn-outline-secondary'}" href="${buildUrl(page, pageSize, targetLimit)}" aria-current="${active ? 'page' : 'false'}">${page}</a>`);
-            }
-
-            const first = rows.length ? ((currentPage - 1) * pageSize) + 1 : 0;
-            const last = Math.min(rows.length, currentPage * pageSize);
-            const moreText = serverHasMore ? ' Older orders load only when another page is requested.' : '';
-            footer.className = 'card-footer d-flex justify-content-between align-items-center flex-wrap gap-2';
-            footer.innerHTML =
-                `<span class="small text-muted">Showing ${first}-${last} of ${rows.length} loaded FBM orders · Page ${currentPage}.${moreText}</span>` +
-                '<div class="d-flex flex-wrap gap-2 align-items-center justify-content-end">' +
-                    '<span class="small text-muted me-1">Show:</span>' +
-                    sizeLinks +
-                    '<span class="small text-muted ms-2 me-1">Page:</span>' +
-                    pageLinks.join('') +
-                '</div>';
-        }
-
-        function applySearch() {
-            const query = String(input.value || '').trim().toLowerCase();
-            const pageStart = (currentPage - 1) * pageSize;
-            const pageEnd = pageStart + pageSize;
-            let visible = 0;
-
-            rows.forEach((row, index) => {
-                const match = rowMatches(row, query);
-                const inPage = index >= pageStart && index < pageEnd;
-                const show = query ? match : inPage;
-                row.el.hidden = !show;
-                if (show) visible += 1;
-            });
-
-            try {
-                window.sessionStorage.setItem(fbmSearchSessionKey, input.value || '');
-            } catch (error) {
-                // Browser storage is optional; search remains fully local without it.
-            }
-
-            result.classList.toggle('d-none', !query);
-            if (query) result.textContent = `${visible} matching order${visible === 1 ? '' : 's'} in the loaded FBM browser session`;
-        }
-
-        renderPager();
-
-        try {
-            const savedSearch = window.sessionStorage.getItem(fbmSearchSessionKey) || '';
-            if (savedSearch) input.value = savedSearch;
-        } catch (error) {
-            // Ignore storage restrictions and keep the local search available.
-        }
-
-        applySearch();
-
-        form.addEventListener('submit', event => {
-            event.preventDefault();
-            event.stopPropagation();
-            applySearch();
-        });
-        input.addEventListener('input', applySearch);
-        input.addEventListener('change', applySearch);
-
-        if (window.location.hash === `#${fbmPagerAnchor}`) {
-            window.requestAnimationFrame(() => footer.scrollIntoView({block: 'end'}));
-        }
-    }
-
     function alignPersistedLifecycle() {
-        installFbmSearch();
+        // Search, history, lifecycle tabs and pagination are owned by the existing
+        // FBM session/page controller. This journey bootstrap must not create a
+        // second search form, pager, row filter or page-size authority.
         document.querySelectorAll('.fbm-order-row').forEach(row => {
             const status = String(row.dataset.lifecycleStatus || '').trim().toLowerCase();
             const orderCell = row.children && row.children[2];
