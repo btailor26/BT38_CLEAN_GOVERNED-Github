@@ -79,6 +79,22 @@ def _date_value(row):
     return getattr(row, "marketplace_created_at", None) or getattr(row, "created_at", None) or getattr(row, "processed_at", None)
 
 
+def _shipment_truth(row, queue: str):
+    shipped_at = getattr(row, "shipped_at", None)
+    tracking = str(getattr(row, "tracking_number", None) or "").strip()
+    status = _status(row)
+    lifecycle = "FBA Pending" if queue == "pending" else status.replace("_", " ").title()
+    if shipped_at:
+        ship_deliver = f"Shipped {shipped_at.strftime('%d/%m/%Y %H:%M')}"
+    elif queue == "pending":
+        ship_deliver = "Awaiting Amazon dispatch"
+    else:
+        ship_deliver = "Amazon managed"
+    shipment = tracking if tracking else ("Awaiting Amazon tracking" if queue != "pending" else "Not dispatched")
+    journey = lifecycle
+    return ship_deliver, shipment, journey, tracking, shipped_at
+
+
 def _row_html(row: MarketplaceOrder, queue: str) -> str:
     warehouse = getattr(row, "warehouse_stock", None)
     store = getattr(row, "store", None)
@@ -93,8 +109,7 @@ def _row_html(row: MarketplaceOrder, queue: str) -> str:
         quantity = int(getattr(row, "quantity", 0) or 0)
     except (TypeError, ValueError):
         quantity = 0
-    lifecycle = "FBA Pending" if queue == "pending" else status.replace("_", " ").title()
-    shipment = "Amazon fulfilment pending" if queue == "pending" else f"Amazon · {lifecycle}"
+    ship_deliver, shipment, journey, _tracking, _shipped_at = _shipment_truth(row, queue)
     return (
         f'<tr class="fbm-order-row" data-order-id="{int(row.id)}" data-fbm-fba-readonly="1" '
         f'data-lifecycle-status="{escape(status, quote=True)}">'
@@ -103,9 +118,9 @@ def _row_html(row: MarketplaceOrder, queue: str) -> str:
         f'<div class="small text-muted mt-1">{escape(store_name)}</div><span class="badge bg-light text-dark border mt-1">FBA</span></td>'
         f'<td><span class="fw-semibold">{escape(order_id)}</span><div class="small text-muted">{escape(date_text)}</div></td>'
         f'<td class="fbm-product-cell"><strong>{escape(product)}</strong><div class="small text-muted"><code>{escape(sku)}</code></div></td>'
-        f'<td>{quantity}</td><td class="fbm-route-cell"><strong>Fulfilment by Amazon</strong><div class="small text-muted mt-1">Read only</div></td>'
-        '<td class="fbm-promise-cell"><div class="small text-muted">Amazon managed</div></td>'
-        f'<td><strong>{escape(shipment)}</strong></td><td><span class="badge bg-light text-dark border">{escape(lifecycle)}</span></td>'
+        f'<td>{quantity}</td><td class="fbm-route-cell"><strong>Amazon FBA</strong><div class="small text-muted mt-1">Fulfilment by Amazon · Read only</div></td>'
+        f'<td class="fbm-promise-cell"><strong>{escape(ship_deliver)}</strong></td>'
+        f'<td><strong>{escape(shipment)}</strong></td><td><span class="badge bg-light text-dark border">{escape(journey)}</span></td>'
         '<td class="fbm-action-cell" data-no-row-click="1"><span class="badge bg-light text-dark border">Read only</span></td></tr>'
     )
 
@@ -129,10 +144,7 @@ def _insert_rows(html: str, rows: list[MarketplaceOrder]):
         if queue == "fba":
             fba_count += 1
         created = _date_value(row)
-        # Always publish the FBA lifecycle/date into the shared controller payload,
-        # even when the row already exists in the base table. The proven badge fix
-        # counted existing rows, but skipping their payload left localCounts() using
-        # the base FBM queue instead of FBA for History-filtered counts.
+        ship_deliver, shipment, journey, tracking, shipped_at = _shipment_truth(row, queue)
         payload[row_id] = {
             "queue": queue,
             "status": _status(row),
@@ -141,6 +153,11 @@ def _insert_rows(html: str, rows: list[MarketplaceOrder]):
             "shipping_currency": None,
             "shipping_cost_confirmed": False,
             "fba_read_only": True,
+            "fba_ship_deliver": ship_deliver,
+            "fba_shipment": shipment,
+            "fba_journey": journey,
+            "tracking_number": tracking or None,
+            "shipped_at": shipped_at.isoformat() if shipped_at else None,
         }
         if f'data-order-id="{row_id}"' in html:
             continue
@@ -176,6 +193,13 @@ def _install() -> None:
         rendered = rendered.replace(
             f"addTruthLink(tabBar,'FBA','/governed/amazon-fba-stock',{int(local_fba_count)});",
             "addWorkflowButton(tabBar,'fba','FBA');",
+            1,
+        )
+        # Existing rows can originate in the shared FBM renderer. Reconcile only
+        # FBA presentation from the already-loaded DB payload; never call Amazon.
+        rendered = rendered.replace(
+            "applyPayload();render();",
+            "applyPayload();rows.forEach(function(row){var info=payload[String(row.dataset.orderId||'')];if(!info||!info.fba_read_only)return;var cells=row.querySelectorAll('td');if(cells.length<10)return;cells[5].innerHTML='<strong>Amazon FBA</strong><div class=\"small text-muted mt-1\">Fulfilment by Amazon · Read only</div>';cells[6].innerHTML='<strong>'+esc(info.fba_ship_deliver||'Amazon managed')+'</strong>';cells[7].innerHTML='<strong>'+esc(info.fba_shipment||'Awaiting Amazon tracking')+'</strong>';cells[8].innerHTML='<span class=\"badge bg-light text-dark border\">'+esc(info.fba_journey||'FBA')+'</span>';cells[9].innerHTML='<span class=\"badge bg-light text-dark border\">Read only</span>';});render();",
             1,
         )
         return rendered
