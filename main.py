@@ -10,10 +10,7 @@ import services.governed_ui_event_signal  # noqa: F401
 import services.governed_webhook_rejection_recovery  # noqa: F401
 import services.governed_ebay_shipping_notification_registration_alignment  # noqa: F401
 try:
-    from services.governed_ebay_post_deploy_alignment import (
-        align_ebay_notifications_and_recover_missed_changes,
-    )
-
+    from services.governed_ebay_post_deploy_alignment import align_ebay_notifications_and_recover_missed_changes
     with app.app_context():
         align_ebay_notifications_and_recover_missed_changes(store_id=23, max_days=7)
 except Exception:
@@ -30,6 +27,7 @@ from services.governed_fbm_shipment_selection_alignment import install_governed_
 from services.governed_fbm_marketplace_dispatch_authority_alignment import install_governed_fbm_marketplace_dispatch_authority_alignment
 from services.fbm_db_delivery_promise_alignment import install_fbm_db_delivery_promise_alignment
 from services.governed_fbm_global_search_alignment import install_governed_fbm_global_search_alignment
+from services.governed_fbm_local_controls_alignment import install_governed_fbm_local_controls_alignment
 from services.governed_fbm_render_budget_alignment import install_governed_fbm_render_budget_alignment
 from services.governed_fbm_all_orders_health_alignment import install_governed_fbm_all_orders_health_alignment
 from services.governed_fbm_dispatch_queue_alignment import install_governed_fbm_dispatch_queue_alignment
@@ -70,6 +68,7 @@ install_governed_fbm_marketplace_dispatch_authority_alignment()
 install_governed_fbm_order_projection_alignment()
 install_fbm_db_delivery_promise_alignment(app)
 install_governed_fbm_global_search_alignment(app)
+install_governed_fbm_local_controls_alignment(app)
 install_governed_fbm_all_orders_health_alignment(app)
 install_governed_fbm_render_budget_alignment(app)
 
@@ -84,7 +83,6 @@ def _fbm_browser_working_rows(_requested_limit):
 install_governed_fbm_dispatch_queue_alignment(app)
 _fbm_page_alignment._latest_distinct_fbm_rows = _fbm_browser_working_rows
 
-# FBA/AFN stays read-only and is projected into the same local lifecycle workspace.
 import services.governed_fbm_fba_visibility_alignment  # noqa: F401,E402
 install_product_linking_unlink_alignment(app)
 install_governed_ebay_native_shipping_alignment(app)
@@ -113,7 +111,6 @@ install_governed_bell_event_projection_alignment(app)
 install_governed_fbm_tracking_authority_restore(app)
 
 from services.governed_ebay_notification_challenge import install_ebay_notification_challenge_handler
-
 install_ebay_notification_challenge_handler(app)
 
 
@@ -121,7 +118,6 @@ install_ebay_notification_challenge_handler(app)
 def acknowledge_captured_ebay_webhook(response):
     """Acknowledge eBay once its notification is durably captured."""
     from flask import request
-
     if request.method != "POST":
         return response
     if request.path.rstrip("/") != "/governed/webhooks/ebay":
