@@ -1,13 +1,12 @@
 // FBM browser-session presentation alignment.
 // No polling or marketplace/provider reads are owned here. History, lifecycle,
-// search and page-size controls operate only on the maintained FBM page/session
+// search and existing pagination operate only on the maintained FBM page/session
 // working set. With no event, the FBM session sleeps.
 (function () {
   'use strict';
   if (window.bt38FbmEventSessionRefreshInstalled) return;
   window.bt38FbmEventSessionRefreshInstalled = true;
 
-  const allowedPageSizes = [15, 30, 50, 100];
   const allowedRanges = ['3d', '7d', '30d', '90d', '1y', 'custom'];
 
   function onFbm() {
@@ -121,62 +120,6 @@
     }
   }
 
-  function syncPageSize() {
-    const select = document.getElementById('bt38ResultsPerPageSelect');
-    if (!select) return;
-    select.removeAttribute('onchange');
-
-    const rendered = Number.parseInt(select.value, 10);
-    const pageSize = allowedPageSizes.includes(rendered) ? rendered : 15;
-    if (select.value !== String(pageSize)) select.value = String(pageSize);
-    setSessionState({pageSize: pageSize});
-    try { sessionStorage.setItem('bt38_fbm_limit', String(pageSize)); } catch (_) {}
-
-    if (!select.dataset.bt38FbmSessionBound) {
-      select.dataset.bt38FbmSessionBound = '1';
-      select.addEventListener('change', function (event) {
-        event.preventDefault();
-        event.stopPropagation();
-        const selected = Number.parseInt(select.value, 10);
-        const normalized = allowedPageSizes.includes(selected) ? selected : 15;
-        setSessionState({pageSize: normalized});
-        try { sessionStorage.setItem('bt38_fbm_limit', String(normalized)); } catch (_) {}
-        alignAllRowVisibility();
-      }, true);
-    }
-  }
-
-  function committedSnapshotIds() {
-    const node = document.getElementById('bt38FbmLifecycleTabsData');
-    if (!node) return null;
-    try {
-      const payload = JSON.parse(node.textContent || '{}');
-      return new Set(Object.keys(payload || {}));
-    } catch (_) {
-      return null;
-    }
-  }
-
-  function bindPagerToCommittedSnapshot() {
-    if (!onFbm()) return;
-    const allowed = committedSnapshotIds();
-    if (!allowed) return;
-
-    document.querySelectorAll('tr.fbm-order-row').forEach(function (row) {
-      if (!allowed.has(String(row.dataset.orderId || ''))) row.remove();
-    });
-
-    const pages = window.BT38 && window.BT38.pages;
-    const state = pages && (pages.fbm || pages.FBM);
-    if (state && Array.isArray(state.rows)) {
-      state.rows = state.rows.filter(function (entry) {
-        const row = entry && entry.el;
-        return row && row.isConnected && allowed.has(String(row.dataset.orderId || ''));
-      });
-      state.currentPage = 1;
-    }
-  }
-
   function rowMatchesSession(row, session) {
     if (!row || !row.classList || !row.classList.contains('fbm-order-row')) return false;
     if (!rowInHistory(row, session)) return false;
@@ -190,7 +133,6 @@
 
   function alignAllRowVisibility() {
     if (!onFbm()) return;
-    bindPagerToCommittedSnapshot();
     const session = getSessionState({tab: 'pending', search: '', range: '3d', from: '', to: '', pageSize: 15});
     const matched = [];
     document.querySelectorAll('tr.fbm-order-row').forEach(function (row) {
@@ -222,18 +164,6 @@
         alignAllRowVisibility();
       });
     });
-
-    const fba = Array.from(document.querySelectorAll('a.fbm-lifecycle-tab')).find(function (link) {
-      return String(link.getAttribute('href') || '') === '/governed/amazon-fba-stock';
-    });
-    if (fba && !fba.dataset.bt38FbaNavBound) {
-      fba.dataset.bt38FbaNavBound = '1';
-      fba.addEventListener('click', function (event) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        window.location.assign('/governed/amazon-fba-stock');
-      }, true);
-    }
   }
 
   function bindSearch() {
@@ -270,15 +200,12 @@
   function initialise() {
     if (!onFbm()) return;
     syncHistoryControls();
-    syncPageSize();
     bindLifecycleControls();
     bindSearch();
-    bindPagerToCommittedSnapshot();
     restoreLifecycleTab();
     alignAllRowVisibility();
     window.addEventListener('load', function () {
       syncHistoryControls();
-      syncPageSize();
       bindLifecycleControls();
       bindSearch();
       alignAllRowVisibility();
