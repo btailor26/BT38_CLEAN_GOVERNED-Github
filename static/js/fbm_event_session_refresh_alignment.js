@@ -8,6 +8,7 @@
   window.bt38FbmEventSessionRefreshInstalled = true;
 
   const allowedRanges = ['3d', '7d', '30d', '90d', '1y', 'custom'];
+  const allowedPageSizes = [15, 30, 50, 100];
 
   function onFbm() {
     return String(window.location.pathname || '').replace(/\/$/, '') === '/fbm';
@@ -89,7 +90,8 @@
         historyRange: selected,
         range: selected,
         from: from ? from.value : '',
-        to: to ? to.value : ''
+        to: to ? to.value : '',
+        currentPage: 1
       };
       setSessionState(next);
       try {
@@ -131,9 +133,34 @@
     return !search || searchText.indexOf(search) >= 0;
   }
 
+  function renderLocalPage(matched, session) {
+    const selectedSize = Number.parseInt(String(session.pageSize || 15), 10);
+    const pageSize = allowedPageSizes.includes(selectedSize) ? selectedSize : 15;
+    const totalPages = Math.max(1, Math.ceil(matched.length / pageSize));
+    const requestedPage = Number.parseInt(String(session.currentPage || 1), 10) || 1;
+    const currentPage = Math.min(Math.max(requestedPage, 1), totalPages);
+    const start = (currentPage - 1) * pageSize;
+    const end = Math.min(start + pageSize, matched.length);
+    const visible = new Set(matched.slice(start, end));
+
+    document.querySelectorAll('tr.fbm-order-row').forEach(function (row) {
+      row.hidden = !visible.has(row);
+    });
+
+    const count = document.querySelector('#bt38FbmOrderFlow .bt38-table-count');
+    if (count) count.textContent = matched.length + ' matching · showing ' + (matched.length ? start + 1 : 0) + '-' + end;
+    const status = document.querySelector('#bt38FbmOrderFlow .bt38-page-status');
+    if (status) status.textContent = 'Page ' + currentPage + ' of ' + totalPages + ' · ' + matched.length + ' total';
+    const previous = document.getElementById('bt38FbmPreviousPage');
+    const next = document.getElementById('bt38FbmNextPage');
+    if (previous) previous.disabled = currentPage <= 1;
+    if (next) next.disabled = currentPage >= totalPages;
+    if (currentPage !== requestedPage) setSessionState({currentPage: currentPage});
+  }
+
   function alignAllRowVisibility() {
     if (!onFbm()) return;
-    const session = getSessionState({tab: 'pending', search: '', range: '3d', from: '', to: '', pageSize: 15});
+    const session = getSessionState({tab: 'pending', search: '', range: '3d', from: '', to: '', pageSize: 15, currentPage: 1});
     const matched = [];
     document.querySelectorAll('tr.fbm-order-row').forEach(function (row) {
       const show = rowMatchesSession(row, session);
@@ -150,8 +177,10 @@
       state.filteredRows = state.rows.filter(function (entry) {
         return entry && matchedSet.has(entry.el);
       });
-      state.currentPage = 1;
+      state.currentPage = Number.parseInt(String(session.currentPage || 1), 10) || 1;
       controller.renderPage(state.name);
+    } else {
+      renderLocalPage(matched, session);
     }
   }
 
@@ -160,7 +189,7 @@
       if (button.dataset.bt38SessionBound) return;
       button.dataset.bt38SessionBound = '1';
       button.addEventListener('click', function () {
-        setSessionState({tab: String(button.dataset.fbmTab || 'pending')});
+        setSessionState({tab: String(button.dataset.fbmTab || 'pending'), currentPage: 1});
         alignAllRowVisibility();
       });
     });
@@ -172,7 +201,7 @@
     if (input && !input.dataset.bt38SessionBound) {
       input.dataset.bt38SessionBound = '1';
       input.addEventListener('input', function () {
-        setSessionState({search: String(input.value || '').trim().toLowerCase()});
+        setSessionState({search: String(input.value || '').trim().toLowerCase(), currentPage: 1});
         alignAllRowVisibility();
       }, true);
     }
@@ -182,7 +211,47 @@
         event.preventDefault();
         event.stopPropagation();
         if (input) input.value = '';
-        setSessionState({search: ''});
+        setSessionState({search: '', currentPage: 1});
+        alignAllRowVisibility();
+      }, true);
+    }
+  }
+
+  function bindOrderFlow() {
+    const select = document.getElementById('bt38ResultsPerPageSelect');
+    const previous = document.getElementById('bt38FbmPreviousPage');
+    const next = document.getElementById('bt38FbmNextPage');
+    const session = getSessionState({pageSize: 15, currentPage: 1});
+    const savedSize = Number.parseInt(String(session.pageSize || 15), 10);
+    if (select && allowedPageSizes.includes(savedSize)) select.value = String(savedSize);
+
+    if (select && !select.dataset.bt38FbmBound) {
+      select.dataset.bt38FbmBound = '1';
+      select.addEventListener('change', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        const size = Number.parseInt(String(select.value || 15), 10);
+        setSessionState({pageSize: allowedPageSizes.includes(size) ? size : 15, currentPage: 1});
+        alignAllRowVisibility();
+      }, true);
+    }
+    if (previous && !previous.dataset.bt38FbmBound) {
+      previous.dataset.bt38FbmBound = '1';
+      previous.addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        const current = getSessionState({currentPage: 1});
+        setSessionState({currentPage: Math.max(1, (Number.parseInt(String(current.currentPage || 1), 10) || 1) - 1)});
+        alignAllRowVisibility();
+      }, true);
+    }
+    if (next && !next.dataset.bt38FbmBound) {
+      next.dataset.bt38FbmBound = '1';
+      next.addEventListener('click', function (event) {
+        event.preventDefault();
+        event.stopPropagation();
+        const current = getSessionState({currentPage: 1});
+        setSessionState({currentPage: (Number.parseInt(String(current.currentPage || 1), 10) || 1) + 1});
         alignAllRowVisibility();
       }, true);
     }
@@ -202,12 +271,14 @@
     syncHistoryControls();
     bindLifecycleControls();
     bindSearch();
+    bindOrderFlow();
     restoreLifecycleTab();
     alignAllRowVisibility();
     window.addEventListener('load', function () {
       syncHistoryControls();
       bindLifecycleControls();
       bindSearch();
+      bindOrderFlow();
       alignAllRowVisibility();
     }, {once: true});
   }
