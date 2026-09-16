@@ -145,6 +145,9 @@ window.BT38.pages = window.BT38.pages || {};
     if (strong) strong.textContent = value;
     if (small && note) small.textContent = note;
   }
+  // Warehouse aggregate KPIs come from /governed/warehouse/kpis. Row-level
+  // profitability is a separate local truth owned by warehouse-governed.js at
+  // /governed/warehouse/economics-batch?stock_ids= and never expands into a marketplace write.
   async function updateWarehouseKpis() {
     try {
       const response = await fetch("/governed/warehouse/kpis", {credentials: "include", headers: {Accept: "application/json"}, cache: "no-store"});
