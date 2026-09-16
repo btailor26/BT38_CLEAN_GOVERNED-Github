@@ -2,7 +2,7 @@
 
 Records what BT38 actually renders and what the browser user interacts with.
 There is no polling, timer loop, marketplace call, stock mutation, keystroke,
-password, payment-field, or user-entered form-value capture.
+credential, payment-field, or user-entered form-value capture.
 """
 from __future__ import annotations
 
