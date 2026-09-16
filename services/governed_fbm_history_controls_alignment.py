@@ -116,9 +116,17 @@ def _controls_html() -> str:
     )
     clear_args = controls._query_args_without("search", "fbm_tab")
     clear_url = "/fbm" + (("?" + urlencode(clear_args)) if clear_args else "")
+    session_sync = (
+        '<script id="bt38FbmHistoryServerAuthority">'
+        '(function(){var mode=' + repr(mode) + ',from=' + repr(from_value) + ',to=' + repr(to_value) + ';'
+        'if(window.BT38&&typeof window.BT38.getPageSession==="function"&&typeof window.BT38.setPageSession==="function"){' 
+        'var current=window.BT38.getPageSession("fbm",{tab:"pending",search:"",range:"3d",from:"",to:"",dirty:false})||{};'
+        'current.range=mode;current.from=from;current.to=to;window.BT38.setPageSession("fbm",current);}})();'
+        '</script>'
+    )
     return (
         '<div class="card-header border-bottom-0 pb-0">'
-        '<form id="bt38FbmControls" class="d-flex gap-2 align-items-center flex-wrap" method="get" action="/fbm">'
+        '<form id="bt38FbmControls" class="d-flex gap-2 align-items-center flex-wrap" method="get" action="/fbm" onsubmit="this.submit();return false;">'
         + hidden
         + '<label class="small text-muted mb-0">History</label>'
         + f'<select id="bt38FbmRange" class="form-select form-select-sm" style="width:auto" name="fbm_range" onchange="if(this.value!==\'custom\'){{this.form.submit();}}">{options}</select>'
@@ -128,6 +136,7 @@ def _controls_html() -> str:
         + '<button class="btn btn-sm btn-primary" type="submit">Apply</button>'
         + f'<a id="bt38FbmGlobalSearchClear" class="btn btn-sm btn-outline-secondary" href="{escape(clear_url)}">Clear search</a>'
         + '</form>'
+        + session_sync
         + '</div>'
     )
 
