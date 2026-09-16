@@ -2,11 +2,10 @@
 
 This module changes presentation only. It does not query or write the DB and does
 not call a marketplace/provider. The existing FBM event/session controller owns
-History, lifecycle, search and page-size changes after the initial rendered set.
+History, lifecycle and search changes after the initial rendered set. Existing
+FBM pagination remains the only page-size/paging authority.
 """
 from __future__ import annotations
-
-from html import escape
 
 from services import governed_fbm_global_search_alignment as global_search
 
@@ -25,10 +24,6 @@ def _local_controls_html() -> str:
             ("custom", "Custom"),
         )
     )
-    sizes = "".join(
-        f'<option value="{value}"{" selected" if value == 15 else ""}>{value}</option>'
-        for value in (15, 30, 50, 100)
-    )
     return (
         '<div class="card-header border-bottom-0 pb-0">'
         # Marker prevents the legacy tracking journey from creating a second
@@ -39,7 +34,6 @@ def _local_controls_html() -> str:
         f'<select id="bt38FbmRange" class="form-select form-select-sm" style="width:auto" aria-label="FBM history">{options}</select>'
         '<input id="bt38FbmFrom" class="form-control form-control-sm" style="width:auto;display:none" type="date" aria-label="From date">'
         '<input id="bt38FbmTo" class="form-control form-control-sm" style="width:auto;display:none" type="date" aria-label="To date">'
-        f'<select id="bt38ResultsPerPageSelect" class="form-select form-select-sm" style="width:auto" aria-label="Orders per page">{sizes}</select>'
         '<input id="bt38FbmGlobalSearchInput" class="form-control form-control-sm" style="width:min(300px,65vw)" type="search" autocomplete="off" placeholder="Order, SKU, tracking, carrier or status">'
         '<button id="bt38FbmGlobalSearchClear" class="btn btn-sm btn-outline-secondary" type="button">Clear search</button>'
         '</form>'
@@ -56,5 +50,5 @@ def install_governed_fbm_local_controls_alignment(app) -> None:
     global_search._controls_html = _local_controls_html
     app._bt38_fbm_local_controls_alignment_installed = True
     app.logger.info(
-        "BT38 FBM controls aligned: History/lifecycle/search/page-size are browser-local; default History=3d; no filter GET/navigation"
+        "BT38 FBM controls aligned: History/lifecycle/search are browser-local; existing pagination retained; default History=3d; no filter GET/navigation"
     )
