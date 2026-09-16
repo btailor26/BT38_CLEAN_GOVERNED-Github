@@ -34,7 +34,8 @@ def _ebay_shipping_card() -> str:
         '<button id="ebayShippingConnectionTest" class="btn btn-sm btn-outline-primary" type="button">Test connection</button>'
         '</div>'
         '<div id="ebayShippingConnectionStatus" class="small text-muted mt-2">'
-        'Store connection is separate. Test only the eBay Shipping authorization here.'</n        'div>'
+        'Store connection is separate. Test only the eBay Shipping authorization here.'
+        '</div>'
         '</div>'
     )
 
