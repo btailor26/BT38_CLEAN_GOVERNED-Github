@@ -24,9 +24,17 @@ def test_source_manifest_is_automatic_and_secret_safe():
     assert "sha256" in text
 
 
+def test_runtime_registration_records_names_only():
+    text = Path("scripts/verify_governed_runtime_registration.py").read_text(encoding="utf-8")
+    assert "loaded-bt38-modules.txt" in text
+    assert "registered-routes.txt" in text
+    assert "app.url_map.iter_rules()" in text
+    assert "app.config" not in text
+
+
 def test_deploy_workflow_must_wire_evidence_recorder():
     workflow = Path(".github/workflows/deploy-fly.yml").read_text(encoding="utf-8")
-    # Intentionally red until the production workflow invokes both components.
-    # This prevents passive files from being mistaken for active protection.
+    # Intentionally red until the production workflow invokes all evidence components.
     assert "verify_governed_production_source.py" in workflow
+    assert "verify_governed_runtime_registration.py" in workflow
     assert "record_governed_deployment_evidence.py" in workflow
