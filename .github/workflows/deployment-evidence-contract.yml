@@ -1,0 +1,17 @@
+name: Deployment Evidence Contract
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify deployment evidence recorder contract
+        run: python -m pytest -q tests/test_governed_deployment_evidence_contract.py
