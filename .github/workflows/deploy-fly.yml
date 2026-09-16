@@ -265,15 +265,19 @@ jobs:
         run: |
           set -euo pipefail
           : > deployment-evidence/production-source-hashes.txt
+          EXPECTED_SOURCE_COUNT="$(wc -l < deployment-evidence/source-production-hashes.txt)"
+          test "$EXPECTED_SOURCE_COUNT" -gt 0
           while IFS= read -r LINE; do
             EXPECTED="${LINE%%  *}"
             FILE="${LINE#*  }"
-            REMOTE="$(flyctl ssh console --app bt38-prod --command "sh -lc 'sha256sum /app/$FILE'" | tail -n 1 | awk '{print $1}' | tr -d '\r')"
+            REMOTE="$(flyctl ssh console --app bt38-prod --command "sh -lc 'sha256sum /app/$FILE'" </dev/null | tail -n 1 | awk '{print $1}' | tr -d '\r')"
             test -n "$REMOTE"
             printf '%s  %s\n' "$REMOTE" "$FILE" >> deployment-evidence/production-source-hashes.txt
             test "$REMOTE" = "$EXPECTED"
           done < deployment-evidence/source-production-hashes.txt
-          echo "ALL_DEPLOYED_SOURCE_OK commit=${{ inputs.expected_commit }}"
+          PRODUCTION_SOURCE_COUNT="$(wc -l < deployment-evidence/production-source-hashes.txt)"
+          test "$PRODUCTION_SOURCE_COUNT" = "$EXPECTED_SOURCE_COUNT"
+          echo "ALL_DEPLOYED_SOURCE_OK commit=${{ inputs.expected_commit }} files=$PRODUCTION_SOURCE_COUNT"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
