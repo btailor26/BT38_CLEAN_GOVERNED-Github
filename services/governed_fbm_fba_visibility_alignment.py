@@ -128,9 +128,11 @@ def _insert_rows(html: str, rows: list[MarketplaceOrder]):
             continue
         if queue == "fba":
             fba_count += 1
-        if f'data-order-id="{row_id}"' in html:
-            continue
         created = _date_value(row)
+        # Always publish the FBA lifecycle/date into the shared controller payload,
+        # even when the row already exists in the base table. The proven badge fix
+        # counted existing rows, but skipping their payload left localCounts() using
+        # the base FBM queue instead of FBA for History-filtered counts.
         payload[row_id] = {
             "queue": queue,
             "status": _status(row),
@@ -140,6 +142,8 @@ def _insert_rows(html: str, rows: list[MarketplaceOrder]):
             "shipping_cost_confirmed": False,
             "fba_read_only": True,
         }
+        if f'data-order-id="{row_id}"' in html:
+            continue
         fragments.append(_row_html(row, queue))
     if fragments:
         html = html[:tbody_end] + "".join(fragments) + html[tbody_end:]
