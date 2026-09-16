@@ -1,9 +1,8 @@
 """Event-driven, privacy-bounded customer journey recorder.
 
-Records browser behaviour only when a real browser event occurs. There is no
-polling, timer loop, marketplace call, stock mutation, or form-value capture.
-The recorder is injected into HTML responses so it covers public and signed-in
-BT38 pages without page-specific duplicate implementations.
+Records what BT38 actually renders and what the browser user interacts with.
+There is no polling, timer loop, marketplace call, stock mutation, keystroke,
+password, payment-field, or user-entered form-value capture.
 """
 from __future__ import annotations
 
@@ -18,13 +17,15 @@ from models import SystemLog
 
 _ENDPOINT = "/governed/ui/customer-behaviour"
 _ALLOWED_EVENTS = {
-    "page_view", "section_view", "scroll_depth", "click", "form_start",
-    "form_submit", "page_exit", "signup_complete",
+    "page_view", "display_snapshot", "feature_view", "section_view",
+    "scroll_depth", "click", "change", "form_start", "form_submit",
+    "page_exit", "signup_complete",
 }
 _ALLOWED_KEYS = {
     "event", "journey_id", "page", "title", "referrer_path", "section",
     "target", "target_text", "target_href", "form", "scroll_depth",
-    "engaged_ms", "viewport", "sequence",
+    "engaged_ms", "viewport", "sequence", "feature", "display_text",
+    "display_state",
 }
 _MAX_BODY = 8192
 _SCRIPT = r'''<script id="bt38CustomerBehaviourRecorder">
@@ -36,20 +37,50 @@ _SCRIPT = r'''<script id="bt38CustomerBehaviourRecorder">
   var key="bt38.customerJourney.v1";
   var journey=sessionStorage.getItem(key);
   if(!journey){journey=(self.crypto&&crypto.randomUUID)?crypto.randomUUID():String(Date.now())+"-"+Math.random().toString(36).slice(2);sessionStorage.setItem(key,journey);}
-  var seq=0, started=Date.now(), maxDepth=0, seenSections=new Set(), startedForms=new Set();
+  var seq=0, started=Date.now(), maxDepth=0, seenSections=new Set(), seenFeatures=new Set(), startedForms=new Set();
   function clean(v,n){return String(v||"").replace(/\s+/g," ").trim().slice(0,n||160);}
-  function pathOnly(v){try{var u=new URL(v,location.origin);return u.origin===location.origin?u.pathname+u.search:"";}catch(e){return "";}}
+  function pathOnly(v){try{var u=new URL(v,location.origin);return u.origin===location.origin?u.pathname:"";}catch(e){return "";}}
+  function safeText(el,n){
+    if(!el)return "";
+    if(el.matches&&el.matches("input,textarea,select,[contenteditable=true]"))return clean(el.getAttribute("data-behaviour-label")||el.getAttribute("aria-label")||el.id||el.name,n||160);
+    return clean(el.getAttribute&&el.getAttribute("data-behaviour-label")||el.getAttribute&&el.getAttribute("aria-label")||el.textContent||el.id||"",n||160);
+  }
   function send(event,data,beacon){
     var body=Object.assign({event:event,journey_id:journey,page:location.pathname,title:clean(document.title,120),referrer_path:pathOnly(document.referrer),viewport:innerWidth+"x"+innerHeight,sequence:++seq},data||{});
     var raw=JSON.stringify(body);
     if(beacon&&navigator.sendBeacon){navigator.sendBeacon(endpoint,new Blob([raw],{type:"application/json"}));return;}
     fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:raw,credentials:"same-origin",keepalive:!!beacon}).catch(function(){});
   }
-  function label(el){return clean(el.getAttribute("data-behaviour-label")||el.getAttribute("aria-label")||el.textContent||el.id||el.name,100);}
+  function selector(el){
+    if(!el)return "";
+    return clean(el.tagName.toLowerCase()+(el.id?"#"+el.id:"")+(el.getAttribute("data-behaviour-feature")?"[data-behaviour-feature]":"")+(el.name?"[name="+el.name+"]":""),120);
+  }
+  function state(el){
+    if(!el)return "";
+    var bits=[];
+    if(el.disabled)bits.push("disabled");
+    if(el.getAttribute("aria-expanded")!==null)bits.push("expanded="+el.getAttribute("aria-expanded"));
+    if(el.getAttribute("aria-selected")!==null)bits.push("selected="+el.getAttribute("aria-selected"));
+    if(el.getAttribute("aria-checked")!==null)bits.push("checked="+el.getAttribute("aria-checked"));
+    if(el.classList&&el.classList.contains("active"))bits.push("active");
+    return clean(bits.join(","),100);
+  }
+  function visible(el){var r=el.getBoundingClientRect();var cs=getComputedStyle(el);return r.width>0&&r.height>0&&cs.display!=="none"&&cs.visibility!=="hidden";}
+  function snapshot(){
+    var nodes=[].slice.call(document.querySelectorAll("main h1,main h2,main h3,main [data-behaviour-feature],main .card,main .alert,main .badge,main table,main nav"));
+    var shown=[];
+    nodes.forEach(function(el){if(!visible(el)||shown.length>=40)return;var t=safeText(el,180);if(!t)return;shown.push(selector(el)+":"+t);});
+    send("display_snapshot",{display_text:clean(shown.join(" | "),4000)});
+  }
   send("page_view");
+  snapshot();
   document.addEventListener("click",function(e){
-    var el=e.target.closest("a,button,[role=button],input[type=submit]"); if(!el)return;
-    send("click",{target:clean(el.tagName.toLowerCase()+(el.id?"#"+el.id:"")+(el.name?"[name="+el.name+"]":""),120),target_text:label(el),target_href:el.tagName==="A"?pathOnly(el.href):""});
+    var el=e.target.closest("a,button,[role=button],input[type=submit],[data-behaviour-feature]"); if(!el)return;
+    send("click",{target:selector(el),target_text:safeText(el,100),target_href:el.tagName==="A"?pathOnly(el.href):"",display_state:state(el)});
+  },true);
+  document.addEventListener("change",function(e){
+    var el=e.target;if(!el)return;
+    send("change",{target:selector(el),target_text:safeText(el,100),display_state:state(el)});
   },true);
   document.addEventListener("focusin",function(e){
     var form=e.target.closest&&e.target.closest("form"); if(!form)return;
@@ -59,7 +90,11 @@ _SCRIPT = r'''<script id="bt38CustomerBehaviourRecorder">
   document.addEventListener("submit",function(e){var f=e.target;if(!f||f.tagName!=="FORM")return;send("form_submit",{form:clean(f.id||f.getAttribute("name")||f.getAttribute("action")||"form",100)});},true);
   var sections=[].slice.call(document.querySelectorAll("main section[id],main [data-behaviour-section]"));
   if("IntersectionObserver" in window&&sections.length){
-    var io=new IntersectionObserver(function(entries){entries.forEach(function(x){if(!x.isIntersecting||x.intersectionRatio<0.35)return;var s=clean(x.target.getAttribute("data-behaviour-section")||x.target.id,100);if(!s||seenSections.has(s))return;seenSections.add(s);send("section_view",{section:s});});},{threshold:[0.35]});sections.forEach(function(s){io.observe(s);});
+    var io=new IntersectionObserver(function(entries){entries.forEach(function(x){if(!x.isIntersecting||x.intersectionRatio<0.35)return;var s=clean(x.target.getAttribute("data-behaviour-section")||x.target.id,100);if(!s||seenSections.has(s))return;seenSections.add(s);send("section_view",{section:s,display_text:safeText(x.target,500)});});},{threshold:[0.35]});sections.forEach(function(s){io.observe(s);});
+  }
+  var features=[].slice.call(document.querySelectorAll("[data-behaviour-feature],main button,main a,main [role=button],main .card,main .alert,main table"));
+  if("IntersectionObserver" in window&&features.length){
+    var fio=new IntersectionObserver(function(entries){entries.forEach(function(x){if(!x.isIntersecting||x.intersectionRatio<0.5)return;var f=clean(x.target.getAttribute("data-behaviour-feature")||selector(x.target)+":"+safeText(x.target,80),140);if(!f||seenFeatures.has(f))return;seenFeatures.add(f);send("feature_view",{feature:f,display_text:safeText(x.target,500),display_state:state(x.target)});});},{threshold:[0.5]});features.forEach(function(f){fio.observe(f);});
   }
   var depths=[25,50,75,100];
   window.addEventListener("scroll",function(){var h=Math.max(document.documentElement.scrollHeight-innerHeight,1);var d=Math.min(100,Math.round(scrollY/h*100));depths.forEach(function(mark){if(d>=mark&&maxDepth<mark){maxDepth=mark;send("scroll_depth",{scroll_depth:mark});}});},{passive:true});
@@ -102,16 +137,12 @@ def install_governed_customer_behaviour_recorder(app):
             if isinstance(value, (dict, list)):
                 details.pop(key, None)
             elif isinstance(value, str):
-                details[key] = _safe_text(value, 300)
+                details[key] = _safe_text(value, 4000 if key == "display_text" else 300)
         details["recorded_at"] = datetime.utcnow().isoformat() + "Z"
         details["authenticated"] = bool(current_user.is_authenticated)
         if current_user.is_authenticated:
             details["user_id"] = getattr(current_user, "id", None)
-        row = SystemLog(
-            log_type="customer_behaviour",
-            message=f"Customer behaviour: {event}",
-            details=json.dumps(details, ensure_ascii=False),
-        )
+        row = SystemLog(log_type="customer_behaviour", message=f"Customer behaviour: {event}", details=json.dumps(details, ensure_ascii=False))
         db.session.add(row)
         db.session.commit()
         return jsonify({"ok": True}), 202
@@ -121,51 +152,30 @@ def install_governed_customer_behaviour_recorder(app):
     def bt38_customer_behaviour_admin():
         if getattr(current_user, "role", "") != "admin":
             abort(403)
-        rows = (
-            SystemLog.query
-            .filter(SystemLog.log_type == "customer_behaviour")
-            .order_by(SystemLog.created_at.desc(), SystemLog.id.desc())
-            .limit(2000)
-            .all()
-        )
+        rows = SystemLog.query.filter(SystemLog.log_type == "customer_behaviour").order_by(SystemLog.created_at.desc(), SystemLog.id.desc()).limit(2000).all()
         grouped = {}
         for row in reversed(rows):
             details = _details(row)
             journey_id = _safe_text(details.get("journey_id"), 100) or "unknown"
-            journey = grouped.setdefault(journey_id, {
-                "journey_id": journey_id,
-                "user_id": details.get("user_id"),
-                "first_at": row.created_at,
-                "last_at": row.created_at,
-                "events": [],
-            })
+            journey = grouped.setdefault(journey_id, {"journey_id": journey_id, "user_id": details.get("user_id"), "first_at": row.created_at, "last_at": row.created_at, "events": []})
             journey["last_at"] = row.created_at
-            if details.get("user_id") is not None:
-                journey["user_id"] = details.get("user_id")
+            if details.get("user_id") is not None: journey["user_id"] = details.get("user_id")
             journey["events"].append({
-                "created_at": row.created_at,
-                "event": _safe_text(details.get("event"), 40),
-                "page": _safe_text(details.get("page"), 300),
-                "section": _safe_text(details.get("section"), 100),
-                "target": _safe_text(details.get("target"), 120),
-                "target_text": _safe_text(details.get("target_text"), 100),
-                "form": _safe_text(details.get("form"), 100),
-                "scroll_depth": details.get("scroll_depth"),
-                "engaged_ms": details.get("engaged_ms"),
+                "created_at": row.created_at, "event": _safe_text(details.get("event"), 40), "page": _safe_text(details.get("page"), 300),
+                "section": _safe_text(details.get("section"), 100), "target": _safe_text(details.get("target"), 120), "target_text": _safe_text(details.get("target_text"), 100),
+                "form": _safe_text(details.get("form"), 100), "feature": _safe_text(details.get("feature"), 140), "display_text": _safe_text(details.get("display_text"), 4000),
+                "display_state": _safe_text(details.get("display_state"), 100), "scroll_depth": details.get("scroll_depth"), "engaged_ms": details.get("engaged_ms"),
             })
         journeys = sorted(grouped.values(), key=lambda item: item["last_at"], reverse=True)
         return render_template("admin/customer_behaviour.html", journeys=journeys)
 
     @app.after_request
     def bt38_customer_behaviour_script(response):
-        if request.path == _ENDPOINT or request.method != "GET":
-            return response
+        if request.path == _ENDPOINT or request.method != "GET": return response
         content_type = str(response.headers.get("Content-Type") or "").lower()
-        if "text/html" not in content_type or response.direct_passthrough:
-            return response
+        if "text/html" not in content_type or response.direct_passthrough or response.headers.get("Content-Encoding"): return response
         body = response.get_data(as_text=True)
-        if "bt38CustomerBehaviourRecorder" in body or "</body>" not in body:
-            return response
+        if "bt38CustomerBehaviourRecorder" in body or "</body>" not in body: return response
         body = body.replace("</body>", _SCRIPT + "\n</body>", 1)
         response.set_data(body)
         response.headers.pop("Content-Length", None)
