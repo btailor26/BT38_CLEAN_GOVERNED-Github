@@ -67,7 +67,16 @@ def _bounded_browser_session_rows(limit: int):
     search = str(page.request.args.get("search") or "").strip()
     if tab or search:
         from services import governed_fbm_global_search_alignment as global_search
-        return global_search._workflow_rows(limit) if tab else global_search._search_rows(limit)
+        if tab:
+            workflow_rows = global_search._workflow_rows(limit)
+            # FBA is not an FBM lifecycle tab. Preserve the existing FBA route/link
+            # boundary instead of allowing a stale /fbm?fbm_tab=fba URL to return None.
+            if workflow_rows is not None:
+                return workflow_rows
+        else:
+            search_rows = global_search._search_rows(limit)
+            if search_rows is not None:
+                return search_rows
     return page._bt38_original_bounded_fbm_rows(limit)
 
 
