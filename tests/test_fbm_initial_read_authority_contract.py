@@ -17,12 +17,12 @@ def test_history_does_not_replace_initial_fbm_reader():
     assert "DO NOT replace" in HISTORY
 
 
-def test_browser_session_calls_captured_bounded_reader_only():
-    assert "return page._bt38_original_bounded_fbm_rows(limit)" in SESSION
+def test_browser_session_uses_one_history_working_set():
+    assert "rows, truncated = global_search._session_snapshot_rows()" in SESSION
+    assert "return rows, bool(truncated)" in SESSION
     assert "page._latest_distinct_fbm_rows = _bounded_browser_session_rows" in SESSION
-    assert "365-day .all()" not in SESSION
-    assert "timedelta(days=364)" not in SESSION
-    assert "MarketplaceOrder.created_at >= start_at" not in SESSION
+    assert "global_search._workflow_rows(limit)" not in SESSION
+    assert "global_search._search_rows(limit)" not in SESSION
 
 
 def test_health_initial_render_uses_existing_browser_session_facts():
@@ -52,13 +52,13 @@ def test_performance_alignment_does_not_touch_print_or_purchase_paths():
     assert "EventSource(" not in combined
 
 
-def test_lifecycle_hydration_is_scoped_to_history_window():
-    assert "function historyScope()" in DISPATCH
-    assert "function lifecycleLoadedKey(name)" in DISPATCH
-    assert "'bt38_fbm_loaded_'+historyScope()+'_'+name" in DISPATCH
-    assert "var loadedKey=lifecycleLoadedKey(name)" in DISPATCH
-    assert "sessionStorage.setItem(lifecycleLoadedKey(legacyTab),'1')" in DISPATCH
-    assert "var loadedKey='bt38_fbm_loaded_'+name" not in DISPATCH
+def test_lifecycle_tabs_are_browser_session_local():
+    assert "button.addEventListener('click',function(){{active=name;saveSession();render()}});" in DISPATCH
+    assert "window.location.assign" not in DISPATCH
+    assert "u.searchParams.set('fbm_tab',name)" not in DISPATCH
+    assert "fetch(" not in DISPATCH
+    assert "setInterval(" not in DISPATCH
+    assert "EventSource(" not in DISPATCH
 
 
 def test_explicit_url_history_state_beats_saved_browser_state():
@@ -72,7 +72,8 @@ def test_legacy_whole_session_mutation_api_is_retired():
 
 
 def test_retired_all_orders_health_module_cannot_become_second_authority():
-    assert "def install_governed_fbm_all_orders_health_alignment" not in OLD_HEALTH
+    assert "def install_governed_fbm_all_orders_health_alignment(app):" in OLD_HEALTH
+    assert "return app" in OLD_HEALTH
     assert "db.session.query" not in OLD_HEALTH
     assert "_persisted_workflow_snapshot =" not in OLD_HEALTH
     assert "_health_summary =" not in OLD_HEALTH
