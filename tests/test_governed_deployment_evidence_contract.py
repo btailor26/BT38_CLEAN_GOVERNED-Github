@@ -35,6 +35,18 @@ def test_source_manifest_is_event_driven_and_secret_safe():
     assert "sha256" in text
 
 
+def test_governed_deploy_full_runtime_manifest_request_is_honoured_fail_closed():
+    source = Path("scripts/verify_governed_production_source.py").read_text(encoding="utf-8")
+    workflow = Path(".github/workflows/deploy-fly.yml").read_text(encoding="utf-8")
+    sentinel = "__bt38_full_tracked_runtime_manifest__"
+    assert sentinel in workflow
+    assert f'FULL_TRACKED_SENTINEL = "{sentinel}"' in source
+    assert 'os.getenv("BT38_CHANGED_FILES") == FULL_TRACKED_SENTINEL' in source
+    assert 'return TRACKED_LIST, "full-tracked-runtime"' in source
+    assert 'if MODE == "full-tracked-runtime" and not entries:' in source
+    assert 'raise SystemExit("Full tracked runtime manifest resolved to zero files")' in source
+
+
 def test_source_manifest_tracks_docker_runtime_exclusions():
     source = Path("scripts/verify_governed_production_source.py").read_text(encoding="utf-8")
     dockerignore = Path(".dockerignore").read_text(encoding="utf-8")
