@@ -35,13 +35,10 @@ jobs:
           test "${{ github.ref_name }}" = "fix/full-system-release-alignment"
           test "${{ inputs.expected_commit }}" = "${{ github.sha }}"
           PR_JSON="$(gh api repos/${{ github.repository }}/pulls/528)"
-          PR_STATE="$(printf '%s' "$PR_JSON" | jq -r '.state')"
-          PR_MERGED="$(printf '%s' "$PR_JSON" | jq -r '.merged')"
+          test "$(printf '%s' "$PR_JSON" | jq -r '.state')" = "open"
+          test "$(printf '%s' "$PR_JSON" | jq -r '.merged')" = "false"
+          test "$(printf '%s' "$PR_JSON" | jq -r '.head.ref')" = "fix/full-system-release-alignment"
           PR_HEAD="$(printf '%s' "$PR_JSON" | jq -r '.head.sha')"
-          PR_BRANCH="$(printf '%s' "$PR_JSON" | jq -r '.head.ref')"
-          test "$PR_STATE" = "open"
-          test "$PR_MERGED" = "false"
-          test "$PR_BRANCH" = "fix/full-system-release-alignment"
           test "$PR_HEAD" = "${{ inputs.expected_commit }}"
           echo "GOVERNED_SOURCE_APPROVED commit=$PR_HEAD"
 
@@ -55,13 +52,10 @@ jobs:
           POSTGRES_USER: bt38_ci
           POSTGRES_PASSWORD: bt38_ci
           POSTGRES_DB: bt38_ci
-        ports:
-          - 5432:5432
+        ports: ['5432:5432']
         options: >-
           --health-cmd "pg_isready -U bt38_ci -d bt38_ci"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          --health-interval 10s --health-timeout 5s --health-retries 5
     env:
       DEV_DATABASE_URL: postgresql://bt38_ci:bt38_ci@127.0.0.1:5432/bt38_ci
       BT38_ALLOW_DATABASE_TESTS: "true"
@@ -70,97 +64,37 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
       - name: Install locked dependencies
         run: |
           python -m pip install --upgrade pip
           python -m pip install uv
           uv sync --frozen --no-dev
-
       - name: Verify governed production inputs
         run: |
-          test -f Dockerfile
-          test -f fly.toml
-          test -f pyproject.toml
-          test -f uv.lock
+          test -f Dockerfile && test -f fly.toml && test -f pyproject.toml && test -f uv.lock
           grep -q 'uv sync --frozen --no-dev' Dockerfile
           grep -q 'main:app' Dockerfile
           grep -q 'app = "bt38-prod"' fly.toml
-
       - name: Reject corrupt production source files
         run: |
           python - <<'PY'
           from pathlib import Path
-          bad = []
+          bad=[]
           for path in Path('.').rglob('*'):
-              if not path.is_file() or '.git' in path.parts:
-                  continue
-              if path.suffix.lower() not in {'.py', '.html', '.js', '.toml', '.md'}:
-                  continue
-              if b'\0' in path.read_bytes():
-                  bad.append(str(path))
-          if bad:
-              raise SystemExit('Null bytes found in production source: ' + ', '.join(bad))
+              if path.is_file() and '.git' not in path.parts and path.suffix.lower() in {'.py','.html','.js','.toml','.md'} and b'\0' in path.read_bytes(): bad.append(str(path))
+          if bad: raise SystemExit('Null bytes found in production source: '+', '.join(bad))
           print('SOURCE_INTEGRITY_OK')
           PY
-
       - name: Compile production runtime
         run: |
-          uv run python -m py_compile \
-            main.py app.py models.py fbm_models.py \
-            governed_routes.py governed_group_routes.py governed_group_propagation_routes.py \
-            governed_runtime_visibility_routes.py governed_fbm_routes.py governed_fbm_manual_routes.py \
-            governed_packlink_callback_routes.py \
-            services/__init__.py \
-            services/fbm_provider_contract.py \
-            services/fbm_order_mapper.py services/fbm_marketplace_destination.py \
-            services/fbm_amazon_order_profile.py services/fbm_amazon_shipping_adapter.py \
-            services/fbm_packlink_adapter.py services/fbm_packlink_callback.py \
-            services/fbm_packlink_event_processor.py services/fbm_marketplace_confirmation.py \
-            services/fbm_post_purchase.py services/fbm_shipping_state.py \
-            services/fbm_db_delivery_promise_alignment.py \
-            services/governed_order_clarity_alignment.py services/governed_fbm_page_alignment.py \
-            services/governed_amazon_tracking_readback.py services/governed_exact_ebay_order_hydration.py \
-            services/governed_ebay_oauth_scopes.py services/governed_ebay_notification_registration.py \
-            services/governed_ebay_shipping_notification_alignment.py \
-            services/governed_ebay_post_deploy_alignment.py \
-            services/governed_runtime_engine.py services/governed_webhook_execution.py \
-            services/governed_webhook_alignment.py services/governed_push_execution.py \
-            services/governed_ebay_inventory_import.py services/governed_amazon_inventory_import.py \
-            services/governed_amazon_listing_fulfillment_refresh.py \
-            services/governed_marketplace_order_import.py services/governed_order_stock_mutation.py \
-            services/governed_warehouse_sync.py \
-            services/google_identity.py services/public_early_access.py \
-            services/account_profile_alignment.py services/package_catalog_alignment.py \
-            services/revolut_billing.py services/revolut_subscription_alignment.py \
-            services/billing_invoice_alignment.py services/support_case_alignment.py \
-            scripts/verify_production_db_contract.py \
-            scripts/verify_governed_production_source.py \
-            scripts/verify_governed_runtime_registration.py \
-            scripts/record_governed_deployment_evidence.py
-
+          uv run python -m compileall -q main.py app.py models.py fbm_models.py governed_routes.py governed_group_routes.py governed_group_propagation_routes.py governed_runtime_visibility_routes.py governed_fbm_routes.py governed_fbm_manual_routes.py governed_packlink_callback_routes.py services scripts
       - name: Run deployment contracts
         run: |
-          uv run python -m pytest -q \
-            tests/test_runtime_deployment_contract.py \
-            tests/test_fba_targeted_update_contract.py \
-            tests/test_webhook_scoped_reconcile_contract.py \
-            tests/test_webhook_push_alignment_contract.py \
-            tests/test_ui_production_alignment_contract.py \
-            tests/test_github_fly_only_deployment_contract.py \
-            tests/test_fbm_manual_shipping_order_contract.py \
-            tests/test_google_identity_alignment_contract.py \
-            tests/test_package_catalog_alignment_contract.py \
-            tests/test_revolut_billing_client_contract.py \
-            tests/test_revolut_subscription_alignment_contract.py \
-            tests/test_billing_invoice_alignment_contract.py \
-            tests/test_support_case_alignment_contract.py \
-            tests/test_governed_deployment_evidence_contract.py
+          uv run python -m pytest -q tests/test_runtime_deployment_contract.py tests/test_fba_targeted_update_contract.py tests/test_webhook_scoped_reconcile_contract.py tests/test_webhook_push_alignment_contract.py tests/test_ui_production_alignment_contract.py tests/test_github_fly_only_deployment_contract.py tests/test_fbm_manual_shipping_order_contract.py tests/test_google_identity_alignment_contract.py tests/test_package_catalog_alignment_contract.py tests/test_revolut_billing_client_contract.py tests/test_revolut_subscription_alignment_contract.py tests/test_billing_invoice_alignment_contract.py tests/test_support_case_alignment_contract.py tests/test_governed_deployment_evidence_contract.py
 
   deploy:
     needs: audit
@@ -172,15 +106,12 @@ jobs:
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-
       - name: Set up Fly CLI
         uses: superfly/flyctl-actions/setup-flyctl@master
-
       - name: Capture governed deployment before-state and source manifest
         shell: bash
         run: |
@@ -188,40 +119,22 @@ jobs:
           mkdir -p deployment-evidence
           git ls-files > deployment-evidence/tracked-production-files.txt
           git diff-tree --no-commit-id --name-only -r "${{ github.sha }}" > deployment-evidence/changed-files.txt
-          BT38_CHANGED_FILES='__bt38_full_tracked_runtime_manifest__' \
-          BT38_TRACKED_FILES_FILE=deployment-evidence/tracked-production-files.txt \
-          BT38_SOURCE_HASH_FILE=deployment-evidence/source-production-hashes.txt \
-            python scripts/verify_governed_production_source.py
+          BT38_CHANGED_FILES='__bt38_full_tracked_runtime_manifest__' BT38_TRACKED_FILES_FILE=deployment-evidence/tracked-production-files.txt BT38_SOURCE_HASH_FILE=deployment-evidence/source-production-hashes.txt python scripts/verify_governed_production_source.py
           MACHINE_JSON="$(flyctl machines list --app bt38-prod --json)"
           printf '%s\n' "$MACHINE_JSON" > deployment-evidence/fly-machines-before.json
-          MACHINE_ID="$(printf '%s' "$MACHINE_JSON" | jq -r '.[0].id // empty')"
-          IMAGE_BEFORE="$(printf '%s' "$MACHINE_JSON" | jq -r '.[0].config.image // empty')"
-          printf '%s' "$MACHINE_ID" > deployment-evidence/machine-before.txt
-          printf '%s' "$IMAGE_BEFORE" > deployment-evidence/image-before.txt
+          printf '%s' "$(printf '%s' "$MACHINE_JSON" | jq -r '.[0].id // empty')" > deployment-evidence/machine-before.txt
+          printf '%s' "$(printf '%s' "$MACHINE_JSON" | jq -r '.[0].config.image // empty')" > deployment-evidence/image-before.txt
           printf '%s' "$(git rev-parse HEAD^)" > deployment-evidence/previous-commit.txt
-          echo "EVIDENCE_BEFORE_OK commit=${{ github.sha }} machine=$MACHINE_ID"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
       - name: Verify production DB contract before deploy when machine is available
         shell: bash
         run: |
           set -euo pipefail
           CHECK_B64="$(base64 -w0 scripts/verify_production_db_contract.py)"
-          DB_CHECK_OUTPUT=""
-          if DB_CHECK_OUTPUT="$(flyctl ssh console --app bt38-prod --command "sh -lc 'printf %s \"$CHECK_B64\" | base64 -d > /tmp/bt38-db-contract.py && cd /app && .venv/bin/python /tmp/bt38-db-contract.py'" 2>&1)"; then
-            printf '%s\n' "$DB_CHECK_OUTPUT"
-          else
-            printf '%s\n' "$DB_CHECK_OUTPUT"
-            if printf '%s\n' "$DB_CHECK_OUTPUT" | grep -q 'has no started VMs'; then
-              echo 'DB_CHECK_DEFERRED: production machine is stopped; post-deploy DB verification remains mandatory.'
-            else
-              exit 1
-            fi
-          fi
+          if OUT="$(flyctl ssh console --app bt38-prod --command "sh -lc 'printf %s \"$CHECK_B64\" | base64 -d > /tmp/bt38-db-contract.py && cd /app && .venv/bin/python /tmp/bt38-db-contract.py'" 2>&1)"; then printf '%s\n' "$OUT"; elif printf '%s\n' "$OUT" | grep -q 'has no started VMs'; then echo 'DB_CHECK_DEFERRED'; else printf '%s\n' "$OUT"; exit 1; fi
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
       - name: Deploy exact GitHub commit with Fly remote builder
         shell: bash
         run: |
@@ -231,27 +144,17 @@ jobs:
           flyctl deploy --app bt38-prod --config fly.toml --remote-only --strategy rolling
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
       - name: Start existing production machine after deploy
         shell: bash
         run: |
           set -euo pipefail
           MACHINE_ID='7849913cd19d28'
-          IDS="$(flyctl machines list --app bt38-prod --json | jq -r '.[].id')"
-          printf '%s\n' "$IDS" | grep -Fxq "$MACHINE_ID"
+          flyctl machines list --app bt38-prod --json | jq -r '.[].id' | grep -Fxq "$MACHINE_ID"
           flyctl machine start "$MACHINE_ID" --app bt38-prod || true
-          for ATTEMPT in 1 2 3 4 5 6; do
-            if flyctl ssh console --app bt38-prod --command "sh -lc 'printf MACHINE_BOOT_OK'"; then
-              echo "EXISTING_MACHINE_STARTED id=$MACHINE_ID"
-              exit 0
-            fi
-            sleep $((ATTEMPT * 5))
-          done
-          echo 'BLOCKED: existing production machine did not become SSH-ready; no replacement VM was created.'
+          for ATTEMPT in 1 2 3 4 5 6; do flyctl ssh console --app bt38-prod --command "sh -lc 'printf MACHINE_BOOT_OK'" && exit 0; sleep $((ATTEMPT*5)); done
           exit 1
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
       - name: Verify deployed image DB contract against production Neon
         shell: bash
         run: |
@@ -260,28 +163,20 @@ jobs:
           printf 'PASS' > deployment-evidence/db-contract.txt
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
       - name: Verify all tracked deployed runtime source fingerprints
         shell: bash
         run: |
           set -euo pipefail
-          : > deployment-evidence/production-source-hashes.txt
           EXPECTED_SOURCE_COUNT="$(wc -l < deployment-evidence/source-production-hashes.txt)"
           test "$EXPECTED_SOURCE_COUNT" -gt 0
-          while IFS= read -r LINE; do
-            EXPECTED="${LINE%%  *}"
-            FILE="${LINE#*  }"
-            REMOTE="$(flyctl ssh console --app bt38-prod --command "sh -lc 'sha256sum /app/$FILE'" </dev/null | tail -n 1 | awk '{print $1}' | tr -d '\r')"
-            test -n "$REMOTE"
-            printf '%s  %s\n' "$REMOTE" "$FILE" >> deployment-evidence/production-source-hashes.txt
-            test "$REMOTE" = "$EXPECTED"
-          done < deployment-evidence/source-production-hashes.txt
+          FILES_B64="$(awk '{sub(/^[^ ]+[ ][ ]/,""); print}' deployment-evidence/source-production-hashes.txt | base64 -w0)"
+          flyctl ssh console --app bt38-prod --command "sh -lc 'printf %s \"$FILES_B64\" | base64 -d > /tmp/bt38-runtime-files.txt && cd /app && while IFS= read -r f; do sha256sum \"$f\"; done < /tmp/bt38-runtime-files.txt'" | tr -d '\r' | grep -E '^[0-9a-f]{64}  ' > deployment-evidence/production-source-hashes.txt
           PRODUCTION_SOURCE_COUNT="$(wc -l < deployment-evidence/production-source-hashes.txt)"
           test "$PRODUCTION_SOURCE_COUNT" = "$EXPECTED_SOURCE_COUNT"
+          diff -u deployment-evidence/source-production-hashes.txt deployment-evidence/production-source-hashes.txt
           echo "ALL_DEPLOYED_SOURCE_OK commit=${{ inputs.expected_commit }} files=$PRODUCTION_SOURCE_COUNT"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
       - name: Capture deployed runtime module and route registration
         shell: bash
         run: |
@@ -292,7 +187,6 @@ jobs:
           flyctl ssh console --app bt38-prod --command "sh -lc 'cat /tmp/registered-routes.txt'" | tr -d '\r' > deployment-evidence/registered-routes.txt
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
       - name: Verify public login and dashboard redirect
         shell: bash
         run: |
@@ -300,17 +194,10 @@ jobs:
           for ATTEMPT in $(seq 1 18); do
             LOGIN_CODE="$(curl -L -sS -o /tmp/login.html -w '%{http_code}' --max-time 15 https://bt38-prod.fly.dev/login || true)"
             DASH_HEADERS="$(curl -sS -I --max-time 15 https://bt38-prod.fly.dev/dashboard || true)"
-            if [ "$LOGIN_CODE" = '200' ] && printf '%s\n' "$DASH_HEADERS" | grep -Eiq '^location: .*/login'; then
-              echo "PUBLIC_DEPLOY_OK attempt=$ATTEMPT"
-              printf 'PASS' > deployment-evidence/public-smoke.txt
-              exit 0
-            fi
+            if [ "$LOGIN_CODE" = '200' ] && printf '%s\n' "$DASH_HEADERS" | grep -Eiq '^location: .*/login'; then printf 'PASS' > deployment-evidence/public-smoke.txt; exit 0; fi
             sleep 10
           done
-          echo 'BLOCKED: public login/dashboard deploy contract failed.'
-          printf 'FAIL' > deployment-evidence/public-smoke.txt
-          exit 1
-
+          printf 'FAIL' > deployment-evidence/public-smoke.txt; exit 1
       - name: Capture governed deployment after-state and write evidence record
         if: always()
         shell: bash
@@ -318,28 +205,24 @@ jobs:
           set -euo pipefail
           MACHINE_JSON="$(flyctl machines list --app bt38-prod --json || printf '[]')"
           printf '%s\n' "$MACHINE_JSON" > deployment-evidence/fly-machines-after.json
-          MACHINE_AFTER="$(printf '%s' "$MACHINE_JSON" | jq -r '.[0].id // empty')"
-          IMAGE_AFTER="$(printf '%s' "$MACHINE_JSON" | jq -r '.[0].config.image // empty')"
-          DB_RESULT="$(cat deployment-evidence/db-contract.txt 2>/dev/null || printf 'NOT_COMPLETED')"
-          PUBLIC_RESULT="$(cat deployment-evidence/public-smoke.txt 2>/dev/null || printf 'NOT_COMPLETED')"
           BT38_EVIDENCE_OUT=deployment-evidence/deployment-evidence.json \
           BT38_DEPLOY_COMMIT="${{ github.sha }}" \
           BT38_PREVIOUS_DEPLOY_COMMIT="$(cat deployment-evidence/previous-commit.txt 2>/dev/null || true)" \
           BT38_FLY_APP=bt38-prod \
           BT38_MACHINE_BEFORE="$(cat deployment-evidence/machine-before.txt 2>/dev/null || true)" \
-          BT38_MACHINE_AFTER="$MACHINE_AFTER" \
+          BT38_MACHINE_AFTER="$(printf '%s' "$MACHINE_JSON" | jq -r '.[0].id // empty')" \
           BT38_IMAGE_BEFORE="$(cat deployment-evidence/image-before.txt 2>/dev/null || true)" \
-          BT38_IMAGE_AFTER="$IMAGE_AFTER" \
-          BT38_DB_CONTRACT_RESULT="$DB_RESULT" \
-          BT38_PUBLIC_SMOKE_RESULT="$PUBLIC_RESULT" \
+          BT38_IMAGE_AFTER="$(printf '%s' "$MACHINE_JSON" | jq -r '.[0].config.image // empty')" \
+          BT38_DB_CONTRACT_RESULT="$(cat deployment-evidence/db-contract.txt 2>/dev/null || printf NOT_COMPLETED)" \
+          BT38_PUBLIC_SMOKE_RESULT="$(cat deployment-evidence/public-smoke.txt 2>/dev/null || printf NOT_COMPLETED)" \
           BT38_EXPECTED_SOURCE_HASH_FILE=deployment-evidence/source-production-hashes.txt \
           BT38_PRODUCTION_SOURCE_HASH_FILE=deployment-evidence/production-source-hashes.txt \
+          BT38_CHANGED_FILES_FILE=deployment-evidence/changed-files.txt \
           BT38_LOADED_MODULES_FILE=deployment-evidence/loaded-bt38-modules.txt \
           BT38_REGISTERED_ROUTES_FILE=deployment-evidence/registered-routes.txt \
-            python scripts/record_governed_deployment_evidence.py
+          python scripts/record_governed_deployment_evidence.py
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
       - name: Upload governed deployment evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -347,18 +230,16 @@ jobs:
           name: bt38-prod-deployment-evidence-${{ github.sha }}
           path: deployment-evidence/
           if-no-files-found: error
-
       - name: Confirm governed deployment boundary
         shell: bash
         run: |
           set -euo pipefail
           test "${{ github.ref_name }}" = "fix/full-system-release-alignment"
           test "$(git rev-parse HEAD)" = "${{ inputs.expected_commit }}"
-          test -s deployment-evidence/deployment-evidence.json
           python - <<'PY'
           import json
           from pathlib import Path
-          data = json.loads(Path('deployment-evidence/deployment-evidence.json').read_text(encoding='utf-8'))
+          data=json.loads(Path('deployment-evidence/deployment-evidence.json').read_text())
           assert data['verified'] is True, data
           print('GOVERNED_DEPLOYMENT_EVIDENCE_OK')
           PY
