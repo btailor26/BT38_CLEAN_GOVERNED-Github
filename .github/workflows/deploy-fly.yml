@@ -188,6 +188,7 @@ jobs:
           mkdir -p deployment-evidence
           git ls-files > deployment-evidence/tracked-production-files.txt
           git diff-tree --no-commit-id --name-only -r "${{ github.sha }}" > deployment-evidence/changed-files.txt
+          BT38_CHANGED_FILES='__bt38_full_tracked_runtime_manifest__' \
           BT38_TRACKED_FILES_FILE=deployment-evidence/tracked-production-files.txt \
           BT38_SOURCE_HASH_FILE=deployment-evidence/source-production-hashes.txt \
             python scripts/verify_governed_production_source.py
@@ -329,13 +330,12 @@ jobs:
           BT38_MACHINE_AFTER="$MACHINE_AFTER" \
           BT38_IMAGE_BEFORE="$(cat deployment-evidence/image-before.txt 2>/dev/null || true)" \
           BT38_IMAGE_AFTER="$IMAGE_AFTER" \
-          BT38_CHANGED_FILES_FILE=deployment-evidence/changed-files.txt \
-          BT38_SOURCE_HASH_FILE=deployment-evidence/source-production-hashes.txt \
-          BT38_PRODUCTION_HASH_FILE=deployment-evidence/production-source-hashes.txt \
+          BT38_DB_CONTRACT_RESULT="$DB_RESULT" \
+          BT38_PUBLIC_SMOKE_RESULT="$PUBLIC_RESULT" \
+          BT38_EXPECTED_SOURCE_HASH_FILE=deployment-evidence/source-production-hashes.txt \
+          BT38_PRODUCTION_SOURCE_HASH_FILE=deployment-evidence/production-source-hashes.txt \
           BT38_LOADED_MODULES_FILE=deployment-evidence/loaded-bt38-modules.txt \
           BT38_REGISTERED_ROUTES_FILE=deployment-evidence/registered-routes.txt \
-          BT38_DB_CONTRACT="$DB_RESULT" \
-          BT38_PUBLIC_SMOKE="$PUBLIC_RESULT" \
             python scripts/record_governed_deployment_evidence.py
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
@@ -344,25 +344,21 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: governed-deployment-evidence-${{ github.sha }}
+          name: bt38-prod-deployment-evidence-${{ github.sha }}
           path: deployment-evidence/
           if-no-files-found: error
-          retention-days: 90
 
       - name: Confirm governed deployment boundary
         shell: bash
         run: |
-          test -f deployment-evidence/deployment-evidence.json
+          set -euo pipefail
+          test "${{ github.ref_name }}" = "fix/full-system-release-alignment"
+          test "$(git rev-parse HEAD)" = "${{ inputs.expected_commit }}"
+          test -s deployment-evidence/deployment-evidence.json
           python - <<'PY'
           import json
-          with open('deployment-evidence/deployment-evidence.json', encoding='utf-8') as handle:
-              evidence = json.load(handle)
-          assert evidence['production_source']['verified'] is True
-          assert evidence['runtime']['db_contract'] == 'PASS'
-          assert evidence['runtime']['public_smoke'] == 'PASS'
-          assert evidence['boundaries']['no_merge_performed'] is True
+          from pathlib import Path
+          data = json.loads(Path('deployment-evidence/deployment-evidence.json').read_text(encoding='utf-8'))
+          assert data['verified'] is True, data
           print('GOVERNED_DEPLOYMENT_EVIDENCE_OK')
           PY
-          echo 'PACKLINK_UNTOUCHED=true'
-          echo 'NO_MERGE_PERFORMED=true'
-          echo 'CURRENT_HEAD_DEPLOY_COMPLETE=true'
