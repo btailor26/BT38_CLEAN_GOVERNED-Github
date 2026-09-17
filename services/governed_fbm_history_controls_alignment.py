@@ -10,8 +10,6 @@ introduced here.
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from html import escape
-from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 from flask import g, request
@@ -92,53 +90,6 @@ def _range_bounds():
 
 controls._range_key = _range_key
 controls._range_bounds = _range_bounds
-
-
-def _controls_html() -> str:
-    mode = controls._range_key()
-    term = controls._search_term()
-    from_value = str(request.args.get("fbm_from") or "")
-    to_value = str(request.args.get("fbm_to") or "")
-    preserved = controls._query_args_without("fbm_range", "fbm_from", "fbm_to", "search", "fbm_tab")
-    hidden = "".join(
-        f'<input type="hidden" name="{escape(name)}" value="{escape(value)}">'
-        for name, value in preserved.items()
-    )
-    options = "".join(
-        f'<option value="{value}"{" selected" if mode == value else ""}>{label}</option>'
-        for value, label in (
-            ("3d", "3 days"), ("7d", "7 days"), ("30d", "30 days"),
-            ("90d", "90 days"), ("1y", "Last year"), ("custom", "Custom"),
-        )
-    )
-    clear_args = controls._query_args_without("search", "fbm_tab")
-    clear_url = "/fbm" + (("?" + urlencode(clear_args)) if clear_args else "")
-    session_sync = (
-        '<script id="bt38FbmHistoryServerAuthority">'
-        '(function(){var mode=' + repr(mode) + ',from=' + repr(from_value) + ',to=' + repr(to_value) + ';'
-        'if(window.BT38&&typeof window.BT38.getPageSession==="function"&&typeof window.BT38.setPageSession==="function"){' 
-        'var current=window.BT38.getPageSession("fbm",{tab:"pending",search:"",range:"3d",from:"",to:"",dirty:false})||{};'
-        'current.range=mode;current.from=from;current.to=to;window.BT38.setPageSession("fbm",current);}})();'
-        '</script>'
-    )
-    return (
-        '<div class="card-header border-bottom-0 pb-0">'
-        '<form id="bt38FbmControls" class="d-flex gap-2 align-items-center flex-wrap" method="get" action="/fbm">'
-        + hidden
-        + '<label class="small text-muted mb-0">History</label>'
-        + f'<select id="bt38FbmRange" class="form-select form-select-sm" style="width:auto" name="fbm_range">{options}</select>'
-        + f'<input id="bt38FbmFrom" class="form-control form-control-sm" style="width:auto" type="date" name="fbm_from" value="{escape(from_value)}" aria-label="From date">'
-        + f'<input id="bt38FbmTo" class="form-control form-control-sm" style="width:auto" type="date" name="fbm_to" value="{escape(to_value)}" aria-label="To date">'
-        + f'<input id="bt38FbmGlobalSearchInput" class="form-control form-control-sm" style="width:min(300px,65vw)" type="search" name="search" autocomplete="off" value="{escape(term)}" placeholder="Order, SKU, tracking, carrier or status">'
-        + '<button class="btn btn-sm btn-primary" type="submit">Apply</button>'
-        + f'<a id="bt38FbmGlobalSearchClear" class="btn btn-sm btn-outline-secondary" href="{escape(clear_url)}">Clear search</a>'
-        + '</form>'
-        + session_sync
-        + '</div>'
-    )
-
-
-controls._controls_html = _controls_html
 
 
 if not getattr(page, "_bt38_history_controls_aligned", False):
