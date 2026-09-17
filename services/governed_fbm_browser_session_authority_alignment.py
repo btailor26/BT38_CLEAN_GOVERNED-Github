@@ -62,22 +62,12 @@ def _canonical_bounded_page_rows(limit: int):
 
 
 def _bounded_browser_session_rows(limit: int):
-    """Keep normal landing bounded, but preserve the existing explicit lifecycle loader."""
-    tab = str(page.request.args.get("fbm_tab") or "").strip().lower()
-    search = str(page.request.args.get("search") or "").strip()
-    if tab or search:
-        from services import governed_fbm_global_search_alignment as global_search
-        if tab:
-            workflow_rows = global_search._workflow_rows(limit)
-            # FBA is not an FBM lifecycle tab. Preserve the existing FBA route/link
-            # boundary instead of allowing a stale /fbm?fbm_tab=fba URL to return None.
-            if workflow_rows is not None:
-                return workflow_rows
-        else:
-            search_rows = global_search._search_rows(limit)
-            if search_rows is not None:
-                return search_rows
-    return page._bt38_original_bounded_fbm_rows(limit)
+    """Load one bounded History working set; lifecycle/search/pager stay browser-local."""
+    from services import governed_fbm_global_search_alignment as global_search
+    rows, truncated = global_search._session_snapshot_rows()
+    # The browser owns lifecycle/search/pager presentation over this one History set.
+    # A stale fbm_tab URL must not narrow or reload the server-side working set.
+    return rows, bool(truncated)
 
 
 def _session_presentation(rows):
