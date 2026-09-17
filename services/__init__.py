@@ -50,6 +50,12 @@ import services.governed_fbm_amazon_profile_alignment  # noqa: F401,E402
 # bounded Amazon import function and keeps the same writer/stock bridge.
 import services.governed_amazon_multiline_order_alignment  # noqa: F401,E402
 
+# Install the already-built eBay ITEM_MARKED_SHIPPED notification alignment
+# before runtime recovery imports the post-deploy reconciler. This preserves the
+# canonical ORDER_CONFIRMATION intake, reuses the same notification destination,
+# and adds no worker, poller, scheduler, shipment writer or marketplace mutation.
+import services.governed_ebay_shipping_notification_registration_alignment  # noqa: F401,E402
+
 # The existing 8-hour governed recovery must also invoke the already-built
 # bounded exact eBay missing-tracking readback. This only restores invocation of
 # eBay shipment truth for existing MarketplaceOrder rows; it adds no new writer,
