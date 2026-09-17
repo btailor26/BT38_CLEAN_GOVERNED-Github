@@ -112,7 +112,7 @@
         if (governedLiveRefreshPending) return;
         governedLiveRefreshPending = true;
         try {
-            const response = await fetch(window.location.href, {method:'GET', credentials:'same-origin', cache:'no-store', headers:{'Accept':'text/html'}});
+            const response = await fetch(window.location.href, {method:'GET', credentials:'same-origin', cache:'no-store', headers: {'Accept': 'text/html'}});
             if (!response.ok) throw new Error(`FBM refresh failed (HTTP ${response.status})`);
             const html = await response.text();
             const parsed = new DOMParser().parseFromString(html, 'text/html');
