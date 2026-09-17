@@ -176,12 +176,8 @@ def _counts_from_payload(payload: dict[str, dict]) -> dict[str, int]:
 
 
 def _fba_count() -> int:
-    try:
-        return int(db.session.query(MarketplaceOrder.id).filter(
-            db.func.upper(db.func.coalesce(MarketplaceOrder.fulfillment_type, "")).in_(("FBA", "AFN"))
-        ).count())
-    except Exception:
-        return 0
+    """FBA badge is populated by the shared browser-session projection, not a separate DB count."""
+    return 0
 
 
 def _align_cofi_ui(html: str) -> str:
@@ -244,11 +240,11 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   function localDay(value){{if(!value)return null;var d=new Date(value);return isNaN(d.getTime())?null:new Date(d.getFullYear(),d.getMonth(),d.getDate());}}
   function historyBounds(){{var today=new Date();today=new Date(today.getFullYear(),today.getMonth(),today.getDate());if(range==='custom'){{var a=from?new Date(from+'T00:00:00'):null,b=to?new Date(to+'T23:59:59'):null;return {{start:a,end:b}};}}var days={{'3d':3,'7d':7,'30d':30,'90d':90,'1y':365}}[range]||3;var start=new Date(today);start.setDate(start.getDate()-(days-1));var end=new Date(today);end.setHours(23,59,59,999);return {{start:start,end:end}};}}
   function inHistory(row){{var d=localDay(row.dataset.fbmCreatedAt);if(!d)return false;var bounds=historyBounds();if(bounds.start&&d<bounds.start)return false;if(bounds.end&&d>bounds.end)return false;return true;}}
-  function localCounts(){{var result={{ready_dispatch:0,pending:0,dispatched:0,cancelled:0,replacements:0,refunds:0}};rows.forEach(function(row){{if(!inHistory(row))return;var q=row.dataset.fbmQueue;if(Object.prototype.hasOwnProperty.call(result,q))result[q]+=1;}});return result;}}
+  function localCounts(){{var result={{ready_dispatch:0,pending:0,dispatched:0,cancelled:0,fba:0,replacements:0,refunds:0}};rows.forEach(function(row){{if(!inHistory(row))return;var q=row.dataset.fbmQueue;if(Object.prototype.hasOwnProperty.call(result,q))result[q]+=1;}});return result;}}
   function addWorkflowButton(bar,name,label){{var button=document.createElement('button');button.type='button';button.dataset.fbmTab=name;button.className='fbm-lifecycle-tab'+(active===name?' active':'');button.innerHTML=label+' <span class="badge bg-light text-dark border">0</span>';button.addEventListener('click',function(){{active=name;saveSession();var u=new URL(window.location.href);u.searchParams.set('fbm_tab',name);u.searchParams.set('limit',String((document.getElementById('bt38ResultsPerPageSelect')||{{}}).value||15));window.location.assign(u.toString())}});bar.appendChild(button)}}
-  function addTruthLink(bar,label,href,count){{var link=document.createElement('a');link.className='fbm-lifecycle-tab';link.href=href;link.innerHTML=label+' <span class="badge bg-light text-dark border">'+Number(count||0)+'</span>';bar.appendChild(link)}}
+  function addTruthLink(bar,name,label,href){{var link=document.createElement('a');link.className='fbm-lifecycle-tab';link.dataset.fbmTab=name;link.href=href;link.innerHTML=label+' <span class="badge bg-light text-dark border">0</span>';bar.appendChild(link)}}
   var tabBar=document.createElement('div');tabBar.className='fbm-lifecycle-tabs';
-  addWorkflowButton(tabBar,'pending','Pending');addWorkflowButton(tabBar,'ready_dispatch','Ready to dispatch');addWorkflowButton(tabBar,'dispatched','Dispatched');addWorkflowButton(tabBar,'cancelled','Cancelled');addTruthLink(tabBar,'FBA','/governed/amazon-fba-stock',{int(fba_count)});addWorkflowButton(tabBar,'replacements','Replacement');addWorkflowButton(tabBar,'refunds','Refunds');
+  addWorkflowButton(tabBar,'pending','Pending');addWorkflowButton(tabBar,'ready_dispatch','Ready to dispatch');addWorkflowButton(tabBar,'dispatched','Dispatched');addWorkflowButton(tabBar,'cancelled','Cancelled');addTruthLink(tabBar,'fba','FBA','/governed/amazon-fba-stock');addWorkflowButton(tabBar,'replacements','Replacement');addWorkflowButton(tabBar,'refunds','Refunds');
   var header=card.querySelector('.card-header');if(header)header.insertAdjacentElement('afterend',tabBar);else card.insertBefore(tabBar,card.firstChild);
   function handoffToExistingPager(matched){{var controller=window.BT38&&window.BT38.PageController;var pages=window.BT38&&window.BT38.pages;var state=pages&&(pages.fbm||pages.FBM);if(!controller||!state||!Array.isArray(state.rows)||typeof controller.renderPage!=='function')return false;var set=new Set(matched);state.filteredRows=state.rows.filter(function(entry){{return entry&&set.has(entry.el)}});state.currentPage=1;controller.renderPage(state.name);return true;}}
   function refreshBadges(){{var counts=localCounts();tabBar.querySelectorAll('[data-fbm-tab]').forEach(function(button){{var badge=button.querySelector('.badge');if(badge)badge.textContent=Number(counts[button.dataset.fbmTab]||0)}});}}
