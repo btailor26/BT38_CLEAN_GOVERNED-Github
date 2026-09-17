@@ -129,6 +129,7 @@
             });
             window.BT38FBMApplyCommittedSnapshot(nextData, nextCounts);
             alignPersistedLifecycle();
+            updateSelectedPacklinkLabelAction();
         } catch (error) {
             console.warn('[BT38 FBM] committed session refresh unavailable', error);
         } finally {
@@ -146,6 +147,124 @@
     }
 
     window.addEventListener('bt38-marketplace-event', refreshFbmFromGovernedEvent);
+
+    function selectedPacklinkRows() {
+        const selected = [];
+        const seen = new Set();
+        document.querySelectorAll('.fbm-order-checkbox:checked').forEach(checkbox => {
+            const row = checkbox.closest('.fbm-order-row');
+            const statusButton = row && row.querySelector('.packlink-existing-status[data-shipment-id]');
+            const shipmentId = statusButton && String(statusButton.dataset.shipmentId || '').trim();
+            if (!row || !shipmentId || seen.has(shipmentId)) return;
+            seen.add(shipmentId);
+            selected.push({row, shipmentId});
+        });
+        return selected;
+    }
+
+    function updateSelectedPacklinkLabelAction() {
+        const button = document.getElementById('dispatchedPacklinkLabelAction');
+        if (!button) return;
+        const selected = selectedPacklinkRows();
+        if (selected.length !== 1) {
+            button.disabled = true;
+            button.hidden = selected.length === 0;
+            button.textContent = 'Download Label';
+            return;
+        }
+        const row = selected[0].row;
+        const hasLabel = String(row.dataset.labelReady || '') === '1';
+        button.hidden = false;
+        button.disabled = false;
+        button.textContent = hasLabel ? 'Reprint Label' : 'Download Label';
+    }
+
+    async function runSelectedPacklinkLabelAction(button) {
+        const selected = selectedPacklinkRows();
+        if (selected.length !== 1) return;
+        const item = selected[0];
+        const bridge = window.BT38FBMQZ;
+        const status = document.getElementById('qzStatus');
+        button.disabled = true;
+        try {
+            if (!bridge || typeof bridge.packlinkStatus !== 'function') throw new Error('Packlink label bridge is unavailable.');
+            const payload = await bridge.packlinkStatus(item.shipmentId);
+            const label = payload.label || null;
+            if (!payload.label_ready || !label || !(label.url || label.base64 || label.data)) {
+                item.row.dataset.labelReady = '0';
+                button.textContent = 'Download Label';
+                if (status) {
+                    status.className = 'small text-warning mt-2';
+                    status.textContent = payload.message || 'No Packlink label is available to download for this paid shipment yet.';
+                }
+                return;
+            }
+
+            item.row.dataset.labelReady = '1';
+            button.textContent = 'Reprint Label';
+            try {
+                const printed = await bridge.printLabel(label);
+                if (status) {
+                    status.className = 'small text-success mt-2';
+                    status.textContent = `Packlink label downloaded and sent to ${printed.printer}`;
+                }
+            } catch (printError) {
+                console.warn('[BT38 FBM] Packlink label recovered; QZ print unavailable', printError);
+                if (label.url) {
+                    window.open(label.url, '_blank', 'noopener');
+                } else if (label.base64) {
+                    const binary = window.atob(String(label.base64));
+                    const bytes = new Uint8Array(binary.length);
+                    for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+                    const format = String(label.format || 'pdf').toLowerCase();
+                    const blobUrl = URL.createObjectURL(new Blob([bytes], {type:format === 'pdf' ? 'application/pdf' : 'application/octet-stream'}));
+                    const anchor = document.createElement('a');
+                    anchor.href = blobUrl;
+                    anchor.download = `BT38-Packlink-label.${format}`;
+                    anchor.click();
+                    window.setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
+                }
+                if (status) {
+                    status.className = 'small text-warning mt-2';
+                    status.textContent = 'Packlink label downloaded; QZ printing was unavailable, so the label was opened for manual print.';
+                }
+            }
+        } catch (error) {
+            if (status) {
+                status.className = 'small text-danger mt-2';
+                status.textContent = error.message || 'Packlink label download failed.';
+            }
+        } finally {
+            button.disabled = false;
+            updateSelectedPacklinkLabelAction();
+            alignPersistedLifecycle();
+        }
+    }
+
+    function installSelectedPacklinkLabelAction() {
+        if (document.getElementById('dispatchedPacklinkLabelAction')) return;
+        const readyButton = document.getElementById('readyToShipSelected');
+        if (!readyButton || !readyButton.parentNode) return;
+        const button = document.createElement('button');
+        button.id = 'dispatchedPacklinkLabelAction';
+        button.type = 'button';
+        button.className = 'btn btn-sm btn-outline-success';
+        button.textContent = 'Download Label';
+        button.hidden = true;
+        button.disabled = true;
+        readyButton.parentNode.insertBefore(button, readyButton.nextSibling);
+        button.addEventListener('click', event => {
+            event.preventDefault();
+            event.stopPropagation();
+            void runSelectedPacklinkLabelAction(button);
+        });
+        document.addEventListener('change', event => {
+            if (event.target && (event.target.matches('.fbm-order-checkbox') || event.target.matches('#selectAllOrders'))) {
+                window.setTimeout(updateSelectedPacklinkLabelAction, 0);
+            }
+        });
+        updateSelectedPacklinkLabelAction();
+    }
 
     async function handleExistingPacklinkLabel(event) {
         const button = event.target && event.target.closest ? event.target.closest('.packlink-existing-status[data-shipment-id]') : null;
@@ -170,6 +289,7 @@
                 return;
             }
             if (row) row.dataset.labelReady = '1';
+            updateSelectedPacklinkLabelAction();
             if (autoPrint && autoPrint.checked) {
                 try {
                     const printed = await bridge.printLabel(label);
@@ -235,8 +355,20 @@
         document.head.appendChild(legacy);
     }
 
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', alignPersistedLifecycle, {once:true});
-    else alignPersistedLifecycle();
+    function startSelectedPacklinkLabelAction() {
+        installSelectedPacklinkLabelAction();
+        updateSelectedPacklinkLabelAction();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            alignPersistedLifecycle();
+            startSelectedPacklinkLabelAction();
+        }, {once:true});
+    } else {
+        alignPersistedLifecycle();
+        startSelectedPacklinkLabelAction();
+    }
 
     if (document.querySelector('script[data-bt38-ebay-native-bootstrap="1"]')) {
         loadLegacy();
