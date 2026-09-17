@@ -24,7 +24,7 @@ def test_customer_behaviour_recorder_is_event_driven_and_privacy_bounded():
     assert 'log_type="customer_behaviour"' in text
 
 
-def test_customer_behaviour_recorder_is_installed_once_for_all_html_pages():
+def test_customer_behaviour_recorder_is_installed_once_for_non_operational_html_pages():
     main = Path("main.py").read_text(encoding="utf-8")
     recorder = Path("services/governed_customer_behaviour_recorder.py").read_text(encoding="utf-8")
     assert "install_governed_customer_behaviour_recorder(app)" in main
@@ -32,6 +32,19 @@ def test_customer_behaviour_recorder_is_installed_once_for_all_html_pages():
     assert '"text/html"' in recorder
     assert 'body.replace("</body>", _SCRIPT + "\\n</body>", 1)' in recorder
     assert "_bt38_customer_behaviour_recorder_installed" in recorder
+
+
+def test_customer_behaviour_recorder_never_runs_on_operational_workspaces():
+    text = Path("services/governed_customer_behaviour_recorder.py").read_text(encoding="utf-8")
+    assert "_OPERATIONAL_PATH_PREFIXES" in text
+    assert '"/fbm"' in text
+    assert '"/governed/warehouse"' in text
+    assert '"/product-linking"' in text
+    assert '"/mcf"' in text
+    assert "def _operational_path" in text
+    assert "or _operational_path(request.path)" in text
+    assert 'if _operational_path(payload.get("page"))' in text
+    assert '"recorded": False' in text
 
 
 def test_customer_behaviour_endpoint_rejects_arbitrary_payload_fields():
