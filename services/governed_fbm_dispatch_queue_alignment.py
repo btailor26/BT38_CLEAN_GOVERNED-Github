@@ -255,7 +255,6 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   if(toInput)toInput.addEventListener('change',applyHistory);
   if(searchInput)searchInput.addEventListener('input',function(){{search=String(searchInput.value||'').trim().toLowerCase();saveSession();render()}});
   if(clearSearch)clearSearch.addEventListener('click',function(event){{event.preventDefault();if(searchInput)searchInput.value='';search='';saveSession();render()}});
-  window.BT38FBMApplyCommittedSnapshot=function(nextData){{data=nextData||data;rows.forEach(function(row){{var info=data[row.dataset.orderId];if(info){{row.dataset.fbmQueue=info.queue||row.dataset.fbmQueue;row.dataset.fbmCreatedAt=info.created_at||row.dataset.fbmCreatedAt}}}});render()}};
   render();
 }})();
 </script>'''
