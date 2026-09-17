@@ -5,6 +5,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MODEL = (ROOT / "fbm_models.py").read_text(encoding="utf-8")
 ALIGNMENT = (ROOT / "services" / "governed_fbm_replacement_label_alignment.py").read_text(encoding="utf-8")
 SCRIPT = (ROOT / "static" / "js" / "fbm_replacement_label_alignment.js").read_text(encoding="utf-8")
+QZ = (ROOT / "static" / "js" / "fbm_qz_print.js").read_text(encoding="utf-8")
 MAIN = (ROOT / "main.py").read_text(encoding="utf-8")
 
 
@@ -51,10 +52,28 @@ def test_dispatched_workspace_places_replacement_beside_manual_shipping():
     assert "confirm_additional_shipment = 'CONFIRM_REPLACEMENT'" in SCRIPT
 
 
-def test_redundant_check_packlink_control_is_removed_from_dispatch_rows():
-    assert "removeRedundantPacklinkChecks" in SCRIPT
-    assert ".packlink-existing-status" in SCRIPT
-    assert "button.remove()" in SCRIPT
+def test_dispatched_reprint_reuses_existing_packlink_label_action_without_parallel_path():
+    assert "preservePacklinkAuthority" in SCRIPT
+    assert ".packlink-existing-status[data-shipment-id]" in SCRIPT
+    assert "button.hidden = true" in SCRIPT
+    assert "button.remove()" not in SCRIPT.split("function preservePacklinkAuthority", 1)[1].split("function activeWorkflowTab", 1)[0]
+    assert "bulkPacklinkLabels" in SCRIPT
+    assert "Reprint Label" in SCRIPT
+    assert "dispatchedPacklinkLabelAction" in SCRIPT
+    assert "duplicate.remove()" in SCRIPT
+    assert "packlinkStatus(item.shipmentId)" in QZ
+    assert "/fbm/shipments/${encodeURIComponent(shipmentId)}/packlink/status" in QZ
+    assert "packlink/draft" not in SCRIPT.split("function alignDispatchedReprintAction", 1)[1].split("function replacementRouteHtml", 1)[0]
+
+
+def test_dispatched_selection_is_restored_only_for_existing_selected_action_bar():
+    assert "active === 'dispatched'" in SCRIPT
+    assert "active === 'ready_dispatch'" in SCRIPT
+    assert "selectAll.disabled = !(ready || dispatched)" in SCRIPT
+    assert "row.dataset.fbmQueue" in SCRIPT
+    assert "checkbox.disabled = !selectable" in SCRIPT
+    assert "requestAnimationFrame(alignDispatchedReprintAction)" in SCRIPT
+    assert "setInterval" not in SCRIPT
 
 
 def test_amazon_native_second_purchase_is_not_faked_for_dispatched_replacement():
