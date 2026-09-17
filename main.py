@@ -77,12 +77,12 @@ install_governed_fbm_order_projection_alignment()
 install_fbm_db_delivery_promise_alignment(app)
 install_governed_fbm_global_search_alignment(app)
 install_governed_fbm_local_controls_alignment(app)
-install_governed_fbm_all_orders_health_alignment(app)
 install_governed_fbm_render_budget_alignment(app)
 
-# Dispatch owns lifecycle classification. History then normalises the controls,
-# and the final browser-session authority makes History + Health + lifecycle move
-# as one rendered session while leaving the bottom pager presentation-only.
+# Dispatch owns lifecycle classification. The final browser-session authority
+# owns the bounded FBM row set and Health shell so History + lifecycle + Health
+# consume one rendered session. The old all-orders Health snapshot installer is
+# intentionally not installed because it creates a second DB/session authority.
 install_governed_fbm_dispatch_queue_alignment(app)
 import services.governed_fbm_history_controls_alignment  # noqa: F401,E402
 install_governed_fbm_browser_session_authority_alignment(app)
