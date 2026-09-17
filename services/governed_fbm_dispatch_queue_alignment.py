@@ -108,8 +108,6 @@ def _health_route_state_from_marketplace_lifecycle(row: MarketplaceOrder) -> str
     return queue
 
 
-global_search.workflow_queue_for = _aligned_workflow_queue_for
-workflow_queue_for = global_search.workflow_queue_for
 page_alignment._route_state = _health_route_state_from_marketplace_lifecycle
 
 
@@ -134,7 +132,7 @@ def _presentation(rows: list[MarketplaceOrder]) -> dict[str, dict]:
     for row in rows:
         key = (int(row.store_id), str(row.marketplace_order_id))
         shipment = shipments.get(key)
-        queue = workflow_queue_for(row, shipment)
+        queue = _aligned_workflow_queue_for(row, shipment)
         spend = spend_by_shipment.get(int(shipment.id)) if shipment and getattr(shipment, "id", None) else None
         payload[str(row.id)] = {
             "queue": queue,
