@@ -7,7 +7,7 @@ FBM pagination remains the only page-size/paging authority.
 """
 from __future__ import annotations
 
-from services import governed_fbm_global_search_alignment as global_search
+from flask import request
 
 
 def _local_controls_html() -> str:
@@ -44,11 +44,25 @@ def _local_controls_html() -> str:
 def install_governed_fbm_local_controls_alignment(app) -> None:
     if getattr(app, "_bt38_fbm_local_controls_alignment_installed", False):
         return
-    # _inject_controls resolves this module function at response time, so replacing
-    # it here removes the older GET/submit/query-string control authority without
-    # creating another route or page.
-    global_search._controls_html = _local_controls_html
+    @app.after_request
+    def bt38_fbm_local_controls_response(response):
+        path = request.path.rstrip("/") or "/"
+        if path != "/fbm" or response.status_code != 200 or not response.content_type or "text/html" not in response.content_type:
+            return response
+        html = response.get_data(as_text=True)
+        if 'id="bt38FbmControls"' in html:
+            return response
+        marker = '<div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2"><div><span class="fw-semibold">FBM Orders</span>'
+        index = html.find(marker)
+        if index < 0:
+            return response
+        card_start = html.rfind('<div class="card">', 0, index + 1)
+        if card_start < 0:
+            return response
+        html = html[:card_start] + '<div class="card">\n' + _local_controls_html() + html[card_start + len('<div class="card">'):]
+        response.set_data(html)
+        return response
     app._bt38_fbm_local_controls_alignment_installed = True
     app.logger.info(
-        "BT38 FBM controls aligned: History/lifecycle/search are browser-local; existing pagination retained; default History=3d; no filter GET/navigation"
+        "BT38 FBM controls aligned: one explicit local renderer; History/lifecycle/search are browser-local; existing pagination retained; default History=3d; no filter GET/navigation"
     )
