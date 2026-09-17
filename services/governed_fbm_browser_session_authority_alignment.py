@@ -43,10 +43,48 @@ def _session_presentation(rows):
     return payload
 
 
+def _browser_session_health_shell() -> dict:
+    """Render Health structure only; browser-session facts fill the values.
+
+    The previous Health authority rebuilt the complete selected History window
+    from MarketplaceOrder on every /fbm request. That duplicated the page read
+    before HTML could be returned. The rendered lifecycle payload already owns
+    the committed presentation facts needed by Health, so initial server render
+    must not perform a second order/profile/shipment reconstruction.
+    """
+    from services import governed_fbm_all_orders_health_alignment as health
+
+    mode, start_at, end_at, label, raw_from, raw_to = health._selected_history_window()
+    return {
+        "period_mode": mode,
+        "period_label": label,
+        "period_start": start_at,
+        "period_end": end_at,
+        "range_from": raw_from,
+        "range_to": raw_to,
+        "total": 0,
+        "ready": 0,
+        "dispatch_due": 0,
+        "dispatched": 0,
+        "awaiting_acceptance": 0,
+        "overdue": 0,
+        "mapping_review": 0,
+        "returns": 0,
+        "replacements": 0,
+        "refund_issues": 0,
+        "platform_counts": {},
+        "health_score": 100,
+        "risk_actions": 0,
+        "shipping_actions": 0,
+        "truncated": False,
+        "source": "browser_session",
+    }
+
+
 def _session_health_script() -> str:
     return r'''<script id="bt38FbmBrowserSessionHealthAuthority">
 (function(){
-  var form=document.getElementById('bt38FbmControls');
+  var form=document.getElementById('bt38FbmControls')||document.getElementById('bt38FbmHistoryControls');
   var rangeInput=document.getElementById('bt38FbmRangeSelect')||document.getElementById('bt38FbmRange');
   var fromInput=form&&form.querySelector('[name="fbm_from"]');
   var toInput=form&&form.querySelector('[name="fbm_to"]');
@@ -70,11 +108,15 @@ def install_governed_fbm_browser_session_authority_alignment(app) -> None:
     if getattr(app, "_bt38_fbm_browser_session_authority_alignment_installed", False):
         return
 
-    # Capture the function defined by governed_fbm_page_alignment itself, not
-    # whichever History/Health wrapper happens to be installed at this point.
+    # Capture the already-bounded canonical page reader. History must never
+    # replace it with a broad selected-window reconstruction.
     if not hasattr(page, "_bt38_original_bounded_fbm_rows"):
         page._bt38_original_bounded_fbm_rows = page.__dict__["_latest_distinct_fbm_rows"]
     page._latest_distinct_fbm_rows = _bounded_browser_session_rows
+
+    # Health is presentation over the same rendered lifecycle facts. Do not run
+    # all_orders_health._selected_fbm_rows() during the initial /fbm response.
+    page._health_summary = _browser_session_health_shell
 
     if not hasattr(dispatch, "_bt38_original_presentation"):
         dispatch._bt38_original_presentation = dispatch._presentation
@@ -88,4 +130,4 @@ def install_governed_fbm_browser_session_authority_alignment(app) -> None:
         return rendered.replace("</body>", script + "</body>", 1) if "</body>" in rendered else rendered + script
     dispatch._inject = aligned_inject
     app._bt38_fbm_browser_session_authority_alignment_installed = True
-    app.logger.info("BT38 FBM browser-session authority aligned: original bounded page reader is final initial /fbm authority; History/Health local; exact-record events preserved")
+    app.logger.info("BT38 FBM browser-session authority aligned: bounded initial page read; Health/lifecycle derive from rendered session facts; no Health DB rebuild; exact-record events preserved")
