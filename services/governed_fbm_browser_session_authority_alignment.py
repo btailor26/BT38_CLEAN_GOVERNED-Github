@@ -1,8 +1,9 @@
 """Keep FBM History, lifecycle counts and Health on one browser-session snapshot.
 
-The initial /fbm read is explicitly bound to the original bounded page reader.
-History/lifecycle/Health then operate over the rendered browser-session facts.
-The bottom 15/30/50/100 pager remains presentation-only.
+The initial /fbm read is explicitly bound to the canonical bounded page-reader
+contract even though older dispatch alignment replaces the module attribute
+before this installer runs. History/lifecycle/Health then operate over the
+rendered browser-session facts. The bottom pager remains presentation-only.
 
 No marketplace/provider read, write, polling, timer, EventSource or fetch path is
 introduced by this module.
@@ -14,8 +15,52 @@ from services import governed_fbm_page_alignment as page
 from services.fbm_shipping_state import shipment_confirmation_state
 
 
+def _canonical_bounded_page_rows(limit: int):
+    """Use the original page reader contract without the dispatch broad-read override."""
+    eligible = (
+        page.func.upper(page.func.coalesce(page.MarketplaceOrder.fulfillment_type, "")).notin_(("FBA", "AFN", "MCF")),
+        ~page.func.lower(page.func.coalesce(page.MarketplaceOrder.status, "")).like("mcf_%"),
+    )
+    query = page.db.session.query(page.MarketplaceOrder).filter(*eligible)
+    platform_filter = str(page.request.args.get("platform") or "").strip().lower()
+    status_filter = str(page.request.args.get("status") or "").strip().lower()
+    if platform_filter:
+        query = query.filter(page.MarketplaceOrder.store.has(platform=platform_filter))
+    tracking_present = page.MarketplaceOrder.tracking_number.isnot(None) & (page.MarketplaceOrder.tracking_number != "")
+    if status_filter == "tracking recorded":
+        query = query.filter(tracking_present)
+    elif status_filter == "dispatched":
+        query = query.filter(~tracking_present, page.MarketplaceOrder.shipped_at.isnot(None))
+    elif status_filter == "ready for fbm routing":
+        query = query.filter(~tracking_present, page.MarketplaceOrder.shipped_at.is_(None))
+    candidate_limit = min(
+        page._FBM_MAX_EXPANDED * page._FBM_DISCOVERY_MULTIPLIER,
+        max(limit + 1, (limit + 1) * page._FBM_DISCOVERY_MULTIPLIER),
+    )
+    candidates = (
+        query.options(page.joinedload(page.MarketplaceOrder.store), page.joinedload(page.MarketplaceOrder.warehouse_stock))
+        .order_by(page.MarketplaceOrder.id.desc())
+        .limit(candidate_limit)
+        .all()
+    )
+    rows = []
+    seen = set()
+    for row in candidates:
+        if row.store_id is None or not row.marketplace_order_id:
+            continue
+        key = (int(row.store_id), str(row.marketplace_order_id))
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append(row)
+        if len(rows) >= limit + 1:
+            break
+    rows.sort(key=lambda row: (row.created_at is not None, row.created_at, row.id), reverse=True)
+    has_more = len(rows) > limit or len(candidates) == candidate_limit
+    return rows[:limit], has_more
+
+
 def _bounded_browser_session_rows(limit: int):
-    """Call the captured original bounded page reader directly."""
     return page._bt38_original_bounded_fbm_rows(limit)
 
 
@@ -44,40 +89,14 @@ def _session_presentation(rows):
 
 
 def _browser_session_health_shell() -> dict:
-    """Render Health structure only; browser-session facts fill the values.
-
-    The previous Health authority rebuilt the complete selected History window
-    from MarketplaceOrder on every /fbm request. That duplicated the page read
-    before HTML could be returned. The rendered lifecycle payload already owns
-    the committed presentation facts needed by Health, so initial server render
-    must not perform a second order/profile/shipment reconstruction.
-    """
     from services import governed_fbm_all_orders_health_alignment as health
-
     mode, start_at, end_at, label, raw_from, raw_to = health._selected_history_window()
     return {
-        "period_mode": mode,
-        "period_label": label,
-        "period_start": start_at,
-        "period_end": end_at,
-        "range_from": raw_from,
-        "range_to": raw_to,
-        "total": 0,
-        "ready": 0,
-        "dispatch_due": 0,
-        "dispatched": 0,
-        "awaiting_acceptance": 0,
-        "overdue": 0,
-        "mapping_review": 0,
-        "returns": 0,
-        "replacements": 0,
-        "refund_issues": 0,
-        "platform_counts": {},
-        "health_score": 100,
-        "risk_actions": 0,
-        "shipping_actions": 0,
-        "truncated": False,
-        "source": "browser_session",
+        "period_mode": mode, "period_label": label, "period_start": start_at, "period_end": end_at,
+        "range_from": raw_from, "range_to": raw_to, "total": 0, "ready": 0, "dispatch_due": 0,
+        "dispatched": 0, "awaiting_acceptance": 0, "overdue": 0, "mapping_review": 0, "returns": 0,
+        "replacements": 0, "refund_issues": 0, "platform_counts": {}, "health_score": 100,
+        "risk_actions": 0, "shipping_actions": 0, "truncated": False, "source": "browser_session",
     }
 
 
@@ -108,14 +127,12 @@ def install_governed_fbm_browser_session_authority_alignment(app) -> None:
     if getattr(app, "_bt38_fbm_browser_session_authority_alignment_installed", False):
         return
 
-    # Capture the already-bounded canonical page reader. History must never
-    # replace it with a broad selected-window reconstruction.
-    if not hasattr(page, "_bt38_original_bounded_fbm_rows"):
-        page._bt38_original_bounded_fbm_rows = page.__dict__["_latest_distinct_fbm_rows"]
+    # Dispatch alignment has already replaced the module attribute at this point.
+    # Bind the browser session to the canonical bounded page contract explicitly;
+    # never capture dispatch._complete_fbm_page_rows as the "bounded" reader.
+    page._bt38_original_bounded_fbm_rows = _canonical_bounded_page_rows
     page._latest_distinct_fbm_rows = _bounded_browser_session_rows
 
-    # Health is presentation over the same rendered lifecycle facts. Do not run
-    # all_orders_health._selected_fbm_rows() during the initial /fbm response.
     page._health_summary = _browser_session_health_shell
 
     if not hasattr(dispatch, "_bt38_original_presentation"):
@@ -130,4 +147,4 @@ def install_governed_fbm_browser_session_authority_alignment(app) -> None:
         return rendered.replace("</body>", script + "</body>", 1) if "</body>" in rendered else rendered + script
     dispatch._inject = aligned_inject
     app._bt38_fbm_browser_session_authority_alignment_installed = True
-    app.logger.info("BT38 FBM browser-session authority aligned: bounded initial page read; Health/lifecycle derive from rendered session facts; no Health DB rebuild; exact-record events preserved")
+    app.logger.info("BT38 FBM browser-session authority aligned: canonical bounded initial read; dispatch broad-read override bypassed; Health/lifecycle use rendered session facts; exact-record events preserved")
