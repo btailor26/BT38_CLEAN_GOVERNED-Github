@@ -59,3 +59,12 @@ def _selected_history_window() -> tuple[str, datetime, datetime, str, str, str]:
         days, label = _RANGE_DAYS["3d"]
     start_day = today - timedelta(days=days - 1)
     return mode, _utc_db_boundary(start_day), _utc_db_boundary(today + timedelta(days=1)), label, "", ""
+
+
+def install_governed_fbm_all_orders_health_alignment(app):
+    """Retired compatibility shim.
+
+    Kept only so legacy imports/tests cannot fail during collection. It installs
+    no routes, readers, Health overrides, queries, polling, or session authority.
+    """
+    return app
