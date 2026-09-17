@@ -1,9 +1,9 @@
 """Align FBM history, health and page-size controls to the governed page model.
 
 The selected history window defaults to three days. Wider ranges are loaded only
-when the user explicitly selects them. Every lifecycle tab, badge and health
-count derives from the same complete selected-history FBM snapshot; page size is
-presentation only.
+when the user explicitly selects them. Health and workflow counts derive from the
+complete selected-history FBM snapshot, while the ordinary order-table read stays
+bounded to the selected 15/30/50/100 presentation size.
 
 The persisted MarketplaceOrder.created_at column is the single timestamp truth
 for history membership. Range instructions are interpreted as Europe/London
@@ -117,13 +117,10 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
     original_guide_html = page_alignment._guide_html
 
     def _selected_fbm_rows() -> list[MarketplaceOrder]:
-        """Complete canonical eligible FBM snapshot for the selected DB date range."""
+        """Complete canonical eligible FBM snapshot for health/workflow truth only."""
         cached = getattr(g, "_bt38_fbm_health_rows", None)
         if cached is not None:
-            rows = list(cached)
-            g._bt38_fbm_session_rows = rows
-            g._bt38_fbm_session_truncated = False
-            return rows
+            return list(cached)
 
         mode, start_at, end_at, label, raw_from, raw_to = _selected_history_window()
         candidates = (
@@ -152,8 +149,6 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
                 rows.append(row)
 
         g._bt38_fbm_health_rows = rows
-        g._bt38_fbm_session_rows = rows
-        g._bt38_fbm_session_truncated = False
         g._bt38_fbm_history_window = {
             "mode": mode,
             "start_at": start_at,
@@ -165,7 +160,7 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
         return list(rows)
 
     def _selected_shipment_map(rows: list[MarketplaceOrder]) -> dict:
-        """Load shipment truth once for this selected-history request working set."""
+        """Load shipment truth once for the complete health/workflow working set."""
         cached = getattr(g, "_bt38_fbm_selected_shipment_map", None)
         if cached is not None:
             return cached
@@ -173,16 +168,11 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
         g._bt38_fbm_selected_shipment_map = shipments
         return shipments
 
-    def selected_range_snapshot_rows() -> tuple[list[MarketplaceOrder], bool]:
-        """Return the same complete selected-history snapshot used by every tab."""
-        rows = _selected_fbm_rows()
-        return list(rows), False
-
     def _health_rows() -> list[MarketplaceOrder]:
         return _selected_fbm_rows()
 
     def selected_range_workflow_snapshot() -> dict:
-        """Classify every tab from the same complete selected-history snapshot."""
+        """Classify tab counts from complete history without making it the page row set."""
         cached = getattr(g, "_bt38_fbm_workflow_snapshot", None)
         if cached is not None:
             return cached
@@ -204,7 +194,8 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
         g._bt38_fbm_workflow_snapshot = snapshot
         return snapshot
 
-    global_search._session_snapshot_rows = selected_range_snapshot_rows
+    # Keep global_search._session_snapshot_rows as the existing bounded page/search
+    # authority. Only workflow/health require the complete selected-history snapshot.
     global_search._persisted_workflow_snapshot = selected_range_workflow_snapshot
     page_alignment._requested_limit = _persisted_page_size
 
@@ -274,12 +265,7 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
         }
 
     def operational_controls(health: dict) -> str:
-        """Render the single authoritative FBM history form.
-
-        The shared global-search after_request hook recognises bt38FbmControls and
-        therefore cannot inject its older 7-day/sessionStorage control surface.
-        The URL request is the only history instruction.
-        """
+        """Render the single authoritative FBM history form."""
         mode = str(health.get("period_mode") or "3d")
         raw_from = str(health.get("range_from") or "")
         raw_to = str(health.get("range_to") or "")
@@ -288,9 +274,7 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
         for name in ("platform", "status", "search", "q", "fbm_tab"):
             value = str(request.args.get(name) or "").strip()
             if value:
-                preserved.append(
-                    f'<input type="hidden" name="{escape(name)}" value="{escape(value)}">'
-                )
+                preserved.append(f'<input type="hidden" name="{escape(name)}" value="{escape(value)}">')
         options = []
         for value, text in (("3d", "3 days"), ("7d", "7 days"), ("30d", "30 days"), ("90d", "90 days"), ("1y", "1 year"), ("custom", "Custom")):
             selected = " selected" if mode == value else ""
@@ -335,5 +319,5 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
     page_alignment._guide_html = operational_guide_html
     app._bt38_fbm_all_orders_health_alignment_installed = True
     app.logger.info(
-        "BT38 FBM history aligned: one URL-request history authority; persisted DB created_at is timestamp truth; Europe/London calendar-day ranges; rendered rows, lifecycle tabs and badges share one selected-history snapshot and one shipment working set; page size presentation only"
+        "BT38 FBM history aligned: bounded ordinary page working set; complete selected-history health/workflow truth; one URL-request history authority; no marketplace/provider reads"
     )
