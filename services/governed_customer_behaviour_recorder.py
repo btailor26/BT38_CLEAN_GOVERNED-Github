@@ -1,6 +1,9 @@
 """Event-driven, privacy-bounded customer journey recorder.
 
-Records what BT38 actually renders and what the browser user interacts with.
+Records what BT38 actually renders and what the browser user interacts with on
+non-operational/customer-facing pages. Operational workspaces must stay asleep
+when the user is not acting, so this recorder is never injected into FBM,
+Warehouse, Product Linking, MCF or other governed operational routes.
 There is no polling, timer loop, marketplace call, stock mutation, keystroke,
 credential, payment-field, or user-entered form-value capture.
 """
@@ -16,6 +19,16 @@ from extensions import db
 from models import SystemLog
 
 _ENDPOINT = "/governed/ui/customer-behaviour"
+_OPERATIONAL_PATH_PREFIXES = (
+    "/fbm",
+    "/governed/warehouse",
+    "/warehouse",
+    "/product-linking",
+    "/admin/product-linking",
+    "/mcf",
+    "/governed/fbm",
+    "/governed/mcf",
+)
 _ALLOWED_EVENTS = {
     "page_view", "display_snapshot", "feature_view", "section_view",
     "scroll_depth", "click", "change", "form_start", "form_submit",
@@ -115,6 +128,14 @@ def _details(row):
     return value if isinstance(value, dict) else {}
 
 
+def _operational_path(path: str) -> bool:
+    clean_path = str(path or "").rstrip("/") or "/"
+    return any(
+        clean_path == prefix or clean_path.startswith(prefix + "/")
+        for prefix in _OPERATIONAL_PATH_PREFIXES
+    )
+
+
 def install_governed_customer_behaviour_recorder(app):
     if getattr(app, "_bt38_customer_behaviour_recorder_installed", False):
         return
@@ -129,6 +150,8 @@ def install_governed_customer_behaviour_recorder(app):
         payload = request.get_json(silent=True)
         if not isinstance(payload, dict):
             return jsonify({"ok": False}), 400
+        if _operational_path(payload.get("page")):
+            return jsonify({"ok": True, "recorded": False}), 202
         event = _safe_text(payload.get("event"), 40)
         if event not in _ALLOWED_EVENTS:
             return jsonify({"ok": False}), 400
@@ -171,7 +194,7 @@ def install_governed_customer_behaviour_recorder(app):
 
     @app.after_request
     def bt38_customer_behaviour_script(response):
-        if request.path == _ENDPOINT or request.method != "GET": return response
+        if request.path == _ENDPOINT or request.method != "GET" or _operational_path(request.path): return response
         content_type = str(response.headers.get("Content-Type") or "").lower()
         if "text/html" not in content_type or response.direct_passthrough or response.headers.get("Content-Encoding"): return response
         body = response.get_data(as_text=True)
