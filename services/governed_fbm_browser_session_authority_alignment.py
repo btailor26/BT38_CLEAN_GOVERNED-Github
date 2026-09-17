@@ -62,7 +62,12 @@ def _canonical_bounded_page_rows(limit: int):
 
 
 def _bounded_browser_session_rows(limit: int):
-    """Keep the initial HTML read bounded; lifecycle expansion must be explicit."""
+    """Keep normal landing bounded, but preserve the existing explicit lifecycle loader."""
+    tab = str(page.request.args.get("fbm_tab") or "").strip().lower()
+    search = str(page.request.args.get("search") or "").strip()
+    if tab or search:
+        from services import governed_fbm_global_search_alignment as global_search
+        return global_search._workflow_rows(limit) if tab else global_search._search_rows(limit)
     return page._bt38_original_bounded_fbm_rows(limit)
 
 
