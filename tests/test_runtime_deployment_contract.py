@@ -104,10 +104,12 @@ def test_automatic_hydration_is_off_by_default(monkeypatch):
 
 def test_ebay_shipping_alignment_runs_existing_post_deploy_recovery_once_at_startup():
     assert "def _install_runtime_startup_alignment()" in EBAY_STARTUP_ALIGNMENT
-    assert "original_engine_loop = runtime._engine_loop" in EBAY_STARTUP_ALIGNMENT
+    assert "_RUNTIME_ORIGINAL_START = runtime.start_governed_runtime_engine" in EBAY_STARTUP_ALIGNMENT
+    assert "runtime.start_governed_runtime_engine = _start_governed_runtime_engine_with_ebay_alignment" in EBAY_STARTUP_ALIGNMENT
     assert "align_ebay_notifications_and_recover_missed_changes(" in EBAY_STARTUP_ALIGNMENT
     assert "store_id=23" in EBAY_STARTUP_ALIGNMENT
     assert "max_days=7" in EBAY_STARTUP_ALIGNMENT
-    assert "return original_engine_loop(app)" in EBAY_STARTUP_ALIGNMENT
+    assert "return _RUNTIME_ORIGINAL_START(app)" in EBAY_STARTUP_ALIGNMENT
+    assert "runtime._engine_loop =" not in EBAY_STARTUP_ALIGNMENT
     assert "threading.Thread" not in EBAY_STARTUP_ALIGNMENT
     assert "while " not in EBAY_STARTUP_ALIGNMENT
