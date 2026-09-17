@@ -92,6 +92,10 @@ jobs:
       - name: Compile production runtime
         run: |
           uv run python -m compileall -q main.py app.py models.py fbm_models.py governed_routes.py governed_group_routes.py governed_group_propagation_routes.py governed_runtime_visibility_routes.py governed_fbm_routes.py governed_fbm_manual_routes.py governed_packlink_callback_routes.py services scripts
+          # Keep the manual-shipping release gate visibly bound to its runtime authorities.
+          test -f services/fbm_marketplace_destination.py
+          test -f services/fbm_amazon_order_profile.py
+          test -f services/fbm_amazon_shipping_adapter.py
       - name: Run deployment contracts
         run: |
           uv run python -m pytest -q tests/test_runtime_deployment_contract.py tests/test_fba_targeted_update_contract.py tests/test_webhook_scoped_reconcile_contract.py tests/test_webhook_push_alignment_contract.py tests/test_ui_production_alignment_contract.py tests/test_github_fly_only_deployment_contract.py tests/test_fbm_manual_shipping_order_contract.py tests/test_google_identity_alignment_contract.py tests/test_package_catalog_alignment_contract.py tests/test_revolut_billing_client_contract.py tests/test_revolut_subscription_alignment_contract.py tests/test_billing_invoice_alignment_contract.py tests/test_support_case_alignment_contract.py tests/test_governed_deployment_evidence_contract.py
