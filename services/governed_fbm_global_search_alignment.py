@@ -25,7 +25,7 @@ from governed_fbm_routes import _platform
 
 _MAX_SEARCH_LENGTH = 200
 _PAGE_SIZES = (15, 30, 50, 100)
-_RANGE_DAYS = {"7d": 7, "30d": 30, "90d": 90, "1y": 365}
+_RANGE_DAYS = {"3d": 3, "7d": 7, "30d": 30, "90d": 90, "1y": 365}
 _RANGE_ROW_CAP = 5000
 _RANGE_CANDIDATE_MULTIPLIER = 4
 _TZ = ZoneInfo("Europe/London")
@@ -49,15 +49,16 @@ def _page_size() -> int:
 
 
 def _range_key() -> str:
-    raw = str(request.args.get("fbm_range") or "7d").strip().lower()
+    raw = str(request.args.get("fbm_range") or "3d").strip().lower()
     aliases = {
+        "3": "3d", "3day": "3d", "3days": "3d",
         "7": "7d", "7day": "7d", "7days": "7d",
         "30": "30d", "30day": "30d", "30days": "30d",
         "90": "90d", "90day": "90d", "90days": "90d",
         "365": "1y", "year": "1y", "1year": "1y",
     }
     raw = aliases.get(raw, raw)
-    return raw if raw in {*_RANGE_DAYS, "custom"} else "7d"
+    return raw if raw in {*_RANGE_DAYS, "custom"} else "3d"
 
 
 def _parse_date(value: str):
@@ -74,7 +75,7 @@ def _range_bounds() -> tuple[str, datetime, datetime, str]:
         start_date = _parse_date(request.args.get("fbm_from"))
         end_date = _parse_date(request.args.get("fbm_to"))
         if start_date is None or end_date is None or start_date > end_date:
-            mode = "7d"
+            mode = "3d"
         else:
             start_local = datetime(start_date.year, start_date.month, start_date.day, tzinfo=_TZ)
             end_local = datetime(end_date.year, end_date.month, end_date.day, tzinfo=_TZ) + timedelta(days=1)
@@ -82,13 +83,13 @@ def _range_bounds() -> tuple[str, datetime, datetime, str]:
             end_utc = end_local.astimezone(timezone.utc).replace(tzinfo=None)
             return mode, start_utc, end_utc, f"{start_date.strftime('%d %b %Y')} – {end_date.strftime('%d %b %Y')}"
 
-    days = _RANGE_DAYS.get(mode, 7)
+    days = _RANGE_DAYS.get(mode, 3)
     start_date = today - timedelta(days=days - 1)
     start_local = datetime(start_date.year, start_date.month, start_date.day, tzinfo=_TZ)
     end_local = datetime(today.year, today.month, today.day, tzinfo=_TZ) + timedelta(days=1)
     start_utc = start_local.astimezone(timezone.utc).replace(tzinfo=None)
     end_utc = end_local.astimezone(timezone.utc).replace(tzinfo=None)
-    label = {"7d": "Last 7 days", "30d": "Last 30 days", "90d": "Last 90 days", "1y": "Last year"}.get(mode, "Last 7 days")
+    label = {"3d": "Last 3 days", "7d": "Last 7 days", "30d": "Last 30 days", "90d": "Last 90 days", "1y": "Last year"}.get(mode, "Last 3 days")
     return mode, start_utc, end_utc, label
 
 
@@ -123,11 +124,7 @@ def _sds_committed(shipment) -> bool:
 def _canonical_order_rank(row: MarketplaceOrder) -> tuple[int, ...]:
     status = str(getattr(row, "status", "") or "").strip().lower()
     issue_or_cancel = bool(_status_reason(status) or status in _CANCELLED_STATUSES or status.startswith("cancel"))
-    dispatch_truth = bool(
-        any(term in status for term in _DISPATCHED_STATUS_TERMS)
-        or getattr(row, "tracking_number", None)
-        or getattr(row, "shipped_at", None)
-    )
+    dispatch_truth = bool(any(term in status for term in _DISPATCHED_STATUS_TERMS) or getattr(row, "tracking_number", None) or getattr(row, "shipped_at", None))
     processed_truth = bool(getattr(row, "processed_at", None) or status == "processed")
     return (1 if issue_or_cancel else 0, 1 if dispatch_truth else 0, 1 if processed_truth else 0, int(getattr(row, "id", 0) or 0))
 
@@ -153,15 +150,7 @@ def workflow_queue_for(row: MarketplaceOrder, shipment) -> str:
         return reason
     if _sds_committed(shipment):
         return "sds"
-    dispatched = bool(
-        any(term in status for term in _DISPATCHED_STATUS_TERMS)
-        or getattr(row, "tracking_number", None)
-        or getattr(row, "shipped_at", None)
-        or (shipment and getattr(shipment, "tracking_number", None))
-        or (shipment and getattr(shipment, "carrier_accepted_at", None))
-        or (shipment and getattr(shipment, "first_movement_at", None))
-        or (shipment and getattr(shipment, "delivered_at", None))
-    )
+    dispatched = bool(any(term in status for term in _DISPATCHED_STATUS_TERMS) or getattr(row, "tracking_number", None) or getattr(row, "shipped_at", None) or (shipment and getattr(shipment, "tracking_number", None)) or (shipment and getattr(shipment, "carrier_accepted_at", None)) or (shipment and getattr(shipment, "first_movement_at", None)) or (shipment and getattr(shipment, "delivered_at", None)))
     return "dispatched" if dispatched else "ready_dispatch"
 
 
@@ -171,12 +160,7 @@ def _row_matches_term(row: MarketplaceOrder, term: str) -> bool:
     needle = term.casefold()
     store = getattr(row, "store", None)
     warehouse = getattr(row, "warehouse_stock", None)
-    values = (
-        getattr(row, "marketplace_order_id", None), getattr(row, "marketplace_order_item_id", None),
-        getattr(row, "sku", None), getattr(row, "tracking_number", None), getattr(row, "carrier", None),
-        getattr(row, "status", None), getattr(store, "name", None) if store else None,
-        getattr(store, "platform", None) if store else None, getattr(warehouse, "product_name", None) if warehouse else None,
-    )
+    values = (getattr(row, "marketplace_order_id", None), getattr(row, "marketplace_order_item_id", None), getattr(row, "sku", None), getattr(row, "tracking_number", None), getattr(row, "carrier", None), getattr(row, "status", None), getattr(store, "name", None) if store else None, getattr(store, "platform", None) if store else None, getattr(warehouse, "product_name", None) if warehouse else None)
     return any(needle in str(value or "").casefold() for value in values)
 
 
@@ -200,30 +184,15 @@ def _session_snapshot_rows() -> tuple[list[MarketplaceOrder], bool]:
     cached = getattr(g, "_bt38_fbm_session_rows", None)
     if cached is not None:
         return list(cached), bool(getattr(g, "_bt38_fbm_session_truncated", False))
-
     from services import governed_fbm_page_alignment as page_alignment
-
     _, start_at, end_at, _ = _range_bounds()
-    eligible = (
-        func.upper(func.coalesce(MarketplaceOrder.fulfillment_type, "")).notin_(("FBA", "AFN", "MCF")),
-        ~func.lower(func.coalesce(MarketplaceOrder.status, "")).like("mcf_%"),
-    )
+    eligible = (func.upper(func.coalesce(MarketplaceOrder.fulfillment_type, "")).notin_(("FBA", "AFN", "MCF")), ~func.lower(func.coalesce(MarketplaceOrder.status, "")).like("mcf_%"))
     requested = _page_size()
     broad_lookup = bool(_search_term() or _workflow_tab())
     candidate_limit = _RANGE_ROW_CAP + 1 if broad_lookup else min(_RANGE_ROW_CAP + 1, (requested * _RANGE_CANDIDATE_MULTIPLIER) + 1)
-    candidates = (
-        db.session.query(MarketplaceOrder)
-        .filter(*eligible)
-        .filter(MarketplaceOrder.store_id.isnot(None), MarketplaceOrder.marketplace_order_id.isnot(None))
-        .filter(MarketplaceOrder.created_at >= start_at, MarketplaceOrder.created_at < end_at)
-        .options(joinedload(MarketplaceOrder.store), joinedload(MarketplaceOrder.warehouse_stock))
-        .order_by(MarketplaceOrder.id.desc())
-        .limit(candidate_limit)
-        .all()
-    )
+    candidates = (db.session.query(MarketplaceOrder).filter(*eligible).filter(MarketplaceOrder.store_id.isnot(None), MarketplaceOrder.marketplace_order_id.isnot(None)).filter(MarketplaceOrder.created_at >= start_at, MarketplaceOrder.created_at < end_at).options(joinedload(MarketplaceOrder.store), joinedload(MarketplaceOrder.warehouse_stock)).order_by(MarketplaceOrder.id.desc()).limit(candidate_limit).all())
     candidate_truncated = len(candidates) >= candidate_limit
     canonical = _canonical_order_rows(candidates)
-
     profiles = page_alignment._profile_map([row for row in canonical if _platform(row).strip().lower() == "amazon"])
     rows: list[MarketplaceOrder] = []
     for row in canonical:
@@ -231,7 +200,6 @@ def _session_snapshot_rows() -> tuple[list[MarketplaceOrder], bool]:
         profile = profiles.get(key) if _platform(row).strip().lower() == "amazon" else None
         if page_alignment._workspace_fbm_eligible(row, profile):
             rows.append(row)
-
     g._bt38_fbm_session_rows = rows
     g._bt38_fbm_session_truncated = candidate_truncated
     return list(rows), candidate_truncated
@@ -291,30 +259,11 @@ def _controls_html() -> str:
     to_value = str(request.args.get("fbm_to") or "")
     preserved = _query_args_without("fbm_range", "fbm_from", "fbm_to", "limit", "search")
     hidden = "".join(f'<input type="hidden" name="{escape(name)}" value="{escape(value)}">' for name, value in preserved.items())
-    options = "".join(
-        f'<option value="{value}"{" selected" if mode == value else ""}>{label}</option>'
-        for value, label in (("7d", "Last 7 days"), ("30d", "Last 30 days"), ("90d", "Last 90 days"), ("1y", "Last year"), ("custom", "Custom"))
-    )
+    options = "".join(f'<option value="{value}"{" selected" if mode == value else ""}>{label}</option>' for value, label in (("3d", "Last 3 days"), ("7d", "Last 7 days"), ("30d", "Last 30 days"), ("90d", "Last 90 days"), ("1y", "Last year"), ("custom", "Custom")))
     sizes = "".join(f'<option value="{value}"{" selected" if limit == value else ""}>{value}</option>' for value in _PAGE_SIZES)
     clear_args = _query_args_without("search")
     clear_url = "/fbm" + (("?" + urlencode(clear_args)) if clear_args else "")
-    return (
-        '<div class="card-header border-bottom-0 pb-0">'
-        '<form id="bt38FbmControls" class="d-flex gap-2 align-items-center flex-wrap" method="get" action="/fbm">'
-        + hidden
-        + '<label class="small text-muted mb-0">History</label>'
-        + f'<select id="bt38FbmRange" class="form-select form-select-sm" style="width:auto" name="fbm_range" onchange="this.form.submit()">{options}</select>'
-        + f'<input id="bt38FbmFrom" class="form-control form-control-sm" style="width:auto" type="date" name="fbm_from" value="{escape(from_value)}" aria-label="From date">'
-        + f'<input id="bt38FbmTo" class="form-control form-control-sm" style="width:auto" type="date" name="fbm_to" value="{escape(to_value)}" aria-label="To date">'
-        + '<label class="small text-muted mb-0">Show</label>'
-        + f'<select id="bt38ResultsPerPageSelect" class="form-select form-select-sm" style="width:auto" name="limit" onchange="this.form.submit()">{sizes}</select>'
-        + f'<input id="bt38FbmGlobalSearchInput" class="form-control form-control-sm" style="width:min(300px,65vw)" type="search" name="search" autocomplete="off" value="{escape(term)}" placeholder="Order, SKU, tracking, carrier or status">'
-        + '<button class="btn btn-sm btn-primary" type="submit">Apply</button>'
-        + f'<a id="bt38FbmGlobalSearchClear" class="btn btn-sm btn-outline-secondary" href="{escape(clear_url)}">Clear search</a>'
-        + '</form>'
-        + '<script>(function(){var f=document.getElementById("bt38FbmControls"),r=document.getElementById("bt38FbmRange"),a=document.getElementById("bt38FbmFrom"),b=document.getElementById("bt38FbmTo"),s=document.getElementById("bt38ResultsPerPageSelect");if(!f||!r||!s)return;function custom(){var on=r.value==="custom";a.style.display=on?"":"none";b.style.display=on?"":"none";}custom();r.addEventListener("change",function(){sessionStorage.setItem("bt38_fbm_range",r.value);custom();});s.addEventListener("change",function(){sessionStorage.setItem("bt38_fbm_limit",s.value);});if(a)a.addEventListener("change",function(){sessionStorage.setItem("bt38_fbm_from",a.value);});if(b)b.addEventListener("change",function(){sessionStorage.setItem("bt38_fbm_to",b.value);});var u=new URL(window.location.href),changed=false;if(!u.searchParams.has("limit")){var sl=sessionStorage.getItem("bt38_fbm_limit");if(["15","30","50","100"].indexOf(sl)>=0){u.searchParams.set("limit",sl);changed=true;}}if(!u.searchParams.has("fbm_range")){var sr=sessionStorage.getItem("bt38_fbm_range");if(["7d","30d","90d","1y","custom"].indexOf(sr)>=0){u.searchParams.set("fbm_range",sr);if(sr==="custom"){var sf=sessionStorage.getItem("bt38_fbm_from"),st=sessionStorage.getItem("bt38_fbm_to");if(sf)u.searchParams.set("fbm_from",sf);if(st)u.searchParams.set("fbm_to",st);}changed=true;}}if(changed)window.location.replace(u.toString());})();</script>'
-        '</div>'
-    )
+    return ('<div class="card-header border-bottom-0 pb-0">' '<form id="bt38FbmControls" class="d-flex gap-2 align-items-center flex-wrap" method="get" action="/fbm">' + hidden + '<label class="small text-muted mb-0">History</label>' + f'<select id="bt38FbmRange" class="form-select form-select-sm" style="width:auto" name="fbm_range" onchange="this.form.submit()">{options}</select>' + f'<input id="bt38FbmFrom" class="form-control form-control-sm" style="width:auto" type="date" name="fbm_from" value="{escape(from_value)}" aria-label="From date">' + f'<input id="bt38FbmTo" class="form-control form-control-sm" style="width:auto" type="date" name="fbm_to" value="{escape(to_value)}" aria-label="To date">' + '<label class="small text-muted mb-0">Show</label>' + f'<select id="bt38ResultsPerPageSelect" class="form-select form-select-sm" style="width:auto" name="limit" onchange="this.form.submit()">{sizes}</select>' + f'<input id="bt38FbmGlobalSearchInput" class="form-control form-control-sm" style="width:min(300px,65vw)" type="search" name="search" autocomplete="off" value="{escape(term)}" placeholder="Order, SKU, tracking, carrier or status">' + '<button class="btn btn-sm btn-primary" type="submit">Apply</button>' + f'<a id="bt38FbmGlobalSearchClear" class="btn btn-sm btn-outline-secondary" href="{escape(clear_url)}">Clear search</a>' + '</form>' + '<script>(function(){var f=document.getElementById("bt38FbmControls"),r=document.getElementById("bt38FbmRange"),a=document.getElementById("bt38FbmFrom"),b=document.getElementById("bt38FbmTo"),s=document.getElementById("bt38ResultsPerPageSelect");if(!f||!r||!s)return;function custom(){var on=r.value==="custom";a.style.display=on?"":"none";b.style.display=on?"":"none";}custom();r.addEventListener("change",function(){sessionStorage.setItem("bt38_fbm_range",r.value);custom();});s.addEventListener("change",function(){sessionStorage.setItem("bt38_fbm_limit",s.value);});if(a)a.addEventListener("change",function(){sessionStorage.setItem("bt38_fbm_from",a.value);});if(b)b.addEventListener("change",function(){sessionStorage.setItem("bt38_fbm_to",b.value);});var u=new URL(window.location.href),changed=false;if(!u.searchParams.has("limit")){var sl=sessionStorage.getItem("bt38_fbm_limit");if(["15","30","50","100"].indexOf(sl)>=0){u.searchParams.set("limit",sl);changed=true;}}if(!u.searchParams.has("fbm_range")){var sr=sessionStorage.getItem("bt38_fbm_range");if(["3d","7d","30d","90d","1y","custom"].indexOf(sr)>=0){u.searchParams.set("fbm_range",sr);if(sr==="custom"){var sf=sessionStorage.getItem("bt38_fbm_from"),st=sessionStorage.getItem("bt38_fbm_to");if(sf)u.searchParams.set("fbm_from",sf);if(st)u.searchParams.set("fbm_to",st);}changed=true;}}if(changed)window.location.replace(u.toString());})();</script>' '</div>')
 
 
 def _inject_controls(html: str) -> str:
@@ -333,9 +282,7 @@ def _inject_controls(html: str) -> str:
 def install_governed_fbm_global_search_alignment(app) -> None:
     if getattr(app, "_bt38_fbm_global_search_alignment_installed", False):
         return
-
     from services import governed_fbm_page_alignment as page_alignment
-
     original_profile_map = page_alignment._profile_map
     original_shipment_map = page_alignment._shipment_map
 
@@ -406,6 +353,4 @@ def install_governed_fbm_global_search_alignment(app) -> None:
         return response
 
     app._bt38_fbm_global_search_alignment_installed = True
-    app.logger.info(
-        "BT38 FBM history controls aligned: native GET 7/30/90/1y/custom range, exact 15/30/50/100 page size, request-cached persisted reads, no marketplace/provider reads"
-    )
+    app.logger.info("BT38 FBM history controls aligned: native GET 3/7/30/90/1y/custom range, exact 15/30/50/100 page size, request-cached persisted reads, no marketplace/provider reads")
