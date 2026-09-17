@@ -15,8 +15,6 @@ from services import governed_fbm_page_alignment as page
 from services.fbm_shipping_state import shipment_confirmation_state
 
 
-_LIFECYCLE_SESSION_LIMIT = 300
-
 
 def _canonical_bounded_page_rows(limit: int):
     """Use the original page reader contract without the dispatch broad-read override."""
@@ -64,10 +62,8 @@ def _canonical_bounded_page_rows(limit: int):
 
 
 def _bounded_browser_session_rows(limit: int):
-    """Build one bounded lifecycle session, then let the browser page it locally."""
-    session_limit = max(int(limit or 0), _LIFECYCLE_SESSION_LIMIT)
-    rows, has_more = page._bt38_original_bounded_fbm_rows(session_limit)
-    return rows, has_more
+    """Keep the initial HTML read bounded; lifecycle expansion must be explicit."""
+    return page._bt38_original_bounded_fbm_rows(limit)
 
 
 def _session_presentation(rows):
