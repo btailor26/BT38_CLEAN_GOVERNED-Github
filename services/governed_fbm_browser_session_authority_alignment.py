@@ -1,7 +1,7 @@
 """Keep FBM History, lifecycle counts and Health on one browser-session snapshot.
 
-History changes are presentation-only inside the already rendered one-year FBM
-working set. Health and lifecycle numbers are recalculated from that same set.
+The initial /fbm read remains bounded by the existing FBM page authority. History,
+lifecycle and Health then move together over the rendered browser-session facts.
 The bottom 15/30/50/100 pager remains independent presentation state.
 
 This module performs persisted BT38 database reads only. It introduces no
@@ -9,63 +9,19 @@ marketplace/provider read, write, polling, timer, EventSource or fetch path.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
-
-from flask import g
-from sqlalchemy import func
-from sqlalchemy.orm import joinedload
-
-from extensions import db
-from models import MarketplaceOrder
 from services import governed_fbm_dispatch_queue_alignment as dispatch
-from services import governed_fbm_global_search_alignment as controls
 from services import governed_fbm_page_alignment as page
 from services.fbm_shipping_state import shipment_confirmation_state
 
-_TZ = ZoneInfo("Europe/London")
 
-
-def _browser_session_rows(_limit: int):
-    """Load at most the History vocabulary's one-year persisted working set once."""
-    today = datetime.now(_TZ).date()
-    start_local = datetime(
-        (today - timedelta(days=364)).year,
-        (today - timedelta(days=364)).month,
-        (today - timedelta(days=364)).day,
-        tzinfo=_TZ,
-    )
-    start_at = start_local.astimezone(timezone.utc).replace(tzinfo=None)
-    candidates = (
-        db.session.query(MarketplaceOrder)
-        .filter(
-            func.upper(func.coalesce(MarketplaceOrder.fulfillment_type, "")).notin_(("FBA", "AFN", "MCF")),
-            ~func.lower(func.coalesce(MarketplaceOrder.status, "")).like("mcf_%"),
-            MarketplaceOrder.store_id.isnot(None),
-            MarketplaceOrder.marketplace_order_id.isnot(None),
-            MarketplaceOrder.created_at >= start_at,
-        )
-        .options(joinedload(MarketplaceOrder.store), joinedload(MarketplaceOrder.warehouse_stock))
-        .order_by(MarketplaceOrder.id.desc())
-        .all()
-    )
-    rows = controls._canonical_order_rows(candidates)
-    profiles = page._profile_map([
-        row for row in rows if dispatch._marketplace_platform_for(row) == "amazon"
-    ])
-    eligible = []
-    for row in rows:
-        key = (int(row.store_id), str(row.marketplace_order_id))
-        profile = profiles.get(key) if dispatch._marketplace_platform_for(row) == "amazon" else None
-        if page._workspace_fbm_eligible(row, profile):
-            eligible.append(row)
-    g._bt38_fbm_page_working_rows = list(eligible)
-    g._bt38_fbm_session_rows = list(eligible)
-    return list(eligible), False
+def _bounded_browser_session_rows(limit: int):
+    """Use the existing bounded canonical FBM reader; never preload one year here."""
+    rows, has_more = page._bt38_bounded_initial_rows(limit)
+    return rows, has_more
 
 
 def _session_presentation(rows):
-    """Expose only persisted facts needed to move Health with History locally."""
+    """Expose persisted facts needed to move Health with History locally."""
     payload = dispatch._bt38_original_presentation(rows)
     shipments = page._shipment_map(rows)
     for row in rows:
@@ -101,10 +57,9 @@ def _session_health_script() -> str:
   var table=document.querySelector('.fbm-orders-table');
   if(!form||!rangeInput||!dataNode||!table)return;
   var data={};try{data=JSON.parse(dataNode.textContent||'{}')}catch(e){return;}
-  var rows=Array.from(table.querySelectorAll('tbody tr.fbm-order-row'));
 
-  // History is browser-session state. Remove inherited server-submit behaviour.
-  form.onsubmit=function(event){if(event)event.preventDefault();return false;};
+  // History is browser-session presentation state. It must never submit /fbm.
+  form.onsubmit=function(event){if(event)event.preventDefault();syncHealth();return false;};
   rangeInput.onchange=null;
 
   function currentSession(){
@@ -161,13 +116,14 @@ def _session_health_script() -> str:
     var risk=counts.overdue+counts.returns+counts.replacements+counts.refunds;
     var base=Math.max(1,counts.total+counts.returns);var score=Math.max(0,Math.min(100,Math.round(100*(base-risk)/base)));
     var ring=document.querySelector('.fbm-score-ring');if(ring){ring.style.setProperty('--fbm-score',score+'%');var strong=ring.querySelector('strong');if(strong)strong.textContent=score+'%';}
-    var head=document.querySelector('.fbm-period-head .small.text-muted');if(head)head.textContent=b.label+' · DB-backed shipping and lifecycle facts';
+    var head=document.querySelector('.fbm-period-head .small.text-muted');if(head)head.textContent=b.label+' · committed FBM session facts';
     var guide=document.querySelector('.fbm-guide-period');if(guide){var strong=guide.querySelector('strong'),span=guide.querySelector('span');if(strong)strong.textContent=b.label;if(span)span.textContent=counts.total+' FBM orders';}
   }
   rangeInput.addEventListener('change',syncHealth);
   if(fromInput)fromInput.addEventListener('change',syncHealth);
   if(toInput)toInput.addEventListener('change',syncHealth);
   form.addEventListener('submit',syncHealth);
+  document.addEventListener('bt38-fbm-committed-snapshot-applied',syncHealth);
   syncHealth();
 })();
 </script>'''
@@ -177,9 +133,12 @@ def install_governed_fbm_browser_session_authority_alignment(app) -> None:
     if getattr(app, "_bt38_fbm_browser_session_authority_alignment_installed", False):
         return
 
-    # Final authority after the older dispatch/history wrappers: one rendered
-    # one-year persisted working set, then browser-local History/lifecycle/pager.
-    page._latest_distinct_fbm_rows = _browser_session_rows
+    # Preserve the already-installed bounded canonical reader before taking final
+    # authority. This prevents the late browser-session layer from replacing it
+    # with the former 365-day .all() preload.
+    if not hasattr(page, "_bt38_bounded_initial_rows"):
+        page._bt38_bounded_initial_rows = page._latest_distinct_fbm_rows
+    page._latest_distinct_fbm_rows = _bounded_browser_session_rows
 
     if not hasattr(dispatch, "_bt38_original_presentation"):
         dispatch._bt38_original_presentation = dispatch._presentation
@@ -196,5 +155,5 @@ def install_governed_fbm_browser_session_authority_alignment(app) -> None:
     dispatch._inject = aligned_inject
     app._bt38_fbm_browser_session_authority_alignment_installed = True
     app.logger.info(
-        "BT38 FBM final browser-session authority aligned: History + Health + lifecycle move together; bottom pager remains separate; no marketplace/provider reads"
+        "BT38 FBM browser-session authority aligned: bounded initial canonical read; History + Health + lifecycle remain local; exact-record events preserved; no marketplace/provider reads"
     )
