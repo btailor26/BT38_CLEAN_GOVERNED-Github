@@ -2,10 +2,9 @@
 
 The bell owns no order lifecycle state and performs no database, marketplace or
 carrier reads. The FBM page projects each rendered order's current journey into
-the existing browser-session notification cache. The existing bell GET endpoint
-returns an empty transport envelope; the installed browser cache merger supplies
-the current FBM display records. There is no polling, timer, EventSource or
-background fetch.
+browser session storage. The existing bell GET endpoint returns an empty
+transport envelope; the browser projection supplies the current FBM display
+records. There is no polling, timer, EventSource or background fetch.
 """
 from __future__ import annotations
 
@@ -32,10 +31,9 @@ def _fbm_bell_session_script() -> str:
 (function(){
   var table=document.querySelector('.fbm-orders-table');
   if(!table)return;
-  var cacheKey='bt38.notifications.exactEventRecords.v2';
+  var cacheKey='bt38.notifications.fbmCurrentState.v1';
   function text(node){return String(node&&node.textContent||'').trim();}
-  function norm(value){return String(value||'').trim().toLowerCase().replace(/[- ]/g,'_');}
-  function read(){try{var rows=JSON.parse(localStorage.getItem(cacheKey)||'[]');return Array.isArray(rows)?rows:[];}catch(_){return [];}}
+  function read(){try{var rows=JSON.parse(sessionStorage.getItem(cacheKey)||'[]');return Array.isArray(rows)?rows:[];}catch(_){return [];}}
   function label(row){
     var journey=text(row.querySelector('td:nth-child(9)'));
     if(journey.indexOf('Delivered')>=0)return 'Delivered';
@@ -46,7 +44,8 @@ def _fbm_bell_session_script() -> str:
     return 'Ready to dispatch';
   }
   function project(row){
-    var orderId=text(row.querySelector('td:nth-child(3) .fw-semibold');if(!orderId)return null;
+    var orderId=text(row.querySelector('td:nth-child(3) .fw-semibold'));
+    if(!orderId)return null;
     var marketCell=row.querySelector('td:nth-child(2)'),logo=marketCell&&marketCell.querySelector('.fbm-marketplace-logo');
     var platform=String(logo&&logo.getAttribute('alt')||text(marketCell&&marketCell.querySelector('strong'))||'Marketplace').trim();
     var product=text(row.querySelector('td:nth-child(4) strong')),qty=text(row.querySelector('td:nth-child(5)')),sku=text(row.querySelector('td:nth-child(4) code'));
@@ -55,14 +54,14 @@ def _fbm_bell_session_script() -> str:
     return {event_key:'fbm-current:'+orderId,id:'fbm-current:'+orderId,log_type:state==='Ready to dispatch'?'marketplace_sale':'marketplace_lifecycle',platform:platform,title:state+' · '+platform+' · '+(product||orderId),message:parts.join(' · '),order_id:orderId,sku:sku,product_title:product,quantity:qty,carrier:carrier,tracking_number:tracking,status_label:state,requires_action:state==='Ready to dispatch',created_at:new Date().toISOString(),notification_source:'fbm_page'};
   }
   function sync(){
-    var current={},projected=[];
-    table.querySelectorAll('tbody tr.fbm-order-row').forEach(function(row){var record=project(row);if(record){current[record.order_id]=true;projected.push(record);}});
-    // FBM current state replaces older lifecycle displays for the same order.
-    var retained=read().filter(function(record){var orderId=String(record&&record.order_id||'').trim();return !orderId||!current[orderId];});
-    try{localStorage.setItem(cacheKey,JSON.stringify(projected.concat(retained).slice(0,50)));}catch(_){}
+    var projected=[];
+    table.querySelectorAll('tbody tr.fbm-order-row').forEach(function(row){var record=project(row);if(record)projected.push(record);});
+    try{sessionStorage.setItem(cacheKey,JSON.stringify(projected));}catch(_){}
+    try{window.dispatchEvent(new CustomEvent('bt38-fbm-bell-projection-updated',{detail:{records:projected,action_count:projected.filter(function(record){return record.requires_action;}).length}}));}catch(_){}
   }
   sync();
-  document.addEventListener('bt38:exact-record-event',function(){setTimeout(sync,0);});
+  document.addEventListener('bt38:exact-record-event',sync);
+  window.addEventListener('bt38-fbm-committed-snapshot-applied',sync);
 })();
 </script>'''
 
