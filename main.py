@@ -34,6 +34,7 @@ from services.governed_fbm_local_controls_alignment import install_governed_fbm_
 from services.governed_fbm_render_budget_alignment import install_governed_fbm_render_budget_alignment
 from services.governed_fbm_all_orders_health_alignment import install_governed_fbm_all_orders_health_alignment
 from services.governed_fbm_dispatch_queue_alignment import install_governed_fbm_dispatch_queue_alignment
+from services.governed_fbm_browser_session_authority_alignment import install_governed_fbm_browser_session_authority_alignment
 from services.governed_product_linking_unlink_alignment import install_product_linking_unlink_alignment
 from services.governed_ebay_native_shipping_alignment import install_governed_ebay_native_shipping_alignment
 from services.governed_ebay_shipping_connection_ui_alignment import install_governed_ebay_shipping_connection_ui_alignment
@@ -77,13 +78,12 @@ install_governed_fbm_local_controls_alignment(app)
 install_governed_fbm_all_orders_health_alignment(app)
 install_governed_fbm_render_budget_alignment(app)
 
-# Dispatch may add browser classification behaviour, but the final FBM row
-# authority must remain the complete user-selected persisted history snapshot.
-# Import this alignment after dispatch so it restores the canonical server-backed
-# selector and keeps 15/30/50/100 as presentation only. It performs no
-# marketplace/provider reads or writes.
+# Dispatch owns lifecycle classification. History then normalises the controls,
+# and the final browser-session authority makes History + Health + lifecycle move
+# as one rendered session while leaving the bottom pager presentation-only.
 install_governed_fbm_dispatch_queue_alignment(app)
 import services.governed_fbm_history_controls_alignment  # noqa: F401,E402
+install_governed_fbm_browser_session_authority_alignment(app)
 
 import services.governed_fbm_fba_visibility_alignment  # noqa: F401,E402
 install_product_linking_unlink_alignment(app)
