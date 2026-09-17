@@ -252,8 +252,12 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   var header=card.querySelector('.card-header');if(header)header.insertAdjacentElement('afterend',tabBar);else card.insertBefore(tabBar,card.firstChild);
   function handoffToExistingPager(matched){{var controller=window.BT38&&window.BT38.PageController;var pages=window.BT38&&window.BT38.pages;var state=pages&&(pages.fbm||pages.FBM);if(!controller||!state||!Array.isArray(state.rows)||typeof controller.renderPage!=='function')return false;var set=new Set(matched);state.filteredRows=state.rows.filter(function(entry){{return entry&&set.has(entry.el)}});state.currentPage=1;controller.renderPage(state.name);return true;}}
   function refreshBadges(){{var counts=localCounts();tabBar.querySelectorAll('[data-fbm-tab]').forEach(function(button){{var badge=button.querySelector('.badge');if(badge)badge.textContent=Number(counts[button.dataset.fbmTab]||0)}});}}
+  var initialRender=true;
   function render(){{
     rows.forEach(function(row){{row.dataset.fbmHistoryMatch=inHistory(row)?'1':'0'}});
+    var counts=localCounts();
+    if(initialRender&&Number(counts[active]||0)===0){{var fallback=['pending','ready_dispatch','dispatched','replacements','refunds','cancelled'].find(function(name){{return Number(counts[name]||0)>0}});if(fallback)active=fallback;}}
+    initialRender=false;
     var matched=rows.filter(function(row){{return row.dataset.fbmHistoryMatch==='1'&&row.dataset.fbmQueue===active&&(!search||String(row.dataset.fbmSearch||'').indexOf(search)>=0)}});
     var matchedSet=new Set(matched);
     var paged=handoffToExistingPager(matched);
