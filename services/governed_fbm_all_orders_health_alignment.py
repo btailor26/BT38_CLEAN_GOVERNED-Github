@@ -203,23 +203,22 @@ def install_governed_fbm_all_orders_health_alignment(app) -> None:
         rows = _selected_fbm_rows()
         mode, start_at, end_at, label, raw_from, raw_to = _selected_history_window()
         shipments = _selected_shipment_map(rows)
-        dispatch_due = dispatched = awaiting = overdue = mapping_review = 0
-        returns = replacements = refund_issues = 0
+        workflow = selected_range_workflow_snapshot()
+        workflow_counts = workflow["counts"]
+        dispatch_due = int(workflow_counts.get("ready_dispatch", 0) or 0)
+        dispatched = int(workflow_counts.get("dispatched", 0) or 0)
+        replacements = int(workflow_counts.get("replacements", 0) or 0)
+        refund_issues = int(workflow_counts.get("refunds", 0) or 0)
+        awaiting = overdue = mapping_review = 0
+        returns = 0
         platform_counts: dict[str, int] = {}
 
+        # Workflow classification is already complete and request-cached above.
+        # This pass only derives metrics that are not represented by workflow tabs.
         for row in rows:
             platform = _platform(row).strip() or "Other"
             platform_counts[platform] = platform_counts.get(platform, 0) + 1
             shipment = shipments.get((int(row.store_id), str(row.marketplace_order_id)))
-            queue = global_search.workflow_queue_for(row, shipment)
-            if queue == "ready_dispatch":
-                dispatch_due += 1
-            elif queue == "dispatched":
-                dispatched += 1
-            elif queue == "replacements":
-                replacements += 1
-            elif queue == "refunds":
-                refund_issues += 1
 
             if shipment:
                 state = shipment_confirmation_state(shipment)
