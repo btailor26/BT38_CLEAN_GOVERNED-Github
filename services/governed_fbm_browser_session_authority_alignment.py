@@ -38,7 +38,7 @@ def _canonical_bounded_page_rows(limit: int):
         max(limit + 1, (limit + 1) * page._FBM_DISCOVERY_MULTIPLIER),
     )
     candidates = (
-        query.options(page.joinedload(page.MarketplaceOrder.store), page.joinedload(page.MarketplaceOrder.warehouse_stock))
+        query.options(page.joinedload(page.MarketplaceOrder.store))
         .order_by(page.MarketplaceOrder.id.desc())
         .limit(candidate_limit)
         .all()
