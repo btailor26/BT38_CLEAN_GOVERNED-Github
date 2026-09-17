@@ -141,17 +141,10 @@ def _canonical_order_rows(rows: list[MarketplaceOrder]) -> list[MarketplaceOrder
     return sorted(selected.values(), key=lambda row: int(row.id or 0), reverse=True)
 
 
-def workflow_queue_for(row: MarketplaceOrder, shipment) -> str:
-    status = str(getattr(row, "status", "") or "").strip().lower()
-    reason = _status_reason(status)
-    if status in _CANCELLED_STATUSES or status.startswith("cancel"):
-        return "excluded"
-    if reason:
-        return reason
-    if _sds_committed(shipment):
-        return "sds"
-    dispatched = bool(any(term in status for term in _DISPATCHED_STATUS_TERMS) or getattr(row, "tracking_number", None) or getattr(row, "shipped_at", None) or (shipment and getattr(shipment, "tracking_number", None)) or (shipment and getattr(shipment, "carrier_accepted_at", None)) or (shipment and getattr(shipment, "first_movement_at", None)) or (shipment and getattr(shipment, "delivered_at", None)))
-    return "dispatched" if dispatched else "ready_dispatch"
+def workflow_queue_for(row: MarketplaceOrder, shipment=None) -> str:
+    """Canonical FBM lifecycle classifier shared by server and browser presentation."""
+    from services import governed_fbm_dispatch_queue_alignment as dispatch
+    return dispatch._aligned_workflow_queue_for(row, shipment)
 
 
 def _row_matches_term(row: MarketplaceOrder, term: str) -> bool:
