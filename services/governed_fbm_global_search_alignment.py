@@ -33,7 +33,7 @@ _CANCELLED_STATUSES = {"cancelled", "canceled", "cancelled_by_buyer", "cancelled
 _REPLACEMENT_TERMS = ("replacement", "replaced")
 _REFUND_TERMS = ("refund", "refunded", "return", "returned", "inr", "case", "claim", "dispute", "issue")
 _DISPATCHED_STATUS_TERMS = ("shipped", "dispatched", "delivered", "fulfilled", "completed")
-_WORKFLOW_TABS = {"ready_dispatch", "dispatched", "sds", "replacements", "refunds"}
+_WORKFLOW_TABS = {"ready_dispatch", "pending", "dispatched", "cancelled", "sds", "replacements", "refunds"}
 
 
 def _search_term() -> str:
