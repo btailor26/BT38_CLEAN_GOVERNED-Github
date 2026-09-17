@@ -251,34 +251,6 @@ def _query_args_without(*names: str) -> dict[str, str]:
     return {name: str(request.args.get(name) or "").strip() for name in allowed if name not in omitted and str(request.args.get(name) or "").strip()}
 
 
-def _controls_html() -> str:
-    mode = _range_key()
-    limit = _page_size()
-    term = _search_term()
-    from_value = str(request.args.get("fbm_from") or "")
-    to_value = str(request.args.get("fbm_to") or "")
-    preserved = _query_args_without("fbm_range", "fbm_from", "fbm_to", "limit", "search")
-    hidden = "".join(f'<input type="hidden" name="{escape(name)}" value="{escape(value)}">' for name, value in preserved.items())
-    options = "".join(f'<option value="{value}"{" selected" if mode == value else ""}>{label}</option>' for value, label in (("3d", "Last 3 days"), ("7d", "Last 7 days"), ("30d", "Last 30 days"), ("90d", "Last 90 days"), ("1y", "Last year"), ("custom", "Custom")))
-    sizes = "".join(f'<option value="{value}"{" selected" if limit == value else ""}>{value}</option>' for value in _PAGE_SIZES)
-    clear_args = _query_args_without("search")
-    clear_url = "/fbm" + (("?" + urlencode(clear_args)) if clear_args else "")
-    return ('<div class="card-header border-bottom-0 pb-0">' '<form id="bt38FbmControls" class="d-flex gap-2 align-items-center flex-wrap" method="get" action="/fbm">' + hidden + '<label class="small text-muted mb-0">History</label>' + f'<select id="bt38FbmRange" class="form-select form-select-sm" style="width:auto" name="fbm_range" onchange="this.form.submit()">{options}</select>' + f'<input id="bt38FbmFrom" class="form-control form-control-sm" style="width:auto" type="date" name="fbm_from" value="{escape(from_value)}" aria-label="From date">' + f'<input id="bt38FbmTo" class="form-control form-control-sm" style="width:auto" type="date" name="fbm_to" value="{escape(to_value)}" aria-label="To date">' + '<label class="small text-muted mb-0">Show</label>' + f'<select id="bt38ResultsPerPageSelect" class="form-select form-select-sm" style="width:auto" name="limit" onchange="this.form.submit()">{sizes}</select>' + f'<input id="bt38FbmGlobalSearchInput" class="form-control form-control-sm" style="width:min(300px,65vw)" type="search" name="search" autocomplete="off" value="{escape(term)}" placeholder="Order, SKU, tracking, carrier or status">' + '<button class="btn btn-sm btn-primary" type="submit">Apply</button>' + f'<a id="bt38FbmGlobalSearchClear" class="btn btn-sm btn-outline-secondary" href="{escape(clear_url)}">Clear search</a>' + '</form>' + '<script>(function(){var f=document.getElementById("bt38FbmControls"),r=document.getElementById("bt38FbmRange"),a=document.getElementById("bt38FbmFrom"),b=document.getElementById("bt38FbmTo"),s=document.getElementById("bt38ResultsPerPageSelect");if(!f||!r||!s)return;function custom(){var on=r.value==="custom";a.style.display=on?"":"none";b.style.display=on?"":"none";}custom();r.addEventListener("change",function(){sessionStorage.setItem("bt38_fbm_range",r.value);custom();});s.addEventListener("change",function(){sessionStorage.setItem("bt38_fbm_limit",s.value);});if(a)a.addEventListener("change",function(){sessionStorage.setItem("bt38_fbm_from",a.value);});if(b)b.addEventListener("change",function(){sessionStorage.setItem("bt38_fbm_to",b.value);});var u=new URL(window.location.href),changed=false;if(!u.searchParams.has("limit")){var sl=sessionStorage.getItem("bt38_fbm_limit");if(["15","30","50","100"].indexOf(sl)>=0){u.searchParams.set("limit",sl);changed=true;}}if(!u.searchParams.has("fbm_range")){var sr=sessionStorage.getItem("bt38_fbm_range");if(["3d","7d","30d","90d","1y","custom"].indexOf(sr)>=0){u.searchParams.set("fbm_range",sr);if(sr==="custom"){var sf=sessionStorage.getItem("bt38_fbm_from"),st=sessionStorage.getItem("bt38_fbm_to");if(sf)u.searchParams.set("fbm_from",sf);if(st)u.searchParams.set("fbm_to",st);}changed=true;}}if(changed)window.location.replace(u.toString());})();</script>' '</div>')
-
-
-def _inject_controls(html: str) -> str:
-    if 'id="bt38FbmControls"' in html:
-        return html
-    marker = '<div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2"><div><span class="fw-semibold">FBM Orders</span>'
-    index = html.find(marker)
-    if index < 0:
-        return html
-    card_start = html.rfind('<div class="card">', 0, index + 1)
-    if card_start < 0:
-        return html
-    return html[:card_start] + '<div class="card">\n' + _controls_html() + html[card_start + len('<div class="card">'):]
-
-
 def install_governed_fbm_global_search_alignment(app) -> None:
     if getattr(app, "_bt38_fbm_global_search_alignment_installed", False):
         return
@@ -340,17 +312,9 @@ def install_governed_fbm_global_search_alignment(app) -> None:
     page_alignment._requested_limit = requested_limit
     page_alignment._profile_map = request_cached_profile_map
     page_alignment._shipment_map = request_cached_shipment_map
-    page_alignment._latest_distinct_fbm_rows = session_rows
     page_alignment._health_period = selected_health_period
     page_alignment._period_controls = no_legacy_period_controls
     page_alignment._expand_control = no_server_expand
-
-    @app.after_request
-    def bt38_fbm_session_search_response(response):
-        path = request.path.rstrip("/") or "/"
-        if path == "/fbm" and response.status_code == 200 and response.content_type and "text/html" in response.content_type:
-            response.set_data(_inject_controls(response.get_data(as_text=True)))
-        return response
 
     app._bt38_fbm_global_search_alignment_installed = True
     app.logger.info("BT38 FBM history controls aligned: native GET 3/7/30/90/1y/custom range, exact 15/30/50/100 page size, request-cached persisted reads, no marketplace/provider reads")
