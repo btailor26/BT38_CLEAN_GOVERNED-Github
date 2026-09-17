@@ -29,14 +29,14 @@ def _local_controls_html() -> str:
         # Marker prevents the legacy tracking journey from creating a second
         # search/pager authority. It is deliberately not a form.
         '<span id="bt38FbmSearchForm" hidden aria-hidden="true"></span>'
-        '<form id="bt38FbmControls" class="d-flex gap-2 align-items-center flex-wrap" onsubmit="return false">'
+        '<div id="bt38FbmControls" class="d-flex gap-2 align-items-center flex-wrap">'
         '<label class="small text-muted mb-0">History</label>'
         f'<select id="bt38FbmRange" class="form-select form-select-sm" style="width:auto" aria-label="FBM history">{options}</select>'
         '<input id="bt38FbmFrom" class="form-control form-control-sm" style="width:auto;display:none" type="date" aria-label="From date">'
         '<input id="bt38FbmTo" class="form-control form-control-sm" style="width:auto;display:none" type="date" aria-label="To date">'
         '<input id="bt38FbmGlobalSearchInput" class="form-control form-control-sm" style="width:min(300px,65vw)" type="search" autocomplete="off" placeholder="Order, SKU, tracking, carrier or status">'
         '<button id="bt38FbmGlobalSearchClear" class="btn btn-sm btn-outline-secondary" type="button">Clear search</button>'
-        '</form>'
+        '</div>'
         '</div>'
     )
 
