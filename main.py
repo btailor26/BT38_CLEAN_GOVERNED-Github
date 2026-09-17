@@ -36,6 +36,7 @@ from services.governed_fbm_all_orders_health_alignment import install_governed_f
 from services.governed_fbm_dispatch_queue_alignment import install_governed_fbm_dispatch_queue_alignment
 from services.governed_fbm_browser_session_authority_alignment import install_governed_fbm_browser_session_authority_alignment
 from services.governed_fbm_bell_display_only_alignment import install_governed_fbm_bell_display_only_alignment
+from services.governed_fbm_exact_record_session_alignment import install_governed_fbm_exact_record_session_alignment
 from services.governed_product_linking_unlink_alignment import install_product_linking_unlink_alignment
 from services.governed_ebay_native_shipping_alignment import install_governed_ebay_native_shipping_alignment
 from services.governed_ebay_shipping_connection_ui_alignment import install_governed_ebay_shipping_connection_ui_alignment
@@ -117,6 +118,11 @@ install_governed_fbm_tracking_authority_restore(app)
 # Final Bell contract: presentation only. It mirrors the current FBM browser
 # session and must not query DB/marketplace/carrier state or introduce polling.
 install_governed_fbm_bell_display_only_alignment(app)
+
+# Final FBM event boundary: an exact committed order event mutates only that
+# browser-session record. It must run after legacy refresh installers so the old
+# full /fbm GET/rebuild path cannot fire for the same event.
+install_governed_fbm_exact_record_session_alignment(app)
 
 from services.governed_ebay_notification_challenge import install_ebay_notification_challenge_handler
 install_ebay_notification_challenge_handler(app)
