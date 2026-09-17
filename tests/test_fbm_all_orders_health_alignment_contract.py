@@ -9,9 +9,10 @@ SESSION_JS = (ROOT / "static" / "js" / "fbm_event_session_refresh_alignment.js")
 PAGE_CONTROLLER = (ROOT / "static" / "js" / "bt38-page-controller.js").read_text(encoding="utf-8")
 
 
-def test_fbm_history_defaults_to_seven_days_and_history_is_date_scoped():
+def test_fbm_history_defaults_to_three_days_and_history_is_date_scoped():
     assert "install_governed_fbm_all_orders_health_alignment" in CLARITY
-    assert 'request.args.get("fbm_range") or "7d"' in HEALTH
+    assert 'request.args.get("fbm_range") or "3d"' in HEALTH
+    assert '"3d": (3, "Last 3 days")' in HEALTH
     assert '"7d": (7, "Last 7 days")' in HEALTH
     assert '"30d": (30, "Last 30 days")' in HEALTH
     assert '"90d": (90, "Last 90 days")' in HEALTH
@@ -19,23 +20,23 @@ def test_fbm_history_defaults_to_seven_days_and_history_is_date_scoped():
     assert 'mode == "custom"' in HEALTH
     assert 'MarketplaceOrder.created_at >= start_at' in HEALTH
     assert 'MarketplaceOrder.created_at < end_at' in HEALTH
-    assert 'global_search._session_snapshot_rows = selected_range_snapshot_rows' in HEALTH
 
 
-def test_normal_fbm_page_read_is_bounded_to_selected_presentation_size():
+def test_normal_fbm_page_keeps_existing_bounded_session_read_authority():
     assert '_PAGE_SIZES = (15, 30, 50, 100)' in HEALTH
-    assert 'visible_limit = _persisted_page_size()' in HEALTH
-    assert 'candidate_limit = min(401, (visible_limit * 4) + 1)' in HEALTH
-    assert '.limit(candidate_limit)' in HEALTH
-    assert 'if len(rows) >= visible_limit:' in HEALTH
+    assert 'global_search._session_snapshot_rows = selected_range_snapshot_rows' not in HEALTH
+    assert 'global_search._persisted_workflow_snapshot = selected_range_workflow_snapshot' in HEALTH
     assert 'page_alignment._requested_limit = _persisted_page_size' in HEALTH
+    assert 'candidate_limit = _RANGE_ROW_CAP + 1 if broad_lookup else min(_RANGE_ROW_CAP + 1, (requested * _RANGE_CANDIDATE_MULTIPLIER) + 1)' in SEARCH
+    assert '.limit(candidate_limit)' in SEARCH
+    assert 'return rows[:limit], bool(truncated or len(rows) > limit)' in SEARCH
 
 
-def test_fbm_health_uses_selected_date_window_without_loading_warehouse_payloads():
-    assert 'def _health_rows()' in HEALTH
+def test_complete_health_workflow_snapshot_does_not_load_warehouse_payloads():
+    assert 'def _selected_fbm_rows()' in HEALTH
     assert '.options(joinedload(MarketplaceOrder.store))' in HEALTH
-    assert 'joinedload(MarketplaceOrder.warehouse_stock)' in HEALTH
-    assert 'total = len(order_rows)' in HEALTH
+    assert 'joinedload(MarketplaceOrder.warehouse_stock)' not in HEALTH
+    assert 'def selected_range_workflow_snapshot()' in HEALTH
     assert 'global_search.workflow_queue_for(row, shipment)' in HEALTH
     assert 'queue == "ready_dispatch"' in HEALTH
     assert 'queue == "dispatched"' in HEALTH
@@ -49,7 +50,6 @@ def test_fbm_page_size_is_15_30_50_100_and_server_wired():
     assert '<option value="50"' in HEALTH
     assert '<option value="100"' in HEALTH
     assert 'name="limit"' in HEALTH
-    assert 'onchange="this.form.submit()"' in HEALTH
     assert 'session["bt38_fbm_page_size"] = value' in HEALTH
     assert 'session.get("bt38_fbm_page_size", 15)' in HEALTH
     assert 'const allowedPageSizes = [15, 30, 50, 100];' in SESSION_JS
