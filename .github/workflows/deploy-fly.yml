@@ -175,7 +175,7 @@ jobs:
           EXPECTED_SOURCE_COUNT="$(wc -l < deployment-evidence/source-production-hashes.txt)"
           test "$EXPECTED_SOURCE_COUNT" -gt 0
           FILES_B64="$(awk '{sub(/^[^ ]+[ ][ ]/,""); print}' deployment-evidence/source-production-hashes.txt | base64 -w0)"
-          flyctl ssh console --app bt38-prod --command "sh -lc 'printf %s \"$FILES_B64\" | base64 -d > /tmp/bt38-runtime-files.txt && cd /app && while IFS= read -r f; do sha256sum \"$f\"; done < /tmp/bt38-runtime-files.txt'" | tr -d '\r' | grep -E '^[0-9a-f]{64}  ' > deployment-evidence/production-source-hashes.txt
+          flyctl ssh console --app bt38-prod --command "sh -lc 'printf %s \"$FILES_B64\" | base64 -d > /tmp/bt38-runtime-files.txt && cd /app && while IFS= read -r f; do sha256sum \"\$f\"; done < /tmp/bt38-runtime-files.txt'" | tr -d '\r' | grep -E '^[0-9a-f]{64}  ' > deployment-evidence/production-source-hashes.txt
           PRODUCTION_SOURCE_COUNT="$(wc -l < deployment-evidence/production-source-hashes.txt)"
           test "$PRODUCTION_SOURCE_COUNT" = "$EXPECTED_SOURCE_COUNT"
           diff -u deployment-evidence/source-production-hashes.txt deployment-evidence/production-source-hashes.txt
