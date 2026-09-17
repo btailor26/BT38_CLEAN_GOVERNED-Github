@@ -1,10 +1,10 @@
 """Align the existing FBM workspace to the BT38 browser-session workflow.
 
 The registered /fbm page remains the one workspace and existing order table.
-The DB supplies the complete relevant persisted FBM working set on page load.
-History, lifecycle tabs, search and pagination then navigate that rendered working
-set locally in the browser. No marketplace/provider read and no DB read/write is
-introduced by those page controls.
+The DB supplies one bounded canonical FBM working set. History, lifecycle tabs,
+search, Health and pagination consume that same browser-session projection. An
+explicit lifecycle request may hydrate missing bounded persisted rows into the same
+table; no competing browser controller or marketplace/provider read is introduced.
 """
 from __future__ import annotations
 
@@ -268,11 +268,10 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
     var actionable=active==='ready_dispatch';var actionArea=document.getElementById('readyToShipSelected');var selectAll=document.getElementById('selectAllOrders');if(actionArea)actionArea.classList.toggle('d-none',!actionable);if(selectAll)selectAll.disabled=!actionable;
     rows.forEach(function(row){{var cb=row.querySelector('.fbm-order-checkbox');if(cb){{cb.checked=false;cb.closest('td').classList.toggle('invisible',!actionable)}}var option=row.querySelector('.fbm-shipping-options');if(option)option.classList.toggle('d-none',!actionable)}});saveSession();
   }}
-  function applyHistory(event){{if(event){{event.preventDefault();event.stopPropagation();}}range=String(rangeInput&&rangeInput.value||'3d').toLowerCase();from=String(fromInput&&fromInput.value||'');to=String(toInput&&toInput.value||'');saveSession();render();}}
-  if(historyForm)historyForm.addEventListener('submit',applyHistory,true);
-  if(rangeInput)rangeInput.addEventListener('change',applyHistory,true);
-  if(fromInput)fromInput.addEventListener('change',applyHistory,true);
-  if(toInput)toInput.addEventListener('change',applyHistory,true);
+  function applyHistory(){{range=String(rangeInput&&rangeInput.value||'3d').toLowerCase();from=String(fromInput&&fromInput.value||'');to=String(toInput&&toInput.value||'');saveSession();render();}}
+  if(rangeInput)rangeInput.addEventListener('change',applyHistory);
+  if(fromInput)fromInput.addEventListener('change',applyHistory);
+  if(toInput)toInput.addEventListener('change',applyHistory);
   if(searchInput)searchInput.addEventListener('input',function(){{search=String(searchInput.value||'').trim().toLowerCase();saveSession();render()}});
   if(clearSearch)clearSearch.addEventListener('click',function(event){{event.preventDefault();if(searchInput)searchInput.value='';search='';saveSession();render()}});
   window.BT38FBMApplyCommittedSnapshot=function(nextData){{data=nextData||data;rows.forEach(function(row){{var info=data[row.dataset.orderId];if(info){{row.dataset.fbmQueue=info.queue||row.dataset.fbmQueue;row.dataset.fbmCreatedAt=info.created_at||row.dataset.fbmCreatedAt}}}});render()}};
