@@ -108,26 +108,8 @@ def _browser_session_health_shell() -> dict:
 
 
 def _session_health_script() -> str:
-    return r'''<script id="bt38FbmBrowserSessionHealthAuthority">
-(function(){
-  var form=document.getElementById('bt38FbmControls')||document.getElementById('bt38FbmHistoryControls');
-  var rangeInput=document.getElementById('bt38FbmRangeSelect')||document.getElementById('bt38FbmRange');
-  var fromInput=form&&form.querySelector('[name="fbm_from"]');
-  var toInput=form&&form.querySelector('[name="fbm_to"]');
-  var dataNode=document.getElementById('bt38FbmLifecycleTabsData');
-  var table=document.querySelector('.fbm-orders-table');
-  if(!form||!rangeInput||!dataNode||!table)return;
-  var data={};try{data=JSON.parse(dataNode.textContent||'{}')}catch(e){return;}
-  form.onsubmit=function(event){if(event)event.preventDefault();syncHealth();return false;};
-  rangeInput.onchange=null;
-  function currentSession(){var fallback={tab:'pending',search:'',range:'3d',from:'',to:'',dirty:false};return (window.BT38&&typeof window.BT38.getPageSession==='function')?window.BT38.getPageSession('fbm',fallback):fallback;}
-  function bounds(){var saved=currentSession()||{};var range=String(saved.range||rangeInput.value||'3d').toLowerCase();var from=String(saved.from||(fromInput&&fromInput.value)||'');var to=String(saved.to||(toInput&&toInput.value)||'');var today=new Date();today=new Date(today.getFullYear(),today.getMonth(),today.getDate());if(range==='custom')return {range:range,start:from?new Date(from+'T00:00:00'):null,end:to?new Date(to+'T23:59:59'):null,label:(from&&to)?from+' – '+to:'Custom'};var days={'3d':3,'7d':7,'30d':30,'90d':90,'1y':365}[range]||3;var start=new Date(today);start.setDate(start.getDate()-(days-1));var end=new Date(today);end.setHours(23,59,59,999);var labels={'3d':'Last 3 days','7d':'Last 7 days','30d':'Last 30 days','90d':'Last 90 days','1y':'Last year'};return {range:range,start:start,end:end,label:labels[range]||'Last 3 days'};}
-  function included(info,b){if(!info||!info.created_at)return false;var d=new Date(info.created_at);if(isNaN(d.getTime()))return false;if(b.start&&d<b.start)return false;if(b.end&&d>b.end)return false;return true;}
-  function setCard(label,value,tip){document.querySelectorAll('.fbm-period-card').forEach(function(card){var name=card.querySelector('.fbm-period-label');if(!name||name.textContent.trim()!==label)return;var number=card.querySelector('.fbm-period-value');if(number)number.textContent=String(value);var help=card.querySelector('.fbm-period-tip');if(help&&tip)help.innerHTML='<div>'+tip+'</div>';});}
-  function syncHealth(){var b=bounds();var counts={total:0,ready:0,dispatched:0,awaiting:0,overdue:0,returns:0,replacements:0,refunds:0,mapping:0};Object.keys(data).forEach(function(id){var info=data[id];if(!included(info,b))return;counts.total+=1;if(info.queue==='ready_dispatch')counts.ready+=1;if(info.queue==='dispatched')counts.dispatched+=1;if(info.queue==='replacements')counts.replacements+=1;if(info.queue==='refunds')counts.refunds+=1;if(info.shipment_state==='awaiting_carrier_acceptance')counts.awaiting+=1;if(info.shipment_state==='acceptance_overdue')counts.overdue+=1;if(info.return_event)counts.returns+=1;if(info.mapping_review)counts.mapping+=1;});setCard('Orders',counts.total,counts.total+' FBM orders in this History period');setCard('Ready to ship',counts.ready,counts.ready+' orders still need a shipping action');setCard('Dispatched',counts.dispatched,counts.dispatched+' orders have dispatch/tracking recorded');setCard('Awaiting carrier',counts.awaiting,counts.awaiting+' labels are waiting for carrier acceptance');setCard('Carrier overdue',counts.overdue,counts.overdue+' shipments are overdue for carrier acceptance');setCard('Returns',counts.returns,counts.returns+' return events recorded in this period');setCard('Replacements',counts.replacements,counts.replacements+' replacement events recorded in this period');setCard('Refunds / issues',counts.refunds,counts.refunds+' refund, case, dispute or chargeback events');setCard('Mapping review',counts.mapping,counts.mapping+' carrier mappings need review');var risk=counts.overdue+counts.returns+counts.replacements+counts.refunds;var base=Math.max(1,counts.total+counts.returns);var score=Math.max(0,Math.min(100,Math.round(100*(base-risk)/base)));var ring=document.querySelector('.fbm-score-ring');if(ring){ring.style.setProperty('--fbm-score',score+'%');var strong=ring.querySelector('strong');if(strong)strong.textContent=score+'%';}var head=document.querySelector('.fbm-period-head .small.text-muted');if(head)head.textContent=b.label+' · committed FBM session facts';var guide=document.querySelector('.fbm-guide-period');if(guide){var strong2=guide.querySelector('strong'),span=guide.querySelector('span');if(strong2)strong2.textContent=b.label;if(span)span.textContent=counts.total+' FBM orders';}}
-  rangeInput.addEventListener('change',syncHealth);if(fromInput)fromInput.addEventListener('change',syncHealth);if(toInput)toInput.addEventListener('change',syncHealth);form.addEventListener('submit',syncHealth);document.addEventListener('bt38-fbm-committed-snapshot-applied',syncHealth);syncHealth();
-})();
-</script>'''
+    """Lifecycle/History controls have one owner; do not install a competing controller."""
+    return ""
 
 
 def install_governed_fbm_browser_session_authority_alignment(app) -> None:
@@ -149,9 +131,7 @@ def install_governed_fbm_browser_session_authority_alignment(app) -> None:
     if not hasattr(dispatch, "_bt38_original_inject"):
         dispatch._bt38_original_inject = dispatch._inject
     def aligned_inject(html, payload, fba_count):
-        rendered = dispatch._bt38_original_inject(html, payload, fba_count)
-        script = _session_health_script()
-        return rendered.replace("</body>", script + "</body>", 1) if "</body>" in rendered else rendered + script
+        return dispatch._bt38_original_inject(html, payload, fba_count)
     dispatch._inject = aligned_inject
     app._bt38_fbm_browser_session_authority_alignment_installed = True
     app.logger.info("BT38 FBM browser-session authority aligned: canonical bounded initial read; dispatch broad-read override bypassed; Health/lifecycle use rendered session facts; exact-record events preserved")
