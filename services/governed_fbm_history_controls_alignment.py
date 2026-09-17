@@ -1,8 +1,11 @@
-"""Wire FBM history controls to one server-backed governed order reader.
+"""Wire FBM History controls without replacing the bounded /fbm row reader.
 
-Presentation/read alignment only: no marketplace/provider read, worker, poller,
-writer or inventory path. History/search/page-size changes are explicit user
-events; lifecycle tabs stay inside the existing browser-session controller.
+History is browser-session presentation state. The initial /fbm navigation stays
+owned by governed_fbm_page_alignment._latest_distinct_fbm_rows so it cannot be
+expanded by the older server-backed History snapshot path.
+
+No marketplace/provider read, writer, poller, timer or parallel event path is
+introduced here.
 """
 from __future__ import annotations
 
@@ -20,8 +23,6 @@ import services.governed_fbm_all_orders_health_alignment as health_alignment
 
 _TZ = ZoneInfo("Europe/London")
 
-# One history vocabulary everywhere. Three days is the default for a fresh FBM
-# request; wider history is always explicit.
 controls._RANGE_DAYS = {"3d": 3, "7d": 7, "30d": 30, "90d": 90, "1y": 365}
 health_alignment._RANGE_DAYS = {
     "3d": (3, "Last 3 days"),
@@ -55,7 +56,6 @@ def _parse_date(value: str):
 
 
 def _range_bounds():
-    """One timestamp boundary authority; every invalid/missing range falls to 3d."""
     mode = _range_key()
     today = datetime.now(_TZ).date()
     if mode == "custom":
@@ -90,13 +90,10 @@ def _range_bounds():
     )
 
 
-# Replace both inherited 7-day fallbacks, not only the dropdown selection.
 controls._range_key = _range_key
 controls._range_bounds = _range_bounds
 
 
-# Keep exactly one history/search surface beside the Data Truth Review area.
-# Page size remains the existing bottom-of-page presentation control.
 def _controls_html() -> str:
     mode = controls._range_key()
     term = controls._search_term()
@@ -126,10 +123,10 @@ def _controls_html() -> str:
     )
     return (
         '<div class="card-header border-bottom-0 pb-0">'
-        '<form id="bt38FbmControls" class="d-flex gap-2 align-items-center flex-wrap" method="get" action="/fbm" onsubmit="this.submit();return false;">'
+        '<form id="bt38FbmControls" class="d-flex gap-2 align-items-center flex-wrap" method="get" action="/fbm">'
         + hidden
         + '<label class="small text-muted mb-0">History</label>'
-        + f'<select id="bt38FbmRange" class="form-select form-select-sm" style="width:auto" name="fbm_range" onchange="if(this.value!==\'custom\'){{this.form.submit();}}">{options}</select>'
+        + f'<select id="bt38FbmRange" class="form-select form-select-sm" style="width:auto" name="fbm_range">{options}</select>'
         + f'<input id="bt38FbmFrom" class="form-control form-control-sm" style="width:auto" type="date" name="fbm_from" value="{escape(from_value)}" aria-label="From date">'
         + f'<input id="bt38FbmTo" class="form-control form-control-sm" style="width:auto" type="date" name="fbm_to" value="{escape(to_value)}" aria-label="To date">'
         + f'<input id="bt38FbmGlobalSearchInput" class="form-control form-control-sm" style="width:min(300px,65vw)" type="search" name="search" autocomplete="off" value="{escape(term)}" placeholder="Order, SKU, tracking, carrier or status">'
@@ -144,9 +141,6 @@ def _controls_html() -> str:
 controls._controls_html = _controls_html
 
 
-# Lifecycle tabs intentionally keep the dispatch controller's existing local
-# browser-session click handler. Do not replace it with a second server tab
-# authority.
 if not getattr(page, "_bt38_history_controls_aligned", False):
     _original_profile_map = page._profile_map
     _original_shipment_map = page._shipment_map
@@ -196,21 +190,11 @@ if not getattr(page, "_bt38_history_controls_aligned", False):
             loaded.update(missing_keys)
         return {key: cache.get(key) for key in keys if cache.get(key) is not None}
 
-    def _selected_rows(limit: int):
-        # History membership is decided first by the canonical DB timestamp
-        # snapshot. Search narrows that snapshot. Page size is presentation only.
-        rows, truncated = controls._session_snapshot_rows()
-        term = controls._search_term()
-        if term:
-            rows = [row for row in rows if controls._row_matches_term(row, term)]
-        visible = list(rows[:limit])
-        return visible, bool(truncated or len(rows) > limit)
-
-    page._requested_limit = health_alignment._persisted_page_size
+    # Keep profile/shipment request-local caches, but DO NOT replace
+    # page._latest_distinct_fbm_rows. The original bounded reader remains the
+    # initial /fbm authority and the browser controller owns History filtering.
     page._profile_map = _cached_profile_map
     page._shipment_map = _cached_shipment_map
-    page._latest_distinct_fbm_rows = _selected_rows
     page._health_period = controls._range_bounds
     page._period_controls = lambda _health: ""
-    page._expand_control = lambda html, *, visible_limit, has_more: html
     page._bt38_history_controls_aligned = True
