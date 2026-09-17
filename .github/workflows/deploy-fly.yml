@@ -94,6 +94,7 @@ jobs:
           uv run python -m compileall -q main.py app.py models.py fbm_models.py governed_routes.py governed_group_routes.py governed_group_propagation_routes.py governed_runtime_visibility_routes.py governed_fbm_routes.py governed_fbm_manual_routes.py governed_packlink_callback_routes.py services scripts
           # Keep the manual-shipping release gate visibly bound to its runtime authorities.
           test -f services/fbm_marketplace_destination.py
+          test -f services/governed_exact_ebay_order_hydration.py
           test -f services/fbm_amazon_order_profile.py
           test -f services/fbm_amazon_shipping_adapter.py
       - name: Run deployment contracts
