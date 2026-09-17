@@ -66,7 +66,7 @@ def test_deploy_workflow_batches_full_fingerprint_verification_in_one_ssh_sessio
     assert "record_governed_deployment_evidence.py" in workflow
     assert "deployment-evidence/changed-files.txt" in workflow
     assert 'FILES_B64="$(awk' in workflow
-    assert 'while IFS= read -r f; do sha256sum' in workflow
+    assert 'while IFS= read -r f; do sha256sum \\\"\\$f\\\"' in workflow
     assert 'sha256sum /app/$FILE' not in workflow
     assert 'EXPECTED_SOURCE_COUNT="$(wc -l < deployment-evidence/source-production-hashes.txt)"' in workflow
     assert 'test "$PRODUCTION_SOURCE_COUNT" = "$EXPECTED_SOURCE_COUNT"' in workflow
