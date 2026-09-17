@@ -21,6 +21,17 @@ def test_browser_session_calls_captured_bounded_reader_only():
     assert "MarketplaceOrder.created_at >= start_at" not in SESSION
 
 
+def test_health_initial_render_uses_existing_browser_session_facts():
+    assert "page._health_summary = _browser_session_health_shell" in SESSION
+    assert "def _browser_session_health_shell()" in SESSION
+    assert '"source": "browser_session"' in SESSION
+    assert "_selected_fbm_rows()" not in SESSION
+    assert "db.session.query" not in SESSION
+    assert "MarketplaceOrder" not in SESSION
+    assert "Object.keys(data).forEach" in SESSION
+    assert "bt38-fbm-committed-snapshot-applied" in SESSION
+
+
 def test_original_page_reader_is_sql_bounded():
     assert "def _latest_distinct_fbm_rows(limit: int)" in PAGE
     assert ".limit(candidate_limit)" in PAGE
