@@ -113,25 +113,6 @@ workflow_queue_for = global_search.workflow_queue_for
 page_alignment._route_state = _health_route_state_from_marketplace_lifecycle
 
 
-def _complete_fbm_page_rows(_limit: int) -> tuple[list[MarketplaceOrder], bool]:
-    """Load the complete relevant persisted FBM working set once for local navigation."""
-    candidates = (
-        db.session.query(MarketplaceOrder)
-        .filter(
-            func.upper(func.coalesce(MarketplaceOrder.fulfillment_type, "")).notin_(("FBA", "AFN", "MCF")),
-            ~func.lower(func.coalesce(MarketplaceOrder.status, "")).like("mcf_%"),
-            MarketplaceOrder.store_id.isnot(None),
-            MarketplaceOrder.marketplace_order_id.isnot(None),
-        )
-        .options(joinedload(MarketplaceOrder.store), joinedload(MarketplaceOrder.warehouse_stock))
-        .order_by(MarketplaceOrder.id.desc())
-        .all()
-    )
-    rows = global_search._canonical_order_rows(candidates)
-    g._bt38_fbm_page_working_rows = list(rows)
-    return list(rows), False
-
-
 def _presentation(rows: list[MarketplaceOrder]) -> dict[str, dict]:
     shipments = page_alignment._shipment_map(rows)
     shipment_ids = sorted({int(s.id) for s in shipments.values() if s and getattr(s, "id", None)})
@@ -289,10 +270,6 @@ def install_governed_fbm_dispatch_queue_alignment(app) -> None:
     if current_view is None:
         raise RuntimeError("governed FBM page endpoint is not registered")
 
-    # Warehouse-pattern alignment: the server establishes the complete persisted
-    # working set once; normal FBM navigation never asks the DB to rebuild it.
-    page_alignment._latest_distinct_fbm_rows = _complete_fbm_page_rows
-
     @login_required
     def aligned_fbm_page():
         original = current_view()
@@ -308,4 +285,4 @@ def install_governed_fbm_dispatch_queue_alignment(app) -> None:
 
     app.view_functions[endpoint] = aligned_fbm_page
     app._bt38_fbm_dispatch_queue_alignment_installed = True
-    app.logger.info("BT38 FBM lifecycle aligned: complete persisted page working set loaded once; History, lifecycle, search and pager are browser-local; no navigation DB/provider read")
+    app.logger.info("BT38 FBM lifecycle aligned: lifecycle presentation only; canonical bounded reader remains externally owned; no broad page-read override")
