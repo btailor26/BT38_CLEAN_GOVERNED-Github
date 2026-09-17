@@ -3,6 +3,12 @@
  * Uses the existing Shipping options / Packlink draft path. A replacement is
  * never treated as another original shipment and cannot proceed until the user
  * states why the extra label is being purchased.
+ *
+ * Reprint rule:
+ * - reprint is not a replacement purchase;
+ * - dispatched selection reuses the existing Packlink status/label -> QZ path;
+ * - the original Packlink shipment identity stays in the row as hidden authority;
+ * - no second label endpoint, provider service or purchase path is introduced.
  */
 (function (window, document) {
     'use strict';
@@ -71,8 +77,71 @@
         return Boolean(shipmentCell.querySelector('code')) || /Marketplace says shipped/i.test(shipmentText);
     }
 
-    function removeRedundantPacklinkChecks() {
-        document.querySelectorAll('.packlink-existing-status').forEach(button => button.remove());
+    function preservePacklinkAuthority() {
+        document.querySelectorAll('.packlink-existing-status[data-shipment-id]').forEach(button => {
+            const row = button.closest('.fbm-order-row');
+            if (row && button.dataset.shipmentId) row.dataset.packlinkShipmentId = String(button.dataset.shipmentId);
+            button.hidden = true;
+            button.classList.add('d-none');
+            button.setAttribute('aria-hidden', 'true');
+            button.tabIndex = -1;
+        });
+    }
+
+    function activeWorkflowTab() {
+        const selected = document.querySelector('[data-fbm-tab].active');
+        return String(selected && selected.dataset.fbmTab || '').trim();
+    }
+
+    function selectedDispatchedPacklinkCount() {
+        const seen = new Set();
+        document.querySelectorAll('.fbm-order-checkbox:checked').forEach(checkbox => {
+            const row = checkbox.closest('.fbm-order-row');
+            if (!row || String(row.dataset.fbmQueue || '') !== 'dispatched') return;
+            const statusButton = row.querySelector('.packlink-existing-status[data-shipment-id]');
+            const shipmentId = statusButton && String(statusButton.dataset.shipmentId || '').trim();
+            if (shipmentId) seen.add(shipmentId);
+        });
+        return seen.size;
+    }
+
+    function alignDispatchedReprintAction() {
+        preservePacklinkAuthority();
+
+        // Remove the previously injected parallel label control. The existing
+        // bulkPacklinkLabels control is the single selected-label action.
+        const duplicate = document.getElementById('dispatchedPacklinkLabelAction');
+        if (duplicate) duplicate.remove();
+
+        const active = activeWorkflowTab();
+        const dispatched = active === 'dispatched';
+        const ready = active === 'ready_dispatch';
+        const selectAll = document.getElementById('selectAllOrders');
+        if (selectAll) selectAll.disabled = !(ready || dispatched);
+
+        document.querySelectorAll('.fbm-order-row').forEach(row => {
+            const checkbox = row.querySelector('.fbm-order-checkbox');
+            if (!checkbox) return;
+            const cell = checkbox.closest('td');
+            const selectable = ready || (dispatched && String(row.dataset.fbmQueue || '') === 'dispatched');
+            checkbox.disabled = !selectable;
+            if (cell) cell.classList.toggle('invisible', !selectable);
+        });
+
+        const reprint = document.getElementById('bulkPacklinkLabels');
+        if (!reprint) return;
+        if (!dispatched) {
+            reprint.classList.remove('bt38-dispatched-reprint');
+            return;
+        }
+
+        reprint.classList.add('bt38-dispatched-reprint');
+        reprint.hidden = false;
+        reprint.classList.remove('d-none');
+        const count = selectedDispatchedPacklinkCount();
+        reprint.disabled = count === 0;
+        reprint.textContent = count > 1 ? `Reprint ${count} Labels` : 'Reprint Label';
+        reprint.title = 'Retrieve the existing paid Packlink label and send it through the existing QZ/download fallback path.';
     }
 
     function replacementRouteHtml(orderId) {
@@ -85,7 +154,7 @@
     }
 
     function installReplacementRoutes() {
-        removeRedundantPacklinkChecks();
+        preservePacklinkAuthority();
         const host = document.getElementById('fbmShippingOrders');
         if (!host) return;
         host.querySelectorAll('.card[data-order-id]').forEach(card => {
@@ -130,9 +199,10 @@
     }
 
     function installButtons() {
-        removeRedundantPacklinkChecks();
+        preservePacklinkAuthority();
         document.querySelectorAll('.bt38-replacement-label').forEach(button => button.remove());
         installReplacementRoutes();
+        alignDispatchedReprintAction();
     }
 
     const ordersBox = document.getElementById('fbmShippingOrders');
@@ -144,7 +214,16 @@
         observer.observe(ordersBox, {childList: true, subtree: true});
     }
 
+    document.addEventListener('change', event => {
+        if (event.target && (event.target.matches('.fbm-order-checkbox') || event.target.matches('#selectAllOrders'))) {
+            window.requestAnimationFrame(alignDispatchedReprintAction);
+        }
+    });
+
     document.addEventListener('click', event => {
+        const tab = event.target.closest('[data-fbm-tab]');
+        if (tab) window.requestAnimationFrame(alignDispatchedReprintAction);
+
         const replacementStart = event.target.closest('.bt38-replacement-start');
         if (replacementStart) {
             event.preventDefault();
@@ -209,5 +288,5 @@
 
     installButtons();
     document.addEventListener('bt38:fbm-snapshot-applied', installButtons);
-    window.setTimeout(installButtons, 250);
+    window.addEventListener('bt38-marketplace-event', () => window.requestAnimationFrame(alignDispatchedReprintAction));
 })(window, document);
