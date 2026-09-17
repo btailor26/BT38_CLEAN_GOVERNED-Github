@@ -28,6 +28,7 @@ import services.governed_ebay_item_marked_shipped_alignment  # noqa: F401
 _ORIGINAL = _registration.ensure_ebay_order_notification_registration
 _INSTALLED = False
 _RUNTIME_INSTALLED = False
+_RUNTIME_ORIGINAL_START = None
 
 
 def _aligned_registration(*, store: Any, access_token: str) -> dict[str, Any]:
@@ -98,38 +99,41 @@ def _aligned_registration(*, store: Any, access_token: str) -> dict[str, Any]:
     return result
 
 
+def _start_governed_runtime_engine_with_ebay_alignment(app):
+    """Run bounded eBay recovery once, then start the unchanged runtime loop."""
+    import services.governed_runtime_engine as runtime
+
+    try:
+        with app.app_context():
+            from services.governed_ebay_post_deploy_alignment import (
+                align_ebay_notifications_and_recover_missed_changes,
+            )
+
+            result = align_ebay_notifications_and_recover_missed_changes(
+                store_id=23,
+                max_days=7,
+            )
+            runtime._safe_log(
+                "eBay post-deploy alignment complete "
+                f"success={bool(result.get('success'))} "
+                f"shipping_enabled={bool((result.get('shipping_notification') or {}).get('enabled'))}"
+            )
+    except Exception as exc:
+        runtime._safe_error("eBay post-deploy alignment failed", exc)
+
+    return _RUNTIME_ORIGINAL_START(app)
+
+
 def _install_runtime_startup_alignment() -> None:
-    """Run the existing bounded eBay post-deploy alignment once per engine start."""
-    global _RUNTIME_INSTALLED
+    """Attach recovery at engine start without replacing the audited idle loop."""
+    global _RUNTIME_INSTALLED, _RUNTIME_ORIGINAL_START
     if _RUNTIME_INSTALLED:
         return
 
     import services.governed_runtime_engine as runtime
 
-    original_engine_loop = runtime._engine_loop
-
-    def _engine_loop_with_ebay_post_deploy_alignment(app):
-        try:
-            with app.app_context():
-                from services.governed_ebay_post_deploy_alignment import (
-                    align_ebay_notifications_and_recover_missed_changes,
-                )
-
-                result = align_ebay_notifications_and_recover_missed_changes(
-                    store_id=23,
-                    max_days=7,
-                )
-                runtime._safe_log(
-                    "eBay post-deploy alignment complete "
-                    f"success={bool(result.get('success'))} "
-                    f"shipping_enabled={bool((result.get('shipping_notification') or {}).get('enabled'))}"
-                )
-        except Exception as exc:
-            runtime._safe_error("eBay post-deploy alignment failed", exc)
-
-        return original_engine_loop(app)
-
-    runtime._engine_loop = _engine_loop_with_ebay_post_deploy_alignment
+    _RUNTIME_ORIGINAL_START = runtime.start_governed_runtime_engine
+    runtime.start_governed_runtime_engine = _start_governed_runtime_engine_with_ebay_alignment
     _RUNTIME_INSTALLED = True
 
 
