@@ -247,8 +247,9 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
     refreshBadges();
     tabBar.querySelectorAll('[data-fbm-tab]').forEach(function(button){{var selected=button.dataset.fbmTab===active;button.classList.toggle('active',selected);button.setAttribute('aria-selected',selected?'true':'false')}});
     var title=card.querySelector('.card-header .fw-semibold');if(title&&labels[active])title.textContent=labels[active];
-    var actionable=active==='ready_dispatch';var actionArea=document.getElementById('readyToShipSelected');var selectAll=document.getElementById('selectAllOrders');if(actionArea)actionArea.classList.toggle('d-none',!actionable);if(selectAll)selectAll.disabled=!actionable;
-    rows.forEach(function(row){{var cb=row.querySelector('.fbm-order-checkbox');if(cb){{cb.checked=false;cb.closest('td').classList.toggle('invisible',!actionable)}}var option=row.querySelector('.fbm-shipping-options');if(option)option.classList.toggle('d-none',!actionable)}});saveSession();
+    var actionable=active==='ready_dispatch';var actionArea=document.getElementById('readyToShipSelected');var selectAll=document.getElementById('selectAllOrders');var selectedCount=document.getElementById('selectedOrderCount');var actionHint=card.querySelector('.card-header .text-muted.small');if(actionArea)actionArea.classList.toggle('d-none',!actionable);if(selectAll)selectAll.disabled=!actionable;
+    rows.forEach(function(row){{var cb=row.querySelector('.fbm-order-checkbox');if(cb){{cb.checked=false;cb.closest('td').classList.toggle('invisible',!actionable)}}var option=row.querySelector('.fbm-shipping-options');if(option)option.classList.toggle('d-none',!actionable)}});
+    if(selectedCount)selectedCount.classList.toggle('d-none',!actionable);if(actionHint)actionHint.classList.toggle('d-none',!actionable);saveSession();
   }}
   function applyHistory(){{range=String(rangeInput&&rangeInput.value||'3d').toLowerCase();from=String(fromInput&&fromInput.value||'');to=String(toInput&&toInput.value||'');saveSession();render();}}
   if(rangeInput)rangeInput.addEventListener('change',applyHistory);
