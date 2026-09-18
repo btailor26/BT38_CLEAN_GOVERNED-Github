@@ -4,7 +4,7 @@
  * handler cannot run first.
  *
  * Journey colour rule:
- * - persisted label/postage created without carrier acceptance => Picked up RED
+ * - persisted label/postage created without carrier acceptance => Picked up neutral
  * - persisted carrier pickup/acceptance => Picked up GREEN
  * - persisted carrier movement => In transit GREEN
  * - delivery timing colour remains owned by the delivery-promise journey
@@ -98,7 +98,7 @@
                 setBadgeState(pickedUp, 'bg-success');
                 if (pickedUp) pickedUp.title = 'Carrier pickup confirmed by persisted journey state';
             } else if (labelOrTrackingStageReached(row)) {
-                setBadgeState(pickedUp, 'bg-danger');
+                setBadgeState(pickedUp, 'bg-light text-muted border');
                 if (pickedUp) pickedUp.title = 'Label / postage created · waiting for carrier collection';
             }
             if (movementStates.has(status)) setBadgeState(inTransit, 'bg-success');
