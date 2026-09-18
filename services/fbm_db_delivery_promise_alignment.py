@@ -130,17 +130,54 @@ def _delivery_performance(shipment: Any, promise: dict[str, Any] | None) -> str:
     return "on_time" if delivered_cmp <= latest_delivery_cmp else "late"
 
 
+def _shipment_tracking_authority(shipment: Any, order: Any) -> dict[str, str]:
+    """Resolve one carrier/tracking authority from persisted facts only.
+
+    A shipment row may exist before a label/tracking identity is verified. Such a
+    draft must never override an order that already has marketplace tracking.
+    """
+    shipment_tracking = str(getattr(shipment, "tracking_number", "") or "").strip() if shipment is not None else ""
+    order_tracking = str(getattr(order, "tracking_number", "") or "").strip() if order is not None else ""
+    if shipment_tracking:
+        return {
+            "carrier": str(getattr(shipment, "carrier", "") or "").strip(),
+            "service": str(getattr(shipment, "service", "") or "").strip(),
+            "tracking_number": shipment_tracking,
+            "authority": "shipment",
+        }
+    if order_tracking:
+        return {
+            "carrier": str(getattr(order, "carrier", "") or "").strip(),
+            "service": "",
+            "tracking_number": order_tracking,
+            "authority": "marketplace_order",
+        }
+    return {"carrier": "", "service": "", "tracking_number": "", "authority": ""}
+
+
 def _shipping_source(shipment: Any) -> str:
     """Return only a persisted label-purchase source; never infer one."""
     if shipment is None:
         return ""
     provider = str(getattr(shipment, "provider", "") or "").strip().lower()
     label_source = str(getattr(shipment, "label_source", "") or "").strip().lower()
-    if provider == "packlink" or label_source == "packlink":
+    if label_source == "packlink":
         return "Packlink"
-    if provider == "ebay_shipping" or label_source == "ebay_finances_shipping_label":
+    if label_source == "ebay_finances_shipping_label":
         return "eBay Shipping"
-    if provider in {"amazon_buy_shipping", "amazon_shipping"} or label_source in {"amazon_buy_shipping", "amazon_shipping"}:
+    if label_source in {"amazon_buy_shipping", "amazon_shipping"}:
+        return "Amazon Buy Shipping"
+    # Older verified shipment rows may pre-date label_source. Require a persisted
+    # shipment identity before provider alone can identify the purchase source.
+    has_shipment_identity = bool(
+        str(getattr(shipment, "tracking_number", "") or "").strip()
+        or str(getattr(shipment, "provider_shipment_id", "") or "").strip()
+    )
+    if has_shipment_identity and provider == "packlink":
+        return "Packlink"
+    if has_shipment_identity and provider == "ebay_shipping":
+        return "eBay Shipping"
+    if has_shipment_identity and provider in {"amazon_buy_shipping", "amazon_shipping"}:
         return "Amazon Buy Shipping"
     return ""
 
@@ -218,6 +255,7 @@ def install_fbm_db_delivery_promise_alignment(app: Any) -> None:
             shipment = item.get("shipment")
             performance = _delivery_performance(shipment, promise)
             item["delivery_performance"] = performance
+            tracking_authority = _shipment_tracking_authority(shipment, order)
             shipment_id = int(getattr(shipment, "id", 0) or 0) if shipment is not None else 0
             shipment_events = tracking_events_by_shipment.get(shipment_id, [])
             order_id = int(getattr(order, "id", 0) or 0)
@@ -239,9 +277,9 @@ def install_fbm_db_delivery_promise_alignment(app: Any) -> None:
                     "latest_delivery_at": _iso((promise or {}).get("latest_delivery_at")),
                     "delivery_performance": performance,
                     "shipping_source": _shipping_source(shipment),
-                    "carrier": str((getattr(shipment, "carrier", "") if shipment is not None else "") or getattr(order, "carrier", "") or "").strip(),
-                    "service": str(getattr(shipment, "service", "") or "") if shipment is not None else "",
-                    "tracking_number": str((getattr(shipment, "tracking_number", "") if shipment is not None else "") or getattr(order, "tracking_number", "") or "").strip(),
+                    "carrier": tracking_authority["carrier"],
+                    "service": tracking_authority["service"],
+                    "tracking_number": tracking_authority["tracking_number"],
                     "provider_shipment_id": str(getattr(shipment, "provider_shipment_id", "") or "") if shipment is not None else "",
                     "marketplace_order_id": str(getattr(order, "marketplace_order_id", "") or ""),
                     "tracking_events": shipment_events,
