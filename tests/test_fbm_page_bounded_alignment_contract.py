@@ -204,12 +204,13 @@ def test_fbm_session_helper_is_presentation_only_and_never_creates_a_second_even
     assert "MutationObserver" not in EVENT_REFRESH
 
 
-def test_dispatch_split_is_registered_after_persisted_fbm_scope_and_health():
+def test_dispatch_split_is_registered_before_final_browser_session_authority():
     assert "install_governed_notification_read_alignment(app)" in MAIN
     assert "install_governed_fbm_page_alignment(app)" in MAIN
     assert "install_governed_fbm_global_search_alignment(app)" in MAIN
-    assert "install_governed_fbm_all_orders_health_alignment(app)" in MAIN
     assert "install_governed_fbm_dispatch_queue_alignment(app)" in MAIN
+    assert "install_governed_fbm_browser_session_authority_alignment(app)" in MAIN
+    assert "install_governed_fbm_all_orders_health_alignment(app)" not in MAIN
     assert MAIN.index("install_governed_fbm_page_alignment(app)") < MAIN.index("install_governed_fbm_global_search_alignment(app)")
-    assert MAIN.index("install_governed_fbm_global_search_alignment(app)") < MAIN.index("install_governed_fbm_all_orders_health_alignment(app)")
-    assert MAIN.index("install_governed_fbm_all_orders_health_alignment(app)") < MAIN.index("install_governed_fbm_dispatch_queue_alignment(app)")
+    assert MAIN.index("install_governed_fbm_global_search_alignment(app)") < MAIN.index("install_governed_fbm_dispatch_queue_alignment(app)")
+    assert MAIN.index("install_governed_fbm_dispatch_queue_alignment(app)") < MAIN.index("install_governed_fbm_browser_session_authority_alignment(app)")
