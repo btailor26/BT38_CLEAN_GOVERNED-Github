@@ -108,3 +108,13 @@ def test_one_journey_colour_rule_has_no_red_pending_stage():
     assert "bg-light', 'text-muted', 'border', 'border-secondary" in source
     assert "const border = confirmed ? 'border-success' : 'border-secondary';" in source
     assert "bg-danger text-white\">Late" in source
+
+
+def test_all_active_fbm_journey_renderers_keep_pending_neutral():
+    current = Path("static/js/fbm_tracking_journey.js").read_text(encoding="utf-8")
+    legacy = Path("static/js/fbm_tracking_journey_legacy.js").read_text(encoding="utf-8")
+
+    assert "setBadgeState(pickedUp, 'bg-danger')" not in current
+    assert "setBadgeState(pickedUp, 'bg-light text-muted border')" in current
+    assert "badge.classList.contains('bg-danger') || badge.classList.contains('bg-primary')" not in legacy
+    assert "const statusClass = active ? 'bg-success' : 'bg-light text-muted border';" in legacy
