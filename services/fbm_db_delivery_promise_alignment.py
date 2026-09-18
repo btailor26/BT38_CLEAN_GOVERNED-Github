@@ -167,6 +167,8 @@ def _shipping_source(shipment: Any) -> str:
         return "eBay Shipping"
     if label_source in {"amazon_buy_shipping", "amazon_shipping"}:
         return "Amazon Buy Shipping"
+    if provider in {"amazon_buy_shipping", "amazon_shipping"}:
+        return "Amazon Buy Shipping"
     # Older verified shipment rows may pre-date label_source. Require a persisted
     # shipment identity before provider alone can identify the purchase source.
     has_shipment_identity = bool(
