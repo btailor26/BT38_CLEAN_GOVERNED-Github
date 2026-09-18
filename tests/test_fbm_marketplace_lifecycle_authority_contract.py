@@ -153,14 +153,15 @@ def test_outbound_label_is_dispatch_handoff_but_not_return_or_replacement_postag
     assert classifier.index('if reason:') < classifier.index('if _outbound_label_handoff_reached(shipment):')
 
 
-def test_picked_up_stays_red_after_label_stage_until_real_acceptance():
+def test_picked_up_stays_neutral_after_label_stage_until_real_acceptance():
     assert 'labelOrTrackingStageReached(row)' in JOURNEY
     assert "return String(row && row.dataset ? row.dataset.labelReady || '' : '') === '1';" in JOURNEY
-    assert "setBadgeState(pickedUp, 'bg-danger')" in JOURNEY
+    assert "setBadgeState(pickedUp, 'bg-danger')" not in JOURNEY
+    assert "setBadgeState(pickedUp, 'bg-light text-muted border')" in JOURNEY
     assert "setBadgeState(pickedUp, 'bg-success')" in JOURNEY
     assert 'pickupStates.has(status)' in JOURNEY
     assert 'Label / postage created · waiting for carrier collection' in JOURNEY
-    assert 'persisted label/postage created without carrier acceptance => Picked up RED' in JOURNEY
+    assert 'persisted label/postage created without carrier acceptance => Picked up neutral' in JOURNEY
     assert "querySelectorAll('code')" not in JOURNEY.split('function labelOrTrackingStageReached(row) {', 1)[1].split('\n    }', 1)[0]
 
 
