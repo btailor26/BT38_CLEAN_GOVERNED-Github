@@ -99,3 +99,12 @@ def test_shipment_journey_does_not_present_bt38_inference_as_provider_wording():
     assert "carrier acceptance persisted" not in source
     assert "first movement persisted" not in source
     assert "Delivery completion persisted" not in source
+
+
+def test_one_journey_colour_rule_has_no_red_pending_stage():
+    source = Path("static/js/fbm_delivery_promise_journey_alignment.js").read_text(encoding="utf-8")
+
+    assert "stageTruth[label] ? 'bg-success' : 'bg-danger'" not in source
+    assert "bg-light', 'text-muted', 'border', 'border-secondary" in source
+    assert "const border = confirmed ? 'border-success' : 'border-secondary';" in source
+    assert "bg-danger text-white\">Late" in source
