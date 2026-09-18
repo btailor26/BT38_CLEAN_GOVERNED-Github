@@ -141,6 +141,19 @@ def _exact_before_flush(session_obj, flush_context, instances):
                     ),
                     None,
                 )
+                if order_row is None and shipment_row is not None:
+                    # Shipment-only commits still need the exact order context.
+                    # Resolve one matching persisted order inside before_flush;
+                    # after_commit remains publish-only.
+                    order_row = (
+                        session_obj.query(MarketplaceOrder)
+                        .filter(
+                            MarketplaceOrder.store_id == store_id,
+                            MarketplaceOrder.marketplace_order_id == str(order_id),
+                        )
+                        .order_by(MarketplaceOrder.id.desc())
+                        .first()
+                    )
                 if order_row is not None:
                     scope["queue"] = _aligned_workflow_queue_for(order_row, shipment_row)
             except Exception:
