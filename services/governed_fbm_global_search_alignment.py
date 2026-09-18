@@ -180,9 +180,10 @@ def _session_snapshot_rows() -> tuple[list[MarketplaceOrder], bool]:
     from services import governed_fbm_page_alignment as page_alignment
     _, start_at, end_at, _ = _range_bounds()
     eligible = (func.upper(func.coalesce(MarketplaceOrder.fulfillment_type, "")).notin_(("FBA", "AFN", "MCF")), ~func.lower(func.coalesce(MarketplaceOrder.status, "")).like("mcf_%"))
-    requested = _page_size()
-    broad_lookup = bool(_search_term() or _workflow_tab())
-    candidate_limit = _RANGE_ROW_CAP + 1 if broad_lookup else min(_RANGE_ROW_CAP + 1, (requested * _RANGE_CANDIDATE_MULTIPLIER) + 1)
+    # History is the browser-session working-set boundary. Load the selected
+    # bounded History period independently of the visible 15/30/50/100 pager so
+    # lifecycle counts and rows are derived from the same canonical truth set.
+    candidate_limit = _RANGE_ROW_CAP + 1
     candidates = (db.session.query(MarketplaceOrder).filter(*eligible).filter(MarketplaceOrder.store_id.isnot(None), MarketplaceOrder.marketplace_order_id.isnot(None)).filter(MarketplaceOrder.created_at >= start_at, MarketplaceOrder.created_at < end_at).options(joinedload(MarketplaceOrder.store), joinedload(MarketplaceOrder.warehouse_stock)).order_by(MarketplaceOrder.id.desc()).limit(candidate_limit).all())
     candidate_truncated = len(candidates) >= candidate_limit
     canonical = _canonical_order_rows(candidates)
