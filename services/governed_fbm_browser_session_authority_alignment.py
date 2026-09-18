@@ -61,8 +61,64 @@ def _browser_session_health_shell() -> dict:
 
 
 def _session_health_script() -> str:
-    """Lifecycle/History controls have one owner; do not install a competing controller."""
-    return ""
+    """Project Health from the already-rendered FBM session; never read another authority."""
+    return r"""
+<script id="bt38FbmSessionHealthProjection">
+(function(){
+  function setCard(label,value){
+    document.querySelectorAll('.fbm-period-card').forEach(function(card){
+      var node=card.querySelector('.fbm-period-label');
+      if(node&&String(node.textContent||'').trim()===label){
+        var valueNode=card.querySelector('.fbm-period-value');
+        if(valueNode)valueNode.textContent=String(Number(value||0));
+      }
+    });
+  }
+  function project(){
+    var rows=Array.from(document.querySelectorAll('tr.fbm-order-row'));
+    var visible=rows.filter(function(row){return row.dataset.fbmHistoryMatch!=='0';});
+    var counts={ready_dispatch:0,pending:0,dispatched:0,cancelled:0,replacements:0,refunds:0};
+    var platforms={};
+    var awaiting=0,mapping=0,returns=0;
+    visible.forEach(function(row){
+      var q=String(row.dataset.fbmQueue||'');
+      if(Object.prototype.hasOwnProperty.call(counts,q))counts[q]+=1;
+      var platform=String(row.dataset.fbmPlatform||'').trim();
+      if(platform)platforms[platform]=(platforms[platform]||0)+1;
+      if(String(row.dataset.fbmMappingReview||'')==='1')mapping+=1;
+      if(String(row.dataset.fbmReturnEvent||'')==='1')returns+=1;
+      var state=String(row.dataset.fbmShipmentState||'').toLowerCase();
+      if(state==='label_purchased'||state==='marketplace_confirmed')awaiting+=1;
+    });
+    var ready=counts.ready_dispatch;
+    var refunds=counts.refunds;
+    var replacements=counts.replacements;
+    var risk=mapping+returns+replacements+refunds;
+    var base=Math.max(1,visible.length+returns+replacements+refunds);
+    var score=Math.max(0,Math.min(100,Math.round(100*(base-risk)/base)));
+    setCard('Orders',visible.length);
+    setCard('Ready to ship',ready);
+    setCard('Dispatched',counts.dispatched);
+    setCard('Awaiting carrier',awaiting);
+    setCard('Returns',returns);
+    setCard('Replacements',replacements);
+    setCard('Refunds / issues',refunds);
+    setCard('Mapping review',mapping);
+    var period=document.querySelector('.fbm-guide-period span');
+    if(period)period.textContent=String(visible.length)+' FBM orders';
+    var ring=document.querySelector('.fbm-score-ring');
+    if(ring){ring.style.setProperty('--fbm-score',String(score)+'%');var strong=ring.querySelector('strong');if(strong)strong.textContent=String(score)+'%';}
+    var riskNode=document.querySelector('.fbm-score-card .small.text-muted');
+    if(riskNode)riskNode.textContent=String(risk)+' risk/issue actions in this period';
+  }
+  document.addEventListener('bt38-fbm-session-rendered',project);
+  document.addEventListener('bt38-fbm-committed-snapshot-applied',function(){queueMicrotask(project);});
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){queueMicrotask(project);},{once:true});else queueMicrotask(project);
+})();
+</script>
+""
+
+
 
 
 def install_governed_fbm_browser_session_authority_alignment(app) -> None:
@@ -82,7 +138,10 @@ def install_governed_fbm_browser_session_authority_alignment(app) -> None:
     if not hasattr(dispatch, "_bt38_original_inject"):
         dispatch._bt38_original_inject = dispatch._inject
     def aligned_inject(html, payload, fba_count):
-        return dispatch._bt38_original_inject(html, payload, fba_count)
+        aligned = dispatch._bt38_original_inject(html, payload, fba_count)
+        script = _session_health_script()
+        marker = "</body>"
+        return aligned.replace(marker, script + marker, 1) if script and marker in aligned else aligned + script
     dispatch._inject = aligned_inject
     app._bt38_fbm_browser_session_authority_alignment_installed = True
     app.logger.info("BT38 FBM browser-session authority aligned: one selected-History working set; Health/lifecycle/search/pager use rendered session facts; exact-record events preserved")
