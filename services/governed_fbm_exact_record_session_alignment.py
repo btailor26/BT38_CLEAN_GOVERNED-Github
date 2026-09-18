@@ -75,7 +75,10 @@ def _script() -> str:
       return true;
     }
     var status=norm(detail.lifecycle_status||detail.status);
-    if(status){row.dataset.lifecycleStatus=status;row.dataset.fbmQueue=queue(status);}
+    if(status)row.dataset.lifecycleStatus=status;
+    var canonicalQueue=norm(detail.queue);
+    if(canonicalQueue){row.dataset.fbmQueue=canonicalQueue;}
+    else if(status){row.dataset.fbmQueue=queue(status);}
     if(detail.created_at)row.dataset.fbmCreatedAt=String(detail.created_at);
     if(detail.platform!=null)row.dataset.fbmPlatform=String(detail.platform||'');
     if(detail.shipment_state!=null)row.dataset.fbmShipmentState=String(detail.shipment_state||'');
@@ -92,7 +95,9 @@ def _script() -> str:
       try{
         var data=JSON.parse(dataNode.textContent||'{}'),key=String(row.dataset.orderId||'');
         if(key&&data[key]){
-          if(status){data[key].status=status;data[key].queue=queue(status);}
+          if(status)data[key].status=status;
+          if(canonicalQueue)data[key].queue=canonicalQueue;
+          else if(status)data[key].queue=queue(status);
           if(detail.created_at)data[key].created_at=detail.created_at;
           ['platform','shipment_state','mapping_review','return_event'].forEach(function(name){if(detail[name]!=null)data[key][name]=detail[name];});
           projected=data[key];
