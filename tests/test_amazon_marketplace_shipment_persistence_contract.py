@@ -44,3 +44,21 @@ def test_marketplace_lifecycle_remains_explicit_amazon_truth():
     assert '"OUTFORDELIVERY": "out_for_delivery"' in TRACKING
     assert '"DELIVERED": "delivered"' in TRACKING
     assert 'if provider == "marketplace":' in STATE
+
+
+def test_amazon_package_history_is_persisted_only_to_existing_exact_shipment():
+    assert "def _amazon_tracking_events(" in TRACKING
+    assert '"trackingEvents", "trackingHistory", "events", "eventHistory"' in TRACKING
+    assert "FBMShipmentTrackingEvent(" in TRACKING
+    assert 'provider="amazon"' in TRACKING
+    assert "raw_event=event" in TRACKING
+    assert "event_time=event_time" in TRACKING
+    assert "FBMShipment.tracking_number == shipment.get(\"tracking_number\")" in TRACKING
+    assert '"tracking_events_persisted": tracking_events_persisted' in TRACKING
+    assert "FBMShipment(" not in TRACKING
+
+
+def test_amazon_history_does_not_promote_observation_time_to_event_time():
+    assert "event_time = _parse_iso(event_time_raw)" in TRACKING
+    assert "event_time=datetime.utcnow()" not in TRACKING
+    assert "observed_at=datetime.utcnow()" in TRACKING
