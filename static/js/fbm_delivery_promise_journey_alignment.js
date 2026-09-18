@@ -47,7 +47,7 @@
     function stateBadge(confirmed) {
         return confirmed
             ? '<span class="badge rounded-pill px-2 py-1 text-center bg-success text-white border border-success" style="min-width:88px">Confirmed</span>'
-            : '<span class="badge rounded-pill px-2 py-1 text-center bg-danger text-white border border-danger" style="min-width:88px">Pending</span>';
+            : '<span class="badge rounded-pill px-2 py-1 text-center bg-light text-muted border border-secondary" style="min-width:88px">Pending</span>';
     }
 
     function milestoneHtml(row) {
@@ -61,7 +61,7 @@
         const delivered = Boolean(deliveredAt || terminalDelivery);
 
         function milestone(title, confirmed, exactTime) {
-            const border = confirmed ? 'border-success' : 'border-danger';
+            const border = confirmed ? 'border-success' : 'border-secondary';
             const detail = exactTime ? `<div class="small text-muted">${esc(displayDate(exactTime))}</div>` : '';
             return `<div class="border-start border-3 ${border} ps-3 py-2 mb-2"><div class="d-flex justify-content-between align-items-start gap-3"><div><div class="fw-semibold">${esc(title)}</div>${detail}</div>${stateBadge(confirmed)}</div></div>`;
         }
@@ -141,7 +141,11 @@
             const label = String(badge.textContent || '').trim().toLowerCase();
             if (!(label in stageTruth)) return;
             badge.classList.remove('bg-success', 'bg-danger', 'bg-secondary', 'bg-light', 'text-muted', 'text-dark', 'border', 'border-success', 'border-danger', 'border-secondary');
-            badge.classList.add(stageTruth[label] ? 'bg-success' : 'bg-danger', 'text-white');
+            if (stageTruth[label]) {
+                badge.classList.add('bg-success', 'text-white');
+            } else {
+                badge.classList.add('bg-light', 'text-muted', 'border', 'border-secondary');
+            }
         });
         if (terminalDelivery) {
             Array.from(journeyCell.querySelectorAll('.fbm-row-note')).forEach(function (note) {
@@ -195,8 +199,8 @@
     }
 
     function install() {
-        if (document.documentElement.dataset.bt38PromiseJourneyAligned === '12') return;
-        document.documentElement.dataset.bt38PromiseJourneyAligned = '12';
+        if (document.documentElement.dataset.bt38PromiseJourneyAligned === '13') return;
+        document.documentElement.dataset.bt38PromiseJourneyAligned = '13';
         document.querySelectorAll('.fbm-order-row').forEach(alignRowPerformance);
         window.addEventListener('click', intercept, true);
         window.addEventListener('keydown', function (event) { if (event.key !== 'Enter' && event.key !== ' ') return; intercept(event); }, true);
