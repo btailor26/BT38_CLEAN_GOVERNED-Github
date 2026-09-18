@@ -81,7 +81,24 @@ def _script() -> str:
     else if(status){row.dataset.fbmQueue=queue(status);}
     if(detail.created_at)row.dataset.fbmCreatedAt=String(detail.created_at);
     if(detail.platform!=null)row.dataset.fbmPlatform=String(detail.platform||'');
-    if(detail.shipment_state!=null)row.dataset.fbmShipmentState=String(detail.shipment_state||'');
+    if(detail.shipment_state!=null){
+      row.dataset.fbmShipmentState=String(detail.shipment_state||'');
+      row.dataset.shipmentState=String(detail.shipment_state||'');
+    }
+    // Project only facts actually carried by the committed event into the
+    // existing row/session record. Never infer a milestone or timestamp.
+    var trackingFields={
+      tracking_number:'trackingNumber',carrier:'carrier',provider:'provider',
+      service:'service',shipping_source:'shippingSource',provider_shipment_id:'providerShipmentId',
+      last_provider_status:'lastProviderStatus',last_provider_checked_at:'lastProviderCheckedAt',
+      label_purchased_at:'labelPurchasedAt',marketplace_confirmed_at:'marketplaceConfirmedAt',
+      carrier_accepted_at:'carrierAcceptedAt',first_movement_at:'firstMovementAt',
+      delivered_at:'deliveredAt',ship_by_at:'shipByAt',
+      earliest_delivery_at:'earliestDeliveryAt',delivery_promise_at:'deliveryPromiseAt'
+    };
+    Object.keys(trackingFields).forEach(function(name){
+      if(detail[name]!==undefined&&detail[name]!==null)row.dataset[trackingFields[name]]=String(detail[name]||'');
+    });
     if(detail.mapping_review!=null)row.dataset.fbmMappingReview=detail.mapping_review?'1':'0';
     if(detail.return_event!=null)row.dataset.fbmReturnEvent=detail.return_event?'1':'0';
     var shipment=row.querySelector('td:nth-child(8)');
