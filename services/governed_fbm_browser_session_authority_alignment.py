@@ -16,51 +16,6 @@ from services.fbm_shipping_state import shipment_confirmation_state
 
 
 
-def _canonical_bounded_page_rows(limit: int):
-    """Use the original page reader contract without the dispatch broad-read override."""
-    eligible = (
-        page.func.upper(page.func.coalesce(page.MarketplaceOrder.fulfillment_type, "")).notin_(("FBA", "AFN", "MCF")),
-        ~page.func.lower(page.func.coalesce(page.MarketplaceOrder.status, "")).like("mcf_%"),
-    )
-    query = page.db.session.query(page.MarketplaceOrder).filter(*eligible)
-    platform_filter = str(page.request.args.get("platform") or "").strip().lower()
-    status_filter = str(page.request.args.get("status") or "").strip().lower()
-    if platform_filter:
-        query = query.filter(page.MarketplaceOrder.store.has(platform=platform_filter))
-    tracking_present = page.MarketplaceOrder.tracking_number.isnot(None) & (page.MarketplaceOrder.tracking_number != "")
-    if status_filter == "tracking recorded":
-        query = query.filter(tracking_present)
-    elif status_filter == "dispatched":
-        query = query.filter(~tracking_present, page.MarketplaceOrder.shipped_at.isnot(None))
-    elif status_filter == "ready for fbm routing":
-        query = query.filter(~tracking_present, page.MarketplaceOrder.shipped_at.is_(None))
-    candidate_limit = min(
-        page._FBM_MAX_EXPANDED * page._FBM_DISCOVERY_MULTIPLIER,
-        max(limit + 1, (limit + 1) * page._FBM_DISCOVERY_MULTIPLIER),
-    )
-    candidates = (
-        query.options(page.joinedload(page.MarketplaceOrder.store))
-        .order_by(page.MarketplaceOrder.id.desc())
-        .limit(candidate_limit)
-        .all()
-    )
-    rows = []
-    seen = set()
-    for row in candidates:
-        if row.store_id is None or not row.marketplace_order_id:
-            continue
-        key = (int(row.store_id), str(row.marketplace_order_id))
-        if key in seen:
-            continue
-        seen.add(key)
-        rows.append(row)
-        if len(rows) >= limit + 1:
-            break
-    rows.sort(key=lambda row: (row.created_at is not None, row.created_at, row.id), reverse=True)
-    has_more = len(rows) > limit or len(candidates) == candidate_limit
-    return rows[:limit], has_more
-
-
 def _bounded_browser_session_rows(limit: int):
     """Load one bounded History working set; lifecycle/search/pager stay browser-local."""
     from services import governed_fbm_global_search_alignment as global_search
@@ -115,10 +70,8 @@ def install_governed_fbm_browser_session_authority_alignment(app) -> None:
     if getattr(app, "_bt38_fbm_browser_session_authority_alignment_installed", False):
         return
 
-    # Dispatch alignment has already replaced the module attribute at this point.
-    # Bind the browser session to the canonical bounded page contract explicitly;
-    # never capture dispatch._complete_fbm_page_rows as the "bounded" reader.
-    page._bt38_original_bounded_fbm_rows = _canonical_bounded_page_rows
+    # History is the one server-loaded FBM working set. Lifecycle/search/pager
+    # remain browser-local over that exact set.
     page._latest_distinct_fbm_rows = _bounded_browser_session_rows
 
     page._health_summary = _browser_session_health_shell
