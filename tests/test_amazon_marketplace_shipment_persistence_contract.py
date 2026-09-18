@@ -33,8 +33,8 @@ def test_marketplace_journey_uses_existing_proxy_without_fake_db_shipment():
     assert 'provider="marketplace"' in LIFECYCLE
     assert "SimpleNamespace(" in LIFECYCLE
     assert "_marketplace_proven_state" in STATE
-    assert "FBMShipment(" not in TRACKING
-    assert '"marketplace_shipment_persisted": False' in TRACKING
+    assert 'shipment.provider = "marketplace"' in TRACKING
+    assert '"marketplace_shipment_persisted": marketplace_shipment_persisted' in TRACKING
     assert '"marketplace_write_started": False' in TRACKING
 
 
@@ -53,9 +53,10 @@ def test_amazon_package_history_is_persisted_only_to_existing_exact_shipment():
     assert 'provider="amazon"' in TRACKING
     assert "raw_event=event" in TRACKING
     assert "event_time=event_time" in TRACKING
-    assert "FBMShipment.tracking_number == shipment.get(\"tracking_number\")" in TRACKING
+    assert "def _ensure_marketplace_shipment(" in TRACKING
+    assert 'shipment.provider = "marketplace"' in TRACKING
+    assert "shipment.tracking_number = tracking" in TRACKING
     assert '"tracking_events_persisted": tracking_events_persisted' in TRACKING
-    assert "FBMShipment(" not in TRACKING
 
 
 def test_amazon_history_does_not_promote_observation_time_to_event_time():
