@@ -38,3 +38,23 @@ def test_fbm_journey_alignment_does_not_add_db_or_marketplace_reads():
     assert "/api/ebay" not in source
     assert "marketplace_promise" not in source
     assert "setInterval" not in source
+
+
+def test_fbm_row_promise_status_text_and_colour_share_one_authority():
+    source = Path("static/js/fbm_delivery_promise_journey_alignment.js").read_text(encoding="utf-8")
+
+    assert "function alignPromisePerformance(row)" in source
+    assert "promiseCell.querySelector('.fbm-delivery-performance')" in source
+    assert "holder.innerHTML = performanceHtml(row)" in source
+    assert "bg-success text-white\">On time" in source
+    assert "bg-danger text-white\">Late" in source
+    assert "alignPromisePerformance(row);" in source
+
+
+def test_exact_record_event_reapplies_promise_colour_without_page_reload():
+    source = Path("static/js/fbm_delivery_promise_journey_alignment.js").read_text(encoding="utf-8")
+
+    assert "bt38-fbm-committed-snapshot-applied" in source
+    assert "if (row) alignRowPerformance(row)" in source
+    assert "location.reload" not in source
+    assert "setInterval" not in source
