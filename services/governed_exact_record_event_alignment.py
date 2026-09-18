@@ -115,48 +115,44 @@ def _exact_before_flush(session_obj, flush_context, instances):
         ui._merge_scope(scope, _row_scope(row))
 
     if scope:
+        # Capture canonical FBM queue while the transaction and affected ORM
+        # objects are still valid. after_commit is publish-only and performs no SQL.
+        order_id = scope.get("order_id")
+        store_id = scope.get("store_id")
+        if order_id not in (None, "") and store_id not in (None, ""):
+            try:
+                from services.governed_fbm_dispatch_queue_alignment import _aligned_workflow_queue_for
+
+                order_row = next(
+                    (
+                        row for row in rows
+                        if isinstance(row, MarketplaceOrder)
+                        and str(_value(row, "order_id", "marketplace_order_id") or "") == str(order_id)
+                        and _value(row, "store_id") == store_id
+                    ),
+                    None,
+                )
+                shipment_row = next(
+                    (
+                        row for row in rows
+                        if isinstance(row, FBMShipment)
+                        and str(_value(row, "order_id", "marketplace_order_id") or "") == str(order_id)
+                        and _value(row, "store_id") == store_id
+                    ),
+                    None,
+                )
+                if order_row is not None:
+                    scope["queue"] = _aligned_workflow_queue_for(order_row, shipment_row)
+            except Exception:
+                # Keep the exact committed event intact; legacy browser status
+                # classification remains compatibility fallback only.
+                pass
         session_obj.info["_bt38_exact_ui_scope"] = scope
 
 
 def _exact_after_commit(session_obj):
     scope = session_obj.info.pop("_bt38_exact_ui_scope", None)
     if scope:
-        # Queue authority is server-side.  Use the already-committed exact order
-        # and its persisted shipment only for this affected record; the browser
-        # never reclassifies lifecycle truth when canonical queue is present.
-        order_id = scope.get("order_id")
-        store_id = scope.get("store_id")
-        if order_id not in (None, "") and store_id not in (None, ""):
-            try:
-                from fbm_models import FBMShipment
-                from models import MarketplaceOrder
-                from services.governed_fbm_dispatch_queue_alignment import _aligned_workflow_queue_for
-
-                row = (
-                    session_obj.query(MarketplaceOrder)
-                    .filter(
-                        MarketplaceOrder.store_id == store_id,
-                        MarketplaceOrder.marketplace_order_id == str(order_id),
-                    )
-                    .order_by(MarketplaceOrder.id.desc())
-                    .first()
-                )
-                if row is not None:
-                    shipment = (
-                        session_obj.query(FBMShipment)
-                        .filter(
-                            FBMShipment.store_id == store_id,
-                            FBMShipment.marketplace_order_id == str(order_id),
-                        )
-                        .order_by(FBMShipment.id.desc())
-                        .first()
-                    )
-                    scope["queue"] = _aligned_workflow_queue_for(row, shipment)
-            except Exception:
-                # Compatibility fallback: preserve the exact committed event.
-                # The browser's legacy status classifier is used only when a
-                # canonical queue cannot be projected.
-                pass
         ui.publish_governed_ui_event(source="committed_marketplace_state", scope=scope)
 
 
