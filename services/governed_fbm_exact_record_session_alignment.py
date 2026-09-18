@@ -77,6 +77,10 @@ def _script() -> str:
     var status=norm(detail.lifecycle_status||detail.status);
     if(status){row.dataset.lifecycleStatus=status;row.dataset.fbmQueue=queue(status);}
     if(detail.created_at)row.dataset.fbmCreatedAt=String(detail.created_at);
+    if(detail.platform!=null)row.dataset.fbmPlatform=String(detail.platform||'');
+    if(detail.shipment_state!=null)row.dataset.fbmShipmentState=String(detail.shipment_state||'');
+    if(detail.mapping_review!=null)row.dataset.fbmMappingReview=detail.mapping_review?'1':'0';
+    if(detail.return_event!=null)row.dataset.fbmReturnEvent=detail.return_event?'1':'0';
     var shipment=row.querySelector('td:nth-child(8)');
     if(shipment){
       text(shipment.querySelector('strong'),detail.carrier||detail.provider);
@@ -90,6 +94,7 @@ def _script() -> str:
         if(key&&data[key]){
           if(status){data[key].status=status;data[key].queue=queue(status);}
           if(detail.created_at)data[key].created_at=detail.created_at;
+          ['platform','shipment_state','mapping_review','return_event'].forEach(function(name){if(detail[name]!=null)data[key][name]=detail[name];});
           projected=data[key];
           dataNode.textContent=JSON.stringify(data);
         }
