@@ -11,10 +11,11 @@ OLD_HEALTH = (ROOT / "services" / "governed_fbm_all_orders_health_alignment.py")
 MAIN = (ROOT / "main.py").read_text(encoding="utf-8")
 
 
-def test_history_does_not_replace_initial_fbm_reader():
+def test_history_controls_do_not_create_a_second_row_authority():
     assert "page._latest_distinct_fbm_rows = _selected_rows" not in HISTORY
     assert "controls._session_snapshot_rows()" not in HISTORY
-    assert "DO NOT replace" in HISTORY
+    assert "Row authority is assigned" in HISTORY
+    assert "canonical History snapshot" in HISTORY
 
 
 def test_browser_session_uses_one_history_working_set():
