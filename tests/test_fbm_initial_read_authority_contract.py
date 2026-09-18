@@ -92,6 +92,6 @@ def test_lifecycle_classifier_is_not_monkey_patched():
 
 
 def test_history_working_set_is_independent_of_visible_pager():
-    assert "candidate_limit = _RANGE_ROW_CAP + 1" in SEARCH
-    assert "requested * _RANGE_CANDIDATE_MULTIPLIER" not in SEARCH
-    assert "broad_lookup = bool(_search_term() or _workflow_tab())" not in SEARCH
+    assert "candidate_limit = _RANGE_ROW_CAP + 1" in GLOBAL_SEARCH
+    assert "requested * _RANGE_CANDIDATE_MULTIPLIER" not in GLOBAL_SEARCH
+    assert "broad_lookup = bool(_search_term() or _workflow_tab())" not in GLOBAL_SEARCH
