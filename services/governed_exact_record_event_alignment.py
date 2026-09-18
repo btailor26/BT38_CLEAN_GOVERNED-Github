@@ -64,14 +64,33 @@ def _row_scope(row) -> dict:
         scope["order_id"] = _value(row, "order_id", "marketplace_order_id")
         scope["seller_sku"] = _value(row, "seller_sku", "sku")
         scope["store_id"] = _value(row, "store_id")
+        status = _value(row, "status")
+        if status is not None:
+            scope["status"] = status
+            scope["lifecycle_status"] = status
+            scope["return_event"] = str(status).strip().lower() in {"return_requested", "returned"}
+        created_at = _value(row, "created_at")
+        if created_at is not None:
+            scope["created_at"] = created_at.isoformat() if hasattr(created_at, "isoformat") else str(created_at)
+        tracking = _value(row, "tracking_number")
+        if tracking is not None:
+            scope["tracking_number"] = tracking
         stock_id = _value(row, "warehouse_stock_id")
         if stock_id is not None:
             scope["warehouse_stock_id"] = stock_id
             scope["affected_warehouse_stock_ids"] = [stock_id]
         scope["event_type"] = "order_committed"
     elif isinstance(row, FBMShipment):
+        from services.fbm_shipping_state import shipment_confirmation_state
         scope["order_id"] = _value(row, "order_id", "marketplace_order_id")
         scope["store_id"] = _value(row, "store_id")
+        tracking = _value(row, "tracking_number")
+        carrier = _value(row, "carrier", "provider")
+        if tracking is not None:
+            scope["tracking_number"] = tracking
+        if carrier is not None:
+            scope["carrier"] = carrier
+        scope["shipment_state"] = shipment_confirmation_state(row)
         scope["event_type"] = "shipment_committed"
     return {key: value for key, value in scope.items() if value not in (None, "")}
 
