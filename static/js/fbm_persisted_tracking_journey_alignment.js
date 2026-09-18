@@ -38,7 +38,17 @@
     }
 
     function currentStatus(row) {
-        return row.dataset.lastProviderStatus || row.dataset.shipmentState || row.dataset.lifecycleStatus || '';
+        // The exact FBM row/session lifecycle is the display authority. Provider
+        // status is supporting persisted evidence, never a competing classifier.
+        return row.dataset.lifecycleStatus || row.dataset.shipmentState || row.dataset.lastProviderStatus || '';
+    }
+
+    function statusClass(value) {
+        const status = String(value || '').trim().toLowerCase();
+        if (['delivered', 'picked_up', 'accepted', 'carrier_accepted', 'collected', 'in_transit', 'out_for_delivery'].includes(status)) return 'bg-success';
+        if (['return_requested', 'returned', 'refund_requested', 'refunded', 'case_open', 'dispute', 'chargeback', 'cancel_requested', 'cancelled'].includes(status)) return 'bg-danger';
+        if (['shipped', 'partially_shipped'].includes(status)) return 'bg-primary';
+        return 'bg-light text-dark border';
     }
 
     function eventRows(row) {
@@ -83,7 +93,8 @@
         const source = row.dataset.shippingSource || 'Persisted BT38 shipment';
         const tracking = row.dataset.trackingNumber || trigger.dataset.trackingNumber || String(trigger.textContent || '').trim() || '—';
         const providerReference = row.dataset.providerShipmentId || '';
-        const status = labelStatus(currentStatus(row));
+        const statusValue = currentStatus(row);
+        const status = labelStatus(statusValue);
         const events = eventRows(row);
         const bodyRows = events.length ? events.map(function (event) {
             return `<tr><td class="text-nowrap text-muted">${esc(formatDate(event.time))}</td><td><strong>${esc(event.title)}</strong><div class="small text-muted">${esc(event.detail)}</div></td></tr>`;
@@ -94,7 +105,7 @@
             `<div class="small">Tracking: <code>${esc(tracking)}</code></div>` +
             `${providerReference ? `<div class="small text-muted">Shipment: ${esc(providerReference)}</div>` : ''}` +
             `<div class="small text-muted">Journey source: ${esc(source)} / persisted BT38 state</div></div>` +
-            `${status ? `<span class="badge bg-success">${esc(status)}</span>` : ''}</div>` +
+            `${status ? `<span class="badge ${statusClass(statusValue)}">${esc(status)}</span>` : ''}</div>` +
             promiseHtml(row) +
             `<div class="fw-semibold mb-2">Shipment movement</div>` +
             `<div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead class="table-light"><tr><th>Time</th><th>Movement</th></tr></thead><tbody>${bodyRows}</tbody></table></div>`;
