@@ -84,10 +84,10 @@ def _resolve_exact_order(*, marketplace: str, payload: dict, result: dict):
     return store, rows, None
 
 
-def _already_has_purchased_authority(*, store_id: int, order_id: str) -> bool:
+def _already_has_purchased_authority(*, store_id: int, order_id: str, require_confirmed_spend: bool = False) -> bool:
     from fbm_models import FBMShipment
 
-    return (
+    shipment = (
         FBMShipment.query.filter_by(
             store_id=int(store_id),
             marketplace_order_id=str(order_id),
@@ -96,6 +96,23 @@ def _already_has_purchased_authority(*, store_id: int, order_id: str) -> bool:
             (FBMShipment.purchase_status == "purchased")
             | (FBMShipment.label_purchased_at.isnot(None))
         )
+        .order_by(FBMShipment.id.desc())
+        .first()
+    )
+    if shipment is None:
+        return False
+    if not require_confirmed_spend:
+        return True
+
+    # Amazon dispatch is not financially complete until the exact purchased
+    # shipment also has its confirmed spend fact. Existing label authority must
+    # not suppress the existing getShipment cost readback/backfill.
+    from shipping_spend_models import ShippingSpendLedger
+
+    if shipment.id is None:
+        return False
+    return (
+        ShippingSpendLedger.query.filter_by(shipment_id=int(shipment.id), confirmed=True)
         .first()
         is not None
     )
@@ -128,11 +145,16 @@ def _align_exact_shipment_authority(*, marketplace: str, payload: dict, result: 
     order_id = _text(rows[0].marketplace_order_id)
     platform = _text(marketplace).lower()
 
-    if _already_has_purchased_authority(store_id=store.id, order_id=order_id):
+    require_confirmed_spend = _text(marketplace).lower() == "amazon"
+    if _already_has_purchased_authority(
+        store_id=store.id,
+        order_id=order_id,
+        require_confirmed_spend=require_confirmed_spend,
+    ):
         return {
             "success": True,
             "skipped": True,
-            "reason": "purchased_shipment_authority_already_persisted",
+            "reason": "purchased_shipment_and_spend_authority_already_persisted" if require_confirmed_spend else "purchased_shipment_authority_already_persisted",
             "order_id": order_id,
             "store_id": int(store.id),
             "broad_scan_started": False,
