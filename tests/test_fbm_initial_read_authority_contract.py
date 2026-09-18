@@ -54,8 +54,8 @@ def test_performance_alignment_does_not_touch_print_or_purchase_paths():
 
 def test_lifecycle_tabs_are_browser_session_local():
     assert "button.addEventListener('click',function(){{active=name;saveSession();render()}});" in DISPATCH
-    assert "window.location.assign" not in DISPATCH
     assert "u.searchParams.set('fbm_tab',name)" not in DISPATCH
+    assert "button.addEventListener('click',function(){{active=name;saveSession();render()}});" in DISPATCH
     assert "fetch(" not in DISPATCH
     assert "setInterval(" not in DISPATCH
     assert "EventSource(" not in DISPATCH
@@ -65,6 +65,10 @@ def test_explicit_url_history_state_beats_saved_browser_state():
     assert "params.get('fbm_range')||saved.range||'3d'" in DISPATCH
     assert "params.has('fbm_from')" in DISPATCH
     assert "params.has('fbm_to')" in DISPATCH
+    assert "u.searchParams.set('fbm_range',range)" in DISPATCH
+    assert "window.location.assign(u.toString())" in DISPATCH
+    assert "document.getElementById('bt38FbmFrom')" in DISPATCH
+    assert "document.getElementById('bt38FbmTo')" in DISPATCH
 
 
 def test_legacy_whole_session_mutation_api_is_retired():
