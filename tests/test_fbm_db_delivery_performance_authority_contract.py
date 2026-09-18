@@ -1,7 +1,7 @@
 from datetime import datetime
 from pathlib import Path
 
-from services.fbm_db_delivery_promise_alignment import _delivery_performance, _shipping_source
+from services.fbm_db_delivery_promise_alignment import _delivery_performance, _shipping_source, _shipment_tracking_authority
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -60,3 +60,47 @@ def test_rendered_rows_receive_request_scoped_db_truth_without_provider_read():
     assert "data-shipping-source" in CLARITY
     assert "data-carrier" in CLARITY
     assert "requests." not in CLARITY
+
+
+class TrackingShipment(Shipment):
+    def __init__(self, tracking_number="", carrier="", service="", provider="", label_source="", provider_shipment_id=""):
+        super().__init__(provider=provider, label_source=label_source)
+        self.tracking_number = tracking_number
+        self.carrier = carrier
+        self.service = service
+        self.provider_shipment_id = provider_shipment_id
+
+
+class TrackingOrder:
+    def __init__(self, tracking_number="", carrier=""):
+        self.tracking_number = tracking_number
+        self.carrier = carrier
+
+
+def test_draft_shipment_cannot_override_marketplace_tracking_identity():
+    shipment = TrackingShipment(carrier="Royal Mail", service="Tracked 48 Small Parcel", provider="packlink")
+    order = TrackingOrder(tracking_number="T00TNA6517868770", carrier="Hermes UK")
+    truth = _shipment_tracking_authority(shipment, order)
+    assert truth == {
+        "carrier": "Hermes UK",
+        "service": "",
+        "tracking_number": "T00TNA6517868770",
+        "authority": "marketplace_order",
+    }
+    assert _shipping_source(shipment) == ""
+
+
+def test_verified_shipment_tracking_owns_its_carrier_and_service():
+    shipment = TrackingShipment(
+        tracking_number="H0067A0359326254",
+        carrier="Evri",
+        service="ParcelShop Parcel",
+        provider="packlink",
+    )
+    order = TrackingOrder(tracking_number="OTHER", carrier="Other")
+    truth = _shipment_tracking_authority(shipment, order)
+    assert truth["carrier"] == "Evri"
+    assert truth["service"] == "ParcelShop Parcel"
+    assert truth["tracking_number"] == "H0067A0359326254"
+    assert truth["authority"] == "shipment"
+    assert _shipping_source(shipment) == "Packlink"
