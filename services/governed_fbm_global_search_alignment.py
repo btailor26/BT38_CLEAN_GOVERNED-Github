@@ -293,9 +293,6 @@ def install_governed_fbm_global_search_alignment(app) -> None:
             return workflow_result
         return rows[:limit], bool(truncated or len(rows) > limit)
 
-    def selected_health_period():
-        return _range_bounds()
-
     def no_legacy_period_controls(_health):
         return ""
 
@@ -305,7 +302,6 @@ def install_governed_fbm_global_search_alignment(app) -> None:
     page_alignment._requested_limit = requested_limit
     page_alignment._profile_map = request_cached_profile_map
     page_alignment._shipment_map = request_cached_shipment_map
-    page_alignment._health_period = selected_health_period
     page_alignment._period_controls = no_legacy_period_controls
     page_alignment._expand_control = no_server_expand
 
