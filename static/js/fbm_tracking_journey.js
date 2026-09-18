@@ -93,8 +93,8 @@
             const pickedUp = badges.find(badge => /picked up/i.test(String(badge.textContent || '')));
             const inTransit = badges.find(badge => /in transit/i.test(String(badge.textContent || '')));
             const delivered = badges.find(badge => /delivered/i.test(String(badge.textContent || '')));
-            const pickupAlreadyConfirmed = Boolean(pickedUp && pickedUp.classList.contains('bg-success'));
-            if (pickupAlreadyConfirmed || pickupStates.has(status)) {
+            // Persisted row/session truth owns colour. Existing DOM colour is presentation only.
+            if (pickupStates.has(status)) {
                 setBadgeState(pickedUp, 'bg-success');
                 if (pickedUp) pickedUp.title = 'Carrier pickup confirmed by persisted journey state';
             } else if (labelOrTrackingStageReached(row)) {
