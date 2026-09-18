@@ -56,6 +56,15 @@ _SINGULAR_SCOPE_KEYS = (
     "warehouse_stock_id",
     "group_id",
     "store_id",
+    "status",
+    "lifecycle_status",
+    "created_at",
+    "tracking_number",
+    "carrier",
+    "provider",
+    "shipment_state",
+    "return_event",
+    "mapping_review",
 )
 
 _ARRAY_SCOPE_KEYS = (
