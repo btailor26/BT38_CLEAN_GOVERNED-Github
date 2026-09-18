@@ -59,16 +59,17 @@ def test_cancelled_marketplace_orders_are_stated_clearly():
     assert "addWorkflowButton(tabBar,'cancelled','Cancelled')" in DISPATCH_QUEUE
 
 
-def test_ready_and_dispatched_use_exact_marketplace_lifecycle_not_shipping_evidence():
+def test_ready_and_dispatched_use_one_persisted_dispatch_truth_hierarchy():
     classifier = DISPATCH_QUEUE.split("def _aligned_workflow_queue_for", 1)[1].split("def _health_route_state_from_marketplace_lifecycle", 1)[0]
-    assert "status in _DISPATCHED_MARKETPLACE_STATUSES" in classifier
-    assert "term in status" not in classifier
-    assert "tracking_number" not in classifier
-    assert "shipped_at" not in classifier
-    assert "label_purchased_at" not in classifier
-    assert "carrier_accepted_at" not in classifier
-    assert "first_movement_at" not in classifier
-    assert "delivered_at" not in classifier
+    assert "_outbound_label_handoff_reached(shipment)" in classifier
+    assert "_dispatch_truth_reached(row, shipment)" in classifier
+    assert "status in _DISPATCHED_MARKETPLACE_STATUSES" in DISPATCH_QUEUE
+    assert "tracking_number" in DISPATCH_QUEUE
+    assert "shipped_at" in DISPATCH_QUEUE
+    assert "label_purchased_at" in DISPATCH_QUEUE
+    assert "carrier_accepted_at" in DISPATCH_QUEUE
+    assert "first_movement_at" in DISPATCH_QUEUE
+    assert "delivered_at" in DISPATCH_QUEUE
     assert '"unshipped"' not in DISPATCH_QUEUE.split("_DISPATCHED_MARKETPLACE_STATUSES", 1)[1].split("}", 1)[0]
 
 
