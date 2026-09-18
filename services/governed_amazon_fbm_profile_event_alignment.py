@@ -15,6 +15,7 @@ from sqlalchemy import text
 
 from extensions import db
 from fbm_models import FBMOrderProfile
+from models import MarketplaceOrder
 
 
 def _values(value: Any, key: str) -> list[Any]:
@@ -177,6 +178,54 @@ def _persist(payload: dict) -> bool:
     return True
 
 
+def _hydrate_exact_order_when_event_facts_incomplete(payload: dict) -> bool:
+    """Reuse the existing exact Amazon order reader when ORDER_CHANGE is sparse.
+
+    ORDER_CHANGE is allowed to carry only lifecycle summary facts. When the
+    exact order already exists but its persisted Amazon profile/promise is
+    incomplete, enrich only that order from the existing Orders reader. This
+    is event-bound: no page read, scan, polling, historical repair or rebuild.
+    """
+    store_id, order_id = _identity(payload)
+    if store_id is None or not order_id:
+        return False
+
+    profile = FBMOrderProfile.query.filter_by(
+        store_id=store_id,
+        marketplace_order_id=order_id,
+    ).first()
+    state = db.session.execute(text("""
+        SELECT ship_by_at, earliest_delivery_at, latest_delivery_at, shipping_service
+        FROM fbm_order_operational_state
+        WHERE store_id=:store_id AND marketplace_order_id=:order_id
+        LIMIT 1
+    """), {"store_id": store_id, "order_id": order_id}).mappings().first()
+
+    complete = bool(
+        profile
+        and profile.latest_ship_at
+        and profile.shipment_service_level
+        and state
+        and state.get("ship_by_at")
+        and state.get("latest_delivery_at")
+    )
+    if complete:
+        return False
+
+    order = (
+        MarketplaceOrder.query
+        .filter_by(store_id=store_id, marketplace_order_id=order_id)
+        .order_by(MarketplaceOrder.id.desc())
+        .first()
+    )
+    if order is None:
+        return False
+
+    from services.fbm_amazon_order_profile import get_or_refresh_amazon_profile
+    get_or_refresh_amazon_profile(order, force=True)
+    return True
+
+
 def install_governed_amazon_fbm_profile_event_alignment(app) -> None:
     if getattr(app, "_bt38_amazon_fbm_profile_event_alignment", False):
         return
@@ -193,6 +242,7 @@ def install_governed_amazon_fbm_profile_event_alignment(app) -> None:
             payload = request.get_json(silent=True)
             if isinstance(payload, dict):
                 _persist(payload)
+                _hydrate_exact_order_when_event_facts_incomplete(payload)
         except Exception:
             db.session.rollback()
             app.logger.exception("Amazon exact-event FBM profile alignment failed")
