@@ -115,12 +115,10 @@ def install_governed_order_clarity_alignment(app) -> None:
     from services.governed_fbm_fulfillment_guard import install_governed_fbm_fulfillment_guard
     from services.fbm_db_delivery_promise_alignment import install_fbm_db_delivery_promise_alignment
     from services.governed_fbm_global_search_alignment import install_governed_fbm_global_search_alignment
-    from services.governed_fbm_all_orders_health_alignment import install_governed_fbm_all_orders_health_alignment
     from services.governed_fbm_overdue_alert_alignment import install_governed_fbm_overdue_alert_alignment
 
     install_fbm_db_delivery_promise_alignment(app)
     install_governed_fbm_global_search_alignment(app)
-    install_governed_fbm_all_orders_health_alignment(app)
     install_governed_fbm_overdue_alert_alignment(app)
     install_governed_fbm_lifecycle_alignment(app)
     install_governed_fbm_marketplace_dispatch_authority_alignment()
