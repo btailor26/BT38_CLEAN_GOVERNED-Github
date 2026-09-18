@@ -60,17 +60,15 @@
         const transitPassed = Boolean(movementAt || deliveredAt || terminalDelivery);
         const delivered = Boolean(deliveredAt || terminalDelivery);
 
-        function milestone(title, confirmed, exactTime, confirmedDetail, inferredDetail) {
+        function milestone(title, confirmed, exactTime) {
             const border = confirmed ? 'border-success' : 'border-danger';
-            let detail = '';
-            if (exactTime) detail = `<div class="small text-muted">${esc(displayDate(exactTime))}${confirmedDetail ? ` · ${esc(confirmedDetail)}` : ''}</div>`;
-            else if (confirmed && inferredDetail) detail = `<div class="small text-muted">${esc(inferredDetail)}</div>`;
+            const detail = exactTime ? `<div class="small text-muted">${esc(displayDate(exactTime))}</div>` : '';
             return `<div class="border-start border-3 ${border} ps-3 py-2 mb-2"><div class="d-flex justify-content-between align-items-start gap-3"><div><div class="fw-semibold">${esc(title)}</div>${detail}</div>${stateBadge(confirmed)}</div></div>`;
         }
 
-        return milestone('Picked up', pickupPassed, pickedUpAt, `${carrier} carrier acceptance persisted`, 'Stage passed: later persisted shipment truth proves pickup occurred; exact pickup timestamp is not persisted.') +
-            milestone('In transit', transitPassed, movementAt, `${carrier} first movement persisted`, 'Stage passed: later persisted shipment truth proves transit occurred; exact first-movement timestamp is not persisted.') +
-            milestone('Delivered', delivered, deliveredAt, 'Delivery completion persisted', terminalDelivery ? 'Delivery completion is proven by persisted shipment/provider truth; exact delivery timestamp is not exposed on this row.' : '');
+        return milestone('Picked up', pickupPassed, pickedUpAt) +
+            milestone('In transit', transitPassed, movementAt) +
+            milestone('Delivered', delivered, deliveredAt);
     }
 
     function trackingEvents(row) {
@@ -106,10 +104,11 @@
             return bTime - aTime;
         });
         return `<div class="fw-semibold mt-3 mb-2">Tracking history</div><div class="list-group list-group-flush border rounded">` + ordered.map(function (event, index) {
-            const when = displayDate(event.event_time || event.observed_at || '');
-            const title = String(event.description || event.status || 'Carrier update').trim();
+            const when = displayDate(event.event_time || '');
+            const title = String(event.description || event.status || '').trim();
             const detail = String(event.detail || '').trim();
-            return `<div class="list-group-item py-2"><div class="d-flex justify-content-between gap-3"><div><div class="fw-semibold">${esc(title)}</div>${detail ? `<div class="small text-muted">${esc(detail)}</div>` : ''}</div>${index === 0 ? '<span class="badge rounded-pill px-2 py-1 bg-secondary text-white align-self-start">Latest</span>' : ''}</div>${when ? `<div class="small text-muted mt-1">${esc(when)}</div>` : ''}</div>`;
+            if (!title && !detail) return '';
+            return `<div class="list-group-item py-2"><div class="d-flex justify-content-between gap-3"><div>${title ? `<div class="fw-semibold">${esc(title)}</div>` : ''}${detail ? `<div class="small text-muted">${esc(detail)}</div>` : ''}</div>${index === 0 ? '<span class="badge rounded-pill px-2 py-1 bg-secondary text-white align-self-start">Latest</span>' : ''}</div>${when ? `<div class="small text-muted mt-1">${esc(when)}</div>` : ''}</div>`;
         }).join('') + `</div>`;
     }
 
