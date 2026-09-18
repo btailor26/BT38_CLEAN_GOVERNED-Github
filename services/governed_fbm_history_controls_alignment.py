@@ -93,57 +93,8 @@ controls._range_bounds = _range_bounds
 
 
 if not getattr(page, "_bt38_history_controls_aligned", False):
-    _original_profile_map = page._profile_map
-    _original_shipment_map = page._shipment_map
-
-    def _cached_profile_map(rows):
-        cache = getattr(g, "_bt38_fbm_history_profile_cache", None)
-        if cache is None:
-            cache = {}
-            g._bt38_fbm_history_profile_cache = cache
-        missing = [
-            row for row in rows
-            if row.store_id is not None and row.marketplace_order_id
-            and (int(row.store_id), str(row.marketplace_order_id)) not in cache
-        ]
-        if missing:
-            cache.update(_original_profile_map(missing))
-        return {
-            (int(row.store_id), str(row.marketplace_order_id)): cache.get((int(row.store_id), str(row.marketplace_order_id)))
-            for row in rows
-            if row.store_id is not None and row.marketplace_order_id
-            and cache.get((int(row.store_id), str(row.marketplace_order_id))) is not None
-        }
-
-    def _cached_shipment_map(rows):
-        cache = getattr(g, "_bt38_fbm_history_shipment_cache", None)
-        loaded = getattr(g, "_bt38_fbm_history_shipment_keys", None)
-        if cache is None:
-            cache = {}
-            g._bt38_fbm_history_shipment_cache = cache
-        if loaded is None:
-            loaded = set()
-            g._bt38_fbm_history_shipment_keys = loaded
-        keys = {
-            (int(row.store_id), str(row.marketplace_order_id))
-            for row in rows if row.store_id is not None and row.marketplace_order_id
-        }
-        missing_keys = keys - loaded
-        if missing_keys:
-            missing_rows = [
-                row for row in rows
-                if row.store_id is not None and row.marketplace_order_id
-                and (int(row.store_id), str(row.marketplace_order_id)) in missing_keys
-            ]
-            fresh = _original_shipment_map(missing_rows)
-            controls._prime_shipment_relationships(fresh.values())
-            cache.update(fresh)
-            loaded.update(missing_keys)
-        return {key: cache.get(key) for key in keys if cache.get(key) is not None}
-
-    # Keep profile/shipment request-local caches only. Row authority is assigned
-    # later by the browser-session installer to the canonical History snapshot.
-    page._profile_map = _cached_profile_map
-    page._shipment_map = _cached_shipment_map
+    # Global-search alignment already owns the request-local profile/shipment
+    # caches. History controls only define the selected period and suppress the
+    # retired Health-period controls; they do not wrap those readers again.
     page._period_controls = lambda _health: ""
     page._bt38_history_controls_aligned = True
