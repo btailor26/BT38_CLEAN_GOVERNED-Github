@@ -242,6 +242,41 @@ def _event_value(event: dict[str, Any], *keys: str) -> Any:
     return None
 
 
+def _ensure_marketplace_shipment(*, store_id: int, order_id: str, truth: dict[str, Any]):
+    """Reuse or persist the one physical shipment proven by Amazon package truth."""
+    tracking = _text(truth.get("tracking_number"))
+    if not tracking:
+        return None, False
+    from fbm_models import FBMShipment
+    exact = (
+        FBMShipment.query
+        .filter_by(store_id=int(store_id), marketplace_order_id=order_id, tracking_number=tracking)
+        .order_by(FBMShipment.id.desc())
+        .first()
+    )
+    if exact is not None:
+        return exact, False
+    draft = (
+        FBMShipment.query
+        .filter_by(store_id=int(store_id), marketplace_order_id=order_id)
+        .filter((FBMShipment.tracking_number.is_(None)) | (FBMShipment.tracking_number == ""))
+        .order_by(FBMShipment.id.desc())
+        .first()
+    )
+    shipment = draft or FBMShipment(store_id=int(store_id), marketplace_order_id=order_id)
+    shipment.provider = "marketplace"
+    shipment.carrier = _text(truth.get("carrier")) or None
+    shipment.service = _text(truth.get("shipping_service")) or None
+    shipment.tracking_number = tracking
+    shipment.status = _text(truth.get("lifecycle_status")) or "shipped"
+    shipment.marketplace_confirmed_at = truth.get("shipped_at")
+    shipment.marketplace_confirmation_status = "marketplace_authoritative"
+    if draft is None:
+        db.session.add(shipment)
+        db.session.flush()
+    return shipment, True
+
+
 def _persist_amazon_tracking_events(*, shipment: Any, events: list[dict[str, Any]]) -> int:
     """Persist only exact Amazon event history against an existing shipment row."""
     shipment_id = getattr(shipment, "id", None)
@@ -515,22 +550,15 @@ def hydrate_amazon_tracking_for_order(
             row.updated_at = datetime.utcnow()
             updates += 1
 
-    tracking_events_persisted = 0
-    shipment_row = None
-    if shipment.get("tracking_number"):
-        from fbm_models import FBMShipment
-        shipment_row = (
-            FBMShipment.query
-            .filter_by(store_id=int(store.id), marketplace_order_id=order_id)
-            .filter(FBMShipment.tracking_number == shipment.get("tracking_number"))
-            .order_by(FBMShipment.id.desc())
-            .first()
-        )
-    if shipment_row is not None:
-        tracking_events_persisted = _persist_amazon_tracking_events(
-            shipment=shipment_row,
-            events=list(shipment.get("tracking_events") or []),
-        )
+    shipment_row, marketplace_shipment_persisted = _ensure_marketplace_shipment(
+        store_id=int(store.id),
+        order_id=order_id,
+        truth=shipment,
+    )
+    tracking_events_persisted = _persist_amazon_tracking_events(
+        shipment=shipment_row,
+        events=list(shipment.get("tracking_events") or []),
+    )
 
     service_persisted = _persist_package_shipping_service(
         store_id=int(store.id),
@@ -540,7 +568,7 @@ def hydrate_amazon_tracking_for_order(
 
     # A readback is observation, not a commercial movement. Commit only when the
     # canonical MarketplaceOrder truth or exact package service actually changed.
-    if updates or service_persisted or tracking_events_persisted:
+    if updates or service_persisted or marketplace_shipment_persisted or tracking_events_persisted:
         db.session.commit()
 
     return {
@@ -569,7 +597,7 @@ def hydrate_amazon_tracking_for_order(
         "legacy_order_status": legacy_status,
         "legacy_read_error": legacy_error,
         "source": source,
-        "marketplace_shipment_persisted": False,
-        "marketplace_shipment_id": None,
+        "marketplace_shipment_persisted": marketplace_shipment_persisted,
+        "marketplace_shipment_id": getattr(shipment_row, "id", None),
         "marketplace_write_started": False,
     }
