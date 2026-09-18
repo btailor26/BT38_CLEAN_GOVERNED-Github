@@ -21,7 +21,12 @@
     }
 
     function deliveryProven(row) {
-        return ['on_time', 'late', 'timing_unavailable'].includes(performanceState(row));
+        // Delivery is proven only by persisted shipment/provider completion.
+        // Delivery-performance describes timing against the marketplace promise;
+        // it must never fabricate carrier milestones by itself.
+        return Boolean(row?.dataset?.deliveredAt) ||
+            String(row?.dataset?.shipmentState || '').trim().toLowerCase() === 'delivered' ||
+            String(row?.dataset?.lastProviderStatus || '').trim().toLowerCase() === 'delivered';
     }
 
     function performanceHtml(row) {
@@ -65,7 +70,7 @@
 
         return milestone('Picked up', pickupPassed, pickedUpAt, `${carrier} carrier acceptance persisted`, 'Stage passed: later persisted shipment truth proves pickup occurred; exact pickup timestamp is not persisted.') +
             milestone('In transit', transitPassed, movementAt, `${carrier} first movement persisted`, 'Stage passed: later persisted shipment truth proves transit occurred; exact first-movement timestamp is not persisted.') +
-            milestone('Delivered', delivered, deliveredAt, 'Delivery completion persisted', terminalDelivery ? 'Delivery completion is proven by persisted delivery-performance truth; exact delivery timestamp is not exposed on this row.' : '');
+            milestone('Delivered', delivered, deliveredAt, 'Delivery completion persisted', terminalDelivery ? 'Delivery completion is proven by persisted shipment/provider truth; exact delivery timestamp is not exposed on this row.' : '');
     }
 
     function trackingEvents(row) {
@@ -179,7 +184,8 @@
         const providerReference = String(row.dataset.providerShipmentId || '').trim();
         const events = trackingEvents(row);
         if (subtitle) subtitle.textContent = tracking;
-        body.innerHTML = `<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3"><div><div class="fw-semibold">${esc(carrier)}${service && service !== '—' ? ` · ${esc(service)}` : ''}</div><div class="small">Tracking: <code>${esc(tracking)}</code></div><div class="small text-muted">Journey source: persisted BT38 DB</div></div><div>${performanceHtml(row)}</div></div>` + packageSummaryHtml(events, providerReference) + `<div class="border rounded p-3 mb-3">${promiseHtml(row)}</div><div class="fw-semibold mb-2">Shipment journey</div>${milestoneHtml(row)}` + trackingHistoryHtml(events);
+        const shippingSource = String(row.dataset.shippingSource || '').trim() || 'Persisted shipment';
+        body.innerHTML = `<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3"><div><div class="fw-semibold">${esc(carrier)}${service && service !== '—' ? ` · ${esc(service)}` : ''}</div><div class="small">Tracking: <code>${esc(tracking)}</code></div><div class="small text-muted">Tracking authority: ${esc(shippingSource)} · persisted BT38 DB</div></div><div>${performanceHtml(row)}</div></div>` + packageSummaryHtml(events, providerReference) + `<div class="border rounded p-3 mb-3">${promiseHtml(row)}</div><div class="fw-semibold mb-2">Shipment journey</div>${milestoneHtml(row)}` + trackingHistoryHtml(events);
         bootstrap.Modal.getOrCreateInstance(modalElement).show();
     }
 
