@@ -18,6 +18,7 @@ from sqlalchemy import text
 from amazon_service_live_patch import _load_credentials
 from extensions import db
 from models import MarketplaceOrder
+from fbm_tracking_event_models import FBMShipmentTrackingEvent
 
 
 LWA_TOKEN_URL = "https://api.amazon.com/auth/o2/token"
@@ -222,6 +223,65 @@ def _legacy_exact_order_lifecycle(
     return _PACKAGE_LIFECYCLE.get(_status_key(raw_status)), raw_status, None
 
 
+def _amazon_tracking_events(package: dict[str, Any] | None) -> list[dict[str, Any]]:
+    """Return exact Amazon-supplied package tracking events without inventing fields."""
+    if not isinstance(package, dict):
+        return []
+    for key in ("trackingEvents", "trackingHistory", "events", "eventHistory"):
+        rows = package.get(key)
+        if isinstance(rows, list):
+            return [row for row in rows if isinstance(row, dict)]
+    return []
+
+
+def _event_value(event: dict[str, Any], *keys: str) -> Any:
+    for key in keys:
+        value = event.get(key)
+        if value not in (None, ""):
+            return value
+    return None
+
+
+def _persist_amazon_tracking_events(*, shipment: Any, events: list[dict[str, Any]]) -> int:
+    """Persist only exact Amazon event history against an existing shipment row."""
+    shipment_id = getattr(shipment, "id", None)
+    if not shipment_id or not events:
+        return 0
+    inserted = 0
+    for index, event in enumerate(events):
+        event_time_raw = _event_value(event, "eventTime", "eventDate", "timestamp", "eventTimestamp")
+        event_time = _parse_iso(event_time_raw)
+        status = _text(_event_value(event, "status", "eventCode", "eventType")) or None
+        description = _text(_event_value(event, "eventDetails", "description", "message", "detailedStatus")) or None
+        location = _event_value(event, "location", "eventLocation")
+        if isinstance(location, dict):
+            detail = " ".join(_text(location.get(key)) for key in ("city", "stateOrRegion", "countryCode") if _text(location.get(key))) or None
+        else:
+            detail = _text(location) or None
+        identity = "|".join((_text(event_time_raw), _text(status), _text(description), _text(detail), str(index)))
+        event_key = f"amazon:{identity}"
+        exists = (
+            FBMShipmentTrackingEvent.query
+            .filter_by(shipment_id=int(shipment_id), event_key=event_key)
+            .first()
+        )
+        if exists is not None:
+            continue
+        db.session.add(FBMShipmentTrackingEvent(
+            shipment_id=int(shipment_id),
+            provider="amazon",
+            event_key=event_key,
+            event_time=event_time,
+            status=status,
+            description=description,
+            detail=detail,
+            raw_event=event,
+            observed_at=datetime.utcnow(),
+        ))
+        inserted += 1
+    return inserted
+
+
 def _package_truth(order_payload: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
     """Return lifecycle truth even when tracking is absent or multi-package."""
     packages = [row for row in (order_payload.get("packages") or []) if isinstance(row, dict)]
@@ -281,6 +341,7 @@ def _package_truth(order_payload: dict[str, Any]) -> tuple[dict[str, Any] | None
         "lifecycle_status": lifecycle_status,
         "order_status": _order_fulfillment_status(order_payload),
         "truth_source": "orders_2026",
+        "tracking_events": _amazon_tracking_events(package),
     }, ambiguity
 
 
@@ -454,6 +515,23 @@ def hydrate_amazon_tracking_for_order(
             row.updated_at = datetime.utcnow()
             updates += 1
 
+    tracking_events_persisted = 0
+    shipment_row = None
+    if shipment.get("tracking_number"):
+        from fbm_models import FBMShipment
+        shipment_row = (
+            FBMShipment.query
+            .filter_by(store_id=int(store.id), marketplace_order_id=order_id)
+            .filter(FBMShipment.tracking_number == shipment.get("tracking_number"))
+            .order_by(FBMShipment.id.desc())
+            .first()
+        )
+    if shipment_row is not None:
+        tracking_events_persisted = _persist_amazon_tracking_events(
+            shipment=shipment_row,
+            events=list(shipment.get("tracking_events") or []),
+        )
+
     service_persisted = _persist_package_shipping_service(
         store_id=int(store.id),
         order_id=order_id,
@@ -462,7 +540,7 @@ def hydrate_amazon_tracking_for_order(
 
     # A readback is observation, not a commercial movement. Commit only when the
     # canonical MarketplaceOrder truth or exact package service actually changed.
-    if updates or service_persisted:
+    if updates or service_persisted or tracking_events_persisted:
         db.session.commit()
 
     return {
@@ -485,6 +563,7 @@ def hydrate_amazon_tracking_for_order(
         "order_status": shipment.get("order_status"),
         "lifecycle_status": shipment.get("lifecycle_status"),
         "truth_source": shipment.get("truth_source"),
+        "tracking_events_persisted": tracking_events_persisted,
         "tracking_ambiguity": ambiguity,
         "observed_v2026_status": observed_v2026_status,
         "legacy_order_status": legacy_status,
