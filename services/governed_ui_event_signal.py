@@ -57,6 +57,7 @@ _SINGULAR_SCOPE_KEYS = (
     "group_id",
     "store_id",
     "platform",
+    "queue",
     "status",
     "lifecycle_status",
     "created_at",
