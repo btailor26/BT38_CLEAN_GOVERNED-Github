@@ -146,14 +146,24 @@
         }
     }
 
+    function alignPromisePerformance(row) {
+        const promiseCell = row?.querySelector?.('.fbm-promise-cell') || null;
+        if (!promiseCell) return;
+        let holder = promiseCell.querySelector('.fbm-delivery-performance');
+        if (!holder) {
+            holder = document.createElement('div');
+            holder.className = 'fbm-delivery-performance mt-1';
+            promiseCell.appendChild(holder);
+        }
+        // One authority: the same persisted delivery-performance state supplies
+        // both the text and Bootstrap colour class. Never infer colour separately.
+        holder.innerHTML = performanceHtml(row);
+    }
+
     function alignRowPerformance(row) {
         alignShippingAndShipment(row);
         alignJourneyRowColours(row);
-        const journeyCell = row?.children?.[8] || null;
-        if (!journeyCell) return;
-        let holder = journeyCell.querySelector('.fbm-delivery-performance');
-        if (!holder) { holder = document.createElement('div'); holder.className = 'fbm-row-note fbm-delivery-performance mt-1'; journeyCell.appendChild(holder); }
-        holder.innerHTML = performanceHtml(row);
+        alignPromisePerformance(row);
     }
 
     function openAlignedJourney(button) {
@@ -186,6 +196,12 @@
         window.addEventListener('click', intercept, true);
         window.addEventListener('keydown', function (event) { if (event.key !== 'Enter' && event.key !== ' ') return; intercept(event); }, true);
         document.addEventListener('fbm:rows-updated', function () { document.querySelectorAll('.fbm-order-row').forEach(alignRowPerformance); });
+        document.addEventListener('bt38-fbm-committed-snapshot-applied', function (event) {
+            const orderId = String(event?.detail?.order_id || event?.detail?.orderId || '').trim();
+            if (!orderId) return;
+            const row = document.querySelector('.fbm-order-row[data-order-id="' + CSS.escape(orderId) + '"]');
+            if (row) alignRowPerformance(row);
+        });
     }
 
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, {once: true});
