@@ -1,8 +1,7 @@
 """Keep FBM History, lifecycle counts and Health on one browser-session snapshot.
 
-The initial /fbm read is explicitly bound to the canonical bounded page-reader
-contract even though older dispatch alignment replaces the module attribute
-before this installer runs. History/lifecycle/Health then operate over the
+The selected FBM History window is loaded once through the canonical History
+snapshot reader. History/lifecycle/Health/search/pager then operate over the same
 rendered browser-session facts. The bottom pager remains presentation-only.
 
 No marketplace/provider read, write, polling, timer, EventSource or fetch path is
@@ -86,4 +85,4 @@ def install_governed_fbm_browser_session_authority_alignment(app) -> None:
         return dispatch._bt38_original_inject(html, payload, fba_count)
     dispatch._inject = aligned_inject
     app._bt38_fbm_browser_session_authority_alignment_installed = True
-    app.logger.info("BT38 FBM browser-session authority aligned: canonical bounded initial read; dispatch broad-read override bypassed; Health/lifecycle use rendered session facts; exact-record events preserved")
+    app.logger.info("BT38 FBM browser-session authority aligned: one selected-History working set; Health/lifecycle/search/pager use rendered session facts; exact-record events preserved")
