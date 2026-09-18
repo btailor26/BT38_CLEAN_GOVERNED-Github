@@ -127,6 +127,16 @@ def _candidate_order_ids(store_id: int, *, platform: str) -> list[str]:
                 OR NULLIF(BTRIM(COALESCE(mo.carrier, '')), '') IS NULL
                 OR fos.ship_by_at IS NULL
                 OR (fos.earliest_delivery_at IS NULL AND fos.latest_delivery_at IS NULL)
+                OR NOT EXISTS (
+                    SELECT 1
+                    FROM fbm_shipments fs
+                    JOIN fbm_shipment_tracking_events fte ON fte.shipment_id = fs.id
+                    WHERE fs.store_id = mo.store_id
+                      AND fs.marketplace_order_id = mo.marketplace_order_id
+                      AND NULLIF(BTRIM(COALESCE(fs.tracking_number, '')), '') =
+                          NULLIF(BTRIM(COALESCE(mo.tracking_number, '')), '')
+                      AND fte.provider = 'amazon'
+                )
               )
             ORDER BY mo.marketplace_order_id ASC
             """
