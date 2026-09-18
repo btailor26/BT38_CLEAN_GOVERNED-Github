@@ -235,7 +235,9 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   var tabBar=document.createElement('div');tabBar.className='fbm-lifecycle-tabs';
   addWorkflowButton(tabBar,'pending','Pending');addWorkflowButton(tabBar,'ready_dispatch','Ready to dispatch');addWorkflowButton(tabBar,'dispatched','Dispatched');addWorkflowButton(tabBar,'cancelled','Cancelled');addTruthLink(tabBar,'FBA','/governed/amazon-fba-stock',{int(fba_count)});addWorkflowButton(tabBar,'replacements','Replacement');addWorkflowButton(tabBar,'refunds','Refunds');
   var header=card.querySelector('.card-header');if(header)header.insertAdjacentElement('afterend',tabBar);else card.insertBefore(tabBar,card.firstChild);
-  function handoffToExistingPager(matched){{var controller=window.BT38&&window.BT38.PageController;var pages=window.BT38&&window.BT38.pages;var state=pages&&(pages.fbm||pages.FBM);if(!controller||!state||!Array.isArray(state.rows)||typeof controller.renderPage!=='function')return false;var set=new Set(matched);state.filteredRows=state.rows.filter(function(entry){{return entry&&set.has(entry.el)}});state.currentPage=1;controller.renderPage(state.name);return true;}}
+  var pageSizeSelect=document.getElementById('bt38ResultsPerPageSelect');var previousPage=document.getElementById('bt38FbmPreviousPage');var nextPage=document.getElementById('bt38FbmNextPage');var pageStatus=document.querySelector('#bt38FbmOrderFlow .bt38-page-status');var tableCount=document.querySelector('#bt38FbmOrderFlow .bt38-table-count');var currentPage=1;var pageSize=Number(pageSizeSelect&&pageSizeSelect.value||15)||15;
+  function renderExistingPager(matched){{var total=matched.length;var pages=Math.max(1,Math.ceil(total/pageSize));currentPage=Math.min(Math.max(1,currentPage),pages);var start=(currentPage-1)*pageSize,end=start+pageSize;matched.forEach(function(row,index){{row.hidden=!(index>=start&&index<end)}});if(pageStatus)pageStatus.textContent='Page '+currentPage+' of '+pages;if(tableCount)tableCount.textContent=total?'Showing '+(start+1)+'–'+Math.min(end,total)+' of '+total+' matching FBM orders':'No matching FBM orders';if(previousPage)previousPage.disabled=currentPage<=1;if(nextPage)nextPage.disabled=currentPage>=pages;return true;}}
+  if(pageSizeSelect)pageSizeSelect.addEventListener('change',function(){{pageSize=Number(pageSizeSelect.value||15)||15;currentPage=1;saveSession({{page_size:pageSize}});render()}});if(previousPage)previousPage.addEventListener('click',function(){{if(currentPage>1){{currentPage-=1;render()}}}});if(nextPage)nextPage.addEventListener('click',function(){{currentPage+=1;render()}});
   function refreshBadges(){{var counts=localCounts();tabBar.querySelectorAll('[data-fbm-tab]').forEach(function(button){{var badge=button.querySelector('.badge');if(badge)badge.textContent=Number(counts[button.dataset.fbmTab]||0)}});}}
   var initialRender=true;
   function render(){{
@@ -245,8 +247,8 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
     initialRender=false;
     var matched=rows.filter(function(row){{return row.dataset.fbmHistoryMatch==='1'&&row.dataset.fbmQueue===active&&(!search||String(row.dataset.fbmSearch||'').indexOf(search)>=0)}});
     var matchedSet=new Set(matched);
-    var paged=handoffToExistingPager(matched);
-    rows.forEach(function(row){{if(!matchedSet.has(row))row.hidden=true;else if(!paged)row.hidden=false}});
+    rows.forEach(function(row){{if(!matchedSet.has(row))row.hidden=true}});
+    renderExistingPager(matched);
     refreshBadges();
     tabBar.querySelectorAll('[data-fbm-tab]').forEach(function(button){{var selected=button.dataset.fbmTab===active;button.classList.toggle('active',selected);button.setAttribute('aria-selected',selected?'true':'false')}});
     var title=card.querySelector('.card-header .fw-semibold');if(title&&labels[active])title.textContent=labels[active];
