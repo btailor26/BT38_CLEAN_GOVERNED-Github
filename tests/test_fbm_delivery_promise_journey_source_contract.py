@@ -32,8 +32,10 @@ def test_fbm_journey_alignment_is_loaded_for_the_single_fbm_page():
 def test_fbm_journey_alignment_does_not_add_db_or_marketplace_reads():
     source = Path("static/js/fbm_delivery_promise_journey_alignment.js").read_text(encoding="utf-8")
 
-    # The only network read retained is the existing, click-scoped Packlink status route.
-    assert "/packlink/status" in source
+    # Opening/rendering the journey consumes persisted DB truth only. Provider
+    # refresh belongs to the governed provider-event/action boundary.
+    assert "/packlink/status" not in source
+    assert "fetch(" not in source
     assert "/api/amazon" not in source
     assert "/api/ebay" not in source
     assert "marketplace_promise" not in source
@@ -58,3 +60,23 @@ def test_exact_record_event_reapplies_promise_colour_without_page_reload():
     assert "if (row) alignRowPerformance(row)" in source
     assert "location.reload" not in source
     assert "setInterval" not in source
+
+
+def test_delivery_performance_never_fabricates_provider_milestones():
+    source = Path("static/js/fbm_delivery_promise_journey_alignment.js").read_text(encoding="utf-8")
+
+    assert "function deliveryProven(row)" in source
+    assert "Boolean(row?.dataset?.deliveredAt)" in source
+    assert "row?.dataset?.shipmentState" in source
+    assert "row?.dataset?.lastProviderStatus" in source
+    assert "includes(performanceState(row))" not in source
+
+
+def test_tracking_authority_is_persisted_label_source_without_provider_read():
+    source = Path("static/js/fbm_delivery_promise_journey_alignment.js").read_text(encoding="utf-8")
+
+    assert "Tracking authority:" in source
+    assert "row.dataset.shippingSource" in source
+    assert "persisted BT38 DB" in source
+    assert "fetch(" not in source
+    assert "/packlink/status" not in source
