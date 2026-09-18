@@ -49,3 +49,18 @@ def test_no_broad_amazon_profile_repair_remains():
     assert '_start_missing_profile_repair_once' not in source
     assert "NOW() - INTERVAL '90 days'" not in source
     assert 'get_or_refresh_amazon_profile(order, force=True)' not in source
+
+
+def test_sparse_amazon_event_reuses_exact_order_profile_reader_only():
+    source = Path("services/governed_amazon_fbm_profile_event_alignment.py").read_text()
+
+    assert "_hydrate_exact_order_when_event_facts_incomplete(payload)" in source
+    assert "get_or_refresh_amazon_profile(order, force=True)" in source
+    assert "profile.latest_ship_at" in source
+    assert 'state.get("ship_by_at")' in source
+    assert 'state.get("latest_delivery_at")' in source
+    assert "MarketplaceOrder.query" in source
+    assert ".filter_by(store_id=store_id, marketplace_order_id=order_id)" in source
+    assert "ORDER_CHANGE is allowed to carry only lifecycle summary facts" in source
+    assert "threading" not in source
+    assert "INTERVAL" not in source
