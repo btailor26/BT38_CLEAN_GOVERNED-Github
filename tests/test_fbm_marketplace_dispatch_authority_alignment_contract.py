@@ -36,3 +36,12 @@ def test_alignment_is_installed_after_existing_lifecycle_authority():
     lifecycle = INSTALLER.index("install_governed_fbm_lifecycle_alignment(app)")
     dispatch = INSTALLER.index("install_governed_fbm_marketplace_dispatch_authority_alignment()")
     assert lifecycle < dispatch
+
+
+def test_fbm_template_uses_persisted_physical_provider_as_route_after_dispatch():
+    template = _read("templates/fbm.html")
+
+    assert "shipment.provider != 'marketplace'" in template
+    assert "'Packlink' if shipment.provider == 'packlink'" in template
+    assert "'Amazon Buy Shipping' if shipment.provider == 'amazon_buy_shipping'" in template
+    assert "Recommended: {{ shipping.recommended }}" in template
