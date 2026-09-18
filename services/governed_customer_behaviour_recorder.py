@@ -11,8 +11,9 @@ from __future__ import annotations
 
 from datetime import datetime
 import json
+import time
 
-from flask import jsonify, request, render_template, abort
+from flask import jsonify, request, render_template, abort, g
 from flask_login import current_user, login_required
 
 from extensions import db
@@ -191,6 +192,58 @@ def install_governed_customer_behaviour_recorder(app):
             })
         journeys = sorted(grouped.values(), key=lambda item: item["last_at"], reverse=True)
         return render_template("admin/customer_behaviour.html", journeys=journeys)
+
+    @app.before_request
+    def bt38_fbm_request_probe_start():
+        # Reuse the existing SystemLog recorder authority for a narrow FBM
+        # request-origin audit. This records no order/customer/marketplace data.
+        if request.method == "GET" and (request.path.rstrip("/") or "/") == "/fbm":
+            g._bt38_fbm_probe_started = time.perf_counter()
+
+    @app.after_request
+    def bt38_fbm_request_probe(response):
+        if request.method != "GET" or (request.path.rstrip("/") or "/") != "/fbm":
+            return response
+        started = getattr(g, "_bt38_fbm_probe_started", None)
+        duration_ms = round((time.perf_counter() - started) * 1000, 1) if started is not None else None
+        fetch_mode = _safe_text(request.headers.get("Sec-Fetch-Mode"), 40).lower()
+        fetch_dest = _safe_text(request.headers.get("Sec-Fetch-Dest"), 40).lower()
+        expansion = _safe_text(request.headers.get("X-BT38-FBM-History-Expansion"), 20) == "1"
+        if expansion:
+            origin = "history_expansion"
+        elif fetch_mode == "navigate" or fetch_dest == "document":
+            origin = "browser_navigation"
+        elif fetch_mode:
+            origin = "browser_fetch"
+        else:
+            origin = "unknown"
+        details = {
+            "event": "fbm_request_probe",
+            "page": "/fbm",
+            "request_origin": origin,
+            "fbm_range": _safe_text(request.args.get("fbm_range") or "3d", 20),
+            "has_custom_from": bool(request.args.get("fbm_from")),
+            "has_custom_to": bool(request.args.get("fbm_to")),
+            "status_code": int(response.status_code),
+            "response_bytes": int(response.calculate_content_length() or 0),
+            "duration_ms": duration_ms,
+            "fetch_mode": fetch_mode,
+            "fetch_dest": fetch_dest,
+            "history_expansion_header": expansion,
+            "recorded_at": datetime.utcnow().isoformat() + "Z",
+        }
+        try:
+            row = SystemLog(
+                log_type="customer_behaviour",
+                message=f"FBM request probe: {origin}",
+                details=json.dumps(details, ensure_ascii=False),
+            )
+            db.session.add(row)
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            app.logger.exception("BT38 FBM request probe could not be recorded")
+        return response
 
     @app.after_request
     def bt38_customer_behaviour_script(response):
