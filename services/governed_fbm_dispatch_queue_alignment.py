@@ -202,6 +202,9 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   var legacySearch=params.get('search')||params.get('q');
   var active=(legacyTab&&labels[legacyTab])?legacyTab:(saved.tab&&labels[saved.tab]?saved.tab:'pending');
   var search=String(legacySearch!=null?legacySearch:(saved.search||'')).trim().toLowerCase();
+  var loadedRange=String(params.get('fbm_range')||'3d').toLowerCase();
+  var loadedFrom=String(params.get('fbm_from')||'');
+  var loadedTo=String(params.get('fbm_to')||'');
   var range=String(params.get('fbm_range')||saved.range||'3d').toLowerCase();
   var from=String(params.has('fbm_from')?(params.get('fbm_from')||''):(saved.from||''));
   var to=String(params.has('fbm_to')?(params.get('fbm_to')||''):(saved.to||''));
@@ -252,7 +255,8 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
     if(selectedCount)selectedCount.classList.toggle('d-none',!actionable);if(actionHint)actionHint.classList.toggle('d-none',!actionable);saveSession();
     document.dispatchEvent(new CustomEvent('bt38-fbm-session-rendered'));
   }}
-  function applyHistory(){{range=String(rangeInput&&rangeInput.value||'3d').toLowerCase();from=String(fromInput&&fromInput.value||'');to=String(toInput&&toInput.value||'');saveSession();render();}}
+  function loadedCoversRequestedHistory(){{if(loadedRange==='custom'){{if(range!=='custom')return false;return !!(loadedFrom&&loadedTo&&from&&to&&from>=loadedFrom&&to<=loadedTo);}}if(range==='custom')return false;var days={{'3d':3,'7d':7,'30d':30,'90d':90,'1y':365}};return Number(days[range]||3)<=Number(days[loadedRange]||3);}}
+  function applyHistory(){{range=String(rangeInput&&rangeInput.value||'3d').toLowerCase();from=String(fromInput&&fromInput.value||'');to=String(toInput&&toInput.value||'');saveSession();if(loadedCoversRequestedHistory()){{render();return;}}var u=new URL(window.location.href);u.searchParams.set('fbm_range',range);u.searchParams.delete('fbm_tab');u.searchParams.delete('search');if(range==='custom'&&from&&to){{u.searchParams.set('fbm_from',from);u.searchParams.set('fbm_to',to)}}else{{u.searchParams.delete('fbm_from');u.searchParams.delete('fbm_to')}}window.location.assign(u.toString());}}
   if(rangeInput)rangeInput.addEventListener('change',function(){{var custom=String(rangeInput.value||'')==='custom';if(fromInput)fromInput.style.display=custom?'':'none';if(toInput)toInput.style.display=custom?'':'none';if(!custom)applyHistory();}});
   if(fromInput)fromInput.addEventListener('change',function(){{if(range==='custom'||String(rangeInput&&rangeInput.value||'')==='custom'){{range='custom';if(fromInput.value&&toInput&&toInput.value)applyHistory();}}}});
   if(toInput)toInput.addEventListener('change',function(){{if(range==='custom'||String(rangeInput&&rangeInput.value||'')==='custom'){{range='custom';if(toInput.value&&fromInput&&fromInput.value)applyHistory();}}}});
