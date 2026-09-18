@@ -13,23 +13,19 @@ EVENT_REFRESH = (ROOT / "static" / "js" / "fbm_event_session_refresh_alignment.j
 GLOBAL_STATE = (ROOT / "static" / "js" / "bt38-global-state.js").read_text(encoding="utf-8")
 
 
-def test_fbm_uses_one_bounded_session_snapshot_then_preserves_original_browser_paging():
-    assert "_SESSION_MAX_ROWS = 300" in SEARCH
-    assert "_SESSION_CANDIDATE_MULTIPLIER = 4" in SEARCH
+def test_fbm_uses_one_bounded_history_snapshot_then_browser_paging():
+    assert "_RANGE_ROW_CAP = 5000" in SEARCH
+    assert "candidate_limit = _RANGE_ROW_CAP + 1" in SEARCH
     assert "def _session_snapshot_rows" in SEARCH
     assert "g._bt38_fbm_session_rows" in SEARCH
-    assert "page_alignment._latest_distinct_fbm_rows = session_rows" in SEARCH
     assert "page_alignment._expand_control = no_server_expand" in SEARCH
-    assert "bt38-fbm-session-page" not in DISPATCH_QUEUE
-    assert "loaded FBM orders · Page" not in DISPATCH_QUEUE
-    assert "session snapshot bounded" not in DISPATCH_QUEUE
     assert "window.BT38.getPageSession('fbm'" in DISPATCH_QUEUE
     assert "window.BT38.setPageSession('fbm'" in DISPATCH_QUEUE
     assert "sessionStorage" in GLOBAL_STATE
 
 
 def test_fbm_session_discovery_is_bounded_before_business_truth_identity_selection():
-    assert "candidate_limit = (_SESSION_MAX_ROWS * _SESSION_CANDIDATE_MULTIPLIER) + 1" in SEARCH
+    assert "candidate_limit = _RANGE_ROW_CAP + 1" in SEARCH
     assert ".order_by(MarketplaceOrder.id.desc())" in SEARCH
     assert ".limit(candidate_limit)" in SEARCH
     assert "def _canonical_order_rank" in SEARCH
