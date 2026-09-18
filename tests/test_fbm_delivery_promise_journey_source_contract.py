@@ -80,3 +80,22 @@ def test_tracking_authority_is_persisted_label_source_without_provider_read():
     assert "persisted BT38 DB" in source
     assert "fetch(" not in source
     assert "/packlink/status" not in source
+
+
+def test_tracking_history_never_invents_provider_wording_or_time():
+    source = Path("static/js/fbm_delivery_promise_journey_alignment.js").read_text(encoding="utf-8")
+
+    assert "event.description || event.status || '').trim()" in source
+    assert "'Carrier update'" not in source
+    assert "event.event_time || '')" in source
+    assert "event.event_time || event.observed_at" not in source
+    assert "if (!title && !detail) return '';" in source
+
+
+def test_shipment_journey_does_not_present_bt38_inference_as_provider_wording():
+    source = Path("static/js/fbm_delivery_promise_journey_alignment.js").read_text(encoding="utf-8")
+
+    assert "Stage passed:" not in source
+    assert "carrier acceptance persisted" not in source
+    assert "first movement persisted" not in source
+    assert "Delivery completion persisted" not in source
