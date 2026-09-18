@@ -116,7 +116,7 @@ def _session_health_script() -> str:
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',function(){queueMicrotask(project);},{once:true});else queueMicrotask(project);
 })();
 </script>
-""
+"""
 
 
 
