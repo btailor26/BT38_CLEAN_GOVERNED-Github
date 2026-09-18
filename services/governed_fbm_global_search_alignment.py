@@ -283,16 +283,6 @@ def install_governed_fbm_global_search_alignment(app) -> None:
     def requested_limit():
         return _page_size()
 
-    def session_rows(limit: int):
-        rows, truncated = _session_snapshot_rows()
-        search_result = _search_rows(limit)
-        if search_result is not None:
-            return search_result
-        workflow_result = _workflow_rows(limit)
-        if workflow_result is not None:
-            return workflow_result
-        return rows[:limit], bool(truncated or len(rows) > limit)
-
     def no_legacy_period_controls(_health):
         return ""
 
@@ -306,4 +296,4 @@ def install_governed_fbm_global_search_alignment(app) -> None:
     page_alignment._expand_control = no_server_expand
 
     app._bt38_fbm_global_search_alignment_installed = True
-    app.logger.info("BT38 FBM history controls aligned: native GET 3/7/30/90/1y/custom range, exact 15/30/50/100 page size, request-cached persisted reads, no marketplace/provider reads")
+    app.logger.info("BT38 FBM History read support aligned: selected 3/7/30/90/1y/custom snapshot, request-cached persisted profile/shipment reads; lifecycle/search/pager remain browser-session presentation; no marketplace/provider reads")
