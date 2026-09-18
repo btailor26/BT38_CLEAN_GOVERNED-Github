@@ -157,8 +157,8 @@
         const badges = journeyCell ? Array.from(journeyCell.querySelectorAll('.badge')) : [];
         const milestoneHtml = badges.slice(0, 4).map(function (badge) {
             const text = String(badge.textContent || '').replace(/^\d+\s*·\s*/, '').trim();
-            const active = badge.classList.contains('bg-success') || badge.classList.contains('bg-danger') || badge.classList.contains('bg-primary');
-            const statusClass = badge.classList.contains('bg-danger') ? 'bg-danger' : (active ? 'bg-success' : 'bg-light text-muted border');
+            const active = badge.classList.contains('bg-success') || badge.classList.contains('bg-primary');
+            const statusClass = active ? 'bg-success' : 'bg-light text-muted border';
             return `<div class="d-flex align-items-center justify-content-between border rounded px-3 py-2 mb-2"><span class="fw-semibold">${esc(text)}</span><span class="badge ${statusClass}">${active ? 'Confirmed' : 'Pending'}</span></div>`;
         }).join('');
         const warningHtml = warning ? `<div class="alert alert-warning py-2 mb-3"><strong>Live Packlink/carrier history unavailable.</strong><div class="small">${esc(warning)} BT38 is retaining the purchased-provider authority and showing persisted shipment state instead.</div></div>` : '';
