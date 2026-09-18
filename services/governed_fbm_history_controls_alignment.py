@@ -1,8 +1,8 @@
-"""Wire FBM History controls without replacing the bounded /fbm row reader.
+"""Wire FBM History controls without creating another /fbm row authority.
 
-History is browser-session presentation state. The initial /fbm navigation stays
-owned by governed_fbm_page_alignment._latest_distinct_fbm_rows so it cannot be
-expanded by the older server-backed History snapshot path.
+A selected History period is an explicit bounded data request. The canonical
+History snapshot reader loads that period once; lifecycle/search/Health/pager
+then remain browser-session presentation over that exact working set.
 
 No marketplace/provider read, writer, poller, timer or parallel event path is
 introduced here.
@@ -141,11 +141,9 @@ if not getattr(page, "_bt38_history_controls_aligned", False):
             loaded.update(missing_keys)
         return {key: cache.get(key) for key in keys if cache.get(key) is not None}
 
-    # Keep profile/shipment request-local caches, but DO NOT replace
-    # page._latest_distinct_fbm_rows. The original bounded reader remains the
-    # initial /fbm authority and the browser controller owns History filtering.
+    # Keep profile/shipment request-local caches only. Row authority is assigned
+    # later by the browser-session installer to the canonical History snapshot.
     page._profile_map = _cached_profile_map
     page._shipment_map = _cached_shipment_map
-    page._health_period = controls._range_bounds
     page._period_controls = lambda _health: ""
     page._bt38_history_controls_aligned = True
