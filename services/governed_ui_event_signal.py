@@ -56,6 +56,7 @@ _SINGULAR_SCOPE_KEYS = (
     "warehouse_stock_id",
     "group_id",
     "store_id",
+    "platform",
     "status",
     "lifecycle_status",
     "created_at",
