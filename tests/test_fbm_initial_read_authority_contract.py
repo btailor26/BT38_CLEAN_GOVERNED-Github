@@ -89,3 +89,9 @@ def test_lifecycle_classifier_is_not_monkey_patched():
     assert "global_search.workflow_queue_for =" not in DISPATCH
     assert "workflow_queue_for = global_search.workflow_queue_for" not in DISPATCH
     assert "return dispatch._aligned_workflow_queue_for(row, shipment)" in GLOBAL_SEARCH
+
+
+def test_history_working_set_is_independent_of_visible_pager():
+    assert "candidate_limit = _RANGE_ROW_CAP + 1" in SEARCH
+    assert "requested * _RANGE_CANDIDATE_MULTIPLIER" not in SEARCH
+    assert "broad_lookup = bool(_search_term() or _workflow_tab())" not in SEARCH
