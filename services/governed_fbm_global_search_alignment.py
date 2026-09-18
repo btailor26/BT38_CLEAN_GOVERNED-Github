@@ -27,7 +27,6 @@ _MAX_SEARCH_LENGTH = 200
 _PAGE_SIZES = (15, 30, 50, 100)
 _RANGE_DAYS = {"3d": 3, "7d": 7, "30d": 30, "90d": 90, "1y": 365}
 _RANGE_ROW_CAP = 5000
-_RANGE_CANDIDATE_MULTIPLIER = 4
 _TZ = ZoneInfo("Europe/London")
 _CANCELLED_STATUSES = {"cancelled", "canceled", "cancelled_by_buyer", "cancelled_by_seller"}
 _REPLACEMENT_TERMS = ("replacement", "replaced")
