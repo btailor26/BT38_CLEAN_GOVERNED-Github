@@ -56,10 +56,11 @@ def test_amazon_tracking_is_fbm_only_and_corrects_marketplace_owned_package_trut
 
 def test_amazon_readback_only_commits_real_canonical_change():
     assert 'service_persisted = _persist_package_shipping_service(' in AMAZON_TRACKING
-    assert 'if updates or service_persisted:\n        db.session.commit()' in AMAZON_TRACKING
-    assert 'if updates or shipment_persisted' not in AMAZON_TRACKING
-    assert '_persist_marketplace_shipment(' not in AMAZON_TRACKING
-    assert 'provider="marketplace"' not in AMAZON_TRACKING
+    assert 'if updates or service_persisted or marketplace_shipment_persisted or tracking_events_persisted:' in AMAZON_TRACKING
+    assert 'def _ensure_marketplace_shipment(' in AMAZON_TRACKING
+    assert 'shipment.provider = "marketplace"' in AMAZON_TRACKING
+    assert 'shipment.tracking_number = tracking' in AMAZON_TRACKING
+    assert 'marketplace_confirmation_status = "marketplace_authoritative"' in AMAZON_TRACKING
     assert 'row.updated_at = datetime.utcnow()' in AMAZON_TRACKING
 
 
