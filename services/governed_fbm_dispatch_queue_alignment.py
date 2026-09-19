@@ -215,12 +215,15 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   var legacySearch=params.get('search')||params.get('q');
   var active=(legacyTab&&labels[legacyTab])?legacyTab:(saved.tab&&labels[saved.tab]?saved.tab:'pending');
   var search=String(legacySearch!=null?legacySearch:(saved.search||'')).trim().toLowerCase();
-  var loadedRange=String(params.get('fbm_range')||'3d').toLowerCase();
-  var loadedFrom=String(params.get('fbm_from')||'');
-  var loadedTo=String(params.get('fbm_to')||'');
-  var range=String(params.get('fbm_range')||saved.range||'3d').toLowerCase();
-  var from=String(params.has('fbm_from')?(params.get('fbm_from')||''):(saved.from||''));
-  var to=String(params.has('fbm_to')?(params.get('fbm_to')||''):(saved.to||''));
+  // Initial HTML is always the bounded 3-day working set. Wider History is
+  // added only after an explicit History selection through the existing
+  // expansion path; stale URL/session state cannot enlarge initial loading.
+  var loadedRange='3d';
+  var loadedFrom='';
+  var loadedTo='';
+  var range='3d';
+  var from='';
+  var to='';
   function historyScope(){{return range==='custom'?'custom:'+from+':'+to:range;}}
   function lifecycleLoadedKey(name){{return 'bt38_fbm_loaded_'+historyScope()+'_'+name;}}
   if(legacyTab&&['ready_dispatch','pending','dispatched','cancelled','replacements','refunds'].indexOf(legacyTab)>=0)sessionStorage.setItem(lifecycleLoadedKey(legacyTab),'1');
