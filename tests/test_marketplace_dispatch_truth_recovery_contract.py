@@ -145,3 +145,19 @@ def test_historical_recovery_requires_explicit_manual_workflow_dispatch():
     assert "Verify deployed recovery source is exact" in RECOVERY_WORKFLOW
     assert "Recover missing Amazon and eBay dispatch truth from DB start" in RECOVERY_WORKFLOW
     assert "schedule:" not in RECOVERY_WORKFLOW
+
+
+def test_amazon_order_intake_persists_ready_dispatch_status_and_exact_promise():
+    intake = Path("services/governed_marketplace_order_import.py").read_text(encoding="utf-8")
+    assert 'def _amazon_status(order_status: str)' in intake
+    assert '"UNSHIPPED": "unshipped"' in intake
+    assert '"PARTIALLYSHIPPED": "partially_shipped"' in intake
+    assert 'status=_amazon_status(order_status)' in intake
+    assert 'def _persist_amazon_order_promise(' in intake
+    assert 'get_or_refresh_amazon_profile(order, force=True)' in intake
+    assert 'result["promise"]' in intake
+
+
+def test_amazon_recovery_includes_ready_dispatch_promise_gaps():
+    assert '_DISPATCHED_STATUSES | {"unshipped", "confirmed", "partially_shipped", "pending"}' in RECOVERY
+    assert "fos.ship_by_at IS NULL" in RECOVERY
