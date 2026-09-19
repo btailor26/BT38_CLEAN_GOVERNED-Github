@@ -48,6 +48,11 @@ def _page_size() -> int:
 
 
 def _range_key() -> str:
+    # A normal FBM page load is always the bounded 3-day working set. Wider
+    # History is loaded only by the existing explicit browser expansion request;
+    # stale URL/session state must never turn initial page load into 90d/1y.
+    if request.headers.get("X-BT38-FBM-History-Expansion") != "1":
+        return "3d"
     raw = str(request.args.get("fbm_range") or "3d").strip().lower()
     aliases = {
         "3": "3d", "3day": "3d", "3days": "3d",
