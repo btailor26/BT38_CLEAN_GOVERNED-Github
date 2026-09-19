@@ -14,6 +14,7 @@ import json
 import time
 
 from flask import jsonify, request, render_template, abort, g
+from sqlalchemy import event as sqlalchemy_event
 from flask_login import current_user, login_required
 
 from extensions import db
@@ -33,13 +34,14 @@ _OPERATIONAL_PATH_PREFIXES = (
 _ALLOWED_EVENTS = {
     "page_view", "display_snapshot", "feature_view", "section_view",
     "scroll_depth", "click", "change", "form_start", "form_submit",
-    "page_exit", "signup_complete",
+    "page_exit", "signup_complete", "browser_request", "browser_error",
 }
 _ALLOWED_KEYS = {
     "event", "journey_id", "page", "title", "referrer_path", "section",
     "target", "target_text", "target_href", "form", "scroll_depth",
     "engaged_ms", "viewport", "sequence", "feature", "display_text",
-    "display_state",
+    "display_state", "request_id", "method", "status_code", "duration_ms",
+    "response_bytes", "request_origin", "query_keys", "error_name", "error_message",
 }
 _MAX_BODY = 8192
 _SCRIPT = r'''<script id="bt38CustomerBehaviourRecorder">
@@ -86,6 +88,10 @@ _SCRIPT = r'''<script id="bt38CustomerBehaviourRecorder">
     nodes.forEach(function(el){if(!visible(el)||shown.length>=40)return;var t=safeText(el,180);if(!t)return;shown.push(selector(el)+":"+t);});
     send("display_snapshot",{display_text:clean(shown.join(" | "),4000)});
   }
+  var originalFetch=window.fetch;
+  if(originalFetch){window.fetch=function(input,init){var started=performance.now(),method=String((init&&init.method)||"GET").toUpperCase(),url="";try{url=new URL(typeof input==="string"?input:input.url,location.origin);url=url.origin===location.origin?url.pathname:"external";}catch(e){url="unknown";}return originalFetch.apply(this,arguments).then(function(response){send("browser_request",{target:url,method:method,status_code:response.status,duration_ms:Math.round(performance.now()-started)});return response;},function(error){send("browser_error",{target:url,method:method,duration_ms:Math.round(performance.now()-started),error_name:clean(error&&error.name,80),error_message:clean(error&&error.message,180)});throw error;});};}
+  window.addEventListener("error",function(e){send("browser_error",{error_name:"window_error",error_message:clean(e.message,180)});});
+  window.addEventListener("unhandledrejection",function(e){send("browser_error",{error_name:"unhandled_rejection",error_message:clean(e.reason&&e.reason.message||e.reason,180)});});
   send("page_view");
   snapshot();
   document.addEventListener("click",function(e){
@@ -137,10 +143,65 @@ def _operational_path(path: str) -> bool:
     )
 
 
+
+_SECRET_TERMS = ("password", "passwd", "secret", "token", "authorization", "cookie", "session", "api_key", "apikey", "private_key", "card", "cvv", "credential")
+
+
+def _safe_query_keys():
+    return sorted({str(key)[:80] for key in request.args.keys() if not any(term in str(key).lower() for term in _SECRET_TERMS)})[:80]
+
+
+def _request_origin():
+    mode = _safe_text(request.headers.get("Sec-Fetch-Mode"), 40).lower()
+    dest = _safe_text(request.headers.get("Sec-Fetch-Dest"), 40).lower()
+    if mode == "navigate" or dest == "document": return "browser_navigation"
+    if mode: return "browser_fetch"
+    return "backend_or_unknown"
+
+
+def _record_system_event(message, details):
+    try:
+        row = SystemLog(log_type="system_recorder", message=message, details=json.dumps(details, ensure_ascii=False))
+        db.session.add(row)
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+
 def install_governed_customer_behaviour_recorder(app):
     if getattr(app, "_bt38_customer_behaviour_recorder_installed", False):
         return
     app._bt38_customer_behaviour_recorder_installed = True
+
+    @app.before_request
+    def bt38_system_recorder_request_start():
+        if request.path == _ENDPOINT: return
+        g._bt38_system_started = time.perf_counter()
+        g._bt38_system_request_id = _safe_text(request.headers.get("X-Request-ID"), 100) or f"local-{time.time_ns()}"
+        g._bt38_db_queries = 0
+        g._bt38_db_ms = 0.0
+
+    @app.after_request
+    def bt38_system_recorder_request_finish(response):
+        if request.path == _ENDPOINT: return response
+        started = getattr(g, "_bt38_system_started", None)
+        duration_ms = round((time.perf_counter() - started) * 1000, 1) if started is not None else None
+        details = {
+            "event": "request_complete", "request_id": getattr(g, "_bt38_system_request_id", None),
+            "method": request.method, "page": request.path, "query_keys": _safe_query_keys(),
+            "request_origin": _request_origin(), "status_code": int(response.status_code),
+            "duration_ms": duration_ms, "response_bytes": int(response.calculate_content_length() or 0),
+            "db_query_count": int(getattr(g, "_bt38_db_queries", 0) or 0),
+            "db_duration_ms": round(float(getattr(g, "_bt38_db_ms", 0.0) or 0.0), 1),
+            "recorded_at": datetime.utcnow().isoformat() + "Z",
+        }
+        _record_system_event(f"Request {request.method} {request.path}", details)
+        return response
+
+    @app.errorhandler(Exception)
+    def bt38_system_recorder_unhandled(error):
+        details = {"event": "backend_error", "request_id": getattr(g, "_bt38_system_request_id", None), "method": request.method, "page": request.path, "error_type": type(error).__name__, "recorded_at": datetime.utcnow().isoformat() + "Z"}
+        _record_system_event(f"Backend error {request.method} {request.path}: {type(error).__name__}", details)
+        raise error
 
     @app.post(_ENDPOINT)
     def bt38_customer_behaviour_event():
@@ -247,7 +308,7 @@ def install_governed_customer_behaviour_recorder(app):
 
     @app.after_request
     def bt38_customer_behaviour_script(response):
-        if request.path == _ENDPOINT or request.method != "GET" or _operational_path(request.path): return response
+        if request.path == _ENDPOINT or request.method != "GET": return response
         content_type = str(response.headers.get("Content-Type") or "").lower()
         if "text/html" not in content_type or response.direct_passthrough or response.headers.get("Content-Encoding"): return response
         body = response.get_data(as_text=True)
