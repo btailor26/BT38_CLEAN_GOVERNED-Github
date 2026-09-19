@@ -54,3 +54,15 @@ def test_customer_behaviour_endpoint_rejects_arbitrary_payload_fields():
     assert "_MAX_BODY" in text
     assert '== "cross-site"' in text
     assert "isinstance(value, (dict, list))" in text
+
+
+def test_system_recorder_covers_operational_frontend_and_backend_without_values():
+    assert 'if request.path == _ENDPOINT or request.method != "GET": return response' in SOURCE
+    assert '"event": "request_complete"' in SOURCE
+    assert '"db_query_count"' in SOURCE
+    assert '"db_duration_ms"' in SOURCE
+    assert 'query_keys' in SOURCE
+    assert 'window.fetch=function' in SOURCE
+    assert '"browser_request"' in SOURCE
+    assert '"browser_error"' in SOURCE
+    assert '_SECRET_TERMS' in SOURCE
