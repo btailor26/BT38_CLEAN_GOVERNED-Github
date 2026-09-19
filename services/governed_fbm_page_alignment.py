@@ -31,6 +31,11 @@ from governed_fbm_routes import (
     _store_name,
 )
 from services.fbm_shipping_state import provider_case_eligibility, shipment_confirmation_state
+from services.fbm_db_delivery_promise_alignment import (
+    _merge_promise,
+    _operational_promises,
+    _profile_promises,
+)
 
 
 _FBM_PAGE_SIZE = 15
@@ -655,6 +660,27 @@ def install_governed_fbm_page_alignment(app) -> None:
                 "profile": profile,
                 "mapping_review": mapping_review,
             })
+
+        # Project persisted marketplace promise truth into the same row payload
+        # before rendering. Amazon and eBay therefore use one table path and one
+        # canonical DB authority; no browser fetch, polling, timer or reload is
+        # needed to make Ship / Deliver visible.
+        promise_keys = {
+            (int(item["order"].store_id), str(item["order"].marketplace_order_id))
+            for item in orders
+            if item.get("order") is not None
+            and item["order"].store_id is not None
+            and item["order"].marketplace_order_id
+        }
+        profile_promises = _profile_promises(promise_keys)
+        operational_promises = _operational_promises(promise_keys)
+        for item in orders:
+            row = item["order"]
+            key = (int(row.store_id), str(row.marketplace_order_id))
+            item["delivery_promise"] = _merge_promise(
+                profile_promises.get(key),
+                operational_promises.get(key),
+            )
 
         counts = {
             "total": len(orders),
