@@ -552,11 +552,36 @@ def _amazon_delivery_fields(client, order_id: str, order_payload: dict[str, Any]
     }, address_error
 
 
+def _amazon_status(order_status: str) -> str:
+    return {
+        "UNSHIPPED": "unshipped",
+        "PARTIALLYSHIPPED": "partially_shipped",
+        "SHIPPED": "shipped",
+        "PENDING": "pending",
+    }.get(_text(order_status).upper(), "pending")
+
+
+def _persist_amazon_order_promise(store: Store, order: MarketplaceOrder) -> dict[str, Any]:
+    """Persist exact Amazon dispatch/delivery promise for this one existing FBM order."""
+    from services.fbm_amazon_order_profile import get_or_refresh_amazon_profile
+    try:
+        profile = get_or_refresh_amazon_profile(order, force=True)
+        return {
+            "success": True,
+            "ship_by_at": profile.latest_ship_at.isoformat() if profile.latest_ship_at else None,
+            "shipping_service": profile.shipment_service_level,
+        }
+    except Exception as exc:
+        db.session.rollback()
+        return {"success": False, "error": str(exc)[:1000]}
+
+
 def _hydrate_existing_amazon_rows(
     rows: list[MarketplaceOrder],
     *,
     delivery: dict[str, str],
     shipped_at: datetime | None,
+    order_status: str,
 ) -> None:
     for row in rows:
         if delivery.get("name"):
@@ -571,8 +596,11 @@ def _hydrate_existing_amazon_rows(
             row.ship_to_country = delivery["country"]
         if delivery.get("phone"):
             row.ship_to_phone = delivery["phone"]
+        row.status = _amazon_status(order_status)
         if shipped_at is not None:
             row.shipped_at = shipped_at
+        elif _text(order_status).upper() in {"UNSHIPPED", "PARTIALLYSHIPPED", "PENDING"}:
+            row.shipped_at = None
         row.updated_at = datetime.utcnow()
 
     db.session.flush()
@@ -664,7 +692,9 @@ def _run_amazon_order_import(store: Store, *, source: str) -> dict[str, Any]:
                 existing_rows,
                 delivery=delivery,
                 shipped_at=shipped_at,
+                order_status=order_status,
             )
+            promise_result = _persist_amazon_order_promise(store, existing_rows[0])
             existing_hydrated += 1
             existing_skipped += 1
             skipped += 1
@@ -677,6 +707,7 @@ def _run_amazon_order_import(store: Store, *, source: str) -> dict[str, Any]:
                 "address_hydrated": bool(delivery.get("postcode") or delivery.get("address")),
                 "address_error": address_error,
                 "shipped": shipped_at is not None,
+                "promise": promise_result,
             })
             continue
 
@@ -716,7 +747,7 @@ def _run_amazon_order_import(store: Store, *, source: str) -> dict[str, Any]:
                 quantity=qty,
                 unit_price=price_value,
                 fulfillment_type=fulfillment_type,
-                status="pending",
+                status=_amazon_status(order_status),
                 shipped_at=shipped_at,
                 ship_to_name=delivery.get("name"),
                 ship_to_address=delivery.get("address"),
@@ -742,6 +773,17 @@ def _run_amazon_order_import(store: Store, *, source: str) -> dict[str, Any]:
                     "reason": "existing_line_stock_processing_skipped",
                 }
 
+            promise_order = (
+                MarketplaceOrder.query
+                .filter_by(store_id=store.id, marketplace_order_id=order_id)
+                .order_by(MarketplaceOrder.id.desc())
+                .first()
+            )
+            result["promise"] = (
+                _persist_amazon_order_promise(store, promise_order)
+                if promise_order is not None
+                else {"success": False, "error": "exact_order_missing_after_import"}
+            )
             if address_error:
                 result["address_error"] = address_error
             line_results.append(result)
