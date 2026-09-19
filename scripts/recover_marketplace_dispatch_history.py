@@ -141,7 +141,7 @@ def _candidate_order_ids(store_id: int, *, platform: str) -> list[str]:
             ORDER BY mo.marketplace_order_id ASC
             """
         ),
-        {"store_id": int(store_id), "statuses": sorted(_DISPATCHED_STATUSES)},
+        {"store_id": int(store_id), "statuses": sorted(_DISPATCHED_STATUSES | {"unshipped", "confirmed", "partially_shipped", "pending"})},
     ).all()
     return [_clean(order_id) for (order_id,) in rows if _clean(order_id)]
 
