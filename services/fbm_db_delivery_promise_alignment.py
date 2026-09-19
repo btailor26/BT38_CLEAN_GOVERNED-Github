@@ -259,8 +259,11 @@ def install_fbm_db_delivery_promise_alignment(app: Any) -> None:
                 continue
             order = item.get("order")
             key = (int(getattr(order, "store_id", 0) or 0), str(getattr(order, "marketplace_order_id", "") or "").strip())
-            promise = _merge_promise(profile_promises.get(key), operational_promises.get(key))
-            item["delivery_promise"] = promise
+            if "delivery_promise" in item:
+                promise = item.get("delivery_promise")
+            else:
+                promise = _merge_promise(profile_promises.get(key), operational_promises.get(key))
+                item["delivery_promise"] = promise
             shipment = item.get("shipment")
             performance = _delivery_performance(shipment, promise)
             item["delivery_performance"] = performance
