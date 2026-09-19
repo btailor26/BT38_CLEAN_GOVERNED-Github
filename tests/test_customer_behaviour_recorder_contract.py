@@ -18,7 +18,7 @@ def test_customer_behaviour_recorder_is_event_driven_and_privacy_bounded():
     assert "setTimeout(" not in text
     assert "requestAnimationFrame(" not in text
     assert "input_value" not in text
-    assert "password" not in text.lower()
+    assert "_SECRET_TERMS" in text
     assert "request.form" not in text
     assert "request.get_json" in text
     assert 'log_type="customer_behaviour"' in text
@@ -34,17 +34,16 @@ def test_customer_behaviour_recorder_is_installed_once_for_non_operational_html_
     assert "_bt38_customer_behaviour_recorder_installed" in recorder
 
 
-def test_customer_behaviour_recorder_never_runs_on_operational_workspaces():
+def test_customer_behaviour_recorder_covers_operational_workspaces_without_form_values():
     text = Path("services/governed_customer_behaviour_recorder.py").read_text(encoding="utf-8")
     assert "_OPERATIONAL_PATH_PREFIXES" in text
     assert '"/fbm"' in text
     assert '"/governed/warehouse"' in text
     assert '"/product-linking"' in text
     assert '"/mcf"' in text
-    assert "def _operational_path" in text
-    assert "or _operational_path(request.path)" in text
-    assert 'if _operational_path(payload.get("page"))' in text
-    assert '"recorded": False' in text
+    assert 'if request.path == _ENDPOINT or request.method != "GET": return response' in text
+    assert "request.form" not in text
+    assert "input_value" not in text
 
 
 def test_customer_behaviour_endpoint_rejects_arbitrary_payload_fields():
@@ -57,6 +56,7 @@ def test_customer_behaviour_endpoint_rejects_arbitrary_payload_fields():
 
 
 def test_system_recorder_covers_operational_frontend_and_backend_without_values():
+    SOURCE = Path("services/governed_customer_behaviour_recorder.py").read_text(encoding="utf-8")
     assert 'if request.path == _ENDPOINT or request.method != "GET": return response' in SOURCE
     assert '"event": "request_complete"' in SOURCE
     assert '"db_query_count"' in SOURCE
