@@ -195,8 +195,21 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   var body=table.querySelector('tbody');
   var rows=Array.from(body.querySelectorAll('tr.fbm-order-row'));
   var labels={{ready_dispatch:'Ready to dispatch',pending:'Pending',dispatched:'Dispatched',cancelled:'Cancelled',replacements:'Replacement',refunds:'Refunds'}};
-  var sessionDefaults={{tab:'pending',search:'',range:'3d',from:'',to:'',dirty:false}};
-  var saved=(window.BT38&&typeof window.BT38.getPageSession==='function')?window.BT38.getPageSession('fbm',sessionDefaults):sessionDefaults;
+  var sessionEpoch='fbm-history-3d-v1';
+  var sessionDefaults={{tab:'pending',search:'',range:'3d',from:'',to:'',dirty:false,session_epoch:sessionEpoch}};
+  var saved=sessionDefaults;
+  if(window.BT38&&typeof window.BT38.getPageSession==='function'){{
+    var storedEpoch='';
+    try{{
+      var rawSession=window.sessionStorage.getItem('bt38:page:fbm');
+      var parsedSession=rawSession?JSON.parse(rawSession):null;
+      storedEpoch=String(parsedSession&&parsedSession.session_epoch||'');
+    }}catch(_e){{storedEpoch='';}}
+    // Only state created by this FBM History owner may override the 3-day
+    // default. Pre-ownership/stale browser state (for example range=90d)
+    // is deliberately ignored once, then the canonical session is saved below.
+    saved=storedEpoch===sessionEpoch?window.BT38.getPageSession('fbm',sessionDefaults):sessionDefaults;
+  }}
   var params=new URLSearchParams(window.location.search);
   var legacyTab=params.get('fbm_tab');
   var legacySearch=params.get('search')||params.get('q');
@@ -211,7 +224,7 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   function historyScope(){{return range==='custom'?'custom:'+from+':'+to:range;}}
   function lifecycleLoadedKey(name){{return 'bt38_fbm_loaded_'+historyScope()+'_'+name;}}
   if(legacyTab&&['ready_dispatch','pending','dispatched','cancelled','replacements','refunds'].indexOf(legacyTab)>=0)sessionStorage.setItem(lifecycleLoadedKey(legacyTab),'1');
-  function saveSession(extra){{var next=Object.assign({{tab:active,search:search,range:range,from:from,to:to,dirty:false}},extra||{{}});if(window.BT38&&typeof window.BT38.setPageSession==='function')window.BT38.setPageSession('fbm',next);return next;}}
+  function saveSession(extra){{var next=Object.assign({{tab:active,search:search,range:range,from:from,to:to,dirty:false,session_epoch:sessionEpoch}},extra||{{}});if(window.BT38&&typeof window.BT38.setPageSession==='function')window.BT38.setPageSession('fbm',next);return next;}}
   var searchInput=document.getElementById('bt38FbmGlobalSearchInput');
   var clearSearch=document.getElementById('bt38FbmGlobalSearchClear');
   var historyForm=document.getElementById('bt38FbmControls');
