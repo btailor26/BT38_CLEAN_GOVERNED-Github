@@ -96,3 +96,13 @@ def test_history_working_set_is_independent_of_visible_pager():
     assert "candidate_limit = _RANGE_ROW_CAP + 1" in GLOBAL_SEARCH
     assert "requested * _RANGE_CANDIDATE_MULTIPLIER" not in GLOBAL_SEARCH
     assert "broad_lookup = bool(_search_term() or _workflow_tab())" not in GLOBAL_SEARCH
+
+
+def test_delivery_promises_are_projected_once_before_shared_table_render():
+    promise = (ROOT / "services" / "fbm_db_delivery_promise_alignment.py").read_text(encoding="utf-8")
+    assert "_operational_promises(promise_keys)" in PAGE
+    assert 'item["delivery_promise"] = _merge_promise(' in PAGE
+    assert '"delivery_promise" not in item' in promise
+    assert "setInterval(" not in PAGE
+    assert "EventSource(" not in PAGE
+    assert "window.location.reload" not in PAGE
