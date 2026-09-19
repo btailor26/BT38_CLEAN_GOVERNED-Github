@@ -103,6 +103,8 @@ def test_delivery_promises_are_projected_once_before_shared_table_render():
     assert "_operational_promises(promise_keys)" in PAGE
     assert 'item["delivery_promise"] = _merge_promise(' in PAGE
     assert '"delivery_promise" not in item' in promise
+    assert 'if "delivery_promise" in item:' in promise
+    assert 'promise = item.get("delivery_promise")' in promise
     assert "setInterval(" not in PAGE
     assert "EventSource(" not in PAGE
     assert "window.location.reload" not in PAGE
