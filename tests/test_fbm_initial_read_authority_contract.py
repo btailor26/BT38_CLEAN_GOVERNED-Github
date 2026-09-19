@@ -62,8 +62,11 @@ def test_lifecycle_tabs_are_browser_session_local():
     assert "EventSource(" not in DISPATCH
 
 
-def test_explicit_url_history_state_beats_saved_browser_state():
-    assert "params.get('fbm_range')||saved.range||'3d'" in DISPATCH
+def test_initial_history_is_bounded_to_three_days_and_wider_history_is_explicit():
+    assert "var loadedRange='3d';" in DISPATCH
+    assert "var range='3d';" in DISPATCH
+    assert 'X-BT38-FBM-History-Expansion' in GLOBAL_SEARCH
+    assert 'return "3d"' in GLOBAL_SEARCH
     assert "params.has('fbm_from')" in DISPATCH
     assert "params.has('fbm_to')" in DISPATCH
     assert "u.searchParams.set('fbm_range',range)" in DISPATCH
@@ -108,3 +111,10 @@ def test_delivery_promises_are_projected_once_before_shared_table_render():
     assert "setInterval(" not in PAGE
     assert "EventSource(" not in PAGE
     assert "window.location.reload" not in PAGE
+
+
+def test_initial_three_day_bound_does_not_replace_shared_table_authority():
+    assert "page._latest_distinct_fbm_rows = _bounded_browser_session_rows" in SESSION
+    assert "expandHistoryWorkingSet()" in DISPATCH
+    assert "incomingBody=doc.querySelector('.fbm-orders-table tbody')" in DISPATCH
+    assert "fetch(u.toString()" in DISPATCH
