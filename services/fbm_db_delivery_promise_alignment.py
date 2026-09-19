@@ -229,15 +229,22 @@ def install_fbm_db_delivery_promise_alignment(app: Any) -> None:
         if getattr(template, "name", None) != "fbm.html":
             return
         items = context.get("orders") or []
+        # The canonical FBM page now projects promise truth before render. Keep
+        # this signal as compatibility for other/legacy render paths, but never
+        # perform a second DB read for rows that already carry that projection.
+        missing_items = [
+            item for item in items
+            if isinstance(item, dict)
+            and item.get("order") is not None
+            and "delivery_promise" not in item
+        ]
         keys = {
             (int(getattr(item.get("order"), "store_id", 0) or 0), str(getattr(item.get("order"), "marketplace_order_id", "") or "").strip())
-            for item in items if isinstance(item, dict) and item.get("order") is not None
+            for item in missing_items
         }
         keys = {key for key in keys if key[0] > 0 and key[1]}
-        if not keys:
-            return
-        profile_promises = _profile_promises(keys)
-        operational_promises = _operational_promises(keys)
+        profile_promises = _profile_promises(keys) if keys else {}
+        operational_promises = _operational_promises(keys) if keys else {}
         shipment_ids = {
             int(getattr(item.get("shipment"), "id", 0) or 0)
             for item in items
