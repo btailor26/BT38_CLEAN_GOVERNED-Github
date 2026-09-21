@@ -905,14 +905,6 @@ def _bt38_webhook_platform_allowed(platform: str) -> tuple[bool, str]:
 def _bt38_webhook_payload() -> dict:
     body = request.get_json(silent=True)
     if isinstance(body, dict):
-        # Amazon SQS delivers the SP-API notification envelope with business
-        # fields nested below Payload. Governed execution must receive that
-        # exact notification body, not a flattened or separately fetched copy.
-        # This keeps the webhook event-driven while allowing ORDER_CHANGE
-        # lifecycle/cancellation fields to be classified from their canonical
-        # nested locations.
-        if str(request.headers.get("X-BT38-Notification-Transport") or "").strip().lower() == "amazon_sqs":
-            return body
         return body
 
     raw = request.get_data(as_text=True) or ""
