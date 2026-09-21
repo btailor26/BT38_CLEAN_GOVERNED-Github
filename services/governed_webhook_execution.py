@@ -1122,6 +1122,29 @@ def _import_marketplace_order_from_notification(
     )
 
     order = result.get("_order_row")
+
+    # Keep Amazon FBM profile/promise persistence on the existing exact-order
+    # path, but run it only after canonical webhook order intake has produced
+    # the MarketplaceOrder row. The request-level event alignment can arrive
+    # before a brand-new order exists, so it cannot be the sole enrichment
+    # point for newly-created webhook orders.
+    if (
+        marketplace == "amazon"
+        and fulfillment_type == "FBM"
+        and bool(result.get("success"))
+        and order is not None
+    ):
+        try:
+            from services.fbm_amazon_order_profile import (
+                get_or_refresh_amazon_profile,
+            )
+            get_or_refresh_amazon_profile(order, force=True)
+        except Exception:
+            # Promise/profile enrichment must not turn an already-persisted
+            # exact sale into an order-intake failure. The next exact Amazon
+            # event can reuse the same existing enrichment path.
+            db.session.rollback()
+
     public_result = {
         key: value
         for key, value in result.items()
