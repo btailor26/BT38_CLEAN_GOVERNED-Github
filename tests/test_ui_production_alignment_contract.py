@@ -9,6 +9,8 @@ WAREHOUSE_ROUTE = Path("governed_routes.py")
 WAREHOUSE_GOVERNED_JS = Path("static/js/warehouse-governed.js")
 WAREHOUSE_RUNTIME_VISIBILITY = Path("governed_runtime_visibility_routes.py")
 STORES = Path("templates/stores.html")
+UI_EVENT_SIGNAL = Path("services/governed_ui_event_signal.py")
+GUNICORN = Path("gunicorn.conf.py")
 
 
 def _source(path):
@@ -288,3 +290,21 @@ def test_ebay_store_ui_uses_persisted_auth_state_not_credentials():
     assert "'Insufficient permissions' in store.api_key" not in stores
     assert "Permission approval required" in stores
     assert "Approve eBay" in stores
+
+def test_live_event_stream_reserves_login_request_capacity_without_polling():
+    signal = _source(UI_EVENT_SIGNAL)
+    gunicorn = _source(GUNICORN)
+
+    assert "threads = 4" in gunicorn
+    assert "_MAX_LIVE_BROWSER_STREAMS = 3" in signal
+    assert "_active_live_browser_streams >= _MAX_LIVE_BROWSER_STREAMS" in signal
+    assert "Response(status=204)" in signal
+    assert 'X-BT38-Live-Signal"] = "capacity-reserved"' in signal
+    assert "_active_live_browser_streams - 1" in signal
+
+    stream_start = signal.index('def governed_ui_event_stream():')
+    stream_end = signal.index('@event.listens_for(Session, "before_flush")', stream_start)
+    stream = signal[stream_start:stream_end]
+    assert "db.session" not in stream
+    assert "setInterval" not in stream
+    assert "setTimeout" not in stream
