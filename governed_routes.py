@@ -6,7 +6,7 @@ import json
 
 from flask import Blueprint, jsonify, request, render_template, redirect, url_for
 try:
-    from flask_login import current_user, login_required
+    from flask_login import current_user, login_required, logout_user
 except Exception:
     current_user = None
 
@@ -18,20 +18,35 @@ governed_bp = Blueprint("governed", __name__)
 @governed_bp.route("/logout")
 @login_required
 def logout():
+    from datetime import datetime
     from flask import redirect, url_for, session
+    from extensions import db
+    from models import SystemLog
+
+    # Capture the authenticated identity before ending the sole BT38 browser
+    # session. Never persist cookies, tokens, credentials or form values.
+    user_id = int(current_user.id) if current_user and current_user.is_authenticated else None
+    if user_id is not None:
+        db.session.add(SystemLog(
+            log_type="authentication",
+            message="BT38 sign-out succeeded",
+            details=json.dumps({
+                "provider": "bt38",
+                "method": "sign_out",
+                "user_id": user_id,
+                "signed_out_at": datetime.utcnow().isoformat() + "Z",
+            }),
+        ))
+        db.session.commit()
 
     try:
         session.clear()
     except Exception:
         pass
 
-    if logout_user:
-        logout_user()
-
+    logout_user()
     response = redirect(url_for("governed.login"))
-
     response.delete_cookie("bt38_session_prod")
-
     return response
 
 
@@ -594,7 +609,19 @@ def login():
         )
 
         if user and user.is_active and user.check_password(password):
+            from models import SystemLog
+
             user.last_login = datetime.utcnow()
+            db.session.add(SystemLog(
+                log_type="authentication",
+                message="Password sign-in succeeded",
+                details=json.dumps({
+                    "provider": "bt38",
+                    "method": "password",
+                    "user_id": user.id,
+                    "signed_in_at": datetime.utcnow().isoformat() + "Z",
+                }),
+            ))
             db.session.commit()
             login_user(user, remember=True)
             return redirect(next_url)
