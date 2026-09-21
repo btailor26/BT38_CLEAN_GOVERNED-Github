@@ -288,3 +288,11 @@ def test_ebay_store_ui_uses_persisted_auth_state_not_credentials():
     assert "'Insufficient permissions' in store.api_key" not in stores
     assert "Permission approval required" in stores
     assert "Approve eBay" in stores
+
+
+def test_web_entrypoint_does_not_run_ebay_recovery_during_import():
+    main = _source(MAIN)
+
+    assert "align_ebay_notifications_and_recover_missed_changes" not in main
+    assert "governed_ebay_post_deploy_alignment" not in main
+    assert "start_event_only_runtime" not in main
