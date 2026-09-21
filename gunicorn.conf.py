@@ -148,8 +148,12 @@ def _write_runtime_registration_snapshot(app):
 
 def post_worker_init(worker):
     """Start one governed event listener after the WSGI app is fully loaded."""
-    from main import app
     from services.governed_event_runtime import start_event_only_runtime
+
+    # Gunicorn has already loaded main:app for this worker. Use that exact
+    # initialized WSGI application for runtime evidence instead of importing
+    # main again inside the worker hook.
+    app = worker.wsgi
 
     _align_notification_noop_labels(app)
     _write_runtime_registration_snapshot(app)
