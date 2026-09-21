@@ -1139,11 +1139,24 @@ def _import_marketplace_order_from_notification(
                 get_or_refresh_amazon_profile,
             )
             get_or_refresh_amazon_profile(order, force=True)
-        except Exception:
+        except Exception as exc:
             # Promise/profile enrichment must not turn an already-persisted
-            # exact sale into an order-intake failure. The next exact Amazon
-            # event can reuse the same existing enrichment path.
+            # exact sale into an order-intake failure. Persist the failure on
+            # the existing exact order so the missing Amazon promise is
+            # observable and the next exact Amazon event can retry it.
             db.session.rollback()
+            from models import SystemLog
+            db.session.add(SystemLog(
+                log_type="amazon_fbm_profile_enrichment_error",
+                message=f"Amazon FBM promise enrichment failed: {order_id}",
+                details=json.dumps({
+                    "store_id": int(store.id),
+                    "marketplace_order_id": str(order_id),
+                    "source": f"webhook_{marketplace}",
+                    "error": str(exc)[:1000],
+                }, default=str),
+            ))
+            db.session.commit()
 
     public_result = {
         key: value
