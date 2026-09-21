@@ -56,3 +56,13 @@ def test_distinct_proven_legacy_grant_remains_refreshable_without_scope_expansio
 def test_runtime_imports_ebay_order_identity_alignment():
     source = _text(MAIN)
     assert "import services.governed_ebay_order_identity_alignment" in source
+
+
+def test_user_authorization_scope_excludes_generic_application_scope_and_includes_logistics():
+    source = _text(SCOPES)
+    legacy_block = source.split("LEGACY_EBAY_OAUTH_SCOPES = (", 1)[1].split(")", 1)[0]
+    default_block = source.split("DEFAULT_EBAY_OAUTH_SCOPES = (", 1)[1].split(")", 1)[0]
+    assert '"https://api.ebay.com/oauth/api_scope",' not in legacy_block
+    assert 'EBAY_LOGISTICS_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.logistics"' in source
+    assert "EBAY_LOGISTICS_SCOPE" in default_block
+    assert "configured = [scope for scope in configured if scope != generic_application_scope]" in source
