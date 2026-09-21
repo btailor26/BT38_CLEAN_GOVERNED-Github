@@ -14,10 +14,15 @@ def test_bell_uses_existing_fbm_projection_not_passive_override():
     assert "notification_source:'fbm_page'" in BELL
 
 
-def test_bell_projection_is_zero_polling_and_zero_network():
+def test_bell_projection_is_zero_polling_and_zero_authority_reads():
     assert "setInterval" not in BELL
-    assert "fetch(" not in BELL
     assert "XMLHttpRequest" not in BELL
+    assert "db.session" not in BELL
+    assert "MarketplaceOrder.query" not in BELL
+    assert "FBMShipment.query" not in BELL
+    assert "requests." not in BELL
+    assert "window.addEventListener('bt38-marketplace-event'" in BELL
+    assert "function fbmProjection(detail)" in BELL
 
 
 def test_fbm_page_has_no_page_time_marketplace_hydration():
@@ -31,3 +36,9 @@ def test_fbm_page_has_no_page_time_marketplace_hydration():
     )
     for token in forbidden:
         assert token not in FBM_AMAZON
+
+
+def test_main_has_one_final_bell_projection_authority():
+    main = (ROOT / "main.py").read_text()
+    assert main.count("install_governed_bell_event_projection_alignment(app)") == 1
+    assert "install_governed_fbm_bell_display_only_alignment(app)" not in main
