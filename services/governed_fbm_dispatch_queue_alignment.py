@@ -236,8 +236,8 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   var toInput=document.getElementById('bt38FbmTo')||(historyForm&&historyForm.querySelector('[name="fbm_to"]'));
   if(searchInput)searchInput.value=search;
   if(rangeInput)rangeInput.value=range;
-  if(fromInput){fromInput.value=from;fromInput.style.display=range==='custom'?'':'none';}
-  if(toInput){toInput.value=to;toInput.style.display=range==='custom'?'':'none';}
+  if(fromInput){{fromInput.value=from;fromInput.style.display=range==='custom'?'':'none';}}
+  if(toInput){{toInput.value=to;toInput.style.display=range==='custom'?'':'none';}}
   function ensureCostHeader(){{var head=table.querySelector('thead tr');if(!head||head.querySelector('[data-fbm-shipping-cost="1"]'))return;var th=document.createElement('th');th.textContent='Shipping cost';th.dataset.fbmShippingCost='1';head.insertBefore(th,head.lastElementChild);}}
   function addCostCell(row,info){{if(row.querySelector('[data-fbm-shipping-cost="1"]'))return;var td=document.createElement('td');td.dataset.fbmShippingCost='1';if(info.shipping_cost_confirmed){{td.className='fbm-shipping-cost';try{{td.textContent=new Intl.NumberFormat('en-GB',{{style:'currency',currency:info.shipping_currency||'GBP'}}).format(info.shipping_cost)}}catch(e){{td.textContent=(info.shipping_currency||'GBP')+' '+Number(info.shipping_cost).toFixed(2)}}}}else{{td.className='fbm-shipping-cost-pending';td.textContent='Pending / unavailable'}}row.insertBefore(td,row.lastElementChild);}}
   ensureCostHeader();
