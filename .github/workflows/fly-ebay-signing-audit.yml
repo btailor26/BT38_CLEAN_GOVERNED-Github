@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - fix/full-system-release-alignment
+    paths:
+      - '.github/workflows/fly-ebay-signing-audit.yml'
+      - 'services/governed_ebay_signature_alignment.py'
+      - 'services/governed_ebay_native_shipping_alignment.py'
+      - 'tests/test_ebay_signature_alignment_contract.py'
+      - 'tests/test_ebay_native_shipping_alignment_contract.py'
   workflow_dispatch:
 
 permissions:
