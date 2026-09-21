@@ -109,7 +109,9 @@ def test_ebay_shipping_alignment_runs_existing_post_deploy_recovery_once_at_star
     assert "align_ebay_notifications_and_recover_missed_changes(" in EBAY_STARTUP_ALIGNMENT
     assert "store_id=23" in EBAY_STARTUP_ALIGNMENT
     assert "max_days=7" in EBAY_STARTUP_ALIGNMENT
-    assert "return _RUNTIME_ORIGINAL_START(app)" in EBAY_STARTUP_ALIGNMENT
+    assert "started = _RUNTIME_ORIGINAL_START(app)" in EBAY_STARTUP_ALIGNMENT
+    assert "if not started:" in EBAY_STARTUP_ALIGNMENT
+    assert 'name="bt38-ebay-post-start-recovery"' in EBAY_STARTUP_ALIGNMENT
+    assert "daemon=True" in EBAY_STARTUP_ALIGNMENT
     assert "runtime._engine_loop =" not in EBAY_STARTUP_ALIGNMENT
-    assert "threading.Thread" not in EBAY_STARTUP_ALIGNMENT
     assert "while " not in EBAY_STARTUP_ALIGNMENT
