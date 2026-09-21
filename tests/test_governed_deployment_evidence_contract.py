@@ -52,11 +52,13 @@ def test_source_manifest_tracks_docker_runtime_exclusions():
 
 
 def test_runtime_registration_records_names_only():
-    text = Path("scripts/verify_governed_runtime_registration.py").read_text(encoding="utf-8")
-    assert "loaded-bt38-modules.txt" in text
-    assert "registered-routes.txt" in text
-    assert "app.url_map.iter_rules()" in text
-    assert "app.config" not in text
+    verifier = Path("scripts/verify_governed_runtime_registration.py").read_text(encoding="utf-8")
+    gunicorn = Path("gunicorn.conf.py").read_text(encoding="utf-8")
+    assert "loaded-bt38-modules.txt" in verifier
+    assert "registered-routes.txt" in verifier
+    assert "app.url_map.iter_rules()" in gunicorn
+    assert "app.config" not in verifier
+    assert "app.config" not in gunicorn
 
 
 def test_deploy_workflow_batches_full_fingerprint_verification_in_one_ssh_session():
