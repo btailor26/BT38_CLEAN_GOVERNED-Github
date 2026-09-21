@@ -60,3 +60,42 @@ CREATE INDEX IF NOT EXISTS ix_account_package_assignments_account_id
     ON account_package_assignments (account_id);
 CREATE INDEX IF NOT EXISTS ix_account_package_assignments_package_id
     ON account_package_assignments (package_id);
+
+
+-- Every customer account must resolve to exactly one package authority.
+-- Preserve all existing assignments; only accounts with no assignment receive
+-- the canonical free package.
+INSERT INTO subscription_packages (
+    code, name, description, tier_type, price_pence, currency,
+    billing_interval, user_limit, marketplace_limit, monthly_order_limit,
+    features, is_active
+)
+SELECT
+    'bt38-free', 'BT38 Free',
+    'Default BT38 package for accounts without a paid package assignment.',
+    'free', 0, 'GBP', 'none', 5, NULL, NULL, '[]', TRUE
+WHERE NOT EXISTS (
+    SELECT 1 FROM subscription_packages WHERE code = 'bt38-free'
+);
+
+INSERT INTO account_package_assignments (
+    account_id, package_id, status, billing_provider, starts_at
+)
+SELECT
+    ca.id, sp.id, 'active', 'none', CURRENT_TIMESTAMP
+FROM customer_accounts ca
+CROSS JOIN subscription_packages sp
+WHERE sp.code = 'bt38-free'
+  AND NOT EXISTS (
+      SELECT 1
+      FROM account_package_assignments apa
+      WHERE apa.account_id = ca.id
+  );
+
+UPDATE customer_accounts ca
+SET plan_name = sp.name,
+    user_limit = sp.user_limit,
+    billing_status = apa.status
+FROM account_package_assignments apa
+JOIN subscription_packages sp ON sp.id = apa.package_id
+WHERE apa.account_id = ca.id;
