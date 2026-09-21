@@ -28,4 +28,6 @@ def test_profile_alignment_remains_current_event_only():
     assert "threading.thread" not in lowered
     assert "90 days" not in lowered
     assert "backfill" in lowered  # only the module's explicit no-backfill contract text
-    assert "get_or_refresh_amazon_profile" not in PROFILE
+    # Current sparse events may reuse the existing exact-order reader. The
+    # contract remains event-bound: no broad scan, timer or background repair.
+    assert "get_orders" not in PROFILE
