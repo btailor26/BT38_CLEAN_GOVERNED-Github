@@ -1,10 +1,10 @@
 """Event-driven, privacy-bounded customer journey recorder.
 
-Records what BT38 actually renders and what the browser user interacts with on
-non-operational/customer-facing pages. Operational workspaces must stay asleep
-when the user is not acting, so this recorder is never injected into FBM,
-Warehouse, Product Linking, MCF or other governed operational routes.
-There is no polling, timer loop, marketplace call, stock mutation, keystroke,
+Records actual BT38 browser and backend activity as live proof. The recorder is
+available on operational workspaces too, but it is strictly event-driven: when
+there is no browser or backend activity it emits nothing. Its own transport is
+excluded from fetch instrumentation so recording cannot recursively create
+recording traffic. There is no polling, timer loop, marketplace call, stock mutation, keystroke,
 credential, payment-field, or user-entered form-value capture.
 """
 from __future__ import annotations
@@ -212,8 +212,6 @@ def install_governed_customer_behaviour_recorder(app):
         payload = request.get_json(silent=True)
         if not isinstance(payload, dict):
             return jsonify({"ok": False}), 400
-        if _operational_path(payload.get("page")):
-            return jsonify({"ok": True, "recorded": False}), 202
         event = _safe_text(payload.get("event"), 40)
         if event not in _ALLOWED_EVENTS:
             return jsonify({"ok": False}), 400
@@ -308,7 +306,7 @@ def install_governed_customer_behaviour_recorder(app):
 
     @app.after_request
     def bt38_customer_behaviour_script(response):
-        if request.path == _ENDPOINT or request.method != "GET" or _operational_path(request.path): return response
+        if request.path == _ENDPOINT or request.method != "GET": return response
         content_type = str(response.headers.get("Content-Type") or "").lower()
         if "text/html" not in content_type or response.direct_passthrough or response.headers.get("Content-Encoding"): return response
         body = response.get_data(as_text=True)
