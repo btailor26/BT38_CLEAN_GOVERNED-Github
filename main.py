@@ -144,3 +144,38 @@ def acknowledge_captured_ebay_webhook(response):
     response.headers["X-BT38-Webhook-Capture"] = "stored"
     response.headers["X-BT38-Webhook-Processing"] = "failed-after-capture"
     return response
+
+def _write_governed_runtime_registration_snapshot():
+    """Persist names-only runtime registration evidence from the live app process.
+
+    Deployment verification must not import a second full BT38 application
+    inside the production machine: that duplicates the application graph and
+    can exceed the machine's runtime budget. The already-loaded worker is the
+    authority for what actually registered.
+    """
+    try:
+        import sys
+        from pathlib import Path
+
+        modules = sorted(
+            name for name in sys.modules
+            if name.startswith(("services.", "governed_"))
+        )
+        routes = sorted(
+            f"{','.join(sorted(rule.methods - {'HEAD', 'OPTIONS'}))} "
+            f"{rule.rule} -> {rule.endpoint}"
+            for rule in app.url_map.iter_rules()
+        )
+        Path("/tmp/bt38-live-loaded-modules.txt").write_text(
+            "\n".join(modules) + "\n", encoding="utf-8"
+        )
+        Path("/tmp/bt38-live-registered-routes.txt").write_text(
+            "\n".join(routes) + "\n", encoding="utf-8"
+        )
+    except Exception:
+        app.logger.exception(
+            "Unable to write names-only governed runtime registration snapshot"
+        )
+
+
+_write_governed_runtime_registration_snapshot()

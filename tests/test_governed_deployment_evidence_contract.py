@@ -71,3 +71,15 @@ def test_deploy_workflow_batches_full_fingerprint_verification_in_one_ssh_sessio
     assert 'EXPECTED_SOURCE_COUNT="$(wc -l < deployment-evidence/source-production-hashes.txt)"' in workflow
     assert 'test "$PRODUCTION_SOURCE_COUNT" = "$EXPECTED_SOURCE_COUNT"' in workflow
     assert 'diff -u deployment-evidence/source-production-hashes.txt deployment-evidence/production-source-hashes.txt' in workflow
+
+
+def test_runtime_registration_uses_live_worker_snapshot_before_fallback_import():
+    main = Path("main.py").read_text(encoding="utf-8")
+    verifier = Path("scripts/verify_governed_runtime_registration.py").read_text(encoding="utf-8")
+    assert "_write_governed_runtime_registration_snapshot" in main
+    assert "/tmp/bt38-live-loaded-modules.txt" in main
+    assert "/tmp/bt38-live-registered-routes.txt" in main
+    assert 'live_modules = Path("/tmp/bt38-live-loaded-modules.txt")' in verifier
+    assert 'live_routes = Path("/tmp/bt38-live-registered-routes.txt")' in verifier
+    assert "source=live-worker" in verifier
+    assert verifier.index("if live_modules.is_file() and live_routes.is_file():") < verifier.index("import main")
