@@ -8,10 +8,15 @@ browser reaches /login on the next request instead of being restored forever.
 """
 from __future__ import annotations
 
+from datetime import datetime
+import json
+
 from flask import redirect, request, session, url_for
 from flask_login import current_user, login_fresh, logout_user
 
 from app import app
+from extensions import db
+from models import SystemLog
 
 
 def _delete_cookie(response, *, name: str, path: str, domain):
@@ -45,6 +50,21 @@ def _expire_bt38_auth_cookies(response):
 
 def _end_auth_session_once():
     """End auth while preserving Flask-Login's remember-cookie clear signal."""
+    # This before-request guard owns /logout, so record the real authenticated
+    # sign-out here before the identity is cleared. No cookie/token is stored.
+    if current_user.is_authenticated:
+        db.session.add(SystemLog(
+            log_type="authentication",
+            message="BT38 sign-out succeeded",
+            details=json.dumps({
+                "provider": "bt38",
+                "method": "sign_out",
+                "user_id": int(current_user.id),
+                "signed_out_at": datetime.utcnow().isoformat() + "Z",
+            }),
+        ))
+        db.session.commit()
+
     # Clear BT38 state first. logout_user() must run afterwards because it sets
     # Flask-Login's internal _remember='clear' marker when a legacy cookie is
     # present. Clearing the session after logout_user() would erase that marker
