@@ -637,6 +637,7 @@ def _extract_marketplace_order_id(payload: dict) -> str | None:
         or _deep_get(payload, "order_number")
         or _deep_get(payload, "orderNumber")
         or _deep_get(payload, "amazonOrderId")
+        or _deep_get(payload, "AmazonOrderId")
         or _deep_get(payload, "ebayOrderId")
     )
     text = str(value or "").strip()
@@ -677,6 +678,8 @@ def _extract_order_lifecycle_values(
         "SHIPPED": "shipped",
         "FULFILLED": "shipped",
         "DELIVERED": "delivered",
+        "CANCELED": "cancelled",
+        "CANCELLED": "cancelled",
     }
     lifecycle_status = status_map.get(raw_status)
 
@@ -912,6 +915,12 @@ def _handle_marketplace_cancellation(
             line.status = "cancelled"
             line.updated_at = datetime.utcnow()
         db.session.commit()
+        _upsert_fbm_order_operational_state(
+            marketplace=marketplace,
+            order_id=order_id,
+            lines=lines,
+            payload=payload,
+        )
         return _log_result(
             status="cancellation_processed",
             marketplace=marketplace,
@@ -967,6 +976,70 @@ def _handle_marketplace_cancellation(
         amazon_cancelled=True,
         cancel_result=cancel_result,
     )
+
+
+def _upsert_fbm_order_operational_state(
+    *,
+    marketplace: str,
+    order_id: str,
+    lines: list,
+    payload: dict,
+) -> None:
+    """Persist the exact FBM order identity used by browser-session projection."""
+    from extensions import db
+    from sqlalchemy import text
+
+    if not lines:
+        return
+    store_id = getattr(lines[0], "store_id", None)
+    if store_id is None:
+        return
+
+    values = _extract_order_lifecycle_values(
+        payload,
+        business_event="cancellation",
+    )
+    db.session.execute(
+        text(
+            """
+            INSERT INTO fbm_order_operational_state (
+                store_id,
+                marketplace_order_id,
+                platform,
+                ship_by_at,
+                marketplace_checked_at,
+                created_at,
+                updated_at
+            )
+            VALUES (
+                :store_id,
+                :order_id,
+                :platform,
+                :ship_by_at,
+                :checked_at,
+                NOW(),
+                NOW()
+            )
+            ON CONFLICT (store_id, marketplace_order_id)
+            DO UPDATE SET
+                platform = EXCLUDED.platform,
+                ship_by_at = COALESCE(
+                    EXCLUDED.ship_by_at,
+                    fbm_order_operational_state.ship_by_at
+                ),
+                marketplace_checked_at = EXCLUDED.marketplace_checked_at,
+                updated_at = NOW()
+            """
+        ),
+        {
+            "store_id": int(store_id),
+            "order_id": str(order_id),
+            "platform": str(marketplace or "").strip().lower() or None,
+            "ship_by_at": values.get("changed_at"),
+            "checked_at": values.get("changed_at") or datetime.utcnow(),
+        },
+    )
+    db.session.commit()
 
 
 def _parse_marketplace_order_timestamp(payload: dict) -> datetime | None:
