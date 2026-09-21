@@ -41,7 +41,9 @@ def _account_for_user(uid):
 def _create_owner_account(user,*,business_name=""):
  existing,_=_account_for_user(user.id)
  if existing:return existing
- a=CustomerAccount(owner_user_id=user.id,business_name=str(business_name or "").strip()[:180] or None,plan_name="BT38",billing_status="setup_pending",user_limit=5); db.session.add(a);db.session.flush();db.session.add(CustomerAccountMember(account_id=a.id,user_id=user.id,access_preset="owner",is_owner=True));return a
+ a=CustomerAccount(owner_user_id=user.id,business_name=str(business_name or "").strip()[:180] or None,plan_name="BT38",billing_status="setup_pending",user_limit=5); db.session.add(a);db.session.flush();db.session.add(CustomerAccountMember(account_id=a.id,user_id=user.id,access_preset="owner",is_owner=True));db.session.flush()
+ from services.package_catalog_alignment import ensure_account_package_assignment
+ ensure_account_package_assignment(a,assigned_by_user_id=user.id);return a
 def _ensure_profile(user):
  p=_profile_for(user.id)
  if p:return p
