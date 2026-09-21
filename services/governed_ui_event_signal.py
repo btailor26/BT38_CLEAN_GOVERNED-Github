@@ -23,6 +23,16 @@ _condition = threading.Condition()
 _revision = 0
 _events = deque(maxlen=256)
 
+# Gunicorn is intentionally one process / four gthread request slots so the
+# in-memory governed event queue has one owner. A long-lived SSE connection
+# consumes one of those slots. Never allow browser event streams to consume all
+# request capacity: keep one slot permanently available for /login and normal
+# HTTP work. This is transport capacity only; it adds no polling, DB read,
+# marketplace call, second queue, worker, or runtime path.
+_MAX_LIVE_BROWSER_STREAMS = 3
+_stream_capacity_lock = threading.Lock()
+_active_live_browser_streams = 0
+
 # The previous 25-second authenticated browser waiter could occupy every
 # Gunicorn thread and hold read transactions open. Keep event publication for
 # server-side governance, but do not install a browser waiter while the bell is
@@ -300,30 +310,50 @@ def governed_ui_event_stream():
     if not session.get("_user_id"):
         return Response(status=401)
 
+    global _active_live_browser_streams
+
+    # Reserve one of the existing four gthread request slots for /login and
+    # ordinary HTTP work. HTTP 204 tells EventSource not to reconnect when
+    # live capacity is full; no fallback polling path is introduced.
+    with _stream_capacity_lock:
+        if _active_live_browser_streams >= _MAX_LIVE_BROWSER_STREAMS:
+            response = Response(status=204)
+            response.headers["X-BT38-Live-Signal"] = "capacity-reserved"
+            return response
+        _active_live_browser_streams += 1
+
     with _condition:
         initial_revision = int(_revision)
 
     def _stream():
+        global _active_live_browser_streams
         seen_revision = initial_revision
 
-        yield "retry: 3000\n\n"
+        try:
+            yield "retry: 3000\n\n"
 
-        while True:
-            with _condition:
-                if int(_revision) == seen_revision:
-                    # In-memory sleep only. Zero SQL/API activity.
-                    _condition.wait(timeout=25.0)
-                current_revision = int(_revision)
+            while True:
+                with _condition:
+                    if int(_revision) == seen_revision:
+                        # In-memory sleep only. Zero SQL/API activity.
+                        _condition.wait(timeout=25.0)
+                    current_revision = int(_revision)
 
-            if current_revision != seen_revision:
-                seen_revision = current_revision
-                yield (
-                    "event: marketplace\n"
-                    f"data: {seen_revision}\n\n"
+                if current_revision != seen_revision:
+                    seen_revision = current_revision
+                    yield (
+                        "event: marketplace\n"
+                        f"data: {seen_revision}\n\n"
+                    )
+                else:
+                    # Network keepalive only.
+                    yield ": keepalive\n\n"
+        finally:
+            with _stream_capacity_lock:
+                _active_live_browser_streams = max(
+                    0,
+                    _active_live_browser_streams - 1,
                 )
-            else:
-                # Network keepalive only.
-                yield ": keepalive\n\n"
 
     response = Response(
         _stream(),
