@@ -24,3 +24,10 @@ def test_session_ownership_fix_adds_no_polling_or_parallel_controller():
     assert "setInterval" not in ownership
     assert "setTimeout" not in ownership
     assert "EventSource" not in ownership
+
+
+def test_saved_history_state_is_restored_and_applied_in_browser_session():
+    assert "var range=String(saved.range||'3d').toLowerCase();" in SOURCE
+    assert "var from=String(saved.from||'');" in SOURCE
+    assert "var to=String(saved.to||'');" in SOURCE
+    assert "if(!loadedCoversRequestedHistory())applyHistory();else render();" in SOURCE
