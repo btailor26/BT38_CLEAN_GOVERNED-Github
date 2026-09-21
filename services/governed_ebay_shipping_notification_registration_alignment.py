@@ -100,28 +100,39 @@ def _aligned_registration(*, store: Any, access_token: str) -> dict[str, Any]:
 
 
 def _start_governed_runtime_engine_with_ebay_alignment(app):
-    """Run bounded eBay recovery once, then start the unchanged runtime loop."""
+    """Start runtime first, then run bounded recovery without blocking web import."""
+    import threading
     import services.governed_runtime_engine as runtime
 
-    try:
-        with app.app_context():
-            from services.governed_ebay_post_deploy_alignment import (
-                align_ebay_notifications_and_recover_missed_changes,
-            )
+    started = _RUNTIME_ORIGINAL_START(app)
+    if not started:
+        return started
 
-            result = align_ebay_notifications_and_recover_missed_changes(
-                store_id=23,
-                max_days=7,
-            )
-            runtime._safe_log(
-                "eBay post-deploy alignment complete "
-                f"success={bool(result.get('success'))} "
-                f"shipping_enabled={bool((result.get('shipping_notification') or {}).get('enabled'))}"
-            )
-    except Exception as exc:
-        runtime._safe_error("eBay post-deploy alignment failed", exc)
+    def _run_post_start_alignment():
+        try:
+            with app.app_context():
+                from services.governed_ebay_post_deploy_alignment import (
+                    align_ebay_notifications_and_recover_missed_changes,
+                )
 
-    return _RUNTIME_ORIGINAL_START(app)
+                result = align_ebay_notifications_and_recover_missed_changes(
+                    store_id=23,
+                    max_days=7,
+                )
+                runtime._safe_log(
+                    "eBay post-deploy alignment complete "
+                    f"success={bool(result.get('success'))} "
+                    f"shipping_enabled={bool((result.get('shipping_notification') or {}).get('enabled'))}"
+                )
+        except Exception as exc:
+            runtime._safe_error("eBay post-deploy alignment failed", exc)
+
+    threading.Thread(
+        target=_run_post_start_alignment,
+        name="bt38-ebay-post-start-recovery",
+        daemon=True,
+    ).start()
+    return started
 
 
 def _install_runtime_startup_alignment() -> None:
