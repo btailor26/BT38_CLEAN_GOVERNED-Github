@@ -308,7 +308,7 @@ def install_governed_customer_behaviour_recorder(app):
 
     @app.after_request
     def bt38_customer_behaviour_script(response):
-        if request.path == _ENDPOINT or request.method != "GET": return response
+        if request.path == _ENDPOINT or request.method != "GET" or _operational_path(request.path): return response
         content_type = str(response.headers.get("Content-Type") or "").lower()
         if "text/html" not in content_type or response.direct_passthrough or response.headers.get("Content-Encoding"): return response
         body = response.get_data(as_text=True)
