@@ -66,3 +66,10 @@ def test_system_recorder_covers_operational_frontend_and_backend_without_values(
     assert '"browser_request"' in SOURCE
     assert '"browser_error"' in SOURCE
     assert '_SECRET_TERMS' in SOURCE
+
+
+def test_recorder_transport_bypasses_its_own_fetch_instrumentation():
+    source = Path("services/governed_customer_behaviour_recorder.py").read_text(encoding="utf-8")
+    assert 'if(url===endpoint)return originalFetch.apply(this,arguments);' in source
+    assert 'send("browser_request"' in source
+    assert "setInterval(" not in source
