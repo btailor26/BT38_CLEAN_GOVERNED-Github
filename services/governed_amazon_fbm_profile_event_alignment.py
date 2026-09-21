@@ -226,6 +226,23 @@ def _hydrate_exact_order_when_event_facts_incomplete(payload: dict) -> bool:
     return True
 
 
+def hydrate_exact_order_after_intake(order: MarketplaceOrder) -> bool:
+    """Hydrate one persisted Amazon FBM order after governed intake.
+
+    A brand-new ORDER_CHANGE can reach the request-level after_request hook
+    before the canonical MarketplaceOrder row exists. The intake path calls
+    this helper after that row has been committed so the same exact-order
+    promise recovery is not dependent on request-hook timing.
+    """
+    if order is None:
+        return False
+    payload = {
+        "_bt38_store_id": getattr(order, "store_id", None),
+        "marketplace_order_id": getattr(order, "marketplace_order_id", None),
+    }
+    return _hydrate_exact_order_when_event_facts_incomplete(payload)
+
+
 def install_governed_amazon_fbm_profile_event_alignment(app) -> None:
     if getattr(app, "_bt38_amazon_fbm_profile_event_alignment", False):
         return
