@@ -9,6 +9,7 @@ WAREHOUSE_ROUTE = Path("governed_routes.py")
 WAREHOUSE_GOVERNED_JS = Path("static/js/warehouse-governed.js")
 WAREHOUSE_RUNTIME_VISIBILITY = Path("governed_runtime_visibility_routes.py")
 STORES = Path("templates/stores.html")
+MAIN = Path("main.py")
 
 
 def _source(path):
