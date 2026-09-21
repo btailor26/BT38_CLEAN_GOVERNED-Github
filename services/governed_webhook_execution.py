@@ -1208,10 +1208,10 @@ def _import_marketplace_order_from_notification(
         and order is not None
     ):
         try:
-            from services.fbm_amazon_order_profile import (
-                get_or_refresh_amazon_profile,
+            from services.governed_amazon_fbm_profile_event_alignment import (
+                hydrate_exact_order_after_intake,
             )
-            get_or_refresh_amazon_profile(order, force=True)
+            hydrate_exact_order_after_intake(order)
         except Exception as exc:
             # Promise/profile enrichment must not turn an already-persisted
             # exact sale into an order-intake failure. Persist the failure on
