@@ -73,3 +73,12 @@ def test_recorder_transport_bypasses_its_own_fetch_instrumentation():
     assert 'if(url===endpoint)return originalFetch.apply(this,arguments);' in source
     assert 'send("browser_request"' in source
     assert "setInterval(" not in source
+
+
+def test_recorder_emits_only_from_real_events_not_idle_loops():
+    source = Path("services/governed_customer_behaviour_recorder.py").read_text(encoding="utf-8")
+    assert "setInterval(" not in source
+    assert "setTimeout(" not in source
+    assert "requestAnimationFrame(" not in source
+    assert 'if(url===endpoint)return originalFetch.apply(this,arguments);' in source
+    assert 'if request.path == _ENDPOINT or request.method != "GET": return response' in source
