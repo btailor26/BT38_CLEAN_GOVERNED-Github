@@ -85,3 +85,11 @@ def test_new_amazon_webhook_order_enriches_only_after_canonical_order_intake():
     assert 'marketplace == "amazon"' in source[intake:public_result]
     assert 'fulfillment_type == "FBM"' in source[intake:public_result]
     assert "get_orders" not in source[intake:public_result]
+
+
+def test_failed_exact_amazon_promise_enrichment_is_observable_and_retryable():
+    source = Path("services/governed_webhook_execution.py").read_text(encoding="utf-8")
+    assert 'except Exception as exc:' in source
+    assert 'log_type="amazon_fbm_profile_enrichment_error"' in source
+    assert '"marketplace_order_id": str(order_id)' in source
+    assert '"error": str(exc)[:1000]' in source
