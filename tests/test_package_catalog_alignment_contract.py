@@ -69,3 +69,18 @@ def test_billing_page_reads_package_without_global_page_query():
     assert "Normal BT38 pages pay no DB" in source
     assert "SubscriptionPackage.query" not in billing
     assert "AccountPackageAssignment.query" not in billing
+
+
+def test_every_customer_account_has_one_package_authority():
+    source = _read("services/package_catalog_alignment.py")
+    profile = _read("services/account_profile_alignment.py")
+    migration = _read("migrations/manual/20260911-package-catalog.sql")
+
+    assert 'code="bt38-free"' in source
+    assert "def ensure_account_package_assignment" in source
+    assert "if assignment:" in source
+    assert "return assignment" in source
+    assert "ensure_account_package_assignment(a,assigned_by_user_id=user.id)" in profile
+    assert "NOT EXISTS (" in migration
+    assert "WHERE apa.account_id = ca.id" in migration
+    assert "uq_account_package_assignment_account" in migration
