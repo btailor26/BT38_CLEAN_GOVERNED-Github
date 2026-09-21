@@ -177,6 +177,70 @@ def _log(event: str, message: str, details: dict) -> None:
     ))
 
 
+def _default_free_package() -> SubscriptionPackage:
+    """Return the canonical package used when an account has no explicit assignment."""
+    package = SubscriptionPackage.query.filter_by(code="bt38-free").first()
+    if package:
+        return package
+
+    package = SubscriptionPackage(
+        code="bt38-free",
+        name="BT38 Free",
+        description="Default BT38 package for accounts without a paid package assignment.",
+        tier_type="free",
+        price_pence=0,
+        currency="GBP",
+        billing_interval="none",
+        user_limit=5,
+        marketplace_limit=None,
+        monthly_order_limit=None,
+        features=[],
+        is_active=True,
+    )
+    db.session.add(package)
+    db.session.flush()
+    _log("package_catalog", "Default package created: BT38 Free", {
+        "action": "default_package_created",
+        "package_id": package.id,
+        "code": package.code,
+    })
+    return package
+
+
+def ensure_account_package_assignment(account: CustomerAccount, *, assigned_by_user_id: int | None = None) -> AccountPackageAssignment:
+    """Guarantee one package authority for every customer account.
+
+    Existing explicit free/paid assignments are never replaced. Only an account
+    with no assignment receives the canonical free package.
+    """
+    assignment = AccountPackageAssignment.query.filter_by(account_id=int(account.id)).first()
+    if assignment:
+        return assignment
+
+    package = _default_free_package()
+    assignment = AccountPackageAssignment(
+        account_id=account.id,
+        package_id=package.id,
+        status="active",
+        billing_provider="none",
+        assigned_by_user_id=assigned_by_user_id,
+        starts_at=datetime.utcnow(),
+    )
+    db.session.add(assignment)
+    account.plan_name = package.name
+    account.user_limit = package.user_limit
+    account.billing_status = "active"
+    _log("package_assignment", f"Default package assigned: {package.name}", {
+        "action": "default_assigned",
+        "account_id": account.id,
+        "owner_user_id": account.owner_user_id,
+        "package_id": package.id,
+        "assigned_by_user_id": assigned_by_user_id,
+    })
+    db.session.commit()
+    return assignment
+
+
 def _package_summary(account_id: int) -> dict | None:
     assignment = AccountPackageAssignment.query.filter_by(account_id=int(account_id)).first()
     if not assignment:
