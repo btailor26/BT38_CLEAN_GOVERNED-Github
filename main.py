@@ -5,18 +5,15 @@ from governed_mcf_routes import governed_mcf_bp
 if "governed_mcf" not in app.blueprints:
     app.register_blueprint(governed_mcf_bp)
 
-import os
 import services.governed_mcf_compat  # noqa: F401
 import services.governed_ui_event_signal  # noqa: F401
 import services.governed_webhook_rejection_recovery  # noqa: F401
 import services.governed_ebay_shipping_notification_registration_alignment  # noqa: F401
-if os.getenv("BT38_RUNTIME_EVIDENCE_IMPORT") != "1":
-    try:
-        from services.governed_ebay_post_deploy_alignment import align_ebay_notifications_and_recover_missed_changes
-        with app.app_context():
-            align_ebay_notifications_and_recover_missed_changes(store_id=23, max_days=7)
-    except Exception:
-        app.logger.exception("eBay post-deploy alignment failed after app startup")
+
+# Web import must stay side-effect free. eBay post-deploy alignment is an
+# explicit deployment/recovery operation and must never run while Gunicorn is
+# importing main:app. Blocking DB/marketplace recovery here can prevent even
+# /login from being served and duplicates the governed runtime boundary.
 import services.governed_ebay_order_identity_alignment  # noqa: F401
 import services.governed_fbm_shipment_event_alignment  # noqa: F401
 import services.auth_session_legacy_cleanup  # noqa: F401
