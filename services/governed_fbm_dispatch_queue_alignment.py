@@ -221,9 +221,9 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   var loadedRange='3d';
   var loadedFrom='';
   var loadedTo='';
-  var range='3d';
-  var from='';
-  var to='';
+  var range=String(saved.range||'3d').toLowerCase();
+  var from=String(saved.from||'');
+  var to=String(saved.to||'');
   function historyScope(){{return range==='custom'?'custom:'+from+':'+to:range;}}
   function lifecycleLoadedKey(name){{return 'bt38_fbm_loaded_'+historyScope()+'_'+name;}}
   if(legacyTab&&['ready_dispatch','pending','dispatched','cancelled','replacements','refunds'].indexOf(legacyTab)>=0)sessionStorage.setItem(lifecycleLoadedKey(legacyTab),'1');
@@ -236,8 +236,8 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   var toInput=document.getElementById('bt38FbmTo')||(historyForm&&historyForm.querySelector('[name="fbm_to"]'));
   if(searchInput)searchInput.value=search;
   if(rangeInput)rangeInput.value=range;
-  if(fromInput)fromInput.value=from;
-  if(toInput)toInput.value=to;
+  if(fromInput){fromInput.value=from;fromInput.style.display=range==='custom'?'':'none';}
+  if(toInput){toInput.value=to;toInput.style.display=range==='custom'?'':'none';}
   function ensureCostHeader(){{var head=table.querySelector('thead tr');if(!head||head.querySelector('[data-fbm-shipping-cost="1"]'))return;var th=document.createElement('th');th.textContent='Shipping cost';th.dataset.fbmShippingCost='1';head.insertBefore(th,head.lastElementChild);}}
   function addCostCell(row,info){{if(row.querySelector('[data-fbm-shipping-cost="1"]'))return;var td=document.createElement('td');td.dataset.fbmShippingCost='1';if(info.shipping_cost_confirmed){{td.className='fbm-shipping-cost';try{{td.textContent=new Intl.NumberFormat('en-GB',{{style:'currency',currency:info.shipping_currency||'GBP'}}).format(info.shipping_cost)}}catch(e){{td.textContent=(info.shipping_currency||'GBP')+' '+Number(info.shipping_cost).toFixed(2)}}}}else{{td.className='fbm-shipping-cost-pending';td.textContent='Pending / unavailable'}}row.insertBefore(td,row.lastElementChild);}}
   ensureCostHeader();
@@ -281,7 +281,7 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   if(toInput)toInput.addEventListener('change',function(){{if(range==='custom'||String(rangeInput&&rangeInput.value||'')==='custom'){{range='custom';if(toInput.value&&fromInput&&fromInput.value)applyHistory();}}}});
   if(searchInput)searchInput.addEventListener('input',function(){{search=String(searchInput.value||'').trim().toLowerCase();currentPage=1;saveSession();render()}});
   if(clearSearch)clearSearch.addEventListener('click',function(event){{event.preventDefault();if(searchInput)searchInput.value='';search='';currentPage=1;saveSession();render()}});
-  render();
+  if(!loadedCoversRequestedHistory())applyHistory();else render();
 }})();
 </script>'''
     return html.replace(marker, block + marker, 1) if marker in html else html + block
