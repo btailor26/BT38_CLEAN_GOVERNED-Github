@@ -7,6 +7,7 @@ for every carrier; rendering never reads a marketplace or carrier provider.
 from __future__ import annotations
 
 from datetime import timezone
+from zoneinfo import ZoneInfo
 from typing import Any
 
 from flask import before_render_template, g
@@ -16,6 +17,8 @@ from extensions import db
 from fbm_models import FBMOrderProfile
 from fbm_tracking_event_models import FBMShipmentTrackingEvent
 
+
+_FBM_DISPLAY_TZ = ZoneInfo("Europe/London")
 
 _OPERATIONAL_FIELDS = (
     "shipping_service",
@@ -115,6 +118,25 @@ def _as_utc_aware(value: Any) -> Any:
     if utcoffset is None:
         return value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc)
+
+
+def _as_fbm_display_time(value: Any) -> Any:
+    """Convert persisted UTC promise truth to Europe/London for presentation only."""
+    if value is None:
+        return None
+    utc_value = _as_utc_aware(value)
+    return utc_value.astimezone(_FBM_DISPLAY_TZ)
+
+
+def _display_promise(promise: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Return a presentation copy; never mutate persisted marketplace promise values."""
+    if promise is None:
+        return None
+    display = dict(promise)
+    for field in ("ship_by_at", "earliest_delivery_at", "latest_delivery_at"):
+        if display.get(field) is not None:
+            display[field] = _as_fbm_display_time(display[field])
+    return display
 
 
 def _delivery_performance(shipment: Any, promise: dict[str, Any] | None) -> str:
@@ -263,7 +285,9 @@ def install_fbm_db_delivery_promise_alignment(app: Any) -> None:
                 promise = item.get("delivery_promise")
             else:
                 promise = _merge_promise(profile_promises.get(key), operational_promises.get(key))
-                item["delivery_promise"] = promise
+            # Keep raw persisted UTC promise truth for comparisons/audit, while
+            # the template receives a Europe/London presentation copy.
+            item["delivery_promise"] = _display_promise(promise)
             shipment = item.get("shipment")
             performance = _delivery_performance(shipment, promise)
             item["delivery_performance"] = performance
