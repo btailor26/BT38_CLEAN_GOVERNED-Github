@@ -514,10 +514,12 @@
         // Do not open the long-lived SSE connection while the browser is
         // completing its normal page refresh. The bell remains event-driven;
         // it simply starts after the page load event has completed.
-        if (document.readyState === "complete") {
-            window.setTimeout(installCrossTabLiveSignal, 0);
+        // DOM readiness is sufficient for the event transport. Do not make
+        // live FBM movement depend on every image/CDN resource completing.
+        if (document.readyState === "loading") {
+            document.addEventListener("DOMContentLoaded", installCrossTabLiveSignal, {once: true});
         } else {
-            window.addEventListener("load", installCrossTabLiveSignal, {once: true});
+            installCrossTabLiveSignal();
         }
 
         window.addEventListener(
