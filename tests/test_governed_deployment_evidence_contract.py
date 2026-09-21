@@ -73,7 +73,7 @@ def test_deploy_workflow_batches_full_fingerprint_verification_in_one_ssh_sessio
     assert 'diff -u deployment-evidence/source-production-hashes.txt deployment-evidence/production-source-hashes.txt' in workflow
 
 
-def test_runtime_registration_uses_live_worker_snapshot_before_fallback_import():
+def test_runtime_registration_uses_live_worker_snapshot_and_never_reimports_app():
     main = Path("main.py").read_text(encoding="utf-8")
     verifier = Path("scripts/verify_governed_runtime_registration.py").read_text(encoding="utf-8")
     assert "_write_governed_runtime_registration_snapshot" in main
@@ -82,4 +82,6 @@ def test_runtime_registration_uses_live_worker_snapshot_before_fallback_import()
     assert 'live_modules = Path("/tmp/bt38-live-loaded-modules.txt")' in verifier
     assert 'live_routes = Path("/tmp/bt38-live-registered-routes.txt")' in verifier
     assert "source=live-worker" in verifier
-    assert verifier.index("if live_modules.is_file() and live_routes.is_file():") < verifier.index("import main")
+    assert "_write_runtime_registration_snapshot" in Path("gunicorn.conf.py").read_text(encoding="utf-8")
+    assert "missing_live_worker_snapshot" in verifier
+    assert "import main" not in verifier

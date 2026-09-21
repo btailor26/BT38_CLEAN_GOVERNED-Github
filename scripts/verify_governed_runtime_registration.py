@@ -37,13 +37,8 @@ if live_modules.is_file() and live_routes.is_file():
     print(f"RUNTIME_REGISTRATION_OK source=live-worker modules={modules_count} routes={routes_count}")
     raise SystemExit(0)
 
-# Import the deployed application registration graph. Do not inspect config,
-# environment values, request bodies, sessions, credentials, or database rows.
-import main  # noqa: E402
-
-app = main.app
-modules = sorted(name for name in sys.modules if name.startswith(("services.", "governed_")))
-routes = sorted(f"{','.join(sorted(rule.methods - {'HEAD', 'OPTIONS'}))} {rule.rule} -> {rule.endpoint}" for rule in app.url_map.iter_rules())
-modules_out.write_text("\n".join(modules) + "\n", encoding="utf-8")
-routes_out.write_text("\n".join(routes) + "\n", encoding="utf-8")
-print(f"RUNTIME_REGISTRATION_OK modules={len(modules)} routes={len(routes)}")
+# Do not fall back to importing main here. This script runs as a second process
+# inside the 512 MB production machine; a second full application graph is not
+# runtime evidence and can terminate under resource pressure. Absence of the
+# worker-owned snapshot is therefore an explicit, cheap, fail-closed condition.
+raise SystemExit("RUNTIME_REGISTRATION_FAIL missing_live_worker_snapshot")

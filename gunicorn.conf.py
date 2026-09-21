@@ -119,12 +119,40 @@ def _align_notification_noop_labels(app):
         return response
 
 
+def _write_runtime_registration_snapshot(app):
+    """Write names-only evidence from the actual initialized Gunicorn worker."""
+    import sys
+    from pathlib import Path
+
+    modules = sorted(
+        name for name in sys.modules
+        if name.startswith(("services.", "governed_"))
+    )
+    routes = sorted(
+        f"{','.join(sorted(rule.methods - {'HEAD', 'OPTIONS'}))} "
+        f"{rule.rule} -> {rule.endpoint}"
+        for rule in app.url_map.iter_rules()
+    )
+    Path("/tmp/bt38-live-loaded-modules.txt").write_text(
+        "\n".join(modules) + "\n", encoding="utf-8"
+    )
+    Path("/tmp/bt38-live-registered-routes.txt").write_text(
+        "\n".join(routes) + "\n", encoding="utf-8"
+    )
+    app.logger.info(
+        "BT38 runtime registration snapshot written modules=%s routes=%s",
+        len(modules),
+        len(routes),
+    )
+
+
 def post_worker_init(worker):
     """Start one governed event listener after the WSGI app is fully loaded."""
     from main import app
     from services.governed_event_runtime import start_event_only_runtime
 
     _align_notification_noop_labels(app)
+    _write_runtime_registration_snapshot(app)
 
     started = start_event_only_runtime(app)
     app.logger.info(
