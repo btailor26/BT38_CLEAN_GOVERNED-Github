@@ -57,7 +57,9 @@ def test_historical_profile_repair_is_prohibited():
     assert "_start_missing_profile_repair_once" not in source
     assert "_hydrate_missing_recent_profiles" not in source
     assert "INTERVAL '90 days'" not in source
-    assert "get_or_refresh_amazon_profile" not in source
+    # Sparse current events may reuse the existing exact-order reader, but
+    # there must still be no broad order scan or background repair.
+    assert "get_orders" not in source
     assert "threading.Thread" not in source
     assert "before_request" not in source
     assert "startup repair" in source.lower()
@@ -72,3 +74,14 @@ def test_existing_exact_profile_read_persists_all_promise_fields():
     assert 'payload.get("EarliestDeliveryDate")' in small
     assert 'payload.get("LatestDeliveryDate")' in small
     assert "INSERT INTO fbm_order_operational_state" in small
+
+
+def test_new_amazon_webhook_order_enriches_only_after_canonical_order_intake():
+    source = Path("services/governed_webhook_execution.py").read_text(encoding="utf-8")
+    intake = source.index("order = result.get(\"_order_row\")")
+    enrichment = source.index("get_or_refresh_amazon_profile(order, force=True)")
+    public_result = source.index("public_result = {", intake)
+    assert intake < enrichment < public_result
+    assert 'marketplace == "amazon"' in source[intake:public_result]
+    assert 'fulfillment_type == "FBM"' in source[intake:public_result]
+    assert "get_orders" not in source[intake:public_result]
