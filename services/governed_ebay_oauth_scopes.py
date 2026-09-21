@@ -11,9 +11,9 @@ EBAY_COMMERCE_SHIPPING_SCOPE = (
 EBAY_FINANCES_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.finances"
 EBAY_RETURN_READ_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.return.read"
 EBAY_RETURN_WRITE_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.return"
+EBAY_LOGISTICS_SCOPE = "https://api.ebay.com/oauth/api_scope/sell.logistics"
 
 LEGACY_EBAY_OAUTH_SCOPES = (
-    "https://api.ebay.com/oauth/api_scope",
     "https://api.ebay.com/oauth/api_scope/sell.inventory",
     "https://api.ebay.com/oauth/api_scope/sell.fulfillment",
     "https://api.ebay.com/oauth/api_scope/sell.account",
@@ -28,6 +28,7 @@ DEFAULT_EBAY_OAUTH_SCOPES = (
     EBAY_FINANCES_SCOPE,
     EBAY_RETURN_READ_SCOPE,
     EBAY_RETURN_WRITE_SCOPE,
+    EBAY_LOGISTICS_SCOPE,
 )
 
 
@@ -35,6 +36,11 @@ def governed_ebay_oauth_scopes() -> str:
     """Return the operator override plus BT38's complete governed scope set."""
 
     configured = (os.getenv("EBAY_SCOPES") or "").split()
+    # eBay Developer Support requires the generic application scope to be
+    # excluded from Authorization Code/User consent. It remains valid for
+    # Client Credentials, which is a separate grant flow.
+    generic_application_scope = "https://api.ebay.com/oauth/api_scope"
+    configured = [scope for scope in configured if scope != generic_application_scope]
     aligned = list(dict.fromkeys([*configured, *DEFAULT_EBAY_OAUTH_SCOPES]))
     return " ".join(aligned)
 
