@@ -22,13 +22,11 @@ from models import SystemLog
 
 _ENDPOINT = "/governed/ui/customer-behaviour"
 _OPERATIONAL_PATH_PREFIXES = (
-    "/fbm",
     "/governed/warehouse",
     "/warehouse",
     "/product-linking",
     "/admin/product-linking",
     "/mcf",
-    "/governed/fbm",
     "/governed/mcf",
 )
 _ALLOWED_EVENTS = {
@@ -310,7 +308,7 @@ def install_governed_customer_behaviour_recorder(app):
         content_type = str(response.headers.get("Content-Type") or "").lower()
         if "text/html" not in content_type or response.direct_passthrough or response.headers.get("Content-Encoding"): return response
         body = response.get_data(as_text=True)
-        if "bt38CustomerBehaviourRecorder" in body or "</body>" not in body: return response
+        if _operational_path(request.path) is False or "bt38CustomerBehaviourRecorder" in body or "</body>" not in body: return response
         body = body.replace("</body>", _SCRIPT + "\n</body>", 1)
         response.set_data(body)
         response.headers.pop("Content-Length", None)
