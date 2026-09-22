@@ -1,0 +1,56 @@
+name: BT38 Opportunity Qualification Pipeline
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 7 * * 1-5"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-opportunity-area:
+    name: Validate separate opportunity workspace
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Confirm isolated area exists
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f opportunity-qualification/README.md
+          test -f opportunity-qualification/config/qualification.yml
+          test -f opportunity-qualification/data/prospects.csv
+          test -f opportunity-qualification/data/exclusions.txt
+
+      - name: Enforce contact-ready gates
+        shell: python
+        run: |
+          import csv
+          from pathlib import Path
+
+          path = Path("opportunity-qualification/data/prospects.csv")
+          rows = list(csv.DictReader(path.open(encoding="utf-8")))
+          failures = []
+
+          for row in rows:
+              if row["status"] == "CONTACT_READY":
+                  required = (
+                      row["company_fit"],
+                      row["current_trigger"],
+                      row["ability_to_pay"],
+                  )
+                  if any(value != "PASS" for value in required):
+                      failures.append(f'{row["company"]}: qualification gate missing')
+                  if not row["decision_maker"].strip() or row["decision_maker"] == "UNKNOWN":
+                      failures.append(f'{row["company"]}: decision-maker missing')
+                  if not row["contact_route"].strip():
+                      failures.append(f'{row["company"]}: contact route missing')
+
+          if failures:
+              raise SystemExit("\n".join(failures))
+
+          print(f"Validated {len(rows)} prospect record(s).")
+          print("No BT38 runtime/application action performed.")
