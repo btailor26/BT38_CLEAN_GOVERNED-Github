@@ -117,6 +117,7 @@ def _browser_event_cache_script() -> str:
   function rank(label){var value=norm(label),ranks={ready_to_dispatch:1,get_ready_to_dispatch:1,sale:1,shipped:2,dispatched:2,picked_up:3,in_transit:4,out_for_delivery:5,delivered:6};return Number(ranks[value]||0);}
   function collapseCurrent(rows){var best={},other=[];(Array.isArray(rows)?rows:[]).forEach(function(row){if(!row)return;var orderId=String(row.order_id||'').trim();if(!orderId){other.push(row);return;}var current=best[orderId];if(!current||rank(row.status_label)>rank(current.status_label)||(rank(row.status_label)===rank(current.status_label)&&Date.parse(row.created_at||'')>Date.parse(current.created_at||'')))best[orderId]=row;});return Object.keys(best).map(function(key){return best[key];}).concat(other).sort(function(a,b){return Date.parse(b&&b.created_at||'')-Date.parse(a&&a.created_at||'');});}
   function read(){try{var value=JSON.parse(localStorage.getItem(cacheKey)||'[]');return collapseCurrent(Array.isArray(value)?value:[]);}catch(_){return [];}}
+  window.BT38BellCurrentRecords=function(){return read().slice(0,50);};
   function write(rows){try{localStorage.setItem(cacheKey,JSON.stringify(collapseCurrent(rows).slice(0,50)));}catch(_){}}
   function readMovement(){try{var value=JSON.parse(localStorage.getItem(movementKey)||'{}');return value&&typeof value==='object'?value:{};}catch(_){return {};}}
   function writeMovement(value){try{localStorage.setItem(movementKey,JSON.stringify(value));}catch(_){}}
