@@ -243,6 +243,30 @@ def hydrate_exact_order_after_intake(order: MarketplaceOrder) -> bool:
     return _hydrate_exact_order_when_event_facts_incomplete(payload)
 
 
+def refresh_exact_amazon_order(order: MarketplaceOrder) -> dict[str, Any]:
+    """Read and reconcile one already-persisted Amazon order only.
+
+    This is the deadline-recovery primitive: no order discovery, no date-window
+    import and no marketplace-wide scan. The existing Amazon Orders reader owns
+    the promise/status read; this function only reports the exact persisted
+    result for the caller that selected the overdue record.
+    """
+    if order is None:
+        return {"success": False, "skipped": True, "reason": "order_missing"}
+
+    from services.fbm_amazon_order_profile import get_or_refresh_amazon_profile
+
+    profile = get_or_refresh_amazon_profile(order, force=True)
+    return {
+        "success": True,
+        "store_id": int(order.store_id),
+        "order_id": str(order.marketplace_order_id),
+        "status": str(getattr(order, "status", "") or "").strip().lower(),
+        "ship_by_at": profile.latest_ship_at.isoformat() if profile.latest_ship_at else None,
+        "checked_at": profile.checked_at.isoformat() if profile.checked_at else None,
+    }
+
+
 def install_governed_amazon_fbm_profile_event_alignment(app) -> None:
     if getattr(app, "_bt38_amazon_fbm_profile_event_alignment", False):
         return
