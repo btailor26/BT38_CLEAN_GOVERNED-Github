@@ -27,3 +27,10 @@ def test_exact_committed_projection_is_handed_to_existing_consumers():
     assert "bt38-fbm-committed-snapshot-applied" in SOURCE
     assert "projection:projected" in SOURCE
     assert "order_id:orderId" in SOURCE
+
+
+def test_exact_session_preserves_full_marketplace_delivery_promise():
+    assert "ship_by_at:'shipByAt'" in SOURCE
+    assert "earliest_delivery_at:'earliestDeliveryAt'" in SOURCE
+    assert "latest_delivery_at:'latestDeliveryAt'" in SOURCE
+    assert "'ship_by_at','earliest_delivery_at','latest_delivery_at','delivery_promise_at'" in SOURCE
