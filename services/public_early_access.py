@@ -620,13 +620,35 @@ def bt38_early_access_application_decision(application_id: int, decision: str):
         }),
     )
     db.session.add(audit)
+
+    # Keep the existing application as the decision authority while reflecting
+    # that decision on its existing pre-account support case.
+    support_case_id = str(request.args.get("support_case") or "").strip().upper()
+    if support_case_id:
+        from services.support_case_alignment import SupportCase
+        support_case = SupportCase.query.filter_by(case_id=support_case_id).first()
+        if support_case is not None:
+            try:
+                support_context = json.loads(support_case.context_json or "{}")
+            except Exception:
+                support_context = {}
+            if (
+                support_case.account_id is None
+                and int(support_context.get("application_id") or 0) == int(application_id)
+            ):
+                support_case.status = "resolved" if decision in {"approved", "rejected"} else "open"
+                support_case.updated_at = datetime.utcnow()
+
     db.session.commit()
 
     if decision == "approved":
         email = quote(str(details.get("email") or ""))
         username = quote(str(details.get("full_name") or ""))
+        source = quote(str(application_id))
         flash("Application approved. Create the BT38 Inventory account through the existing governed user workflow.", "success")
-        return redirect(f"/users/create?email={email}&username={username}")
+        return redirect(f"/users/create?email={email}&username={username}&application_id={source}")
 
     flash(f"Application marked {decision}.", "success")
+    if support_case_id:
+        return redirect(url_for("bt38_support_case_page", case_id=support_case_id))
     return redirect(url_for("bt38_early_access_applications_admin"))
