@@ -508,11 +508,6 @@ def install_governed_fbm_ready_landing_alignment(app) -> None:
         ready_landing_page._bt38_ready_landing_alignment = True
         app.view_functions[endpoint] = ready_landing_page
 
-    bell_endpoint = "governed.governed_ui_notifications"
-    if bell_endpoint in app.view_functions:
-        _event_only_bell_reader._bt38_authority_reminder_bell = True
-        app.view_functions[bell_endpoint] = login_required(_event_only_bell_reader)
-
     if not getattr(app, "_bt38_db_pressure_response_alignment", False):
         app.after_request(_align_browser_pressure_response)
         app._bt38_db_pressure_response_alignment = True
