@@ -57,8 +57,10 @@ def _fbm_bell_session_script() -> str:
     var projected=[];
     table.querySelectorAll('tbody tr.fbm-order-row').forEach(function(row){var record=project(row);if(record)projected.push(record);});
     try{sessionStorage.setItem(cacheKey,JSON.stringify(projected));}catch(_){}
+    window.BT38BellCurrentRecords=function(){return projected.slice(0,50);};
     try{window.dispatchEvent(new CustomEvent('bt38-fbm-bell-projection-updated',{detail:{records:projected,action_count:projected.filter(function(record){return record.requires_action;}).length}}));}catch(_){}
   }
+  window.BT38BellCurrentRecords=function(){return read().slice(0,50);};
   sync();
   document.addEventListener('bt38:exact-record-event',sync);
   window.addEventListener('bt38-fbm-committed-snapshot-applied',sync);
