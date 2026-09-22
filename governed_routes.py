@@ -792,31 +792,40 @@ def create_user():
 
         application_id = request.form.get("application_id", type=int) or request.args.get("application_id", type=int)
 
+        # Approved-application user creation is fail-closed. An application
+        # reference may only create/bind the exact approved email.
+        approved_application_details = None
+        if application_id:
+            from models import SystemLog
+            import json
+            application = SystemLog.query.filter_by(
+                id=application_id,
+                log_type="early_access_application",
+            ).first()
+            if application is not None:
+                try:
+                    candidate_details = json.loads(application.details or "{}")
+                except Exception:
+                    candidate_details = {}
+                approved_email = str(candidate_details.get("email") or "").strip().lower()
+                approved_status = str(candidate_details.get("status") or "").strip().lower()
+                if approved_status == "approved" and approved_email == email:
+                    approved_application_details = candidate_details
+            if approved_application_details is None:
+                flash("Approved application validation failed. No BT38 user was created.", "danger")
+                return redirect(url_for("bt38_early_access_applications_admin"))
+
         existing = User.query.filter((User.username == username) | (User.email == email)).first()
         if existing:
-            if application_id and str(existing.email or "").strip().lower() == email:
-                from models import SystemLog
+            if approved_application_details is not None and str(existing.email or "").strip().lower() == email:
                 from services.account_profile_alignment import _create_owner_account
-                import json
-                application = SystemLog.query.filter_by(
-                    id=application_id,
-                    log_type="early_access_application",
-                ).first()
-                if application is not None:
-                    try:
-                        application_details = json.loads(application.details or "{}")
-                    except Exception:
-                        application_details = {}
-                    approved_email = str(application_details.get("email") or "").strip().lower()
-                    approved_status = str(application_details.get("status") or "").strip().lower()
-                    if approved_status == "approved" and approved_email == email:
-                        _create_owner_account(
-                            existing,
-                            business_name=str(application_details.get("business_name") or "").strip(),
-                        )
-                        db.session.commit()
-                        flash("Approved application linked to the existing BT38 user and account package.", "success")
-                        return redirect(url_for("governed.edit_user", user_id=existing.id))
+                _create_owner_account(
+                    existing,
+                    business_name=str(approved_application_details.get("business_name") or "").strip(),
+                )
+                db.session.commit()
+                flash("Approved application linked to the existing BT38 user and account package.", "success")
+                return redirect(url_for("governed.edit_user", user_id=existing.id))
             flash("That user already exists. Opened the existing user so you can edit access.", "warning")
             return redirect(url_for("governed.edit_user", user_id=existing.id))
 
@@ -829,26 +838,12 @@ def create_user():
         # approved access application, establish the existing customer/account
         # package authority in the same transaction instead of waiting for the
         # customer's first authenticated request.
-        if application_id:
-            from models import SystemLog
+        if approved_application_details is not None:
             from services.account_profile_alignment import _create_owner_account
-            import json
-            application = SystemLog.query.filter_by(
-                id=application_id,
-                log_type="early_access_application",
-            ).first()
-            if application is not None:
-                try:
-                    application_details = json.loads(application.details or "{}")
-                except Exception:
-                    application_details = {}
-                approved_email = str(application_details.get("email") or "").strip().lower()
-                approved_status = str(application_details.get("status") or "").strip().lower()
-                if approved_status == "approved" and approved_email == email:
-                    _create_owner_account(
-                        user,
-                        business_name=str(application_details.get("business_name") or "").strip(),
-                    )
+            _create_owner_account(
+                user,
+                business_name=str(approved_application_details.get("business_name") or "").strip(),
+            )
 
         db.session.commit()
 
