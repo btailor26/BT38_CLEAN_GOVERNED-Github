@@ -64,3 +64,23 @@ def test_release_gates_cover_manual_shipping_runtime_and_contract():
         assert "services/fbm_marketplace_destination.py" in workflow
         assert "services/governed_exact_ebay_order_hydration.py" in workflow
         assert "tests/test_fbm_manual_shipping_order_contract.py" in workflow
+
+
+def test_manual_address_lookup_uses_google_places_and_not_homedata():
+    source = (ROOT / "governed_fbm_address_lookup_routes.py").read_text(encoding="utf-8")
+    template = (ROOT / "templates" / "fbm_manual_shipping.html").read_text(encoding="utf-8")
+
+    assert "GOOGLE_MAPS_API_KEY" in source
+    assert "places.googleapis.com/v1/places:autocomplete" in source
+    assert "includedRegionCodes" in source
+    assert "provider\":\"google_places" in source.replace(" ", "")
+    assert "HOMEDATA_API_KEY" not in source
+    assert "encodeURIComponent(choice.id)" in template
+
+
+def test_manual_packlink_handoff_uses_manual_reference_and_declared_value():
+    source = (ROOT / "services" / "fbm_packlink_adapter.py").read_text(encoding="utf-8")
+
+    assert 'getattr(order, "marketplace_order_id", None) or getattr(order, "reference", "")' in source
+    assert 'getattr(line, "declared_value", None)' in source
+    assert 'getattr(line, "item_title", None)' in source
