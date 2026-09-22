@@ -580,8 +580,7 @@ def hydrate_amazon_tracking_for_order(
     promise_hydration = None
     if source != "fbm_amazon_order_profile":
         try:
-            from services.fbm_amazon_order_profile import get_or_refresh_amazon_profile
-            profile = get_or_refresh_amazon_profile(eligible[0], force=True)
+            from services.fbm_amazon_order_profile import (\n                get_or_refresh_amazon_profile,\n            )\n            profile = get_or_refresh_amazon_profile(eligible[0], force=True)
             promise_hydration = {
                 "success": True,
                 "ship_by_at": profile.latest_ship_at.isoformat() if profile.latest_ship_at else None,
