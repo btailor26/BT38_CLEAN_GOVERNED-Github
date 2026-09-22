@@ -141,12 +141,28 @@ def _browser_event_cache_script() -> str:
     return Object.assign({},detail,{notification_label:label,notification_source:'fbm_page',platform:platform,product_title:productTitle,quantity:quantity,ship_by_at:shipBy,carrier:carrier,tracking_number:tracking,is_prime:prime,source:'fbm_page'});
   }
   function showFbmToast(record){if(!record)return;var movement=readMovement(),key=String(record.order_id||record.event_key||'').trim();if(key&&movement[key]===record.status_label)return;if(key){movement[key]=record.status_label;writeMovement(movement);}var host=document.getElementById('bt38FbmMovementToasts');if(!host){host=document.createElement('div');host.id='bt38FbmMovementToasts';host.setAttribute('aria-live','polite');host.style.cssText='position:fixed;right:18px;top:78px;z-index:1085;width:min(360px,calc(100vw - 36px));display:flex;flex-direction:column;gap:8px;';document.body.appendChild(host);}var box=document.createElement('div');box.className='card shadow-sm border';box.style.cssText='padding:10px 12px;background:var(--bs-body-bg,#fff);';var heading=document.createElement('div');heading.className='fw-semibold small';heading.textContent=record.title;var meta=document.createElement('div');meta.className='small text-muted mt-1';meta.textContent=record.message||'';box.appendChild(heading);if(meta.textContent)box.appendChild(meta);host.appendChild(box);window.setTimeout(function(){if(box&&box.parentNode)box.parentNode.removeChild(box);},5000);}
+  function seedFromRenderedFbm(){
+    var rows=document.querySelectorAll('.fbm-orders-table tbody .fbm-order-row'),seeded=[];
+    for(var i=0;i<rows.length;i++){
+      var row=rows[i],shown=row.querySelector('td:nth-child(3) .fw-semibold'),orderId=text(shown);
+      if(!orderId)continue;
+      var label=fbmLabel(row);if(!label)continue;
+      var marketCell=row.querySelector('td:nth-child(2)'),logo=marketCell&&marketCell.querySelector('.fbm-marketplace-logo'),platform=String(logo&&logo.getAttribute('alt')||text(marketCell&&marketCell.querySelector('strong'))||'').trim(),prime=!!(marketCell&&marketCell.querySelector('img[alt="Prime"]'));
+      var productTitle=text(row.querySelector('td:nth-child(4) strong')),quantity=text(row.querySelector('td:nth-child(5)')),shipBy=text(row.querySelector('td:nth-child(7) .fbm-promise-line span')),carrier=text(row.querySelector('td:nth-child(8) strong')),tracking=text(row.querySelector('td:nth-child(8) code'));
+      var detail={revision:0,order_id:orderId,marketplace_order_id:orderId,notification_label:label,notification_source:'fbm_page',platform:platform,product_title:productTitle,quantity:quantity,ship_by_at:shipBy,carrier:carrier,tracking_number:tracking,is_prime:prime,source:'fbm_page'};
+      var record=recordFor(detail);if(record)seeded.push(record);
+    }
+    if(seeded.length)write(seeded.concat(read()));
+  }
+  window.BT38BellSeedFromRenderedFbm=seedFromRenderedFbm;
   window.addEventListener('bt38-marketplace-event',function(event){
     var detail=event&&event.detail||{},projected=fbmProjection(detail);
     if(projected){var saved=store(projected);if(saved&&saved.isNew)showFbmToast(saved.record);return;}
     if(isGenericTransport(detail))return;
     var saved=store(detail),owned=norm(detail.notification_source||detail.source);if(saved&&saved.isNew&&owned==='fbm_page')showFbmToast(saved.record);
   });
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',seedFromRenderedFbm,{once:true});else seedFromRenderedFbm();
+  window.addEventListener('load',seedFromRenderedFbm,{once:true});
 })();
 </script>
 '''
