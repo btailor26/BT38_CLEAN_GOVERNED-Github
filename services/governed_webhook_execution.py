@@ -1035,7 +1035,9 @@ def _upsert_fbm_order_operational_state(
             "store_id": int(store_id),
             "order_id": str(order_id),
             "platform": str(marketplace or "").strip().lower() or None,
-            "ship_by_at": values.get("changed_at"),
+            "ship_by_at": None,
+            # Cancellation time is observation truth, never a shipping promise.
+            # COALESCE above preserves any valid marketplace ship_by_at already stored.
             "checked_at": values.get("changed_at") or datetime.utcnow(),
         },
     )
