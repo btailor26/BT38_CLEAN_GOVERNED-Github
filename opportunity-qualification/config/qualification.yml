@@ -1,0 +1,46 @@
+name: BT38 Opportunity Qualification Pipeline
+version: 1
+
+pipeline:
+  - DISCOVERED
+  - RESEARCHED
+  - QUALIFIED
+  - CONTACT_READY
+  - CONTACTED
+  - FOLLOW_UP
+  - CONVERSATION
+  - PROPOSAL
+  - WON
+  - LOST
+  - REJECTED
+
+required_gates:
+  company_fit: true
+  current_trigger: true
+  ability_to_pay: true
+  decision_maker_and_contact_route: true
+
+coverage:
+  - ecommerce operations
+  - Amazon and eBay workflows
+  - own website and marketplaces
+  - inventory visibility and stock control
+  - sourcing and buying
+  - warehouse and 3PL operations
+  - fulfilment and dispatch
+  - shipping and tracking
+  - returns
+  - reconciliation
+  - costs and margins
+  - reporting
+  - workflow optimisation
+  - operational systems and processes
+
+reject:
+  duplicates: true
+  anonymous_company: true
+  generic_free_advice: true
+  generic_3pl_placement_only: true
+  no_current_reason_to_engage: true
+
+contact_ready_requires_all_gates: true
