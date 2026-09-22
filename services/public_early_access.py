@@ -515,6 +515,38 @@ def bt38_early_access_apply():
         details=json.dumps(payload, ensure_ascii=False),
     )
     db.session.add(row)
+    db.session.flush()
+
+    # Alignment only: project the existing application into the existing
+    # support queue. The application remains the approval/audit authority and
+    # no CustomerAccount or User is created at submission time.
+    from services.support_case_alignment import SupportCase
+    support_case = SupportCase(
+        account_id=None,
+        opened_by_user_id=0,
+        category="users_access",
+        subject=f"Access application — {payload['business_name']}"[:180],
+        description=(
+            f"Applicant: {payload['full_name']}\n"
+            f"Business: {payload['business_name']}\n"
+            f"Email: {payload['email']}\n"
+            f"Marketplaces: {', '.join(payload.get('marketplaces') or []) or '—'}\n"
+            f"Monthly orders: {payload.get('monthly_orders') or '—'}\n\n"
+            f"What they want BT38 Inventory to help manage:\n{payload['goals']}"
+        )[:8000],
+        priority="normal",
+        status="open",
+        affected_area="BT38 access application",
+        source_page="/apply",
+        context_json=json.dumps({
+            "application_id": row.id,
+            "application_reference": f"BT38-EA-{row.id}",
+            "application_email": payload["email"],
+        }, ensure_ascii=False, sort_keys=True),
+    )
+    db.session.add(support_case)
+    db.session.flush()
+    support_case.case_id = f"BT38-{support_case.created_at.strftime('%y%m%d')}-{int(support_case.id):06d}"
     db.session.commit()
 
     return render_template(
