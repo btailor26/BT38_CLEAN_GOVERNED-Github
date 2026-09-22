@@ -66,6 +66,9 @@
             return `<div class="border-start border-3 ${border} ps-3 py-2 mb-2"><div class="d-flex justify-content-between align-items-start gap-3"><div><div class="fw-semibold">${esc(title)}</div>${detail}</div>${stateBadge(confirmed)}</div></div>`;
         }
 
+        if (!pickupPassed && !transitPassed && !delivered) {
+            return '<div class="alert alert-light border mb-2"><div class="fw-semibold">Waiting for carrier update</div><div class="small text-muted mt-1">No carrier tracking movement has been received yet.</div></div>';
+        }
         return milestone('Picked up', pickupPassed, pickedUpAt) +
             milestone('In transit', transitPassed, movementAt) +
             milestone('Delivered', delivered, deliveredAt);
