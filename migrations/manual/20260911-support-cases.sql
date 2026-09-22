@@ -19,6 +19,11 @@ CREATE TABLE IF NOT EXISTS support_cases (
 ALTER TABLE support_cases ADD COLUMN IF NOT EXISTS context_json TEXT;
 ALTER TABLE support_cases ALTER COLUMN source_page TYPE VARCHAR(500);
 
+-- Public access applications exist before a CustomerAccount is provisioned.
+-- Keep customer support cases account-scoped, while allowing only the schema
+-- shape required for those pre-account application cases.
+ALTER TABLE support_cases ALTER COLUMN account_id DROP NOT NULL;
+
 CREATE TABLE IF NOT EXISTS support_case_messages (
     id SERIAL PRIMARY KEY,
     case_pk INTEGER NOT NULL REFERENCES support_cases(id) ON DELETE CASCADE,
