@@ -213,7 +213,18 @@ class PacklinkAdapter:
         draft_attempt_id = f"{custom_reference}:bt38:{os.urandom(6).hex()}"[:50]
         content = ", ".join(content_parts)[:60] or "Goods"
         content_value = round(content_value, 2)
-        items = [{"title": str(getattr(line, "sku", None) or getattr(line, "item_title", None) or "Item"), "quantity": max(1, int(getattr(line, "quantity", 1) or 1)), "price": ((self._positive_amount(getattr(line, "unit_price", None)) or ((self._positive_amount(getattr(line, "declared_value", None)) or 0.0) / max(1, int(getattr(line, "quantity", 1) or 1))) if getattr(line, "marketplace_order_id", None) is None else (self._positive_amount(getattr(line, "unit_price", None)) or 0.0)) * max(1, int(getattr(line, "quantity", 1) or 1))} for line in lines]
+        items = []
+        for line in lines:
+            qty = max(1, int(getattr(line, "quantity", 1) or 1))
+            unit_price = self._positive_amount(getattr(line, "unit_price", None))
+            if unit_price is None and getattr(line, "marketplace_order_id", None) is None:
+                declared_total = self._positive_amount(getattr(line, "declared_value", None))
+                unit_price = (declared_total / qty) if declared_total is not None else None
+            items.append({
+                "title": str(getattr(line, "sku", None) or getattr(line, "item_title", None) or "Item"),
+                "quantity": qty,
+                "price": (unit_price or 0.0) * qty,
+            })
         location_data = self._best_effort_location_ids(from_address, to_address)
         # The ISO country is the display value, but Packlink's form also needs
         # its resolved destination selector identities on the recipient address.
