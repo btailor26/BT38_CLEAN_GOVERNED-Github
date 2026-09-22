@@ -273,6 +273,10 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
     if(selectedCount)selectedCount.classList.toggle('d-none',!actionable);if(actionHint)actionHint.classList.toggle('d-none',!actionable);saveSession();
     document.dispatchEvent(new CustomEvent('bt38-fbm-session-rendered'));
   }}
+  // Keep the established single FBM browser-session owner reachable by the
+  // shared page controller after it builds/refreshed its row cache. This is a
+  // presentation-only handoff: no fetch, DB read, marketplace read or timer.
+  window.BT38FBMApplyCommittedSnapshot=render;
   // History is presentation over the already-loaded event/session working set.
   // Changing days must never wake the server, query the DB, fetch /fbm, or
   // create a second refresh path. New/changed records arrive only through the
