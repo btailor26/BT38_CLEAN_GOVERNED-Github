@@ -147,7 +147,6 @@ def _browser_event_cache_script() -> str:
     if(isGenericTransport(detail))return;
     var saved=store(detail),owned=norm(detail.notification_source||detail.source);if(saved&&saved.isNew&&owned==='fbm_page')showFbmToast(saved.record);
   });
-  var previousFetch=window.fetch.bind(window);window.fetch=async function(input,init){var response=await previousFetch(input,init),url=typeof input==='string'?input:(input&&input.url)||'',method=String(init&&init.method||'GET').toUpperCase();if(method!=='GET'||url.indexOf('/governed/ui/notifications')!==0||!response.ok)return response;try{var payload=await response.clone().json();if(!payload||payload.success!==true)return response;var combined=collapseCurrent(read().concat(Array.isArray(payload.records)?payload.records:[])),seen=new Set(),unique=[];combined.forEach(function(row){var key=String(row&&row.event_key||'').trim();if(!key||seen.has(key))return;seen.add(key);unique.push(row);});payload.records=unique.slice(0,50);payload.latest_event_at=payload.records.length?payload.records[0].created_at:null;var headers=new Headers(response.headers);headers.set('Content-Type','application/json');return new Response(JSON.stringify(payload),{status:response.status,statusText:response.statusText,headers:headers});}catch(_){return response;}};
 })();
 </script>
 '''
