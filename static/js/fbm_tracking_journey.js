@@ -333,27 +333,9 @@
 
     document.addEventListener('click', event => { void handleExistingPacklinkLabel(event); }, true);
 
-    function loadDeliveryPromiseAlignment() {
-        if (document.querySelector('script[data-bt38-fbm-delivery-promise-alignment="1"]')) return;
-        const alignment = document.createElement('script');
-        alignment.src = assetUrl('/static/js/fbm_delivery_promise_journey_alignment.js');
-        alignment.dataset.bt38FbmDeliveryPromiseAlignment = '1';
-        document.head.appendChild(alignment);
-    }
-
-    function loadLegacy() {
-        if (document.querySelector('script[data-bt38-fbm-tracking-legacy="1"]')) {
-            alignPersistedLifecycle();
-            loadDeliveryPromiseAlignment();
-            return;
-        }
-        const legacy = document.createElement('script');
-        legacy.src = assetUrl('/static/js/fbm_tracking_journey_legacy.js');
-        legacy.dataset.bt38FbmTrackingLegacy = '1';
-        legacy.onload = function () { alignPersistedLifecycle(); loadDeliveryPromiseAlignment(); };
-        legacy.onerror = function () { alignPersistedLifecycle(); loadDeliveryPromiseAlignment(); };
-        document.head.appendChild(legacy);
-    }
+    // Retired child alignment loaders. Their active behavior is owned by the
+    // canonical FBM page assets/injected authorities; this bootstrap must not
+    // load duplicate eBay, legacy journey, or delivery-promise scripts.
 
     function startSelectedPacklinkLabelAction() {
         installSelectedPacklinkLabelAction();
@@ -370,14 +352,5 @@
         startSelectedPacklinkLabelAction();
     }
 
-    if (document.querySelector('script[data-bt38-ebay-native-bootstrap="1"]')) {
-        loadLegacy();
-        return;
-    }
-    const nativeScript = document.createElement('script');
-    nativeScript.src = assetUrl('/static/js/fbm_ebay_shipping_alignment.js');
-    nativeScript.dataset.bt38EbayNativeBootstrap = '1';
-    nativeScript.onload = loadLegacy;
-    nativeScript.onerror = loadLegacy;
-    document.head.appendChild(nativeScript);
+    // Retired: no dynamic child-script bootstrap from this canonical entry.
 })(document);
