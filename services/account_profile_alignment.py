@@ -15,7 +15,6 @@ class CustomerAccountMember(db.Model):
  __tablename__="customer_account_members"; __table_args__=(UniqueConstraint("account_id","user_id",name="uq_customer_account_member"),UniqueConstraint("user_id",name="uq_customer_account_member_user")); id=db.Column(db.Integer,primary_key=True); account_id=db.Column(db.Integer,db.ForeignKey("customer_accounts.id",ondelete="CASCADE"),nullable=False,index=True); user_id=db.Column(db.Integer,db.ForeignKey("users.id",ondelete="CASCADE"),nullable=False,index=True); access_preset=db.Column(db.String(40),nullable=False,default="assistant"); is_owner=db.Column(db.Boolean,nullable=False,default=False); created_at=db.Column(db.DateTime,nullable=False,default=datetime.utcnow)
 class UserProfile(db.Model):
  __tablename__="user_profiles"; user_id=db.Column(db.Integer,db.ForeignKey("users.id",ondelete="CASCADE"),primary_key=True); display_name=db.Column(db.String(140)); position=db.Column(db.String(140)); setup_required=db.Column(db.Boolean,nullable=False,default=False); setup_completed_at=db.Column(db.DateTime); created_at=db.Column(db.DateTime,nullable=False,default=datetime.utcnow); updated_at=db.Column(db.DateTime,nullable=False,default=datetime.utcnow,onupdate=datetime.utcnow)
-with app.app_context(): db.create_all()
 _PERMISSION_SECTIONS=("inventory","warehouse","stores","suppliers","purchase_orders","sync","settings","users")
 def _permission_map(*,view=(),edit=(),can_push=False,can_sync=False,can_import=False,manage_users=False):
  p={}; v=set(view); e=set(edit)
