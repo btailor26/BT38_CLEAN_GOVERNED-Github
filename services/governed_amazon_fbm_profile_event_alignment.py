@@ -175,6 +175,16 @@ def _persist(payload: dict) -> bool:
         })
 
     db.session.commit()
+
+    if ship_by:
+        order = (
+            MarketplaceOrder.query
+            .filter_by(store_id=store_id, marketplace_order_id=order_id)
+            .order_by(MarketplaceOrder.id.desc())
+            .first()
+        )
+        if order is not None:
+            _queue_ship_by_deadline(order, ship_by)
     return True
 
 
