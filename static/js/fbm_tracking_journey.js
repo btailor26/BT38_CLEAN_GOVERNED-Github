@@ -30,33 +30,6 @@
         return `${path}${separator}v=${encodeURIComponent(assetRevision)}`;
     }
 
-    function lifecycleLabel(status) {
-        const labels = {
-            pending: 'Pending', unshipped: 'Confirmed', order: 'Confirmed', confirmed: 'Confirmed',
-            partially_shipped: 'Partially dispatched', shipped: 'Dispatched', accepted: 'Picked up',
-            carrier_accepted: 'Picked up', collected: 'Picked up', picked_up: 'Picked up',
-            in_transit: 'In transit', out_for_delivery: 'Out for delivery', delivered: 'Delivered',
-            return_requested: 'Return requested', returned: 'Returned', refund_requested: 'Refund requested',
-            refunded: 'Refunded', replacement_requested: 'Replacement requested', replacement: 'Replacement',
-            case_open: 'Issue / case', dispute: 'Dispute', chargeback: 'Chargeback',
-            cancel_requested: 'Cancellation requested', cancelled: 'Cancelled'
-        };
-        return labels[status] || String(status || '').replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase());
-    }
-
-    function lifecycleClass(status) {
-        if (['delivered', 'picked_up', 'accepted', 'carrier_accepted', 'collected', 'in_transit', 'out_for_delivery'].includes(status)) return 'bg-success';
-        if (['return_requested', 'returned', 'refund_requested', 'refunded', 'case_open', 'dispute', 'chargeback', 'cancel_requested', 'cancelled'].includes(status)) return 'bg-danger';
-        if (['replacement_requested', 'replacement'].includes(status)) return 'bg-info text-dark';
-        if (status === 'pending') return 'bg-warning text-dark';
-        if (['shipped', 'partially_shipped'].includes(status)) return 'bg-primary';
-        return 'bg-light text-dark border';
-    }
-
-    function labelOrTrackingStageReached(row) {
-        return String(row && row.dataset ? row.dataset.labelReady || '' : '') === '1';
-    }
-
     // Journey stage colours are owned by
     // fbm_delivery_promise_journey_alignment.js from persisted milestone truth.
     // This bootstrap must not independently repaint those badges.
