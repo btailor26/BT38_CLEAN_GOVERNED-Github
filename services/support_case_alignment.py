@@ -279,6 +279,28 @@ def bt38_admin_support_case_state(case_id):
     return redirect(url_for("bt38_support_case_page", case_id=case.case_id))
 
 
+@app.post("/admin/support/cases/<case_id>/access-decision")
+@login_required
+def bt38_admin_support_access_decision(case_id):
+    """Align a pre-account support case with the existing application authority."""
+    if not _is_admin():
+        abort(403)
+    case = _case_or_404(case_id)
+    context = _case_context(case)
+    application_id = context.get("application_id")
+    if case.account_id is not None or not application_id:
+        abort(404)
+    decision = _clean(request.form.get("decision"), 20).lower()
+    if decision not in {"approved", "rejected", "pending"}:
+        abort(400)
+    return redirect(url_for(
+        "bt38_early_access_application_decision",
+        application_id=int(application_id),
+        decision=decision,
+        support_case=case.case_id,
+    ), code=307)
+
+
 def _support_origin_url() -> str:
     """Build a local, sanitized origin URL from the page currently being rendered."""
     if request.path.startswith("/support") or request.path.startswith("/static"):
