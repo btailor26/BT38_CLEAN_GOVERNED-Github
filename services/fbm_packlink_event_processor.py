@@ -70,7 +70,12 @@ def _find_exact_shipment(reference: str, custom_reference: str | None):
 
 
 def _callback_tracking_history(data: dict[str, Any]) -> list[dict[str, Any]]:
-    """Return only tracking events already supplied inside this callback."""
+    """Return only real tracking facts already supplied inside this callback.
+
+    A Packlink wake-up containing only shipment_reference/custom_reference is
+    transport metadata, not carrier history. Do not persist it as a tracking
+    event or let the Journey imply that Packlink supplied movement.
+    """
     for key in ("tracking_history", "trackingHistory", "history", "events"):
         value = data.get(key)
         if isinstance(value, list):
@@ -82,7 +87,17 @@ def _callback_tracking_history(data: dict[str, Any]) -> list[dict[str, Any]]:
         return [item for item in tracking_info if isinstance(item, dict)]
     if isinstance(tracking_info, dict):
         return [tracking_info]
-    return [data] if data else []
+
+    tracking_fact_keys = {
+        "status", "state", "status_name", "statusName", "event_status", "eventStatus",
+        "description", "message", "detail", "details", "reason", "location",
+        "event_description", "eventDescription", "timestamp", "event_time", "eventTime",
+        "event_date", "eventDate", "datetime", "date_time", "dateTime", "created_at",
+        "createdAt", "updated_at", "updatedAt", "date", "estimated_delivery",
+        "estimatedDelivery", "estimated_delivery_at", "estimatedDeliveryAt",
+        "delivery_estimate", "deliveryEstimate", "eta",
+    }
+    return [data] if any(key in data for key in tracking_fact_keys) else []
 
 
 def _callback_provider_state(data: dict[str, Any], event_name: str) -> str:
