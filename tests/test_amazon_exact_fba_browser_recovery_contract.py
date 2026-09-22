@@ -28,3 +28,11 @@ def test_fba_exact_helper_remains_read_only_outside_order_truth():
 def test_mcf_is_not_routed_to_fba_or_fbm_exact_recovery():
     assert 'not in {"FBA", "AFN", "MCF"}' in ROUTE
     assert '"existing_amazon_order_missing_or_mcf"' in ROUTE
+
+
+def test_fbm_exact_browser_action_recovers_persisted_amazon_promise_truth():
+    assert "refresh_exact_amazon_order" in ROUTE
+    assert "promise_readback = [refresh_exact_amazon_order(row) for row in fbm_rows]" in ROUTE
+    assert '"exact_order_only": True' in ROUTE
+    assert '"broad_scan_started": False' in ROUTE
+    assert '"marketplace_write_started": False' in ROUTE
