@@ -16,6 +16,9 @@
                 <div class="card-body">
                     <form method="POST">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        {% if request.args.get('application_id') %}
+                        <input type="hidden" name="application_id" value="{{ request.args.get('application_id') }}">
+                        {% endif %}
                         
                         <div class="mb-3">
                             <label for="username" class="form-label">Username <span class="text-danger">*</span></label>
