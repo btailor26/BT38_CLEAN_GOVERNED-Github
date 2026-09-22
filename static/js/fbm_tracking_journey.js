@@ -106,47 +106,16 @@
         });
     }
 
-    let governedLiveRefreshPending = false;
-
-    async function applyCommittedFbmSnapshot() {
-        if (governedLiveRefreshPending) return;
-        governedLiveRefreshPending = true;
-        try {
-            const response = await fetch(window.location.href, {method:'GET', credentials:'same-origin', cache:'no-store', headers: {'Accept': 'text/html'}});
-            if (!response.ok) throw new Error(`FBM refresh failed (HTTP ${response.status})`);
-            const html = await response.text();
-            const parsed = new DOMParser().parseFromString(html, 'text/html');
-            const dataNode = parsed.getElementById('bt38FbmLifecycleTabsData');
-            const countsNode = parsed.getElementById('bt38FbmLifecycleCountsData');
-            if (!dataNode || !countsNode || typeof window.BT38FBMApplyCommittedSnapshot !== 'function') return;
-            const nextData = JSON.parse(dataNode.textContent || '{}');
-            const nextCounts = JSON.parse(countsNode.textContent || '{}');
-            document.querySelectorAll('.fbm-order-row').forEach(row => {
-                const freshRow = parsed.querySelector(`.fbm-order-row[data-order-id="${CSS.escape(String(row.dataset.orderId || ''))}"]`);
-                if (!freshRow) return;
-                if (freshRow.dataset.lifecycleStatus) row.dataset.lifecycleStatus = freshRow.dataset.lifecycleStatus;
-                row.dataset.labelReady = freshRow.dataset.labelReady || '0';
-            });
-            window.BT38FBMApplyCommittedSnapshot(nextData, nextCounts);
-            alignPersistedLifecycle();
-            updateSelectedPacklinkLabelAction();
-        } catch (error) {
-            console.warn('[BT38 FBM] committed session refresh unavailable', error);
-        } finally {
-            governedLiveRefreshPending = false;
-        }
-    }
-
-    function refreshFbmFromGovernedEvent() {
-        const activeModal = document.querySelector('#fbmShippingModal.show, #fbmTrackingJourneyModal.show');
-        if (activeModal) {
-            activeModal.addEventListener('hidden.bs.modal', () => void applyCommittedFbmSnapshot(), {once:true});
-            return;
-        }
-        void applyCommittedFbmSnapshot();
-    }
-
-    window.addEventListener('bt38-marketplace-event', refreshFbmFromGovernedEvent);
+    // Exact committed-row/session events own FBM refresh. Tracking presentation
+    // must never refetch the full /fbm document or read a provider on Track.
+    // The persisted journey is repainted only after the exact row handoff.
+    document.addEventListener('bt38-fbm-committed-snapshot-applied', function (event) {
+        const orderId = String(event && event.detail && (event.detail.order_id || event.detail.orderId) || '').trim();
+        if (!orderId) return;
+        const row = document.querySelector('.fbm-order-row[data-order-id="' + CSS.escape(orderId) + '"]');
+        if (row) alignPersistedLifecycle();
+        updateSelectedPacklinkLabelAction();
+    });
 
     function selectedPacklinkRows() {
         const selected = [];
