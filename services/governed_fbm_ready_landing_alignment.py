@@ -454,14 +454,10 @@ def _align_ready_landing_html(html: str) -> str:
         flags=re.S,
     )
 
-    # On explicit bell open, discard only the browser's old projection before
-    # loading current server authority. This prevents an already-dispatched FBM
-    # reminder from being unioned back into the current result by the existing
-    # cache wrapper. It does not clear or action any authoritative state.
-    html = html.replace(
-        'panel.addEventListener("show.bs.offcanvas", async function () {\n            stale = true;',
-        'panel.addEventListener("show.bs.offcanvas", async function () {\n            try { window.localStorage.removeItem("bt38.notifications.exactEventRecords.v2"); } catch (error) {}\n            stale = true;',
-    )
+    # Bell is display-only. Opening it must preserve the current FBM movement
+    # projection and must never clear/rebuild that projection from another
+    # authority. loadNotifications() above renders the current browser/session
+    # movement state without a network read.
 
     # The crossed bell was only an empty-state decoration and looked like mute.
     html = html.replace('data-feather="bell-off" class="mb-2"', 'data-feather="bell" class="mb-2"')
