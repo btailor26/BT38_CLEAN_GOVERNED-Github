@@ -53,7 +53,6 @@ from services.governed_fbm_small_alignment import (
 from services.governed_fbm_ready_landing_alignment import install_governed_fbm_ready_landing_alignment
 from services.governed_exact_record_event_alignment import install_governed_exact_record_event_alignment
 from services.governed_bell_event_projection_alignment import install_governed_bell_event_projection_alignment
-from services.governed_fbm_bell_display_only_alignment import install_governed_fbm_bell_display_only_alignment
 from services.governed_webhook_bell_event_alignment import install_governed_webhook_bell_event_alignment
 from services.governed_amazon_fbm_profile_event_alignment import install_governed_amazon_fbm_profile_event_alignment
 from services.governed_fbm_current_amazon_profile_alignment import install_governed_fbm_current_amazon_profile_alignment
@@ -110,10 +109,6 @@ install_governed_webhook_bell_event_alignment(app)
 install_governed_exact_record_event_alignment(app)
 install_governed_bell_event_projection_alignment(app)
 install_governed_fbm_tracking_authority_restore(app)
-
-# Final Bell contract: presentation only. It mirrors the current FBM browser
-# session and must not query DB/marketplace/carrier state or introduce polling.
-install_governed_fbm_bell_display_only_alignment(app)
 
 # Final FBM event boundary: an exact committed order event mutates only that
 # browser-session record. It must run after legacy refresh installers so the old
