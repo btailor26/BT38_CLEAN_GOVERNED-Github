@@ -94,7 +94,8 @@ def _script() -> str:
       label_purchased_at:'labelPurchasedAt',marketplace_confirmed_at:'marketplaceConfirmedAt',
       carrier_accepted_at:'carrierAcceptedAt',first_movement_at:'firstMovementAt',
       delivered_at:'deliveredAt',ship_by_at:'shipByAt',
-      earliest_delivery_at:'earliestDeliveryAt',delivery_promise_at:'deliveryPromiseAt'
+      earliest_delivery_at:'earliestDeliveryAt',latest_delivery_at:'latestDeliveryAt',
+      delivery_promise_at:'deliveryPromiseAt'
     };
     Object.keys(trackingFields).forEach(function(name){
       if(detail[name]!==undefined&&detail[name]!==null)row.dataset[trackingFields[name]]=String(detail[name]||'');
@@ -116,7 +117,7 @@ def _script() -> str:
           if(canonicalQueue)data[key].queue=canonicalQueue;
           else if(status)data[key].queue=queue(status);
           if(detail.created_at)data[key].created_at=detail.created_at;
-          ['platform','shipment_state','mapping_review','return_event'].forEach(function(name){if(detail[name]!=null)data[key][name]=detail[name];});
+          ['platform','shipment_state','mapping_review','return_event','ship_by_at','earliest_delivery_at','latest_delivery_at','delivery_promise_at'].forEach(function(name){if(detail[name]!=null)data[key][name]=detail[name];});
           projected=data[key];
           dataNode.textContent=JSON.stringify(data);
         }
