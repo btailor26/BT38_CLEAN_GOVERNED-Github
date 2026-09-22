@@ -18,6 +18,7 @@ from extensions import db
 from models import MarketplaceOrder, Store
 from services.governed_amazon_shipping_label_readback import hydrate_amazon_purchased_label_for_order
 from services.governed_amazon_tracking_readback import hydrate_amazon_tracking_for_order
+from services.governed_amazon_fbm_profile_event_alignment import refresh_exact_amazon_order
 
 
 governed_amazon_exact_order_recovery_bp = Blueprint("governed_amazon_exact_order_recovery", __name__)
@@ -179,6 +180,21 @@ def recover_exact_amazon_order_manually():
         }), 502
 
     try:
+        promise_readback = [refresh_exact_amazon_order(row) for row in fbm_rows]
+    except Exception as exc:
+        db.session.rollback()
+        current_app.logger.exception(
+            "BT38 manual exact Amazon promise recovery failed store_id=%s order_id=%s", store_id, order_id,
+        )
+        return jsonify({
+            "success": False, "ok": False, "governed": True,
+            "reason": "exact_amazon_promise_recovery_exception", "error": str(exc)[:500],
+            "store_id": store_id, "order_id": order_id, "exact_order_only": True,
+            "broad_scan_started": False, "order_replayed": False,
+            "stock_mutation_started": False, "marketplace_write_started": False,
+        }), 502
+
+    try:
         shipping_label = hydrate_amazon_purchased_label_for_order(
             store=store,
             marketplace_order_id=order_id,
@@ -198,6 +214,7 @@ def recover_exact_amazon_order_manually():
         }
 
     hydration = dict(result)
+    hydration["promise_readback"] = promise_readback
     hydration["shipping_label"] = shipping_label
     return jsonify({
         "success": bool(result.get("success")), "ok": bool(result.get("success")),
