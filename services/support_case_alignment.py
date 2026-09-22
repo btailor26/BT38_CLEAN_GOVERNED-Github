@@ -54,7 +54,10 @@ class SupportCase(db.Model):
     __tablename__ = "support_cases"
     id = db.Column(db.Integer, primary_key=True)
     case_id = db.Column(db.String(40), unique=True, nullable=True, index=True)
-    account_id = db.Column(db.Integer, db.ForeignKey("customer_accounts.id", ondelete="CASCADE"), nullable=False, index=True)
+    # Public access applications enter the existing support queue before a
+    # CustomerAccount exists. Normal authenticated support cases remain
+    # account-scoped; only the access-application alignment may be unscoped.
+    account_id = db.Column(db.Integer, db.ForeignKey("customer_accounts.id", ondelete="CASCADE"), nullable=True, index=True)
     opened_by_user_id = db.Column(db.Integer, nullable=False, index=True)
     category = db.Column(db.String(50), nullable=False, index=True)
     subject = db.Column(db.String(180), nullable=False)
