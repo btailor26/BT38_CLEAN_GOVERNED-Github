@@ -619,7 +619,7 @@ def install_governed_ebay_native_shipping_alignment(app) -> None:
         html = response.get_data(as_text=True)
         marker = "</body>"
         script = '<script src="/static/js/fbm_ebay_shipping_alignment.js"></script>'
-        if marker in html and script not in html:
+        if marker in html and "fbm_ebay_shipping_alignment.js" not in html:
             response.set_data(html.replace(marker, script + marker, 1))
             response.content_length = len(response.get_data())
         return response
