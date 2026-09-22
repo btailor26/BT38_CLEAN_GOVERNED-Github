@@ -78,8 +78,6 @@ class AccountPackageAssignment(db.Model):
 # Match the account/profile alignment's existing idempotent schema-registration
 # pattern. This adds package tables only; it does not create a second account or
 # authentication authority.
-with app.app_context():
-    db.create_all()
 
 
 _PACKAGE_CODE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{1,47}$")
