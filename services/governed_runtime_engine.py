@@ -685,6 +685,70 @@ def _verify_exact_listing(event):
     }
 
 
+def _execute_amazon_fbm_ship_by_deadline_event(event):
+    """Refresh exactly one persisted Amazon FBM order at its ship-by deadline."""
+    from models import MarketplaceOrder
+    from services.governed_amazon_fbm_profile_event_alignment import (
+        refresh_exact_amazon_order,
+    )
+
+    store_id = _safe_int(event.get("store_id"))
+    order_id = _clean(event.get("order_id"))
+    if store_id is None or not order_id:
+        return {
+            "success": False,
+            "verified": False,
+            "aligned": False,
+            "skipped": True,
+            "reason": "exact_amazon_order_identity_required",
+            "database_touched": False,
+        }
+
+    row = (
+        MarketplaceOrder.query
+        .filter_by(store_id=store_id, marketplace_order_id=order_id)
+        .order_by(MarketplaceOrder.id.desc())
+        .first()
+    )
+    if row is None:
+        return {
+            "success": True,
+            "verified": False,
+            "aligned": True,
+            "skipped": True,
+            "reason": "exact_amazon_order_missing",
+            "database_touched": True,
+        }
+
+    status = str(getattr(row, "status", "") or "").strip().lower()
+    if status in {
+        "cancelled", "canceled", "shipped", "dispatched", "delivered",
+        "fulfilled", "completed", "refunded", "returned",
+    }:
+        return {
+            "success": True,
+            "verified": True,
+            "aligned": True,
+            "skipped": True,
+            "reason": "deadline_already_satisfied",
+            "status": status,
+            "database_touched": True,
+        }
+
+    result = refresh_exact_amazon_order(row)
+    return {
+        **result,
+        "verified": True,
+        "aligned": bool(result.get("success")),
+        "event_type": "amazon_fbm_ship_by_deadline",
+        "database_touched": True,
+        "full_scan_started": False,
+        "recent_order_import_started": False,
+        "warehouse_scan_started": False,
+        "marketplace_hydration_started": False,
+    }
+
+
 def _execute_mcf_auto_release_event(event):
     """Continue one exact MCF lifecycle from current DB state."""
     payload = dict(event.get("payload") or {})
@@ -1022,7 +1086,9 @@ def _run_light_reconcile_cycle(
         event_type = str(
             event.get("event_type") or ""
         ).strip().lower()
-        if event_type == "mcf_auto_release":
+        if event_type == "amazon_fbm_ship_by_deadline":
+            result = _execute_amazon_fbm_ship_by_deadline_event(event)
+        elif event_type == "mcf_auto_release":
             result = _execute_mcf_auto_release_event(event)
         elif event_type == "product_linking_group_push":
             result = _execute_product_linking_group_push_event(event)
