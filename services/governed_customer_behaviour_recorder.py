@@ -46,6 +46,11 @@ _SCRIPT = r'''<script id="bt38CustomerBehaviourRecorder">
 (function(){
   "use strict";
   if(window.__bt38BehaviourRecorder)return;
+  // Operational FBM is intentionally outside customer-journey recording. Keep
+  // this browser-side guard as a second boundary even if another response
+  // wrapper ever re-injects this shared script.
+  var pagePath=String(location.pathname||"").replace(/\/$/,"")||"/";
+  if(pagePath==="/fbm"||pagePath.indexOf("/governed/fbm/")===0||pagePath==="/governed/fbm")return;
   window.__bt38BehaviourRecorder=true;
   var endpoint="/governed/ui/customer-behaviour";
   var key="bt38.customerJourney.v1";
