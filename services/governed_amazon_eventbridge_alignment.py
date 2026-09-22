@@ -22,13 +22,17 @@ from services.governed_amazon_listing_fulfillment_refresh import (
 )
 
 
-RULE_NAME = "bt38-amazon-listing-notifications"
+RULE_NAME = "bt38-amazon-governed-notifications"
 TARGET_ID = "bt38-existing-amazon-sqs"
 DESTINATION_NAME = "BT38 Amazon EventBridge"
-LISTING_NOTIFICATION_TYPES = [
+GOVERNED_NOTIFICATION_TYPES = [
+    "ORDER_CHANGE",
     "LISTINGS_ITEM_STATUS_CHANGE",
     "LISTINGS_ITEM_MFN_QUANTITY_CHANGE",
 ]
+
+# Backward-compatible alias for existing listing-only callers/tests.
+LISTING_NOTIFICATION_TYPES = GOVERNED_NOTIFICATION_TYPES
 
 
 def _destination_rows(payload: Any) -> list[dict[str, Any]]:
@@ -235,7 +239,7 @@ def align_governed_amazon_eventbridge_to_existing_sqs(*, store_id: int) -> dict[
             "source": [
                 {"prefix": "aws.partner/sellingpartnerapi.amazon.com"}
             ],
-            "detail-type": LISTING_NOTIFICATION_TYPES,
+            "detail-type": GOVERNED_NOTIFICATION_TYPES,
         },
         separators=(",", ":"),
     )
@@ -245,7 +249,7 @@ def align_governed_amazon_eventbridge_to_existing_sqs(*, store_id: int) -> dict[
         EventPattern=event_pattern,
         State="ENABLED",
         Description=(
-            "BT38 listing notifications to the existing governed Amazon SQS queue"
+            "BT38 order and listing notifications to the existing governed Amazon SQS queue"
         ),
     )
     rule_arn = str(rule.get("RuleArn") or "").strip()
