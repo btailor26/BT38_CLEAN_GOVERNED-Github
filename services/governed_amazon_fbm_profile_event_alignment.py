@@ -226,6 +226,33 @@ def _hydrate_exact_order_when_event_facts_incomplete(payload: dict) -> bool:
     return True
 
 
+def _queue_ship_by_deadline(order: MarketplaceOrder, ship_by_at: datetime | None) -> bool:
+    """Arm one exact Amazon FBM deadline on the existing due-event runtime."""
+    if order is None or ship_by_at is None:
+        return False
+    status = str(getattr(order, "status", "") or "").strip().lower()
+    if status in {
+        "cancelled", "canceled", "shipped", "dispatched", "delivered",
+        "fulfilled", "completed", "refunded", "returned",
+    }:
+        return False
+
+    from services.governed_runtime_engine import notify_governed_runtime_work
+
+    notify_governed_runtime_work(
+        source="amazon_fbm_ship_by_deadline",
+        event={
+            "event_type": "amazon_fbm_ship_by_deadline",
+            "marketplace": "amazon",
+            "store_id": int(order.store_id),
+            "order_id": str(order.marketplace_order_id),
+            "verify_after": ship_by_at,
+            "payload": {"marketplace_order_row_id": int(order.id)},
+        },
+    )
+    return True
+
+
 def hydrate_exact_order_after_intake(order: MarketplaceOrder) -> bool:
     """Hydrate one persisted Amazon FBM order after governed intake.
 
@@ -240,7 +267,14 @@ def hydrate_exact_order_after_intake(order: MarketplaceOrder) -> bool:
         "_bt38_store_id": getattr(order, "store_id", None),
         "marketplace_order_id": getattr(order, "marketplace_order_id", None),
     }
-    return _hydrate_exact_order_when_event_facts_incomplete(payload)
+    hydrated = _hydrate_exact_order_when_event_facts_incomplete(payload)
+    profile = FBMOrderProfile.query.filter_by(
+        store_id=order.store_id,
+        marketplace_order_id=order.marketplace_order_id,
+    ).first()
+    if profile and profile.latest_ship_at:
+        _queue_ship_by_deadline(order, profile.latest_ship_at)
+    return hydrated
 
 
 def refresh_exact_amazon_order(order: MarketplaceOrder) -> dict[str, Any]:
