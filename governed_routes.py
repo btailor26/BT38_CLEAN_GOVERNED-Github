@@ -790,8 +790,33 @@ def create_user():
             flash("Password must be at least 6 characters.", "danger")
             return render_template("create_user.html")
 
+        application_id = request.form.get("application_id", type=int) or request.args.get("application_id", type=int)
+
         existing = User.query.filter((User.username == username) | (User.email == email)).first()
         if existing:
+            if application_id and str(existing.email or "").strip().lower() == email:
+                from models import SystemLog
+                from services.account_profile_alignment import _create_owner_account
+                import json
+                application = SystemLog.query.filter_by(
+                    id=application_id,
+                    log_type="early_access_application",
+                ).first()
+                if application is not None:
+                    try:
+                        application_details = json.loads(application.details or "{}")
+                    except Exception:
+                        application_details = {}
+                    approved_email = str(application_details.get("email") or "").strip().lower()
+                    approved_status = str(application_details.get("status") or "").strip().lower()
+                    if approved_status == "approved" and approved_email == email:
+                        _create_owner_account(
+                            existing,
+                            business_name=str(application_details.get("business_name") or "").strip(),
+                        )
+                        db.session.commit()
+                        flash("Approved application linked to the existing BT38 user and account package.", "success")
+                        return redirect(url_for("governed.edit_user", user_id=existing.id))
             flash("That user already exists. Opened the existing user so you can edit access.", "warning")
             return redirect(url_for("governed.edit_user", user_id=existing.id))
 
@@ -804,7 +829,6 @@ def create_user():
         # approved access application, establish the existing customer/account
         # package authority in the same transaction instead of waiting for the
         # customer's first authenticated request.
-        application_id = request.args.get("application_id", type=int)
         if application_id:
             from models import SystemLog
             from services.account_profile_alignment import _create_owner_account
