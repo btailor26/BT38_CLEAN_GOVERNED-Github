@@ -219,6 +219,27 @@ def _hydrate_marketplace_order(order: Any, payload: dict[str, Any], address_payl
     elif status in {"UNSHIPPED", "PARTIALLYSHIPPED", "PENDING"}:
         order.shipped_at = None
 
+    # Exact Amazon reads are lifecycle authority for the record being checked.
+    # In particular, an overdue exact-record recovery must be able to discover
+    # a cancellation even when the ORDER_CHANGE webhook was missed.
+    lifecycle_status = {
+        "PENDING": "pending",
+        "UNSHIPPED": "unshipped",
+        "PARTIALLYSHIPPED": "partially_shipped",
+        "SHIPPED": "shipped",
+        "CANCELED": "cancelled",
+        "CANCELLED": "cancelled",
+    }.get(status)
+    if lifecycle_status:
+        current = str(getattr(order, "status", "") or "").strip().lower()
+        terminal_issue = {
+            "return_requested", "returned", "refund_requested", "refunded",
+            "replacement_requested", "replacement", "case_open", "dispute",
+            "chargeback",
+        }
+        if lifecycle_status == "cancelled" or current not in terminal_issue:
+            order.status = lifecycle_status
+
     order.updated_at = datetime.utcnow()
 
 
