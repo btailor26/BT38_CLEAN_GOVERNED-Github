@@ -571,6 +571,29 @@ def hydrate_amazon_tracking_for_order(
     if updates or service_persisted or marketplace_shipment_persisted or tracking_events_persisted:
         db.session.commit()
 
+    # Keep the already-built exact Amazon promise/profile hydration aligned with
+    # package tracking. Package truth can arrive on a different event path from
+    # ORDER_CHANGE; without this handoff BT38 can persist carrier/tracking/service
+    # while leaving ship-by/delivery promise NULL. Reuse the exact-order profile
+    # reader only for the same persisted order. Avoid recursion when this package
+    # readback was itself started by the profile reader.
+    promise_hydration = None
+    if source != "fbm_amazon_order_profile":
+        try:
+            from services.fbm_amazon_order_profile import get_or_refresh_amazon_profile
+            profile = get_or_refresh_amazon_profile(eligible[0], force=True)
+            promise_hydration = {
+                "success": True,
+                "ship_by_at": profile.latest_ship_at.isoformat() if profile.latest_ship_at else None,
+                "shipping_service": profile.shipment_service_level,
+            }
+        except Exception as exc:
+            db.session.rollback()
+            promise_hydration = {
+                "success": False,
+                "error": str(exc)[:1000],
+            }
+
     return {
         "success": True,
         "skipped": False,
@@ -597,6 +620,7 @@ def hydrate_amazon_tracking_for_order(
         "legacy_order_status": legacy_status,
         "legacy_read_error": legacy_error,
         "source": source,
+        "promise_hydration": promise_hydration,
         "marketplace_shipment_persisted": marketplace_shipment_persisted,
         "marketplace_shipment_id": getattr(shipment_row, "id", None),
         "marketplace_write_started": False,
