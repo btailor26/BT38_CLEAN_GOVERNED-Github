@@ -428,6 +428,19 @@ def _align_ready_landing_html(html: str) -> str:
         "addWorkflowButton(tabBar,'pending','Pending');\n  addWorkflowButton(tabBar,'ready_dispatch','Ready to dispatch');",
     )
 
+    # Current bell state is owned by the exact-event/browser projection. The
+    # legacy wake/open reader must not rehydrate it from the server. Keep the
+    # existing shell, but make loadNotifications consume the already-projected
+    # browser records only; exact marketplace events remain the sole wake path.
+    html = html.replace(
+        'async function loadNotifications() {',
+        'async function loadNotifications() {\\n'
+        '            if (window.BT38BellCurrentRecords) {\\n'
+        '                records = window.BT38BellCurrentRecords();\\n'
+        '                loaded = true; stale = false; render(); updateUnread(); return;\\n'
+        '            }',
+        1,
+    )
     html = html.replace("hydrateBellAfterWake();", "stale = true;")
 
     # The bell is a reminder, not an inbox. Opening it must never mark an
