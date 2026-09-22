@@ -176,10 +176,5 @@ def _inject_browser_cache(response):
 
 
 def install_governed_bell_event_projection_alignment(app) -> None:
-    from services import governed_fbm_ready_landing_alignment as ready
-    from services.governed_fbm_sale_authority_alignment import install_governed_fbm_sale_authority_alignment
-    _patch_exact_scope(); install_governed_fbm_sale_authority_alignment(app); ready._event_to_bell_record = _event_to_bell_record
-    endpoint = "governed.governed_ui_notifications"
-    if endpoint in app.view_functions: app.view_functions[endpoint] = login_required(ready._event_only_bell_reader)
-    if not getattr(app, "_bt38_exact_bell_browser_cache_installed", False): app.after_request(_inject_browser_cache); app._bt38_exact_bell_browser_cache_installed = True
-    app.logger.info("BT38 bell aligned: current FBM page/session events only; legacy browser cache removed; zero DB/API bell reads; no polling")
+    """Retired: the Bell has one display-only FBM projection owner."""
+    app.logger.info("BT38 retired legacy exact-event Bell projection alignment")
