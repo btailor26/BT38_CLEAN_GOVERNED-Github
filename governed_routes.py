@@ -798,6 +798,34 @@ def create_user():
         user = User(username=username, email=email, role=role, permissions=_full_user_permissions() if role == "admin" else {})
         user.set_password(password)
         db.session.add(user)
+        db.session.flush()
+
+        # When this existing governed user workflow was entered from an
+        # approved access application, establish the existing customer/account
+        # package authority in the same transaction instead of waiting for the
+        # customer's first authenticated request.
+        application_id = request.args.get("application_id", type=int)
+        if application_id:
+            from models import SystemLog
+            from services.account_profile_alignment import _create_owner_account
+            import json
+            application = SystemLog.query.filter_by(
+                id=application_id,
+                log_type="early_access_application",
+            ).first()
+            if application is not None:
+                try:
+                    application_details = json.loads(application.details or "{}")
+                except Exception:
+                    application_details = {}
+                approved_email = str(application_details.get("email") or "").strip().lower()
+                approved_status = str(application_details.get("status") or "").strip().lower()
+                if approved_status == "approved" and approved_email == email:
+                    _create_owner_account(
+                        user,
+                        business_name=str(application_details.get("business_name") or "").strip(),
+                    )
+
         db.session.commit()
 
         flash("User created. You can now assign access from the edit screen.", "success")
