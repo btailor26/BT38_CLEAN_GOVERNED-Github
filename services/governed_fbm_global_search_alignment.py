@@ -1,9 +1,9 @@
 """Align FBM reads to the existing BT38 browser-session architecture.
 
-The page uses explicit user-selected history windows and page sizes. Normal page
-rendering never calls a marketplace/provider and never writes orders, shipments
-or inventory. Search/date/page-size changes are native GET requests so the
-controls work without depending on JavaScript event wiring.
+A normal page refresh loads one bounded server snapshot. History, search,
+lifecycle and page-size controls then operate over the existing browser working
+set and must not navigate back to /fbm. Rendering never calls a marketplace or
+provider and never writes orders, shipments or inventory.
 """
 from __future__ import annotations
 
