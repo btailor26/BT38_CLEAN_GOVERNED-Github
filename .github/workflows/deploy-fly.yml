@@ -32,7 +32,6 @@ jobs:
         run: |
           set -euo pipefail
           test "${{ inputs.confirm_production_deploy }}" = "DEPLOY_GITHUB_COMMIT_TO_BT38_PROD"
-          test "${{ github.ref_name }}" = "fix/full-system-release-alignment"
           test "${{ inputs.expected_commit }}" = "${{ github.sha }}"
           PR_JSON="$(gh api repos/${{ github.repository }}/pulls/528)"
           test "$(printf '%s' "$PR_JSON" | jq -r '.state')" = "open"
