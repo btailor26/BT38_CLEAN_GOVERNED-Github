@@ -370,29 +370,8 @@ def process_packlink_event(
     if event_name == "shipment.tracking.update":
         callback_history = _callback_tracking_history(data)
         provider_state = _callback_provider_state(data, event_name)
-
-        # Packlink may use tracking.update as a wake-up containing only shipment
-        # identity. Keep the runtime event-driven: when the callback carries no
-        # carrier history, hydrate only this exact Packlink shipment's tracking
-        # endpoint once. This is not polling or a batch scan.
-        tracking_source = data
-        if not callback_history:
-            adapter = adapter or PacklinkAdapter()
-            callback_history = adapter.get_tracking_status(reference=reference)
-            try:
-                provider_payload = adapter.get_shipment(reference)
-            except PacklinkRequestError:
-                provider_payload = {}
-            if isinstance(provider_payload, dict) and provider_payload:
-                tracking_source = provider_payload
-                explicit_state = str(
-                    provider_payload.get("state") or provider_payload.get("status") or ""
-                ).strip()
-                if explicit_state:
-                    provider_state = explicit_state
-
-        tracking = extract_packlink_tracking(tracking_source, callback_history, shipment.tracking_number)
-        carrier, service, service_id = _provider_identity(tracking_source, shipment)
+        tracking = extract_packlink_tracking(data, callback_history, shipment.tracking_number)
+        carrier, service, service_id = _provider_identity(data, shipment)
         if carrier:
             shipment.carrier = carrier
         if service:
@@ -423,8 +402,7 @@ def process_packlink_event(
             "shipment_status": shipment.status,
             "provider_status": shipment.last_provider_status,
             "tracking_events_persisted": persisted_events,
-            "webhook_only": bool(_callback_tracking_history(data)),
-            "exact_tracking_hydration": not bool(_callback_tracking_history(data)),
+            "webhook_only": True,
         }
 
     _apply_lifecycle_state(shipment, event_name, now)
