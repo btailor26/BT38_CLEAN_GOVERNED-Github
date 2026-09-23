@@ -1680,10 +1680,19 @@ class MarketplaceListing(db.Model):
         store = db.relationship('Store', backref=db.backref('marketplace_listings', lazy=True))
         master_group = db.relationship('MasterProductGroup', back_populates='marketplace_listings', lazy=True)
     
-    # Ensure unique marketplace row per operational sellable listing.
-    # eBay variations can share the same ItemID, so external_sku must be part of identity.
+    # Current marketplace identity must be unique only among active BT38 listings.
+    # Inactive rows retain their original marketplace identifiers as permanent
+    # BT38 history and must not reserve an identity after retirement.
+    # eBay variations can share an ItemID, so external_sku remains part of identity.
     __table_args__ = (
-        Index('idx_store_external_listing_sku', 'store_id', 'external_listing_id', 'external_sku', unique=True),
+        Index(
+            'idx_store_external_listing_sku',
+            'store_id',
+            'external_listing_id',
+            'external_sku',
+            unique=True,
+            postgresql_where=db.text('is_active = true'),
+        ),
         Index('idx_warehouse_stock_store', 'warehouse_stock_id', 'store_id'),
         Index('idx_last_push_status', 'last_push_status'),
     )
