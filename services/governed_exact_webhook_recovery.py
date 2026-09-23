@@ -457,6 +457,33 @@ def recover_exact_failed_webhook(platform: str, notification_record_id: int) -> 
             "broad_scan_started": False,
         }
 
+    # Non-order notifications (for example LISTINGS_ITEM_STATUS_CHANGE) have
+    # no canonical MarketplaceOrder by design. Once the exact durable
+    # notification has been handled successfully, terminate here instead of
+    # applying an order-only postcondition and manufacturing a false failure.
+    if not identity.get("order_id") and isinstance(replay_result, dict) and bool(
+        replay_result.get("success") or replay_result.get("ok")
+    ):
+        ui_event_published = _publish_committed_change(
+            platform,
+            int(notification_record_id),
+            replay_result,
+        )
+        return {
+            "success": True,
+            "recovered": True,
+            "handled_without_canonical_order": True,
+            "canonical_order_required": False,
+            "order_replayed": False,
+            "order_id": None,
+            "store_id": store_id,
+            "notification_record_id": int(notification_record_id),
+            "platform": platform,
+            "replay_result": replay_result,
+            "ui_event_published": ui_event_published,
+            "broad_scan_started": False,
+        }
+
     db.session.expire_all()
     recovered = _canonical_order_exists(store_id, identity.get("order_id"))
     if not recovered:
