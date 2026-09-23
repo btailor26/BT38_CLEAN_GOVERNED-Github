@@ -39,53 +39,30 @@ def reconcile_provider_lifecycle_state(
     *,
     observed_at: datetime | None = None,
 ) -> str:
-    """Project persisted provider truth onto the canonical three-step journey.
+    """Project status only; never manufacture carrier milestone timestamps.
 
-    This deliberately has no order-age cutoff. Historical, current and future
-    shipments use the same persisted provider status. A terminal delivery proves
-    the prior journey milestones even when an earlier callback was missed.
+    Carrier milestone timestamps are written only from authoritative persisted
+    provider/carrier events. observed_at records when BT38 saw provider truth and
+    is never substituted for pickup, movement, or delivery time.
     """
     provider_state = _normalized_provider_state(shipment.last_provider_status)
-    observed_at = observed_at or shipment.last_provider_checked_at or datetime.utcnow()
 
     delivered_states = {
-        "DELIVERED",
-        "DELIVERY_COMPLETE",
-        "DELIVERY_COMPLETED",
-        "SUCCESSFULLY_DELIVERED",
-        "COMPLETED_DELIVERY",
+        "DELIVERED", "DELIVERY_COMPLETE", "DELIVERY_COMPLETED",
+        "SUCCESSFULLY_DELIVERED", "COMPLETED_DELIVERY",
     }
-    in_transit_states = {
-        "IN_TRANSIT",
-        "OUT_FOR_DELIVERY",
-        "IN_DELIVERY",
-        "ON_ROUTE",
-    }
-    accepted_states = {
-        "ACCEPTED",
-        "CARRIER_ACCEPTED",
-        "PICKED_UP",
-        "PICKEDUP",
-        "COLLECTED",
-    }
+    in_transit_states = {"IN_TRANSIT", "OUT_FOR_DELIVERY", "IN_DELIVERY", "ON_ROUTE"}
+    accepted_states = {"ACCEPTED", "CARRIER_ACCEPTED", "PICKED_UP", "PICKEDUP", "COLLECTED"}
 
     if provider_state in delivered_states or provider_state.endswith("_DELIVERED"):
-        shipment.carrier_accepted_at = shipment.carrier_accepted_at or observed_at
-        shipment.first_movement_at = shipment.first_movement_at or observed_at
-        shipment.delivered_at = shipment.delivered_at or observed_at
         shipment.status = "delivered"
     elif provider_state in in_transit_states or "IN_TRANSIT" in provider_state:
-        shipment.carrier_accepted_at = shipment.carrier_accepted_at or observed_at
-        shipment.first_movement_at = shipment.first_movement_at or observed_at
         if shipment.delivered_at is None:
             shipment.status = "in_transit"
     elif provider_state in accepted_states:
-        shipment.carrier_accepted_at = shipment.carrier_accepted_at or observed_at
         if shipment.delivered_at is None and shipment.first_movement_at is None:
             shipment.status = "accepted"
-
     return shipment.status
-
 
 def _amazon_tracking_number(value: Any) -> str | None:
     """Return the courier tracking value in Amazon's compact form.
