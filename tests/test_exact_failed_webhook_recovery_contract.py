@@ -139,3 +139,21 @@ def test_restart_recovery_selects_failed_stranded_orphans_and_fba_settlement_gap
     assert "get_orders" not in selector
     assert "run_governed_warehouse_sync" not in selector
     assert "run_governed_marketplace_order_import" not in selector
+
+
+def test_successful_non_order_notification_does_not_require_marketplace_order():
+    recover = _function_source(
+        EXACT_TREE,
+        EXACT_SOURCE,
+        "recover_exact_failed_webhook",
+    )
+
+    replay_pos = recover.index("process_marketplace_notification")
+    non_order_pos = recover.index("if not identity.get(\"order_id\")", replay_pos)
+    final_order_check = recover.rindex("_canonical_order_exists")
+
+    assert replay_pos < non_order_pos < final_order_check
+    assert '"handled_without_canonical_order": True' in recover
+    assert '"canonical_order_required": False' in recover
+    assert '"order_id": None' in recover
+    assert '"broad_scan_started": False' in recover
