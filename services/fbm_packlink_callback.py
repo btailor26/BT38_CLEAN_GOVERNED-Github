@@ -15,6 +15,7 @@ from typing import Any
 
 from extensions import db
 from fbm_models import FBMShipment
+from fbm_tracking_event_models import FBMShipmentTrackingEvent
 from models import MarketplaceOrder
 from services.fbm_packlink_adapter import PacklinkAdapter, PacklinkRequestError
 from services.fbm_post_purchase import persist_external_label, reconcile_provider_lifecycle_state
@@ -209,6 +210,102 @@ def _canonical_tracking_lifecycle(
     return None
 
 
+
+def _parse_tracking_event_time(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=None) if value.tzinfo else value
+    text_value = str(value or "").strip()
+    if not text_value:
+        return None
+    normalized = text_value.replace("Z", "+00:00")
+    try:
+        parsed = datetime.fromisoformat(normalized)
+        return parsed.astimezone().replace(tzinfo=None) if parsed.tzinfo else parsed
+    except ValueError:
+        return None
+
+
+def _tracking_event_time(item: dict[str, Any]) -> datetime | None:
+    for key in ("event_time", "eventTime", "date", "datetime", "timestamp", "created_at", "createdAt"):
+        parsed = _parse_tracking_event_time(item.get(key))
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _persist_packlink_tracking_history(
+    shipment: FBMShipment,
+    tracking_history: list[dict[str, Any]] | None,
+    *,
+    observed_at: datetime,
+) -> list[FBMShipmentTrackingEvent]:
+    """Persist exact Packlink carrier history already fetched for this event.
+
+    This function never calls Packlink. Provider observation time and carrier
+    event time remain separate facts.
+    """
+    if shipment.id is None:
+        db.session.flush()
+
+    persisted: list[FBMShipmentTrackingEvent] = []
+    for index, item in enumerate(tracking_history or []):
+        if not isinstance(item, dict):
+            continue
+        event_time = _tracking_event_time(item)
+        status = str(item.get("status") or item.get("state") or item.get("event") or "").strip() or None
+        description = str(item.get("description") or item.get("message") or item.get("status_name") or "").strip() or None
+        detail = str(item.get("detail") or item.get("details") or item.get("status_description") or "").strip() or None
+        event_key = str(
+            item.get("id")
+            or item.get("event_id")
+            or item.get("eventId")
+            or "|".join([
+                event_time.isoformat() if event_time else "",
+                status or "",
+                description or "",
+                detail or "",
+                str(index),
+            ])
+        )[:180]
+        existing = FBMShipmentTrackingEvent.query.filter_by(
+            shipment_id=int(shipment.id),
+            event_key=event_key,
+        ).first()
+        if existing is None:
+            existing = FBMShipmentTrackingEvent(
+                shipment_id=int(shipment.id),
+                provider="packlink",
+                event_key=event_key,
+            )
+            db.session.add(existing)
+        existing.event_time = event_time
+        existing.status = status
+        existing.description = description
+        existing.detail = detail
+        existing.raw_event = item
+        existing.observed_at = observed_at
+        persisted.append(existing)
+    return persisted
+
+
+def _milestone_event_time(events: list[FBMShipmentTrackingEvent], milestone: str) -> datetime | None:
+    matches: list[datetime] = []
+    for event in events:
+        lifecycle = _canonical_tracking_lifecycle(
+            None,
+            [{
+                "status": event.status,
+                "description": event.description,
+                "detail": event.detail,
+            }],
+        )
+        if lifecycle == milestone and event.event_time is not None:
+            matches.append(event.event_time)
+    if not matches:
+        return None
+    return max(matches) if milestone == "DELIVERED" else min(matches)
+
+
 def reconcile_packlink_tracking_lifecycle(
     shipment: FBMShipment,
     *,
@@ -220,6 +317,23 @@ def reconcile_packlink_tracking_lifecycle(
     current = _provider_state_lifecycle(provider_state)
     canonical = current or _canonical_tracking_lifecycle(None, tracking_history)
     checked_at = observed_at or datetime.utcnow()
+    persisted_events = _persist_packlink_tracking_history(
+        shipment,
+        tracking_history,
+        observed_at=checked_at,
+    )
+    accepted_at = _milestone_event_time(persisted_events, "ACCEPTED")
+    movement_at = _milestone_event_time(persisted_events, "IN_TRANSIT")
+    delivered_at = _milestone_event_time(persisted_events, "DELIVERED")
+
+    # Carrier event timestamps are marketplace/provider truth. checked_at is
+    # only when BT38 observed that truth and must never become the carrier time.
+    if accepted_at is not None:
+        shipment.carrier_accepted_at = accepted_at
+    if movement_at is not None:
+        shipment.first_movement_at = movement_at
+    if delivered_at is not None:
+        shipment.delivered_at = delivered_at
 
     # Packlink's current shipment state is newer authority than older history or
     # stale BT38 terminal fields. This only removes milestones that the current
