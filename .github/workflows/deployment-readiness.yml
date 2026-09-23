@@ -9,6 +9,8 @@ on:
     branches:
       - main
       - fix/full-system-release-alignment
+    paths-ignore:
+      - 'migrations/manual/**'
 
 jobs:
   deployment-readiness:
