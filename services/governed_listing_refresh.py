@@ -211,8 +211,37 @@ def refresh_governed_listing_from_snapshot(
     # temporarily; WarehouseStock.master_product_group_id never moves.
     original_group_id = ensure_permanent_original_group(warehouse_stock)
 
-    # The permanent listing was resolved once by store + seller SKU.
-    # No second listing identity lookup is permitted.
+    # Fail closed before mutating marketplace reference metadata when a legacy
+    # duplicate already owns the exact database identity. Webhook recovery may
+    # fill missing truth; it must not force one canonical row over another.
+    identity_owner = (
+        MarketplaceListing.query
+        .filter(
+            MarketplaceListing.store_id == store.id,
+            MarketplaceListing.external_listing_id == external_listing_id,
+            MarketplaceListing.external_sku == sku,
+        )
+        .order_by(MarketplaceListing.id.asc())
+        .first()
+    )
+    if (
+        identity_owner is not None
+        and listing is not None
+        and int(identity_owner.id) != int(listing.id)
+    ):
+        db.session.rollback()
+        return {
+            "success": False,
+            "ok": False,
+            "execution_blocked": True,
+            "reason": "marketplace_listing_identity_conflict",
+            "store_id": store.id,
+            "sku": sku,
+            "external_listing_id": external_listing_id,
+            "listing_id": listing.id,
+            "identity_owner_listing_id": identity_owner.id,
+            "actor": actor,
+        }
 
     created = False
     if listing is None:
