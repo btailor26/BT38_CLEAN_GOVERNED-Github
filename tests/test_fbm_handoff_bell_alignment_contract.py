@@ -61,6 +61,7 @@ def test_final_small_alignment_runs_after_existing_fbm_installers():
     assert 'install_governed_fbm_small_alignment(app)' in MAIN
     assert MAIN.index('install_governed_fbm_dispatch_queue_alignment(app)') < MAIN.rindex('install_governed_fbm_small_alignment(app)')
     assert MAIN.index('install_governed_notification_read_alignment(app)') < MAIN.rindex('install_governed_fbm_small_alignment(app)')
+    assert MAIN.index('install_governed_fbm_small_alignment(app)') < MAIN.rindex('install_governed_fbm_bell_display_only_alignment(app)')
 
 
 def test_pending_is_first_and_returns_are_separate_from_refunds():
@@ -104,6 +105,9 @@ def test_final_bell_is_single_fbm_display_projection():
     assert "ready._event_to_bell_record" not in exact
     assert "app.after_request(_inject_browser_cache)" not in exact
     assert "app.view_functions[bell_endpoint] = login_required(_event_only_bell_reader)" not in ready
+    assert "lifecycle._wrap_notification_bell(app)" not in OVERLAY
+    assert "app._bt38_marketplace_bell_lifecycle_wrapped = False" not in OVERLAY
+    assert "install_governed_fbm_bell_display_only_alignment(app)" in MAIN
 
 def test_amazon_promise_is_persisted_only_during_existing_exact_read_and_rendered_in_london():
     assert 'original_fetch = amazon_profile._fetch_order' in OVERLAY
