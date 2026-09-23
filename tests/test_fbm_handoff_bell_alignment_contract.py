@@ -96,10 +96,10 @@ def test_final_bell_is_single_fbm_display_projection():
     assert "window.BT38BellCurrentRecords=function(){return projected.slice(0,50);};" in display
     assert "carrier:carrier,tracking_number:tracking" in display
     assert "sessionStorage.setItem(cacheKey,JSON.stringify(projected))" in display
-    assert "records": []" in display
-    assert "database_calls": False" in display
-    assert "marketplace_calls": False" in display
-    assert "polling": False" in display
+    assert '"records": []' in display
+    assert '"database_calls": False' in display
+    assert '"marketplace_calls": False' in display
+    assert '"polling": False' in display
 
     assert "Retired: the Bell has one display-only FBM projection owner." in exact
     assert "ready._event_to_bell_record" not in exact
