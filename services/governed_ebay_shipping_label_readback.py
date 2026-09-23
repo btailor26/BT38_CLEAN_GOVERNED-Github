@@ -1,4 +1,4 @@
-"""Persist exact eBay purchased-label shipment authority into existing FBMShipment.
+"""Persist exact eBay label-purchase and fulfillment identity into existing FBMShipment.
 
 The existing exact eBay hydration owns the Fulfillment API read and the existing
 Finances reader owns monetary SHIPPING_LABEL truth. This module joins those two
