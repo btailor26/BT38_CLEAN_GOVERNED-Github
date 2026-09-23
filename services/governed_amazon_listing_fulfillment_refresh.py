@@ -375,13 +375,11 @@ def recover_governed_amazon_listing_from_notification(
     event_type: str,
     seller_sku: str | None,
 ) -> dict[str, Any]:
-    """Use the existing Amazon listing refresh path for one notification.
+    """Recover one exact Amazon listing notification only.
 
-    Marketplace-specific event recognition, exact Listings Items fetching and
-    bounded store recovery remain inside the Amazon listing service.
-
-    Both exact and recovery paths continue to use
-    refresh_governed_listing_from_snapshot() as the sole listing writer.
+    Webhook recovery may fill missing truth for the notified seller SKU. It
+    must never widen one event into a store listing scan. Manual/full listing
+    refresh remains an explicit recovery operation outside this path.
     """
     event_type = _clean(event_type).upper()
     seller_sku = _clean(seller_sku)
@@ -418,9 +416,6 @@ def recover_governed_amazon_listing_from_notification(
             "store_id": int(store_id),
         }
 
-    exact_result = None
-    recovery_result = None
-
     try:
         exact_result = refresh_governed_amazon_listing_exact(
             store_id=int(store_id),
@@ -428,6 +423,9 @@ def recover_governed_amazon_listing_from_notification(
             actor=f"webhook_{event_type}",
         )
     except Exception as exc:
+        # A failed flush poisons the SQLAlchemy transaction. Restore the
+        # session boundary before the webhook caller does any further work.
+        db.session.rollback()
         exact_result = {
             "success": False,
             "governed": True,
@@ -438,45 +436,18 @@ def recover_governed_amazon_listing_from_notification(
             "seller_sku": seller_sku,
         }
 
-    if bool((exact_result or {}).get("success")):
-        return {
-            "success": True,
-            "governed": True,
-            "applicable": True,
-            "targeted": True,
-            "store_id": int(store_id),
-            "seller_sku": seller_sku,
-            "event_type": event_type,
-            "exact": exact_result,
-            "recovery": None,
-        }
-
-    # One bounded exact-store recovery through the existing manual listing
-    # refresh. This uses the same canonical listing writer and cannot loop.
-    try:
-        recovery_result = run_governed_amazon_listing_fulfillment_refresh(
-            store_id=int(store_id),
-        )
-    except Exception as exc:
-        recovery_result = {
-            "success": False,
-            "governed": True,
-            "reason": "amazon_listing_manual_recovery_failed",
-            "error": str(exc),
-            "store_id": int(store_id),
-        }
-
     return {
-        "success": bool((recovery_result or {}).get("success")),
+        "success": bool((exact_result or {}).get("success")),
         "governed": True,
         "applicable": True,
-        "targeted": False,
-        "bounded_recovery": True,
+        "targeted": True,
+        "bounded_recovery": False,
+        "broad_scan_started": False,
         "store_id": int(store_id),
         "seller_sku": seller_sku,
         "event_type": event_type,
         "exact": exact_result,
-        "recovery": recovery_result,
+        "recovery": None,
     }
 
 
