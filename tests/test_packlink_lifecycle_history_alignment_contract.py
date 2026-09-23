@@ -49,3 +49,28 @@ def test_shared_journey_remains_timestamp_authority():
 def test_no_created_at_cutoff_is_added_to_lifecycle_classification():
     lifecycle = CALLBACK.split("def _canonical_tracking_lifecycle", 1)[1].split("def _first_label_url", 1)[0]
     assert "created_at" not in lifecycle
+
+
+def test_packlink_history_is_persisted_without_an_extra_provider_call():
+    lifecycle = CALLBACK.split("def reconcile_packlink_tracking_lifecycle", 1)[1].split("def _first_label_url", 1)[0]
+    assert "_persist_packlink_tracking_history(" in lifecycle
+    assert "adapter." not in lifecycle
+    assert "requests." not in lifecycle
+
+
+def test_carrier_event_time_is_separate_from_bt38_observation_time():
+    assert "def _tracking_event_time" in CALLBACK
+    lifecycle = CALLBACK.split("def reconcile_packlink_tracking_lifecycle", 1)[1].split("def _first_label_url", 1)[0]
+    assert 'shipment.carrier_accepted_at = accepted_at' in lifecycle
+    assert 'shipment.first_movement_at = movement_at' in lifecycle
+    assert 'shipment.delivered_at = delivered_at' in lifecycle
+    assert "shipment.last_provider_checked_at = checked_at" in lifecycle
+
+
+def test_packlink_history_uses_existing_tracking_event_ledger():
+    assert "FBMShipmentTrackingEvent" in CALLBACK
+    persist = CALLBACK.split("def _persist_packlink_tracking_history", 1)[1].split("def _milestone_event_time", 1)[0]
+    assert 'provider="packlink"' in persist
+    assert "raw_event = item" in persist
+    assert "event_time = event_time" in persist
+    assert "observed_at = observed_at" in persist
