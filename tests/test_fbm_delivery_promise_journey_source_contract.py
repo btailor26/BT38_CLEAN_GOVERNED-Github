@@ -118,3 +118,13 @@ def test_all_active_fbm_journey_renderers_keep_pending_neutral():
     assert "setBadgeState(pickedUp, 'bg-light text-muted border')" in current
     assert "badge.classList.contains('bg-danger') || badge.classList.contains('bg-primary')" not in legacy
     assert "const statusClass = active ? 'bg-success' : 'bg-light text-muted border';" in legacy
+
+
+def test_journey_stages_require_their_own_persisted_evidence():
+    source = Path("static/js/fbm_delivery_promise_journey_alignment.js").read_text(encoding="utf-8")
+    assert "const pickupPassed = Boolean(pickedUpAt);" in source
+    assert "const transitPassed = Boolean(movementAt);" in source
+    assert "'picked up': Boolean(row?.dataset?.carrierAcceptedAt)" in source
+    assert "'in transit': Boolean(row?.dataset?.firstMovementAt)" in source
+    assert "pickedUpAt || movementAt || deliveredAt" not in source
+    assert "firstMovementAt || row?.dataset?.deliveredAt" not in source
