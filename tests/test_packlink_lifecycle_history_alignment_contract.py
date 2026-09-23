@@ -98,3 +98,17 @@ def test_packlink_delivered_callback_never_invents_carrier_times():
 def test_packlink_fallback_event_key_is_stable_when_history_order_changes():
     persist = CALLBACK.split("def _persist_packlink_tracking_history", 1)[1].split("def _milestone_event_time", 1)[0]
     assert "str(index)" not in persist
+
+
+def test_exact_packlink_track_shape_maps_status_code_and_unix_timestamp():
+    lifecycle = CALLBACK.split("def _canonical_tracking_lifecycle", 1)[1].split("def _parse_tracking_event_time", 1)[0]
+    parser = CALLBACK.split("def _parse_tracking_event_time", 1)[1].split("def _tracking_event_time", 1)[0]
+    persist = CALLBACK.split("def _persist_packlink_tracking_history", 1)[1].split("def _milestone_event_time", 1)[0]
+    assert 'item.get("status_code")' in lifecycle
+    assert "datetime.fromtimestamp(float(value), tz=timezone.utc)" in parser
+    assert 'item.get("status_code")' in persist
+
+
+def test_ready_for_collection_does_not_claim_physical_carrier_acceptance():
+    lifecycle = CALLBACK.split("def _provider_state_lifecycle", 1)[1].split("def _canonical_tracking_lifecycle", 1)[0]
+    assert '"READY_FOR_COLLECTION"' not in lifecycle
