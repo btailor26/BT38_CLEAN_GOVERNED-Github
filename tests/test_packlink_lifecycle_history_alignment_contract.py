@@ -76,3 +76,25 @@ def test_packlink_history_uses_existing_tracking_event_ledger():
     assert "raw_event = item" in persist
     assert "event_time = event_time" in persist
     assert "observed_at = observed_at" in persist
+
+
+def test_packlink_descriptive_delivery_words_cannot_promote_delivery():
+    lifecycle = CALLBACK.split("def _canonical_tracking_lifecycle", 1)[1].split("def _parse_tracking_event_time", 1)[0]
+    assert '_provider_state_lifecycle(value)' in lifecycle
+    assert '"DELIVER" in value' not in lifecycle
+    assert '"description"' not in lifecycle
+    assert '"message"' not in lifecycle
+
+
+def test_packlink_delivered_callback_never_invents_carrier_times():
+    helper = CALLBACK.split("def _apply_lifecycle_state", 1)[1].split("def _attach_by_marketplace_reference", 1)[0]
+    delivered = helper.split('elif event_name == "shipment.delivered":', 1)[1]
+    assert "carrier_accepted_at =" not in delivered
+    assert "first_movement_at =" not in delivered
+    assert "delivered_at =" not in delivered
+    assert 'shipment.status = "delivered"' in delivered
+
+
+def test_packlink_fallback_event_key_is_stable_when_history_order_changes():
+    persist = CALLBACK.split("def _persist_packlink_tracking_history", 1)[1].split("def _milestone_event_time", 1)[0]
+    assert "str(index)" not in persist
