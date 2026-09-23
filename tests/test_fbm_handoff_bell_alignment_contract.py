@@ -39,24 +39,21 @@ def test_label_assignment_moves_only_original_outbound_dispatch_workflow():
     assert classifier.index('if reason:') < classifier.index('if _outbound_label_handoff_reached(shipment):')
 
 
-def test_committed_fbm_event_refreshes_once_and_the_session_sleeps_between_events():
-    assert 'fetch(window.location.href' in JOURNEY
-    assert "headers: {'Accept': 'text/html'}" in JOURNEY
-    assert 'BT38FBMApplyCommittedSnapshot' in JOURNEY
-    assert "window.addEventListener('bt38-marketplace-event', refreshFbmFromGovernedEvent)" in JOURNEY
-    assert 'window.location.reload()' not in JOURNEY
-    assert 'new EventSource(' not in JOURNEY
-    assert 'setInterval(' not in JOURNEY
+def test_retired_tracking_bootstrap_does_not_reload_child_alignment_assets():
+    assert "fbm_tracking_journey_legacy.js" not in JOURNEY
+    assert "fbm_ebay_shipping_alignment.js" not in JOURNEY
+    assert "fbm_delivery_promise_journey_alignment.js" not in JOURNEY
+    assert "new EventSource(" not in JOURNEY
+    assert "setInterval(" not in JOURNEY
 
     assert "window.addEventListener('bt38-marketplace-event'" not in SESSION
-    assert 'window.location.reload()' not in SESSION
-    assert 'fetch(' not in SESSION
-    assert 'new EventSource(' not in SESSION
-    assert 'setInterval(' not in SESSION
-    assert 'setTimeout(' not in SESSION
-    assert 'MutationObserver' not in SESSION
-    assert 'With no event, the FBM session sleeps.' in SESSION
-
+    assert "window.location.reload()" not in SESSION
+    assert "fetch(" not in SESSION
+    assert "new EventSource(" not in SESSION
+    assert "setInterval(" not in SESSION
+    assert "setTimeout(" not in SESSION
+    assert "MutationObserver" not in SESSION
+    assert "With no event, the FBM session sleeps." in SESSION
 
 def test_final_small_alignment_runs_after_existing_fbm_installers():
     compile(OVERLAY, str(OVERLAY_PATH), "exec")
@@ -90,44 +87,23 @@ def test_final_browser_guard_can_only_hide_rows_outside_the_active_queue():
     assert 'setInterval(' not in OVERLAY
 
 
-def test_final_bell_is_commercial_lifecycle_only_not_listing_or_sync_noise():
-    assert 'lifecycle._wrap_notification_bell(app)' in OVERLAY
-    assert 'app._bt38_marketplace_bell_lifecycle_wrapped = False' in OVERLAY
-    assert '_BELL_SHIPMENT_LOG_TYPES' in OVERLAY
-    assert '== "marketplace_sale"' in OVERLAY
-    assert 'in _BELL_SHIPMENT_LOG_TYPES' in OVERLAY
-    assert '"marketplace_push_succeeded"' not in OVERLAY
-    assert '"marketplace_push_noop"' not in OVERLAY
-    assert 'marketplace_listing' not in OVERLAY
-    assert 'record["status_label"] = "Sale"' in OVERLAY
-    assert 'record["title"] = f"Sale · {product_title}"' in OVERLAY
+def test_final_bell_is_single_fbm_display_projection():
+    display = (ROOT / "services" / "governed_fbm_bell_display_only_alignment.py").read_text(encoding="utf-8")
+    exact = (ROOT / "services" / "governed_bell_event_projection_alignment.py").read_text(encoding="utf-8")
+    ready = (ROOT / "services" / "governed_fbm_ready_landing_alignment.py").read_text(encoding="utf-8")
 
+    assert "window.BT38BellCurrentRecords=function(){return projected.slice(0,50);};" in display
+    assert "carrier:carrier,tracking_number:tracking" in display
+    assert "sessionStorage.setItem(cacheKey,JSON.stringify(projected))" in display
+    assert "records": []" in display
+    assert "database_calls": False" in display
+    assert "marketplace_calls": False" in display
+    assert "polling": False" in display
 
-def test_final_bell_restores_only_meaningful_business_webhook_lifecycle():
-    assert 'SystemLog.log_type == "marketplace_webhook"' in OVERLAY
-    assert 'def _webhook_business_status(details):' in OVERLAY
-    for status in (
-        '"return_requested"',
-        '"returned"',
-        '"refund_requested"',
-        '"refunded"',
-        '"cancel_requested"',
-        '"cancelled"',
-        '"replacement_requested"',
-        '"replacement"',
-        '"delivered"',
-    ):
-        assert status in OVERLAY
-    assert 'if business_status is None:' in OVERLAY
-    assert 'label = lifecycle._lifecycle_label(business_status)' in OVERLAY
-    assert 'key = f"webhook:{platform}:{order_id}:{lifecycle_status}"' in OVERLAY
-
-
-def test_final_bell_deduplicates_commercial_sale_rows_without_collapsing_lifecycle_changes():
-    assert 'key = f"sale:{platform}:{order_id}:{sku}:{quantity}:{lifecycle_status}"' in OVERLAY
-    assert 'Lifecycle changes' in OVERLAY
-    assert 'DB history' not in OVERLAY
-
+    assert "Retired: the Bell has one display-only FBM projection owner." in exact
+    assert "ready._event_to_bell_record" not in exact
+    assert "app.after_request(_inject_browser_cache)" not in exact
+    assert "app.view_functions[bell_endpoint] = login_required(_event_only_bell_reader)" not in ready
 
 def test_amazon_promise_is_persisted_only_during_existing_exact_read_and_rendered_in_london():
     assert 'original_fetch = amazon_profile._fetch_order' in OVERLAY
