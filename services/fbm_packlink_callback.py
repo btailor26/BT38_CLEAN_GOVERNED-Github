@@ -186,26 +186,22 @@ def _canonical_tracking_lifecycle(
     provider_state: Any,
     tracking_history: list[dict[str, Any]] | None,
 ) -> str | None:
-    """Return the strongest explicit provider lifecycle proven by Packlink data."""
-    texts = [str(provider_state or "").strip(), *_status_texts(tracking_history or [])]
-    normalized = [
-        text.upper().replace(" ", "_").replace("-", "_").replace(".", "_").replace("/", "_")
-        for text in texts
-        if text
-    ]
-    if any("DELIVER" in value and "FAILED" not in value and "UNDELIVER" not in value for value in normalized):
+    """Return strongest lifecycle only from explicit provider state fields."""
+    states: list[str] = []
+    if provider_state:
+        states.append(str(provider_state))
+    for item in tracking_history or []:
+        if not isinstance(item, dict):
+            continue
+        value = item.get("status") or item.get("state") or item.get("event") or item.get("event_name")
+        if value:
+            states.append(str(value))
+    lifecycles = [_provider_state_lifecycle(value) for value in states]
+    if "DELIVERED" in lifecycles:
         return "DELIVERED"
-    if any(
-        token in value
-        for value in normalized
-        for token in ("OUT_FOR_DELIVERY", "IN_TRANSIT", "IN_DELIVERY", "ON_ROUTE")
-    ):
+    if "IN_TRANSIT" in lifecycles:
         return "IN_TRANSIT"
-    if any(
-        token in value
-        for value in normalized
-        for token in ("PICKED_UP", "PICKEDUP", "COLLECTED", "CARRIER_ACCEPTED", "ACCEPTED")
-    ):
+    if "ACCEPTED" in lifecycles:
         return "ACCEPTED"
     return None
 
@@ -264,7 +260,6 @@ def _persist_packlink_tracking_history(
                 status or "",
                 description or "",
                 detail or "",
-                str(index),
             ])
         )[:180]
         existing = FBMShipmentTrackingEvent.query.filter_by(
@@ -418,9 +413,8 @@ def _apply_lifecycle_state(shipment: FBMShipment, event_name: str, now: datetime
         if shipment.delivered_at is None and shipment.first_movement_at is None:
             shipment.status = "awaiting_carrier_acceptance"
     elif event_name == "shipment.delivered":
-        shipment.carrier_accepted_at = shipment.carrier_accepted_at or now
-        shipment.first_movement_at = shipment.first_movement_at or now
-        shipment.delivered_at = shipment.delivered_at or now
+        # The callback is a wake-up/status signal. Exact carrier milestone times
+        # come only from persisted tracking-history event_time values.
         shipment.status = "delivered"
 
 
