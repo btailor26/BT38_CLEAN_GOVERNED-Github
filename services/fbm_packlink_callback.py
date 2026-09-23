@@ -669,10 +669,12 @@ def recover_packlink_shipments_for_day(
 ) -> dict[str, Any]:
     """One-shot recovery for exact Packlink shipments already known to BT38.
 
-    The requested day keeps the existing recovery behaviour. When today's pass
-    runs, Packlink records older than the normal seven-day deploy window are also
-    read once for lifecycle recovery only. Historical recovery never confirms a
-    marketplace shipment and never purchases or changes postage.
+    A recovery run for today audits every Packlink shipment already known to
+    BT38, regardless of age or apparent completeness. This deliberately repairs
+    legacy records that can look complete while containing inferred timestamps.
+    A non-today target keeps date-scoped recovery for explicit historical work.
+    Recovery is lifecycle-only: it never confirms a marketplace shipment and
+    never purchases or changes postage.
     """
     start = datetime.combine(target_day, time.min)
     end = start + timedelta(days=1)
@@ -680,34 +682,23 @@ def recover_packlink_shipments_for_day(
         FBMShipment.provider == "packlink",
         FBMShipment.provider_shipment_id.isnot(None),
     )
-    shipments = (
-        query
-        .filter(FBMShipment.created_at >= start, FBMShipment.created_at < end)
-        .order_by(FBMShipment.id.asc())
-        .all()
-    )
-
-    historical_cutoff = start - timedelta(days=6)
-    if target_day == datetime.utcnow().date():
-        historical = (
+    recover_all = target_day == datetime.utcnow().date()
+    if recover_all:
+        shipments = query.order_by(FBMShipment.id.asc()).all()
+    else:
+        shipments = (
             query
-            .filter(FBMShipment.created_at < historical_cutoff)
+            .filter(FBMShipment.created_at >= start, FBMShipment.created_at < end)
             .order_by(FBMShipment.id.asc())
             .all()
         )
-        existing_ids = {shipment.id for shipment in shipments}
-        shipments = historical + [shipment for shipment in shipments if shipment.id not in existing_ids or shipment not in historical]
 
     adapter = adapter or PacklinkAdapter()
     results: list[dict[str, Any]] = []
     for shipment in shipments:
         try:
-            historical_lifecycle_only = bool(
-                target_day == datetime.utcnow().date()
-                and shipment.created_at is not None
-                and shipment.created_at < historical_cutoff
-            )
-            if historical_lifecycle_only or shipment.marketplace_confirmed_at is not None:
+            lifecycle_only = bool(recover_all or shipment.marketplace_confirmed_at is not None)
+            if lifecycle_only:
                 now = datetime.utcnow()
                 provider_payload = adapter.get_shipment(shipment.provider_shipment_id)
                 tracking_history = adapter.get_tracking_status(reference=shipment.provider_shipment_id)
@@ -734,7 +725,7 @@ def recover_packlink_shipments_for_day(
                     "marketplace_order_id": shipment.marketplace_order_id,
                     "provider_reference": shipment.provider_shipment_id,
                     "lifecycle_only": True,
-                    "historical_recovery": historical_lifecycle_only,
+                    "historical_recovery": recover_all,
                     "marketplace_write_attempted": False,
                     "provider_status": shipment.last_provider_status,
                     "shipment_status": shipment.status,
