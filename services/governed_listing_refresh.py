@@ -161,11 +161,9 @@ def refresh_governed_listing_from_snapshot(
     if getattr(store, "is_active", False) is not True:
         return _blocked("store is not active")
 
-    # Platform-wide listing identity contract:
-    #
-    # store_id + seller SKU is the operational marketplace-listing identity.
-    # ASIN / external listing ID is marketplace reference metadata and may be
-    # corrected without creating another MarketplaceListing.
+    # BT38 listing identity is permanent; marketplace identity remains external truth.
+    # Seller SKU resolves the existing operational BT38 row for this exact event,
+    # while external_listing_id stores the marketplace's listing identity.
     listing = (
         MarketplaceListing.query
         .filter(
@@ -211,15 +209,16 @@ def refresh_governed_listing_from_snapshot(
     # temporarily; WarehouseStock.master_product_group_id never moves.
     original_group_id = ensure_permanent_original_group(warehouse_stock)
 
-    # Fail closed before mutating marketplace reference metadata when a legacy
-    # duplicate already owns the exact database identity. Webhook recovery may
-    # fill missing truth; it must not force one canonical row over another.
+    # Fail closed only when another ACTIVE BT38 listing owns the exact current
+    # marketplace identity. Inactive rows are permanent history and deliberately
+    # retain their original marketplace identifiers without reserving live identity.
     identity_owner = (
         MarketplaceListing.query
         .filter(
             MarketplaceListing.store_id == store.id,
             MarketplaceListing.external_listing_id == external_listing_id,
             MarketplaceListing.external_sku == sku,
+            MarketplaceListing.is_active == True,  # noqa: E712
         )
         .order_by(MarketplaceListing.id.asc())
         .first()
@@ -270,8 +269,8 @@ def refresh_governed_listing_from_snapshot(
         listing.external_sku = incoming_sku
     elif not existing_sku:
         listing.external_sku = ""
-    # Marketplace reference metadata may change without changing the
-    # permanent SKU-based operational listing identity.
+    # Marketplace identity follows verified marketplace truth without changing
+    # the permanent BT38 listing ID used for system history and audit.
     listing.external_listing_id = external_listing_id
     if hasattr(listing, "asin") and external_listing_id:
         listing.asin = external_listing_id
