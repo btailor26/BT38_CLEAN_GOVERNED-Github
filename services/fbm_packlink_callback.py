@@ -10,7 +10,7 @@ create a Packlink draft first.
 """
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
 from extensions import db
@@ -193,7 +193,7 @@ def _canonical_tracking_lifecycle(
     for item in tracking_history or []:
         if not isinstance(item, dict):
             continue
-        value = item.get("status") or item.get("state") or item.get("event") or item.get("event_name")
+        value = item.get("status_code") or item.get("status") or item.get("state") or item.get("event") or item.get("event_name")
         if value:
             states.append(str(value))
     lifecycles = [_provider_state_lifecycle(value) for value in states]
@@ -210,6 +210,11 @@ def _canonical_tracking_lifecycle(
 def _parse_tracking_event_time(value: Any) -> datetime | None:
     if isinstance(value, datetime):
         return value.replace(tzinfo=None) if value.tzinfo else value
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        try:
+            return datetime.fromtimestamp(float(value), tz=timezone.utc).replace(tzinfo=None)
+        except (OverflowError, OSError, ValueError):
+            return None
     text_value = str(value or "").strip()
     if not text_value:
         return None
@@ -248,7 +253,7 @@ def _persist_packlink_tracking_history(
         if not isinstance(item, dict):
             continue
         event_time = _tracking_event_time(item)
-        status = str(item.get("status") or item.get("state") or item.get("event") or "").strip() or None
+        status = str(item.get("status_code") or item.get("status") or item.get("state") or item.get("event") or "").strip() or None
         description = str(item.get("description") or item.get("message") or item.get("status_name") or "").strip() or None
         detail = str(item.get("detail") or item.get("details") or item.get("status_description") or "").strip() or None
         event_key = str(
