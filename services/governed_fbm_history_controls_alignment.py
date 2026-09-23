@@ -1,8 +1,8 @@
-"""Wire FBM History controls without creating another /fbm row authority.
+"""Keep FBM History controls browser-local after the page refresh snapshot.
 
-A selected History period is an explicit bounded data request. The canonical
-History snapshot reader loads that period once; lifecycle/search/Health/pager
-then remain browser-session presentation over that exact working set.
+A normal /fbm page refresh loads the bounded working set once. History,
+lifecycle/search/Health/pager changes after that refresh are presentation over
+the existing browser-session facts and must not expand the server DB read.
 
 No marketplace/provider read, writer, poller, timer or parallel event path is
 introduced here.
@@ -32,7 +32,12 @@ health_alignment._RANGE_DAYS = {
 
 
 def _range_key():
-    if not str(request.args.get("fbm_range") or "").strip():
+    # A full /fbm browser refresh owns the one server-side working-set load.
+    # History controls after that refresh are browser-session presentation only.
+    # Never let stale/query-string History state expand an ordinary page refresh
+    # into a 30d/90d/1y DB render. An explicit internal expansion header remains
+    # available for controlled diagnostics, but normal browser navigation is 3d.
+    if request.headers.get("X-BT38-FBM-History-Expansion") != "1":
         return "3d"
     raw = str(request.args.get("fbm_range") or "3d").strip().lower()
     aliases = {
