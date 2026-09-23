@@ -613,21 +613,17 @@ def _patch_provider_lifecycle_persistence() -> None:
         return
 
     def aligned_reconcile(shipment, *, observed_at=None):
-        observed = observed_at or getattr(shipment, "last_provider_checked_at", None) or datetime.utcnow()
+        # Status may advance from persisted provider truth, but observation time
+        # must never be promoted into a carrier milestone timestamp.
         milestone = _canonical_provider_milestone(getattr(shipment, "last_provider_status", None))
-
         if milestone == "delivered":
-            shipment.delivered_at = getattr(shipment, "delivered_at", None) or observed
             shipment.status = "delivered"
         elif milestone == "in_transit":
-            shipment.first_movement_at = getattr(shipment, "first_movement_at", None) or observed
             if getattr(shipment, "delivered_at", None) is None:
                 shipment.status = "in_transit"
         elif milestone == "accepted":
-            shipment.carrier_accepted_at = getattr(shipment, "carrier_accepted_at", None) or observed
             if getattr(shipment, "delivered_at", None) is None and getattr(shipment, "first_movement_at", None) is None:
                 shipment.status = "accepted"
-
         return shipment.status
 
     post_purchase.reconcile_provider_lifecycle_state = aligned_reconcile
