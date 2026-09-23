@@ -56,8 +56,8 @@
         const movementAt = row?.dataset?.firstMovementAt || '';
         const deliveredAt = row?.dataset?.deliveredAt || '';
         const terminalDelivery = deliveryProven(row);
-        const pickupPassed = Boolean(pickedUpAt || movementAt || deliveredAt || terminalDelivery);
-        const transitPassed = Boolean(movementAt || deliveredAt || terminalDelivery);
+        const pickupPassed = Boolean(pickedUpAt);
+        const transitPassed = Boolean(movementAt);
         const delivered = Boolean(deliveredAt || terminalDelivery);
 
         function milestone(title, confirmed, exactTime) {
@@ -136,8 +136,8 @@
         if (!journeyCell) return;
         const terminalDelivery = deliveryProven(row);
         const stageTruth = {
-            'picked up': Boolean(row?.dataset?.carrierAcceptedAt || row?.dataset?.firstMovementAt || row?.dataset?.deliveredAt || terminalDelivery),
-            'in transit': Boolean(row?.dataset?.firstMovementAt || row?.dataset?.deliveredAt || terminalDelivery),
+            'picked up': Boolean(row?.dataset?.carrierAcceptedAt),
+            'in transit': Boolean(row?.dataset?.firstMovementAt),
             'delivered': Boolean(row?.dataset?.deliveredAt || terminalDelivery)
         };
         Array.from(journeyCell.querySelectorAll('.badge')).forEach(function (badge) {
@@ -202,8 +202,8 @@
     }
 
     function install() {
-        if (document.documentElement.dataset.bt38PromiseJourneyAligned === '13') return;
-        document.documentElement.dataset.bt38PromiseJourneyAligned = '13';
+        if (document.documentElement.dataset.bt38PromiseJourneyAligned === '14') return;
+        document.documentElement.dataset.bt38PromiseJourneyAligned = '14';
         document.querySelectorAll('.fbm-order-row').forEach(alignRowPerformance);
         window.addEventListener('click', intercept, true);
         window.addEventListener('keydown', function (event) { if (event.key !== 'Enter' && event.key !== ' ') return; intercept(event); }, true);
