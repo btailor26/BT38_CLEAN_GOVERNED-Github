@@ -40,10 +40,12 @@ def test_previously_known_packlink_rows_get_one_shot_lifecycle_recovery_only():
     assert "historical_lifecycle_only or shipment.marketplace_confirmed_at is not None" in recovery
 
 
-def test_shared_journey_remains_timestamp_authority():
-    assert "shipment.delivered_at = shipment.delivered_at or observed_at" in POST_PURCHASE
-    assert "shipment.first_movement_at = shipment.first_movement_at or observed_at" in POST_PURCHASE
-    assert "shipment.carrier_accepted_at = shipment.carrier_accepted_at or observed_at" in POST_PURCHASE
+def test_provider_status_never_invents_carrier_milestone_timestamps():
+    lifecycle = POST_PURCHASE.split("def reconcile_provider_lifecycle_state", 1)[1].split("def _amazon_tracking_number", 1)[0]
+    assert "shipment.delivered_at =" not in lifecycle
+    assert "shipment.first_movement_at =" not in lifecycle
+    assert "shipment.carrier_accepted_at =" not in lifecycle
+    assert "or observed_at" not in lifecycle
 
 
 def test_no_created_at_cutoff_is_added_to_lifecycle_classification():
