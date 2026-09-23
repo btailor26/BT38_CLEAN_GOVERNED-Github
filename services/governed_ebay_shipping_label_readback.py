@@ -10,7 +10,9 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+import xml.etree.ElementTree as ET
 
+import requests
 from sqlalchemy import text
 
 from extensions import db
@@ -21,7 +23,12 @@ from services.governed_exact_ebay_order_hydration import (
     _fulfillment_truth,
     _fulfillment_values,
 )
-from services.governed_marketplace_order_import import _ebay_access_token, _text
+from services.governed_marketplace_order_import import _ebay_access_token, _parse_ebay_datetime, _text
+
+
+EBAY_TRADING_URL = "https://api.ebay.com/ws/api.dll"
+EBAY_TRADING_COMPAT_LEVEL = "1193"
+EBAY_TRADING_SITE_ID = "3"
 
 
 def _fulfillment_id(value: dict[str, Any]) -> str:
@@ -38,6 +45,60 @@ def _service_value(value: dict[str, Any]) -> str:
         or value.get("shippingServiceName")
         or value.get("service")
     )
+
+
+def _trading_shipment_truth(*, access_token: str, order_id: str) -> dict[str, Any] | None:
+    """Read exact-order carrier/tracking/delivery truth from eBay Trading GetOrders."""
+    root = ET.Element("GetOrdersRequest", xmlns="urn:ebay:apis:eBLBaseComponents")
+    credentials = ET.SubElement(root, "RequesterCredentials")
+    ET.SubElement(credentials, "eBayAuthToken").text = access_token
+    order_ids = ET.SubElement(root, "OrderIDArray")
+    ET.SubElement(order_ids, "OrderID").text = order_id
+    ET.SubElement(root, "OrderRole").text = "Seller"
+    ET.SubElement(root, "DetailLevel").text = "ReturnAll"
+
+    response = requests.post(
+        EBAY_TRADING_URL,
+        headers={
+            "X-EBAY-API-CALL-NAME": "GetOrders",
+            "X-EBAY-API-SITEID": EBAY_TRADING_SITE_ID,
+            "X-EBAY-API-COMPATIBILITY-LEVEL": EBAY_TRADING_COMPAT_LEVEL,
+            "X-EBAY-API-IAF-TOKEN": access_token,
+            "Content-Type": "text/xml",
+        },
+        data=ET.tostring(root, encoding="utf-8", xml_declaration=True),
+        timeout=30,
+    )
+    if response.status_code >= 400:
+        raise RuntimeError(f"ebay_trading_get_orders_failed:{response.status_code}")
+
+    parsed = ET.fromstring(response.content)
+    if _text(parsed.findtext(".//{*}Ack")).upper() not in {"SUCCESS", "WARNING"}:
+        error = parsed.find(".//{*}Errors")
+        code = _text(error.findtext("{*}ErrorCode")) if error is not None else ""
+        raise RuntimeError(f"ebay_trading_get_orders_failed:{code or 'ack'}")
+
+    order = parsed.find(".//{*}Order")
+    if order is None or _text(order.findtext("{*}OrderID")) != order_id:
+        return None
+
+    tracking_rows: list[dict[str, Any]] = []
+    for detail in order.findall(".//{*}ShipmentTrackingDetails"):
+        tracking = _text(detail.findtext("{*}ShipmentTrackingNumber"))
+        if not tracking:
+            continue
+        tracking_rows.append({
+            "tracking_number": tracking,
+            "carrier": _text(detail.findtext("{*}ShippingCarrierUsed")) or None,
+        })
+
+    delivered_at = _parse_ebay_datetime(
+        order.findtext(".//{*}ShippingPackageInfo/{*}ActualDeliveryTime")
+    )
+    return {
+        "tracking_rows": tracking_rows,
+        "delivered_at": delivered_at,
+    }
 
 
 def _confirmed_finance_purchase(*, store_id: int, order_id: str) -> dict[str, Any] | None:
@@ -140,6 +201,11 @@ def persist_exact_ebay_purchased_shipment_authority(*, store, marketplace_order_
     if fulfillment_error:
         return {"success": False, "skipped": False, "reason": fulfillment_error, "order_id": order_id}
 
+    try:
+        trading_truth = _trading_shipment_truth(access_token=access_token, order_id=order_id)
+    except Exception:
+        trading_truth = None
+
     candidates = _unique_fulfillment_candidates(fulfillments)
     if len(candidates) != 1:
         return {
@@ -172,15 +238,35 @@ def persist_exact_ebay_purchased_shipment_authority(*, store, marketplace_order_
 
     shipment.provider = "ebay_shipping"
     shipment.provider_shipment_id = fulfillment_id
-    shipment.carrier = candidate.get("carrier") or shipment.carrier
     shipment.service = candidate.get("service") or shipment.service
     shipment.tracking_number = candidate.get("tracking_number") or shipment.tracking_number
+
+    trading_match = None
+    if trading_truth and shipment.tracking_number:
+        matches = [
+            row for row in trading_truth.get("tracking_rows", [])
+            if row.get("tracking_number") == shipment.tracking_number
+        ]
+        if len(matches) == 1:
+            trading_match = matches[0]
+
+    if trading_match and trading_match.get("carrier"):
+        shipment.carrier = trading_match["carrier"]
+
     shipment.purchase_status = "purchased"
     shipment.purchase_error = None
     shipment.label_purchased_at = purchase["purchased_at"]
     shipment.label_source = "ebay_finances_shipping_label"
-    shipment.status = "awaiting_carrier_acceptance" if shipment.tracking_number else "label_purchased"
-    shipment.last_provider_status = "shipped"
+    delivered_at = trading_truth.get("delivered_at") if trading_truth and trading_match else None
+    if delivered_at is not None:
+        shipment.delivered_at = delivered_at
+        shipment.status = "delivered"
+        shipment.last_provider_status = "delivered"
+    elif shipment.delivered_at is None:
+        if shipment.status not in {"carrier_accepted", "in_transit", "out_for_delivery", "delivered"}:
+            shipment.status = "awaiting_carrier_acceptance" if shipment.tracking_number else "label_purchased"
+        if _text(shipment.last_provider_status).lower() != "delivered":
+            shipment.last_provider_status = "shipped"
     shipment.last_provider_checked_at = datetime.utcnow()
     shipment.marketplace_confirmation_status = "ebay_shipping_fulfillment_readback"
 
@@ -218,6 +304,8 @@ def persist_exact_ebay_purchased_shipment_authority(*, store, marketplace_order_
         "carrier": shipment.carrier,
         "service": shipment.service,
         "tracking_number": shipment.tracking_number,
+        "delivered_at": shipment.delivered_at.isoformat() if shipment.delivered_at else None,
+        "trading_truth_matched": bool(trading_match),
         "purchase_confirmed": True,
         "created": created,
         "marketplace_write_started": False,
