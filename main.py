@@ -109,13 +109,15 @@ install_governed_amazon_fbm_profile_event_alignment(app)
 install_governed_webhook_bell_event_alignment(app)
 install_governed_exact_record_event_alignment(app)
 install_governed_bell_event_projection_alignment(app)
-install_governed_fbm_bell_display_only_alignment(app)
 install_governed_fbm_tracking_authority_restore(app)
 
 # Final FBM event boundary: an exact committed order event mutates only that
 # browser-session record. It must run after legacy refresh installers so the old
 # full /fbm GET/rebuild path cannot fire for the same event.
 install_governed_fbm_exact_record_session_alignment(app)
+
+# Final Bell authority: presentation only, after every FBM/session/tracking installer.
+install_governed_fbm_bell_display_only_alignment(app)
 
 from services.governed_ebay_notification_challenge import install_ebay_notification_challenge_handler
 install_ebay_notification_challenge_handler(app)
