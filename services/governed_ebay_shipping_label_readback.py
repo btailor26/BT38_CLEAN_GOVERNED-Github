@@ -17,6 +17,7 @@ from sqlalchemy import text
 
 from extensions import db
 from fbm_models import FBMShipment
+from fbm_tracking_event_models import FBMShipmentTrackingEvent
 from models import MarketplaceOrder
 from services.governed_exact_ebay_order_hydration import (
     _fulfillment_line_ids,
@@ -165,6 +166,67 @@ def _unique_fulfillment_candidates(fulfillments: list[dict[str, Any]]) -> list[d
     return list(candidates.values())
 
 
+def _persist_ebay_known_tracking_events(*, shipment: FBMShipment, candidate: dict[str, Any], delivered_at: datetime | None) -> int:
+    """Persist only shipment events eBay exposes through supported order APIs.
+
+    This deliberately does not invent carrier acceptance or in-transit scans.
+    Sell Fulfillment shippedDate and Trading ActualDeliveryTime are eBay-owned
+    facts; richer carrier scan history remains separate until eBay exposes a
+    supported outbound tracking-history read.
+    """
+    events: list[dict[str, Any]] = []
+    shipped_at = candidate.get("shipped_at")
+    if shipped_at is not None:
+        events.append({
+            "event_key": f"ebay:fulfillment:{candidate.get('fulfillment_id')}:shipped:{shipped_at.isoformat()}",
+            "event_time": shipped_at,
+            "status": "shipped",
+            "description": "Shipment marked shipped by eBay",
+            "detail": None,
+            "raw_event": {
+                "source": "ebay_sell_fulfillment",
+                "field": "shippedDate",
+                "fulfillment_id": candidate.get("fulfillment_id"),
+                "tracking_number": candidate.get("tracking_number"),
+            },
+        })
+    if delivered_at is not None:
+        events.append({
+            "event_key": f"ebay:trading:{candidate.get('tracking_number')}:delivered:{delivered_at.isoformat()}",
+            "event_time": delivered_at,
+            "status": "delivered",
+            "description": "Delivered",
+            "detail": None,
+            "raw_event": {
+                "source": "ebay_trading_get_orders",
+                "field": "ActualDeliveryTime",
+                "tracking_number": candidate.get("tracking_number"),
+            },
+        })
+
+    inserted = 0
+    for event in events:
+        exists = FBMShipmentTrackingEvent.query.filter_by(
+            shipment_id=shipment.id,
+            event_key=event["event_key"],
+        ).first()
+        if exists is not None:
+            continue
+        db.session.add(FBMShipmentTrackingEvent(
+            shipment_id=shipment.id,
+            provider="ebay",
+            event_key=event["event_key"],
+            event_time=event["event_time"],
+            status=event["status"],
+            description=event["description"],
+            detail=event["detail"],
+            raw_event=event["raw_event"],
+            observed_at=datetime.utcnow(),
+        ))
+        inserted += 1
+    return inserted
+
+
 def persist_exact_ebay_purchased_shipment_authority(*, store, marketplace_order_id: str) -> dict[str, Any]:
     """Join exact eBay finance purchase proof to exact fulfillment identity.
 
@@ -276,6 +338,11 @@ def persist_exact_ebay_purchased_shipment_authority(*, store, marketplace_order_
     shipment.marketplace_confirmation_status = "ebay_shipping_fulfillment_readback"
 
     db.session.flush()
+    tracking_events_inserted = _persist_ebay_known_tracking_events(
+        shipment=shipment,
+        candidate=candidate,
+        delivered_at=delivered_at,
+    )
     db.session.execute(
         text(
             """
@@ -313,5 +380,6 @@ def persist_exact_ebay_purchased_shipment_authority(*, store, marketplace_order_
         "trading_truth_matched": bool(trading_match),
         "purchase_confirmed": True,
         "created": created,
+        "tracking_events_inserted": tracking_events_inserted,
         "marketplace_write_started": False,
     }
