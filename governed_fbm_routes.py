@@ -255,15 +255,27 @@ def _shipment_map(rows: list[MarketplaceOrder]) -> dict[tuple[int, str], FBMShip
             "packlink_replacement:",
         ))
         physical_provider = provider not in {"", "marketplace"}
+        purchased_label = bool(
+            getattr(shipment, "label_purchased_at", None) is not None
+            or purchase_status == "purchased"
+            or tracking_number
+        )
+        # A Packlink draft/reference exists before provider checkout completes.
+        # It is not physical-shipment authority and must never outrank a label
+        # whose purchase/tracking has actually been confirmed.
+        confirmed_physical_authority = physical_provider and (
+            provider != "packlink" or purchased_label
+        )
 
         return (
             1 if exact_tracking_match else 0,
             1 if not additional_shipment else 0,
-            1 if physical_provider else 0,
+            1 if confirmed_physical_authority else 0,
+            1 if purchased_label else 0,
             1 if getattr(shipment, "label_purchased_at", None) is not None else 0,
             1 if purchase_status == "purchased" else 0,
-            1 if getattr(shipment, "provider_shipment_id", None) else 0,
             1 if tracking_number else 0,
+            1 if getattr(shipment, "provider_shipment_id", None) and confirmed_physical_authority else 0,
         )
 
     result = {}
