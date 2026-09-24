@@ -88,15 +88,12 @@ def test_fbm_amazon_page_render_is_event_only_and_has_no_marketplace_read():
     assert 'FBMShipment(' not in AMAZON_FBM_PROFILE_ALIGNMENT
 
 
-def test_amazon_marketplace_journey_reuses_existing_fbm_projection_without_proxy_shipment():
+def test_amazon_marketplace_journey_reuses_existing_fbm_projection_without_lifecycle_promotion():
     assert 'shipment_confirmation_state(shipment) if shipment else "not_started"' in FBM_PAGE_ALIGNMENT
     assert '_page_alignment.render_template = _governed_render_template' in AMAZON_FBM_PROFILE_ALIGNMENT
-    assert '"picked_up": "accepted"' in AMAZON_FBM_PROFILE_ALIGNMENT
-    assert '"in_transit": "in_transit"' in AMAZON_FBM_PROFILE_ALIGNMENT
-    assert '"out_for_delivery": "out_for_delivery"' in AMAZON_FBM_PROFILE_ALIGNMENT
-    assert '"delivered": "delivered"' in AMAZON_FBM_PROFILE_ALIGNMENT
-    assert 'item.get("shipment") is not None' in AMAZON_FBM_PROFILE_ALIGNMENT
-    assert 'aligned["shipment_state"] = journey_state' in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert 'aligned["shipment_state"] = journey_state' not in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert '"picked_up": "accepted"' not in AMAZON_FBM_PROFILE_ALIGNMENT
+    assert '"delivered": "delivered"' not in AMAZON_FBM_PROFILE_ALIGNMENT
     assert 'FBMShipment(' not in AMAZON_FBM_PROFILE_ALIGNMENT
     assert 'requests.' not in AMAZON_FBM_PROFILE_ALIGNMENT
     assert 'db.session.add(' not in AMAZON_FBM_PROFILE_ALIGNMENT
