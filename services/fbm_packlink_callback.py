@@ -182,21 +182,66 @@ def _provider_state_lifecycle(provider_state: Any) -> str | None:
     return None
 
 
+def _tracking_event_lifecycle(item: dict[str, Any]) -> str | None:
+    """Classify one carrier scan without collapsing label/drop-off/collection.
+
+    Provider status codes remain first authority.  Some eBay/Packlink carrier
+    histories expose the physical scan only in the carrier description, so the
+    small phrase map below accepts only explicit physical milestones.  Booking,
+    label creation, expected-parcel and drop-off/depot-arrival text deliberately
+    remain non-pickup unless the carrier explicitly says it collected the parcel.
+    """
+    value = (
+        item.get("status_code")
+        or item.get("status")
+        or item.get("state")
+        or item.get("event")
+        or item.get("event_name")
+    )
+    lifecycle = _provider_state_lifecycle(value)
+    if lifecycle:
+        return lifecycle
+
+    text = " ".join(
+        str(item.get(key) or "").strip().lower()
+        for key in ("description", "message", "detail", "details", "status_description")
+        if str(item.get(key) or "").strip()
+    )
+    if not text:
+        return None
+
+    if (
+        "your parcel has been delivered" in text
+        or "parcel has been delivered" in text
+    ):
+        return "DELIVERED"
+    if (
+        "your parcel is with one of our drivers for delivery" in text
+        or "parcel is at our national hub" in text
+        or "we have your parcel" in text
+    ):
+        return "IN_TRANSIT"
+    if (
+        "we've collected your parcel" in text
+        or "we have collected your parcel" in text
+        or "carrier has collected your parcel" in text
+        or "collected by carrier" in text
+    ):
+        return "ACCEPTED"
+    return None
+
+
 def _canonical_tracking_lifecycle(
     provider_state: Any,
     tracking_history: list[dict[str, Any]] | None,
 ) -> str | None:
-    """Return strongest lifecycle only from explicit provider state fields."""
-    states: list[str] = []
+    """Return the strongest lifecycle proved by explicit provider/carrier scans."""
+    lifecycles: list[str | None] = []
     if provider_state:
-        states.append(str(provider_state))
+        lifecycles.append(_provider_state_lifecycle(provider_state))
     for item in tracking_history or []:
-        if not isinstance(item, dict):
-            continue
-        value = item.get("status_code") or item.get("status") or item.get("state") or item.get("event") or item.get("event_name")
-        if value:
-            states.append(str(value))
-    lifecycles = [_provider_state_lifecycle(value) for value in states]
+        if isinstance(item, dict):
+            lifecycles.append(_tracking_event_lifecycle(item))
     if "DELIVERED" in lifecycles:
         return "DELIVERED"
     if "IN_TRANSIT" in lifecycles:
@@ -291,14 +336,11 @@ def _persist_packlink_tracking_history(
 def _milestone_event_time(events: list[FBMShipmentTrackingEvent], milestone: str) -> datetime | None:
     matches: list[datetime] = []
     for event in events:
-        lifecycle = _canonical_tracking_lifecycle(
-            None,
-            [{
-                "status": event.status,
-                "description": event.description,
-                "detail": event.detail,
-            }],
-        )
+        lifecycle = _tracking_event_lifecycle({
+            "status": event.status,
+            "description": event.description,
+            "detail": event.detail,
+        })
         if lifecycle == milestone and event.event_time is not None:
             matches.append(event.event_time)
     if not matches:
