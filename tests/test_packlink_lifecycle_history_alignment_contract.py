@@ -78,12 +78,28 @@ def test_packlink_history_uses_existing_tracking_event_ledger():
     assert "observed_at = observed_at" in persist
 
 
-def test_packlink_descriptive_delivery_words_cannot_promote_delivery():
-    lifecycle = CALLBACK.split("def _canonical_tracking_lifecycle", 1)[1].split("def _parse_tracking_event_time", 1)[0]
-    assert '_provider_state_lifecycle(value)' in lifecycle
-    assert '"DELIVER" in value' not in lifecycle
-    assert '"description"' not in lifecycle
-    assert '"message"' not in lifecycle
+def test_packlink_carrier_scan_descriptions_preserve_three_stage_handover():
+    classifier = CALLBACK.split("def _tracking_event_lifecycle", 1)[1].split("def _canonical_tracking_lifecycle", 1)[0]
+    milestone = CALLBACK.split("def _milestone_event_time", 1)[1].split("def reconcile_packlink_tracking_lifecycle", 1)[0]
+
+    # Label/booking/drop-off are not physical carrier pickup.
+    assert '"your driver is coming to collect your parcel"' not in classifier
+    assert '"your parcel collection has been booked"' not in classifier
+    assert '"collect plus store"' not in classifier
+
+    # The carrier's collection scan is the pickup authority.
+    assert '"we\'ve collected your parcel"' in classifier
+    assert 'return "ACCEPTED"' in classifier
+    assert "_tracking_event_lifecycle({" in milestone
+
+
+def test_packlink_explicit_carrier_descriptions_can_promote_movement_and_delivery():
+    classifier = CALLBACK.split("def _tracking_event_lifecycle", 1)[1].split("def _canonical_tracking_lifecycle", 1)[0]
+    assert '"your parcel is with one of our drivers for delivery"' in classifier
+    assert '"parcel is at our national hub"' in classifier
+    assert '"your parcel has been delivered"' in classifier
+    assert 'return "IN_TRANSIT"' in classifier
+    assert 'return "DELIVERED"' in classifier
 
 
 def test_packlink_delivered_callback_never_invents_carrier_times():
