@@ -23,32 +23,6 @@ def _amazon_row(row) -> bool:
     return str(getattr(store, "platform", "") or "").strip().lower() == "amazon"
 
 
-def _amazon_marketplace_journey_state(order):
-    if order is None or not _amazon_row(order):
-        return None
-    status = (
-        str(getattr(order, "status", "") or "")
-        .strip()
-        .lower()
-        .replace("-", "_")
-        .replace(" ", "_")
-    )
-    # Only persisted post-dispatch lifecycle evidence lights a journey milestone.
-    # Amazon "shipped" alone remains dispatch truth with milestones unavailable.
-    return {
-        "picked_up": "accepted",
-        "pickedup": "accepted",
-        "accepted": "accepted",
-        "carrier_accepted": "accepted",
-        "collected": "accepted",
-        "in_transit": "in_transit",
-        "intransit": "in_transit",
-        "out_for_delivery": "out_for_delivery",
-        "outfordelivery": "out_for_delivery",
-        "delivered": "delivered",
-    }.get(status)
-
-
 def _tracking_number(item: dict) -> str:
     shipment = item.get("shipment")
     order = item.get("order")
@@ -101,28 +75,10 @@ def _align_persisted_tracking_clicks(html: str, orders: list[dict]) -> str:
 
 
 def _governed_render_template(template_name, *args, **context):
+    rendered = _original_render_template(template_name, *args, **context)
     if template_name == "fbm.html":
-        original_orders = context.get("orders") or []
-        aligned_orders = []
-        changed = False
-        for item in original_orders:
-            if not isinstance(item, dict) or item.get("shipment") is not None:
-                aligned_orders.append(item)
-                continue
-            journey_state = _amazon_marketplace_journey_state(item.get("order"))
-            if not journey_state:
-                aligned_orders.append(item)
-                continue
-            aligned = dict(item)
-            aligned["shipment_state"] = journey_state
-            aligned_orders.append(aligned)
-            changed = True
-        if changed:
-            context = dict(context)
-            context["orders"] = aligned_orders
-        rendered = _original_render_template(template_name, *args, **context)
         return _align_persisted_tracking_clicks(rendered, context.get("orders") or [])
-    return _original_render_template(template_name, *args, **context)
+    return rendered
 
 
 if not getattr(_page_alignment, "_amazon_marketplace_journey_alignment_installed", False):
