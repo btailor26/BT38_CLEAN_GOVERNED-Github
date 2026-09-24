@@ -19,6 +19,9 @@ TRADING_XML = b"""<?xml version="1.0" encoding="UTF-8"?>
       </ShippingServiceSelected>
       <TransactionArray>
         <Transaction>
+          <Item><ItemID>127951772415</ItemID></Item>
+          <TransactionID>10087798582227</TransactionID>
+          <OrderLineItemID>127951772415-10087798582227</OrderLineItemID>
           <ShippingDetails>
             <ShipmentTrackingDetails>
               <ShippingCarrierUsed>InPost Shops</ShippingCarrierUsed>
@@ -91,3 +94,66 @@ def test_trading_shipment_truth_fails_on_http_error(monkeypatch):
         assert str(exc) == "ebay_trading_get_orders_failed:503"
     else:
         raise AssertionError("Trading HTTP failure must remain visible")
+
+
+def test_supported_ebay_order_facts_persist_replay_safe_tracking_events(monkeypatch):
+    shipment = Mock()
+    shipment.id = 225
+    candidate = {
+        "fulfillment_id": "0504CC67049",
+        "tracking_number": "0504CC67049",
+        "shipped_at": datetime(2026, 9, 1, 3, 50),
+    }
+
+    existing_query = Mock()
+    existing_query.filter_by.return_value.first.return_value = None
+    monkeypatch.setattr(readback.FBMShipmentTrackingEvent, "query", existing_query)
+
+    added = []
+    monkeypatch.setattr(readback.db.session, "add", added.append)
+
+    inserted = readback._persist_ebay_known_tracking_events(
+        shipment=shipment,
+        candidate=candidate,
+        delivered_at=datetime(2026, 9, 3, 11, 57),
+    )
+
+    assert inserted == 2
+    assert len(added) == 2
+    assert added[0].provider == "ebay"
+    assert added[0].status == "shipped"
+    assert added[0].event_time == datetime(2026, 9, 1, 3, 50)
+    assert added[0].raw_event["source"] == "ebay_sell_fulfillment"
+    assert added[1].status == "delivered"
+    assert added[1].event_time == datetime(2026, 9, 3, 11, 57)
+    assert added[1].raw_event["source"] == "ebay_trading_get_orders"
+
+
+def test_supported_ebay_order_events_do_not_invent_carrier_movement(monkeypatch):
+    shipment = Mock()
+    shipment.id = 225
+    candidate = {
+        "fulfillment_id": "87RKL8500193A024",
+        "tracking_number": "87RKL8500193A024",
+        "shipped_at": datetime(2026, 9, 6, 17, 7, 36),
+    }
+
+    existing_query = Mock()
+    existing_query.filter_by.return_value.first.return_value = None
+    monkeypatch.setattr(readback.FBMShipmentTrackingEvent, "query", existing_query)
+
+    added = []
+    monkeypatch.setattr(readback.db.session, "add", added.append)
+
+    readback._persist_ebay_known_tracking_events(
+        shipment=shipment,
+        candidate=candidate,
+        delivered_at=datetime(2026, 9, 9, 8, 9, 49),
+    )
+
+    statuses = [event.status for event in added]
+    assert statuses == ["shipped", "delivered"]
+    assert "accepted" not in statuses
+    assert "carrier_accepted" not in statuses
+    assert "in_transit" not in statuses
+    assert "out_for_delivery" not in statuses
