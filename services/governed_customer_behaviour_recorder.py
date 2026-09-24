@@ -32,7 +32,7 @@ _OPERATIONAL_PATH_PREFIXES = (
 _ALLOWED_EVENTS = {
     "page_view", "display_snapshot", "feature_view", "section_view",
     "scroll_depth", "click", "change", "form_start", "form_submit",
-    "page_exit", "signup_complete", "browser_request", "browser_error",
+    "page_exit", "signup_complete", "browser_request", "browser_error", "visual_frame",
 }
 _ALLOWED_KEYS = {
     "event", "journey_id", "page", "title", "referrer_path", "section",
@@ -40,8 +40,9 @@ _ALLOWED_KEYS = {
     "engaged_ms", "viewport", "sequence", "feature", "display_text",
     "display_state", "request_id", "method", "status_code", "duration_ms",
     "response_bytes", "request_origin", "query_keys", "error_name", "error_message",
+    "frame", "scroll_x", "scroll_y",
 }
-_MAX_BODY = 8192
+_MAX_BODY = 24576
 _SCRIPT = r'''<script id="bt38CustomerBehaviourRecorder">
 (function(){
   "use strict";
@@ -99,11 +100,11 @@ _SCRIPT = r'''<script id="bt38CustomerBehaviourRecorder">
   snapshot();
   document.addEventListener("click",function(e){
     var el=e.target.closest("a,button,[role=button],input[type=submit],[data-behaviour-feature]"); if(!el)return;
-    send("click",{target:selector(el),target_text:safeText(el,100),target_href:el.tagName==="A"?pathOnly(el.href):"",display_state:state(el)});
+    send("click",{target:selector(el),target_text:safeText(el,100),target_href:el.tagName==="A"?pathOnly(el.href):"",display_state:state(el)}); visualFrame("click");
   },true);
   document.addEventListener("change",function(e){
     var el=e.target;if(!el)return;
-    send("change",{target:selector(el),target_text:safeText(el,100),display_state:state(el)});
+    send("change",{target:selector(el),target_text:safeText(el,100),display_state:state(el)}); visualFrame("change");
   },true);
   document.addEventListener("focusin",function(e){
     var form=e.target.closest&&e.target.closest("form"); if(!form)return;
@@ -223,7 +224,7 @@ def install_governed_customer_behaviour_recorder(app):
             if isinstance(value, (dict, list)):
                 details.pop(key, None)
             elif isinstance(value, str):
-                details[key] = _safe_text(value, 4000 if key == "display_text" else 300)
+                details[key] = _safe_text(value, 12000 if key == "frame" else (4000 if key == "display_text" else 300))
         details["recorded_at"] = datetime.utcnow().isoformat() + "Z"
         details["authenticated"] = bool(current_user.is_authenticated)
         if current_user.is_authenticated:
