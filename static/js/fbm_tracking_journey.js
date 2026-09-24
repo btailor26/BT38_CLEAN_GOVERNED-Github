@@ -30,17 +30,6 @@
         return `${path}${separator}v=${encodeURIComponent(assetRevision)}`;
     }
 
-    const pickupStates = new Set([
-        'accepted',
-        'carrier_accepted',
-        'collected',
-        'picked_up',
-        'in_transit',
-        'out_for_delivery',
-        'delivered'
-    ]);
-    const movementStates = new Set(['in_transit', 'out_for_delivery', 'delivered']);
-
     function lifecycleLabel(status) {
         const labels = {
             pending: 'Pending', unshipped: 'Confirmed', order: 'Confirmed', confirmed: 'Confirmed',
@@ -64,16 +53,6 @@
         return 'bg-light text-dark border';
     }
 
-    function labelOrTrackingStageReached(row) {
-        return String(row && row.dataset ? row.dataset.labelReady || '' : '') === '1';
-    }
-
-    function setBadgeState(badge, stateClass) {
-        if (!badge) return;
-        badge.classList.remove('bg-success', 'bg-danger', 'bg-primary', 'bg-light', 'text-muted', 'text-dark', 'border');
-        String(stateClass || '').split(/\s+/).filter(Boolean).forEach(name => badge.classList.add(name));
-    }
-
     function alignPersistedLifecycle() {
         document.querySelectorAll('.fbm-order-row').forEach(row => {
             const status = String(row.dataset.lifecycleStatus || '').trim().toLowerCase();
@@ -87,22 +66,6 @@
                 wrap.appendChild(badge);
                 orderCell.appendChild(wrap);
             }
-            const journeyCell = row.children && row.children[8];
-            if (!journeyCell) return;
-            const badges = Array.from(journeyCell.querySelectorAll('.badge'));
-            const pickedUp = badges.find(badge => /picked up/i.test(String(badge.textContent || '')));
-            const inTransit = badges.find(badge => /in transit/i.test(String(badge.textContent || '')));
-            const delivered = badges.find(badge => /delivered/i.test(String(badge.textContent || '')));
-            // Persisted row/session truth owns colour. Existing DOM colour is presentation only.
-            if (pickupStates.has(status)) {
-                setBadgeState(pickedUp, 'bg-success');
-                if (pickedUp) pickedUp.title = 'Carrier pickup confirmed by persisted journey state';
-            } else if (labelOrTrackingStageReached(row)) {
-                setBadgeState(pickedUp, 'bg-light text-muted border');
-                if (pickedUp) pickedUp.title = 'Label / postage created · waiting for carrier collection';
-            }
-            if (movementStates.has(status)) setBadgeState(inTransit, 'bg-success');
-            if (status === 'delivered' && delivered && !delivered.classList.contains('bg-danger')) setBadgeState(delivered, 'bg-success');
         });
     }
 
