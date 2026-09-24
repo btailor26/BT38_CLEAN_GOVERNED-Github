@@ -104,3 +104,15 @@ def test_verified_shipment_tracking_owns_its_carrier_and_service():
     assert truth["tracking_number"] == "H0067A0359326254"
     assert truth["authority"] == "shipment"
     assert _shipping_source(shipment) == "Packlink"
+
+
+def test_journey_delivery_requires_persisted_delivered_timestamp_only():
+    delivery = JS.split("function deliveryProven", 1)[1].split("function performanceHtml", 1)[0]
+    milestones = JS.split("function milestoneHtml", 1)[1].split("function trackingEvents", 1)[0]
+    colours = JS.split("function alignJourneyRowColours", 1)[1].split("function alignPromisePerformance", 1)[0]
+
+    assert "deliveredAt" in delivery
+    assert "shipmentState" not in delivery
+    assert "lastProviderStatus" not in delivery
+    assert "deliveredAt || terminalDelivery" not in milestones
+    assert "deliveredAt || terminalDelivery" not in colours
