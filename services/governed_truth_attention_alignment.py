@@ -207,6 +207,18 @@ def _risk_chip(section: str, field: str, reason: str, *, page_key: str) -> str:
 
 
 def _panel(page_key: str, risks: tuple[tuple[str, str, str], ...]) -> str:
+    if page_key == "fbm":
+        return (
+            '<div class="bt38-truth-attention-panel" data-bt38-truth-attention="1">'
+            '<div class="bt38-truth-attention-title">'
+            '<span class="bt38-truth-attention-main">&#9888; Data truth review</span>'
+            '<span id="bt38FbmTruthSummary" class="bt38-truth-attention-sub">Select order(s) to review persisted shipment truth.</span>'
+            '</div>'
+            '<div id="bt38FbmTruthFacts" class="bt38-truth-attention-items"></div>'
+            '<div class="mt-2"><button id="recoverMissingSelected" class="btn btn-sm btn-outline-danger" type="button" disabled>'
+            '<span aria-hidden="true">&#8635;</span> Recover Missing</button></div>'
+            '</div>'
+        )
     chips = "".join(
         _risk_chip(section, field, reason, page_key=page_key)
         for section, field, reason in risks
@@ -255,6 +267,57 @@ def _assets() -> str:
     wrap.innerHTML='<span class="bt38-truth-warning-icon" aria-hidden="true">&#9888;</span><span class="bt38-truth-warning-label">'+section+'</span><span class="bt38-truth-warning-box" role="note"><strong>Needs admin attention</strong><span class="bt38-truth-warning-copy"></span><label class="bt38-truth-review-check"><input type="checkbox" class="form-check-input bt38-truth-review-request"> <span>Request admin review</span></label><span class="bt38-truth-review-status" aria-live="polite"></span></span>';
     wrap.querySelector('.bt38-truth-warning-copy').textContent=reason;
     target.appendChild(wrap);
+  }
+  function updateFbmSelectedTruth(){
+    var summary=document.getElementById('bt38FbmTruthSummary');
+    var facts=document.getElementById('bt38FbmTruthFacts');
+    var recover=document.getElementById('recoverMissingSelected');
+    if(!summary || !facts || !recover){return;}
+    var rows=Array.from(document.querySelectorAll('.fbm-order-row')).filter(function(row){
+      var box=row.querySelector('.fbm-order-checkbox');
+      return box && box.checked;
+    });
+    facts.innerHTML='';
+    if(!rows.length){
+      summary.textContent='Select order(s) to review persisted shipment truth.';
+      recover.disabled=true;
+      return;
+    }
+    var counts={tracking:0,carrier:0,shipment:0,pickup:0,movement:0,delivery:0,label:0};
+    rows.forEach(function(row){
+      if(!String(row.dataset.trackingNumber||'').trim()){counts.tracking++;}
+      if(!String(row.dataset.carrier||'').trim()){counts.carrier++;}
+      if(!String(row.dataset.providerShipmentId||'').trim()){counts.shipment++;}
+      if(!String(row.dataset.carrierAcceptedAt||'').trim()){counts.pickup++;}
+      if(!String(row.dataset.firstMovementAt||'').trim()){counts.movement++;}
+      if(!String(row.dataset.deliveredAt||'').trim()){counts.delivery++;}
+      if(!String(row.dataset.labelPurchasedAt||'').trim()){counts.label++;}
+    });
+    var labels=[
+      ['tracking','Tracking missing'],['carrier','Carrier missing'],['shipment','Shipment identity missing'],
+      ['pickup','Pickup missing'],['movement','In-transit missing'],['delivery','Delivery missing'],['label','Label purchase missing']
+    ];
+    var unresolved=0;
+    labels.forEach(function(item){
+      var count=counts[item[0]]||0;
+      if(!count){return;}
+      unresolved+=count;
+      var chip=document.createElement('span');
+      chip.className='bt38-truth-warning';
+      chip.textContent=item[1]+' · '+count;
+      facts.appendChild(chip);
+    });
+    if(unresolved){
+      summary.textContent=rows.length+' selected · persisted DB truth has unresolved shipment facts.';
+      recover.disabled=false;
+    }else{
+      summary.textContent=rows.length+' selected · no missing persisted shipment facts detected.';
+      recover.disabled=true;
+      var ok=document.createElement('span');
+      ok.className='badge bg-success';
+      ok.textContent='Shipment truth complete';
+      facts.appendChild(ok);
+    }
   }
   function markObviousUnknowns(){
     document.querySelectorAll('.fbm-order-row').forEach(function(row){
@@ -316,6 +379,13 @@ def _assets() -> str:
     if(input && input.checked){submitReview(input);}
   });
   markObviousUnknowns();
+  updateFbmSelectedTruth();
+  document.addEventListener('change',function(event){
+    if(event.target && (event.target.matches('.fbm-order-checkbox') || event.target.matches('#selectAllOrders'))){
+      window.requestAnimationFrame(updateFbmSelectedTruth);
+    }
+  });
+  document.addEventListener('fbm:rows-updated',updateFbmSelectedTruth);
   if(window.feather && typeof window.feather.replace==='function'){window.feather.replace();}
 })();
 </script>
