@@ -21,12 +21,9 @@
     }
 
     function deliveryProven(row) {
-        // Delivery is proven only by persisted shipment/provider completion.
-        // Delivery-performance describes timing against the marketplace promise;
-        // it must never fabricate carrier milestones by itself.
-        return Boolean(row?.dataset?.deliveredAt) ||
-            String(row?.dataset?.shipmentState || '').trim().toLowerCase() === 'delivered' ||
-            String(row?.dataset?.lastProviderStatus || '').trim().toLowerCase() === 'delivered';
+        // Journey milestones are independent persisted facts. A terminal
+        // shipment/provider state must never fabricate a delivered milestone.
+        return Boolean(row?.dataset?.deliveredAt);
     }
 
     function performanceHtml(row) {
@@ -58,7 +55,7 @@
         const terminalDelivery = deliveryProven(row);
         const pickupPassed = Boolean(pickedUpAt);
         const transitPassed = Boolean(movementAt);
-        const delivered = Boolean(deliveredAt || terminalDelivery);
+        const delivered = Boolean(deliveredAt);
 
         function milestone(title, confirmed, exactTime) {
             const border = confirmed ? 'border-success' : 'border-secondary';
@@ -138,7 +135,7 @@
         const stageTruth = {
             'picked up': Boolean(row?.dataset?.carrierAcceptedAt),
             'in transit': Boolean(row?.dataset?.firstMovementAt),
-            'delivered': Boolean(row?.dataset?.deliveredAt || terminalDelivery)
+            'delivered': Boolean(row?.dataset?.deliveredAt)
         };
         Array.from(journeyCell.querySelectorAll('.badge')).forEach(function (badge) {
             const label = String(badge.textContent || '').trim().toLowerCase();
