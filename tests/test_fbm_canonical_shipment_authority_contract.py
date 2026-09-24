@@ -45,10 +45,13 @@ def test_runtime_canonical_authority_prefers_actual_label_purchase_over_marketpl
 def test_every_fbm_consumer_is_bound_to_the_same_canonical_runtime_selector():
     install = DB_AUTHORITY.split("def install_governed_fbm_db_authority_alignment", 1)[1]
     assert "import governed_fbm_routes as routes" in install
-    assert "routes._shipment_map = _canonical_persisted_shipment_map" in install
-    assert "page._shipment_map = _canonical_persisted_shipment_map" in install
-    assert "global_search._shipment_map = _canonical_persisted_shipment_map" in install
-    assert "dispatch_queue._shipment_map = _canonical_persisted_shipment_map" in install
+    assert "authority_map =" in install
+    assert "page._shipment_map" in install
+    assert "_canonical_persisted_shipment_map" in install
+    assert "routes._shipment_map = authority_map" in install
+    assert "page._shipment_map = authority_map" in install
+    assert "global_search._shipment_map = authority_map" in install
+    assert "dispatch_queue._shipment_map = authority_map" in install
 
 
 def test_fbm_provider_journey_receives_the_selected_persisted_shipment_id():
