@@ -120,13 +120,9 @@ def _marketplace_shipment(row):
     carrier_display = carrier or f"{platform} marketplace shipment"
     service_display = "Marketplace dispatch" if tracking else "Tracking pending"
 
-    delivered = status == "delivered"
-    pickup_proven = status in {
-        "accepted", "carrier_accepted", "collected", "picked_up",
-        "in_transit", "out_for_delivery", "delivered",
-    }
-    movement_proven = status in {"in_transit", "out_for_delivery", "delivered"}
-
+    # Marketplace lifecycle/status remains dispatch/lifecycle truth only.
+    # Physical journey milestones require their own persisted timestamps and
+    # must never be fabricated from a later marketplace state.
     return SimpleNamespace(
         id=None,
         provider="marketplace",
@@ -142,16 +138,16 @@ def _marketplace_shipment(row):
         label_format=None,
         label_purchased_at=shipped_at or (changed_at if tracking else None),
         handover_due_at=None,
-        carrier_accepted_at=changed_at if pickup_proven and not delivered else None,
-        first_movement_at=changed_at if movement_proven and not delivered else None,
-        delivered_at=changed_at if delivered else None,
+        carrier_accepted_at=None,
+        first_movement_at=None,
+        delivered_at=None,
         status=status or "dispatched",
         marketplace_confirmed_at=shipped_at,
         marketplace_confirmation_status="marketplace_authoritative",
         mapping_review=None,
         provider_cases=[],
         _bt38_marketplace_owned=True,
-        _bt38_terminal_delivery_proves_prior_milestones=delivered,
+        _bt38_terminal_delivery_proves_prior_milestones=False,
     )
 
 
