@@ -251,47 +251,6 @@ def _assets() -> str:
     var node=document.querySelector('meta[name="csrf-token"]');
     return node ? String(node.getAttribute('content')||'') : '';
   }
-  function addRowWarning(target, section, field, reason, row){
-    if(!target || target.querySelector('[data-bt38-row-field="'+field+'"]')){return;}
-    var wrap=document.createElement('span');
-    wrap.className='bt38-truth-warning bt38-row-truth-warning';
-    wrap.tabIndex=0;
-    wrap.setAttribute('data-bt38-row-field',field);
-    wrap.setAttribute('data-bt38-section',section);
-    wrap.setAttribute('data-bt38-field',field);
-    wrap.setAttribute('data-bt38-reason',reason);
-    wrap.setAttribute('data-bt38-page',window.location.pathname);
-    wrap.setAttribute('data-bt38-entity-type','marketplace_order');
-    wrap.setAttribute('data-bt38-entity-id',row && row.dataset ? (row.dataset.orderId||'') : '');
-    wrap.innerHTML='<span class="bt38-truth-warning-icon" aria-hidden="true">&#9888;</span><span class="bt38-truth-warning-label">'+section+'</span><span class="bt38-truth-warning-box" role="note"><strong>Needs admin attention</strong><span class="bt38-truth-warning-copy"></span><label class="bt38-truth-review-check"><input type="checkbox" class="form-check-input bt38-truth-review-request"> <span>Request admin review</span></label><span class="bt38-truth-review-status" aria-live="polite"></span></span>';
-    wrap.querySelector('.bt38-truth-warning-copy').textContent=reason;
-    target.appendChild(wrap);
-  }
-  function markObviousUnknowns(){
-    document.querySelectorAll('.fbm-order-row').forEach(function(row){
-      var cells=row.querySelectorAll('td');
-      if(cells.length<8){return;}
-      var qty=(cells[4].textContent||'').trim();
-      if(!qty || qty==='0' || qty==='—'){
-        addRowWarning(cells[4],'Order quantity','quantity','Quantity is missing or not proven. BT38 must not assume a unit count.',row);
-      }
-      var code=cells[3].querySelector('code');
-      var sku=code ? (code.textContent||'').trim() : '';
-      if(!sku || sku==='—'){
-        addRowWarning(cells[3],'SKU / item identity','sku_item_identity','SKU or marketplace item identity is incomplete. Treat this line as unresolved until source evidence is confirmed.',row);
-      }
-      var shipmentText=(cells[7].textContent||'').toLowerCase();
-      if(shipmentText.indexOf('marketplace says shipped')>=0 && shipmentText.indexOf('parcel id pending')<0 && !cells[7].querySelector('code')){
-        addRowWarning(cells[7],'Shipment evidence','shipment_tracking','Marketplace lifecycle says shipped but parcel tracking evidence is not present on this row.',row);
-      }
-      if((row.textContent||'').toLowerCase().indexOf('mapping review')>=0){
-        addRowWarning(cells[7],'Parcel mapping','parcel_mapping','Parcel facts are under review. BT38 must not invent dimensions or packing truth.',row);
-      }
-      if(row.hasAttribute('data-fbm-mcf-readonly') && (row.textContent||'').toLowerCase().indexOf('amazon order id pending')>=0){
-        addRowWarning(cells[2],'MCF Amazon order identity','mcf_amazon_order_identity','Amazon order identity has not yet been confirmed for this MCF order.',row);
-      }
-    });
-  }
   async function submitReview(input){
     var root=input.closest('.bt38-truth-warning');
     if(!root){return;}
@@ -326,7 +285,6 @@ def _assets() -> str:
     var input=event.target.closest && event.target.closest('.bt38-truth-review-request');
     if(input && input.checked){submitReview(input);}
   });
-  markObviousUnknowns();
   if(window.feather && typeof window.feather.replace==='function'){window.feather.replace();}
 })();
 </script>
