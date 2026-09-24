@@ -96,9 +96,27 @@ def _trading_shipment_truth(*, access_token: str, order_id: str) -> dict[str, An
     delivered_at = _parse_ebay_datetime(
         order.findtext(".//{*}ShippingPackageInfo/{*}ActualDeliveryTime")
     )
+
+    # Keep the exact eBay line identity needed by the already-proven
+    # tracking-details source.  These are authoritative GetOrders fields; no
+    # tracking-prefix/carrier inference and no new persistence schema.
+    line_identities: list[dict[str, str]] = []
+    for transaction in order.findall(".//{*}Transaction"):
+        item_id = _text(transaction.findtext("{*}Item/{*}ItemID"))
+        transaction_id = _text(transaction.findtext("{*}TransactionID"))
+        order_line_item_id = _text(transaction.findtext("{*}OrderLineItemID"))
+        if not item_id or not transaction_id:
+            continue
+        line_identities.append({
+            "item_id": item_id,
+            "transaction_id": transaction_id,
+            "order_line_item_id": order_line_item_id,
+        })
+
     return {
         "tracking_rows": tracking_rows,
         "delivered_at": delivered_at,
+        "line_identities": line_identities,
     }
 
 
