@@ -63,7 +63,15 @@ def _canonical_rank(shipment: FBMShipment, persisted_tracking: str) -> tuple[int
         and (
             getattr(shipment, "label_purchased_at", None) is not None
             or purchase_status == "purchased"
+            or shipment_tracking
         )
+    )
+    # Packlink creates a provider reference before checkout/payment completes.
+    # That draft must not qualify as physical shipment authority until purchase
+    # or tracking is confirmed.
+    confirmed_physical_provider = bool(
+        physical_provider
+        and (provider != "packlink" or purchased_provider)
     )
     marketplace_dispatch = bool(
         provider == "marketplace"
@@ -80,8 +88,8 @@ def _canonical_rank(shipment: FBMShipment, persisted_tracking: str) -> tuple[int
         1 if not additional_shipment else 0,
         1 if exact_tracking_match else 0,
         1 if marketplace_dispatch else 0,
-        1 if physical_provider else 0,
-        1 if getattr(shipment, "provider_shipment_id", None) else 0,
+        1 if confirmed_physical_provider else 0,
+        1 if getattr(shipment, "provider_shipment_id", None) and confirmed_physical_provider else 0,
         1 if shipment_tracking else 0,
     )
 
