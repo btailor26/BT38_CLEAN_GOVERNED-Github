@@ -60,6 +60,13 @@ def test_trading_shipment_truth_reads_carrier_tracking_and_delivery(monkeypatch)
             }
         ],
         "delivered_at": datetime(2026, 9, 9, 8, 9, 49),
+        "line_identities": [
+            {
+                "item_id": "127951772415",
+                "transaction_id": "10087798582227",
+                "order_line_item_id": "127951772415-10087798582227",
+            }
+        ],
     }
 
     kwargs = post.call_args.kwargs
