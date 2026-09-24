@@ -56,3 +56,26 @@ def test_fbm_provider_journey_receives_the_selected_persisted_shipment_id():
     assert 'data-shipment-id="{{ shipment.id }}"' in TEMPLATE
     assert "/fbm/shipments/${encodeURIComponent(button.dataset.shipmentId)}/packlink/status" in JS
     assert "Journey source: Packlink / carrier platform" in JS
+
+
+def test_runtime_canonical_authority_rejects_unpaid_packlink_draft_as_physical_truth():
+    rank = DB_AUTHORITY.split("def _canonical_rank", 1)[1].split("\ndef _canonical_persisted_shipment_map", 1)[0]
+
+    assert "confirmed_physical_provider" in rank
+    assert 'provider != "packlink" or purchased_provider' in rank
+    assert "or shipment_tracking" in rank
+    assert "provider_shipment_id" in rank
+    assert "and confirmed_physical_provider" in rank
+
+
+def test_selected_recovery_routes_by_exact_marketplace_identity_before_packlink_fallback():
+    assert 'data-store-id="{{ order.store_id }}"' in TEMPLATE
+    assert 'data-marketplace-order-id="{{ order.marketplace_order_id }}"' in TEMPLATE
+    assert 'data-marketplace="{{ platform_key }}"' in TEMPLATE
+    handler = TEMPLATE.split("if(recoverButton)recoverButton.addEventListener", 1)[1].split("document.querySelector('.fbm-orders-table tbody')", 1)[0]
+
+    assert "/governed/actions/amazon/exact-order-recovery" in handler
+    assert "/governed/actions/ebay/exact-order-recovery" in handler
+    assert "/fbm/shipments/" in handler and "/packlink/status" in handler
+    assert handler.index("marketplace==='amazon'") < handler.index("shipmentProvider")
+    assert handler.index("marketplace==='ebay'") < handler.index("shipmentProvider")
