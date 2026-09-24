@@ -136,7 +136,24 @@ jobs:
         run: |
           set -euo pipefail
           CHECK_B64="$(base64 -w0 scripts/verify_production_db_contract.py)"
-          if OUT="$(flyctl ssh console --app bt38-prod --command "sh -lc 'printf %s \"$CHECK_B64\" | base64 -d > /tmp/bt38-db-contract.py && cd /app && .venv/bin/python /tmp/bt38-db-contract.py'" 2>&1)"; then printf '%s\n' "$OUT"; elif printf '%s\n' "$OUT" | grep -q 'has no started VMs'; then echo 'DB_CHECK_DEFERRED'; else printf '%s\n' "$OUT"; exit 1; fi
+          for ATTEMPT in 1 2 3 4 5 6; do
+            set +e
+            OUT="$(timeout 45s flyctl ssh console --app bt38-prod --command "sh -lc 'printf %s \"$CHECK_B64\" | base64 -d > /tmp/bt38-db-contract.py && cd /app && .venv/bin/python /tmp/bt38-db-contract.py'" 2>&1)"
+            STATUS=$?
+            set -e
+            printf '%s\n' "$OUT"
+            if [ "$STATUS" -eq 0 ]; then exit 0; fi
+            if printf '%s\n' "$OUT" | grep -q 'has no started VMs'; then echo 'DB_CHECK_DEFERRED'; exit 0; fi
+            if printf '%s\n' "$OUT" | grep -q 'DB_CONTRACT_BLOCKED'; then exit "$STATUS"; fi
+            if [ "$STATUS" -eq 124 ] || printf '%s\n' "$OUT" | grep -Eqi 'tunnel unavailable|timed out|context deadline exceeded|Error contacting Fly.io API|connection.*(refused|reset)|ssh.*(connect|handshake)'; then
+              echo "FLY_SSH_TRANSIENT attempt=$ATTEMPT/6"
+              [ "$ATTEMPT" -lt 6 ] && sleep $((ATTEMPT*5))
+              continue
+            fi
+            exit "$STATUS"
+          done
+          echo 'PREDEPLOY_DB_CHECK_FAILED: Fly SSH unavailable after 6 attempts'
+          exit 1
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       - name: Deploy exact GitHub commit with Fly remote builder
