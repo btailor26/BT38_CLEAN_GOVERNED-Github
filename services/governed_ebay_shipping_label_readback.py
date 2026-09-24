@@ -203,8 +203,13 @@ def persist_exact_ebay_purchased_shipment_authority(*, store, marketplace_order_
 
     try:
         trading_truth = _trading_shipment_truth(access_token=access_token, order_id=order_id)
-    except Exception:
-        trading_truth = None
+    except Exception as exc:
+        return {
+            "success": False,
+            "skipped": False,
+            "reason": f"ebay_trading_read_failed:{exc}",
+            "order_id": order_id,
+        }
 
     candidates = _unique_fulfillment_candidates(fulfillments)
     if len(candidates) != 1:
