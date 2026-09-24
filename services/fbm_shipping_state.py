@@ -95,9 +95,16 @@ def shipment_confirmation_state(shipment: Any, *, now: datetime | None = None) -
     provider = str(getattr(shipment, "provider", "") or "").strip().lower()
 
     if provider == "marketplace":
-        proven = _marketplace_proven_state(shipment)
-        if proven is not None:
-            return proven
+        # Marketplace lifecycle/status remains persisted marketplace truth, but
+        # physical journey milestones are independent facts. Never promote a
+        # marketplace status such as IN_TRANSIT/DELIVERED into the shipment
+        # confirmation journey without its persisted milestone timestamp.
+        if getattr(shipment, "delivered_at", None):
+            return "delivered"
+        if getattr(shipment, "first_movement_at", None):
+            return "in_transit"
+        if getattr(shipment, "carrier_accepted_at", None):
+            return "accepted"
     elif provider == "packlink":
         proven = _packlink_proven_state(shipment)
         if proven == "delivered" and getattr(shipment, "delivered_at", None):
