@@ -5,9 +5,6 @@
 (function (document) {
     'use strict';
 
-    const pickupStates = new Set(['accepted', 'carrier_accepted', 'collected', 'picked_up']);
-    const movementStates = new Set(['in_transit', 'out_for_delivery']);
-
     function setBadge(badge, confirmed) {
         if (!badge) return;
         badge.classList.remove('bg-success', 'bg-danger', 'bg-primary', 'bg-warning', 'bg-info', 'bg-light', 'text-muted', 'text-dark', 'border');
@@ -26,21 +23,18 @@
         const inTransit = badges.find(badge => /in transit/i.test(String(badge.textContent || '')));
         const delivered = badges.find(badge => /delivered/i.test(String(badge.textContent || '')));
 
-        // Always reset first so stale server/browser colour cannot survive a
-        // newer persisted marketplace lifecycle snapshot.
-        setBadge(pickedUp, false);
-        setBadge(inTransit, false);
-        setBadge(delivered, false);
-
-        const pickupConfirmed = pickupStates.has(status) || movementStates.has(status) || status === 'delivered';
-        const movementConfirmed = movementStates.has(status) || status === 'delivered';
+        // Journey milestones are independent persisted facts. Lifecycle state
+        // must never manufacture pickup or movement evidence.
+        const pickupConfirmed = Boolean(row.dataset.carrierAcceptedAt);
+        const movementConfirmed = Boolean(row.dataset.firstMovementAt);
+        const deliveryConfirmed = Boolean(row.dataset.deliveredAt);
         setBadge(pickedUp, pickupConfirmed);
         setBadge(inTransit, movementConfirmed);
-        setBadge(delivered, status === 'delivered');
+        setBadge(delivered, deliveryConfirmed);
 
-        if (pickedUp) pickedUp.title = pickupConfirmed ? 'Pickup confirmed by persisted marketplace lifecycle' : 'Pickup not confirmed';
-        if (inTransit) inTransit.title = movementConfirmed ? 'Movement confirmed by persisted marketplace lifecycle' : 'Movement not confirmed';
-        if (delivered) delivered.title = status === 'delivered' ? 'Delivery confirmed by persisted marketplace lifecycle' : 'Delivery not confirmed';
+        if (pickedUp) pickedUp.title = pickupConfirmed ? 'Pickup confirmed by persisted shipment truth' : 'Pickup not confirmed';
+        if (inTransit) inTransit.title = movementConfirmed ? 'Movement confirmed by persisted shipment truth' : 'Movement not confirmed';
+        if (delivered) delivered.title = deliveryConfirmed ? 'Delivery confirmed by persisted shipment truth' : 'Delivery not confirmed';
     }
 
     function renderedRecommendation(cell) {
