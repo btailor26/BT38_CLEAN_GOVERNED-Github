@@ -155,6 +155,7 @@ jobs:
             tests/test_fbm_manual_shipping_order_contract.py \
             tests/test_fbm_db_delivery_performance_authority_contract.py \
             tests/test_fbm_marketplace_dispatch_runtime_order_contract.py \
+            tests/test_fbm_canonical_shipment_authority_contract.py \
             tests/test_ebay_return_notification_registration_contract.py \
             tests/test_order_clarity_alignment_contract.py \
             tests/test_marketplace_tracking_readback_contract.py \
