@@ -16,7 +16,8 @@ def test_shipment_journey_and_row_use_one_persisted_db_milestone_mapping():
     assert "const milestones = persistedMilestones(row);" in JOURNEY
     assert "'picked up': milestones.pickedUp" in JOURNEY
     assert "'in transit': milestones.inTransit" in JOURNEY
-    assert "'delivered': milestones.delivered" in JOURNEY
+    assert "'delivered': deliveryProven(row)" in JOURNEY
+    assert "return Boolean(row?.dataset?.deliveredAt);" in JOURNEY
 
 
 def test_delivery_performance_remains_independent_persisted_db_truth():
