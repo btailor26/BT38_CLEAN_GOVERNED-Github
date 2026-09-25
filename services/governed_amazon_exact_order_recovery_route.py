@@ -295,6 +295,29 @@ def recover_exact_amazon_order_manually():
             "stock_mutation_started": False, "marketplace_write_started": False,
         }), 502
 
+    if not bool(result.get("success")):
+        upstream_status = result.get("status_code")
+        try:
+            response_status = int(upstream_status)
+        except (TypeError, ValueError):
+            response_status = 502
+        if response_status < 400 or response_status > 599:
+            response_status = 502
+        return jsonify({
+            "success": False, "ok": False, "governed": True,
+            "reason": result.get("reason") or "amazon_exact_tracking_recovery_failed",
+            "error": result.get("error"),
+            "status_code": upstream_status,
+            "store_id": store_id, "order_id": order_id, "fulfillment_type": "FBM",
+            "exact_order_only": True, "broad_scan_started": False,
+            "order_replayed": False, "stock_mutation_started": False,
+            "marketplace_write_started": False,
+            "tracking_recovery": result,
+            "promise_recovery_started": False,
+            "shipping_label_recovery_started": False,
+            "database_readback": _readback(store_id, order_id),
+        }), response_status
+
     try:
         promise_readback = [refresh_exact_amazon_order(row) for row in fbm_rows]
     except Exception as exc:
