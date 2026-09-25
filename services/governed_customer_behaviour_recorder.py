@@ -251,7 +251,8 @@ def install_governed_customer_behaviour_recorder(app):
                 "created_at": row.created_at, "created_at_iso": row.created_at.isoformat() if row.created_at else "", "event": _safe_text(details.get("event"), 40), "page": _safe_text(details.get("page"), 300),
                 "section": _safe_text(details.get("section"), 100), "target": _safe_text(details.get("target"), 120), "target_text": _safe_text(details.get("target_text"), 100),
                 "form": _safe_text(details.get("form"), 100), "feature": _safe_text(details.get("feature"), 140), "display_text": _safe_text(details.get("display_text"), 4000),
-                "display_state": _safe_text(details.get("display_state"), 100), "scroll_depth": details.get("scroll_depth"), "engaged_ms": details.get("engaged_ms"),\n                "frame": _safe_text(details.get("frame"), 12000), "scroll_x": details.get("scroll_x"), "scroll_y": details.get("scroll_y"),
+                "display_state": _safe_text(details.get("display_state"), 100), "scroll_depth": details.get("scroll_depth"), "engaged_ms": details.get("engaged_ms"),
+                "frame": _safe_text(details.get("frame"), 12000), "scroll_x": details.get("scroll_x"), "scroll_y": details.get("scroll_y"),
             })
         journeys = sorted(grouped.values(), key=lambda item: item["last_at"], reverse=True)
         return render_template("admin/customer_behaviour.html", journeys=journeys)
