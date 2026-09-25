@@ -24,10 +24,34 @@
         const delivered = badges.find(badge => /delivered/i.test(String(badge.textContent || '')));
 
         // Journey milestones are independent persisted facts. Lifecycle state
-        // must never manufacture pickup or movement evidence.
-        const pickupConfirmed = Boolean(row.dataset.carrierAcceptedAt);
-        const movementConfirmed = Boolean(row.dataset.firstMovementAt);
-        const deliveryConfirmed = Boolean(row.dataset.deliveredAt);
+        // must never manufacture pickup or movement evidence. The canonical
+        // shipment timestamps remain strongest; persisted carrier tracking
+        // events are valid supporting milestone evidence when a provider has
+        // supplied the collection/movement event before the projection timestamp
+        // has been backfilled.
+        let trackingEvents = [];
+        try {
+            const parsed = JSON.parse(String(row.dataset.trackingEvents || '[]'));
+            if (Array.isArray(parsed)) trackingEvents = parsed;
+        } catch (_) {
+            trackingEvents = [];
+        }
+        const eventText = trackingEvents.map(event => [
+            event && event.status,
+            event && event.description,
+            event && event.detail
+        ].filter(Boolean).join(' ').toLowerCase());
+        const hasEvent = patterns => eventText.some(text => patterns.some(pattern => pattern.test(text)));
+
+        const pickupConfirmed = Boolean(row.dataset.carrierAcceptedAt) || hasEvent([
+            /\bcollected\b/, /\bpicked[ _-]?up\b/, /\bcarrier[ _-]?accepted\b/, /\baccepted by carrier\b/
+        ]);
+        const movementConfirmed = Boolean(row.dataset.firstMovementAt) || hasEvent([
+            /\bin[ _-]?transit\b/, /\bout for delivery\b/, /\bdelivered\b/
+        ]);
+        const deliveryConfirmed = Boolean(row.dataset.deliveredAt) || hasEvent([
+            /\bdelivered\b/
+        ]);
         setBadge(pickedUp, pickupConfirmed);
         setBadge(inTransit, movementConfirmed);
         setBadge(delivered, deliveryConfirmed);
