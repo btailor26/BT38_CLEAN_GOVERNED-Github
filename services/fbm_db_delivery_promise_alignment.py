@@ -211,7 +211,12 @@ def _iso(value: Any) -> str:
 
 
 def _tracking_events(shipment_ids: set[int]) -> dict[int, list[dict[str, Any]]]:
-    """Batch-read already-persisted carrier events for the visible canonical shipments."""
+    """Batch-read already-persisted carrier events for the visible canonical shipments.
+
+    Journey pickup is carrier-neutral: once a label exists, the earliest genuine
+    persisted carrier event is the pickup boundary. Provider wording is not part
+    of that decision.
+    """
     if not shipment_ids:
         return {}
     rows = (
@@ -294,6 +299,15 @@ def install_fbm_db_delivery_promise_alignment(app: Any) -> None:
             tracking_authority = _shipment_tracking_authority(shipment, order)
             shipment_id = int(getattr(shipment, "id", 0) or 0) if shipment is not None else 0
             shipment_events = tracking_events_by_shipment.get(shipment_id, [])
+            first_scan_at = ""
+            if shipment is not None and getattr(shipment, "label_purchased_at", None) is not None:
+                for event in shipment_events:
+                    candidate = str(event.get("event_time") or event.get("observed_at") or "").strip()
+                    if candidate:
+                        first_scan_at = candidate
+                        break
+            canonical_pickup_at = _iso(getattr(shipment, "carrier_accepted_at", None)) if shipment is not None else ""
+            pickup_at = canonical_pickup_at or first_scan_at
             order_id = int(getattr(order, "id", 0) or 0)
             if order_id:
                 rendered_truth[order_id] = {
@@ -303,7 +317,7 @@ def install_fbm_db_delivery_promise_alignment(app: Any) -> None:
                     "shipped_at": _iso(getattr(order, "shipped_at", None)),
                     "label_purchased_at": _iso(getattr(shipment, "label_purchased_at", None)) if shipment is not None else "",
                     "marketplace_confirmed_at": _iso(getattr(shipment, "marketplace_confirmed_at", None)) if shipment is not None else "",
-                    "carrier_accepted_at": _iso(getattr(shipment, "carrier_accepted_at", None)) if shipment is not None else "",
+                    "carrier_accepted_at": pickup_at,
                     "first_movement_at": _iso(getattr(shipment, "first_movement_at", None)) if shipment is not None else "",
                     "delivered_at": _iso(getattr(shipment, "delivered_at", None)) if shipment is not None else "",
                     "last_provider_checked_at": _iso(getattr(shipment, "last_provider_checked_at", None)) if shipment is not None else "",
