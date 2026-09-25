@@ -21,6 +21,53 @@
     return String(form?.querySelector('[name="search"]')?.value || '').trim();
   }
 
+  function cssEscape(value) {
+    const text = String(value ?? '');
+    if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(text);
+    return text.replace(/["\\]/g, '\\  async function refreshProductLinkingSilently(detail) {');
+  }
+
+  async function refreshExactHtmlRow(detail) {
+    const path = window.location.pathname.replace(/\/$/, '') || '/';
+    let selector = '';
+
+    if (path === '/warehouse') {
+      if (detail?.warehouse_stock_id != null) selector = `tr[data-stock-id="${cssEscape(detail.warehouse_stock_id)}"]`;
+      else if (detail?.listing_id != null) selector = `tr[data-listing-id="${cssEscape(detail.listing_id)}"]`;
+      else if (detail?.seller_sku) selector = `tr[data-sku="${cssEscape(detail.seller_sku)}"]`;
+      else if (detail?.group_id != null) selector = `tr[data-group-id="${cssEscape(detail.group_id)}"]`;
+    } else if (path === '/fbm') {
+      if (detail?.order_id != null) {
+        selector = `.fbm-order-row[data-order-id="${cssEscape(detail.order_id)}"]`;
+      } else if (detail?.marketplace_order_id) {
+        selector = `.fbm-order-row[data-marketplace-order-id="${cssEscape(detail.marketplace_order_id)}"]`;
+      }
+    } else {
+      return false;
+    }
+
+    if (!selector) return false;
+    const currentRow = document.querySelector(selector);
+    if (!currentRow) return false;
+
+    const response = await fetch(window.location.href, {
+      credentials: 'same-origin',
+      cache: 'no-store',
+      headers: {'X-BT38-UI-Refresh': 'targeted'}
+    });
+    if (!response.ok) return false;
+
+    const parsed = new DOMParser().parseFromString(await response.text(), 'text/html');
+    const freshRow = parsed.querySelector(selector);
+    if (!freshRow) return false;
+
+    currentRow.replaceWith(document.importNode(freshRow, true));
+    if (path === '/fbm') {
+      document.dispatchEvent(new CustomEvent('bt38-fbm-working-set-expanded'));
+    }
+    return true;
+  }
+
   async function refreshProductLinkingSilently(detail) {
     const search = currentProductLinkingSearch();
     if (productLinkingRefreshRunning) return false;
@@ -63,6 +110,8 @@
       await refreshProductLinkingSilently(detail || {});
       return;
     }
+
+    await refreshExactHtmlRow(detail || {});
   }
 
   window.addEventListener('bt38-marketplace-event', function (event) {
