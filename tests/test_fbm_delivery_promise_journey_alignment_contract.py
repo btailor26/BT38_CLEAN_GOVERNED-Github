@@ -10,8 +10,9 @@ def test_shipment_journey_and_row_use_one_persisted_db_milestone_mapping():
     assert "row?.dataset?.firstMovementAt" in JOURNEY
     assert "row?.dataset?.deliveredAt" in JOURNEY
     assert "trackingEvents(row)" in JOURNEY
-    assert "const firstScan = scans[0] || null;" in JOURNEY
-    assert "pickedUp: Boolean(row?.dataset?.carrierAcceptedAt || pickupEventAt)" in JOURNEY
+    assert "const firstScan = scans[0] || null;" not in JOURNEY
+    assert "pickupEventAt" not in JOURNEY
+    assert "pickedUp: Boolean(row?.dataset?.carrierAcceptedAt)" in JOURNEY
     assert "/\\bin[ _-]?transit\\b/" in JOURNEY
     assert "/\\bdelivered\\b/" in JOURNEY
     assert "const milestones = persistedMilestones(row);" in JOURNEY
@@ -20,7 +21,7 @@ def test_shipment_journey_and_row_use_one_persisted_db_milestone_mapping():
     assert "'delivered': deliveryProven(row)" in JOURNEY
     assert "return Boolean(row?.dataset?.deliveredAt);" in JOURNEY
     assert "function matchingEventTime(row, patterns)" in JOURNEY
-    assert "pickedUpAt: row?.dataset?.carrierAcceptedAt || pickupEventAt" in JOURNEY
+    assert "pickedUpAt: row?.dataset?.carrierAcceptedAt || ''" in JOURNEY
     assert "inTransitAt: row?.dataset?.firstMovementAt || movementEventAt" in JOURNEY
     assert "deliveredAt: row?.dataset?.deliveredAt || ''" in JOURNEY
     assert "if (milestones.pickedUp && /pickup not confirmed/i.test(text)) note.remove()" in JOURNEY
