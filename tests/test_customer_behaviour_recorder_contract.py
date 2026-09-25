@@ -117,3 +117,20 @@ def test_recorder_records_session_state_only_on_page_load_or_real_refresh():
     assert 'send("display_snapshot"' not in source
     assert "new CustomEvent('bt38-page-refreshed'" in refresh
     assert "committed_event_refresh" in refresh
+
+
+def test_journey_video_capture_requires_explicit_admin_acceptance_and_never_auto_starts():
+    source = Path("services/governed_customer_behaviour_recorder.py").read_text(encoding="utf-8")
+    assert "_VIDEO_CONTROL_SCRIPT" in source
+    assert "bt38JourneyVideoRecord" in source
+    assert 'addEventListener("click",async function()' in source
+    assert "getDisplayMedia({video:true,audio:false})" in source
+    assert "new MediaRecorder(stream)" in source
+    assert "recorder.start()" in source
+    assert 'getattr(current_user, "role", "") == "admin"' in source
+    assert 'button.textContent="Stop journey video"' in source
+    assert 'track.addEventListener("ended",stop' in source
+    assert 'window.addEventListener("pagehide",stop' in source
+    assert "audio:false" in source
+    # No page/session/event hook is allowed to invoke screen capture.
+    assert source.count("getDisplayMedia(") == 1
