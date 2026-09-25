@@ -374,7 +374,10 @@ def install_governed_customer_behaviour_recorder(app):
         if "text/html" not in content_type or response.direct_passthrough or response.headers.get("Content-Encoding"): return response
         body = response.get_data(as_text=True)
         if "bt38CustomerBehaviourRecorder" in body or "</body>" not in body: return response
-        injected = _SCRIPT\n        if current_user.is_authenticated and getattr(current_user, "role", "") == "admin":\n            injected += "\n" + _VIDEO_CONTROL_SCRIPT\n        body = body.replace("</body>", injected + "\n</body>", 1)
+        injected = _SCRIPT
+        if current_user.is_authenticated and getattr(current_user, "role", "") == "admin":
+            injected += "\n" + _VIDEO_CONTROL_SCRIPT
+        body = body.replace("</body>", injected + "\n</body>", 1)
         response.set_data(body)
         response.headers.pop("Content-Length", None)
         return response
