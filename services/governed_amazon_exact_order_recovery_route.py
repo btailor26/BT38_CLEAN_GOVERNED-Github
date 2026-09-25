@@ -65,6 +65,74 @@ def _readback(store_id: int, order_id: str) -> list[dict]:
     ]
 
 
+@governed_amazon_exact_order_recovery_bp.post("/governed/actions/marketplace/exact-order-recovery-check")
+def check_exact_marketplace_order_recovery():
+    """DB-only gate for Recover Missing; never contacts a marketplace."""
+    if not _operator_authorized():
+        return jsonify({
+            "success": False, "ok": False, "governed": True,
+            "reason": "authentication_required", "marketplace_call_started": False,
+        }), 401
+
+    payload = request.get_json(silent=True) or {}
+    try:
+        store_id = int(payload.get("store_id"))
+    except (TypeError, ValueError):
+        return jsonify({
+            "success": False, "ok": False, "governed": True,
+            "reason": "invalid_store_id", "marketplace_call_started": False,
+        }), 400
+
+    order_id = str(payload.get("marketplace_order_id") or "").strip()
+    platform = str(payload.get("platform") or "").strip().lower()
+    if store_id <= 0 or not order_id or platform not in {"amazon", "ebay"}:
+        return jsonify({
+            "success": False, "ok": False, "governed": True,
+            "reason": "invalid_exact_recovery_identity", "marketplace_call_started": False,
+        }), 400
+
+    store = db.session.get(Store, store_id)
+    if (
+        store is None
+        or not bool(getattr(store, "is_active", False))
+        or platform not in str(getattr(store, "platform", "") or "").lower()
+    ):
+        return jsonify({
+            "success": False, "ok": False, "governed": True,
+            "reason": "active_store_not_found", "marketplace_call_started": False,
+        }), 404
+
+    from scripts.recover_marketplace_dispatch_history import (
+        _candidate_order_ids,
+        _database_readback,
+    )
+
+    before = _database_readback(store_id, order_id)
+    candidates = set(_candidate_order_ids(store_id, platform=platform))
+    recovery_required = order_id in candidates
+    missing = []
+    if not before.get("tracking_number"):
+        missing.append("tracking")
+    if not before.get("carrier"):
+        missing.append("carrier")
+    if before.get("ship_by_at") is None:
+        missing.append("ship-by promise")
+    if before.get("earliest_delivery_at") is None and before.get("latest_delivery_at") is None:
+        missing.append("delivery promise")
+    if platform == "ebay" and not before.get("confirmed_shipping_spend"):
+        missing.append("confirmed shipping spend")
+    if platform == "amazon" and recovery_required and not missing:
+        missing.append("Amazon tracking event history")
+
+    return jsonify({
+        "success": True, "ok": True, "governed": True,
+        "db_check_completed": True, "marketplace_call_started": False,
+        "store_id": store_id, "order_id": order_id, "platform": platform,
+        "recovery_required": recovery_required, "missing": missing,
+        "database_readback": before,
+    }), 200
+
+
 @governed_amazon_exact_order_recovery_bp.post("/governed/actions/amazon/exact-order-recovery")
 def recover_exact_amazon_order_manually():
     """Recover the complete available Amazon-owned journey for one exact order."""
