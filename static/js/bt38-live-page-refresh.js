@@ -65,6 +65,9 @@
     if (path === '/fbm') {
       document.dispatchEvent(new CustomEvent('bt38-fbm-working-set-expanded'));
     }
+    window.dispatchEvent(new CustomEvent('bt38-page-refreshed', {
+      detail: {reason: 'committed_event_refresh', path: path}
+    }));
     return true;
   }
 
@@ -85,6 +88,9 @@
     productLinkingRefreshRunning = true;
     try {
       await window.bt38RefreshProductLinkingRecord(identity);
+      window.dispatchEvent(new CustomEvent('bt38-page-refreshed', {
+        detail: {reason: 'committed_event_refresh', path: '/product-linking'}
+      }));
       return true;
     } catch (error) {
       console.warn('[BT38 UI] Product Linking silent refresh failed', error);
