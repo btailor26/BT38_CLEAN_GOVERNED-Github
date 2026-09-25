@@ -457,10 +457,12 @@
                 function (event) {
                     if (event?.data?.type !== "marketplace") return;
 
-                    dispatchLiveBellSignal({
-                        source: "browser_leader",
-                        sequence: event.data.sequence || ""
-                    });
+                    dispatchLiveBellSignal(
+                        event.data.contract || {
+                            source: "browser_leader",
+                            sequence: event.data.sequence || ""
+                        }
+                    );
                 }
             );
 
@@ -476,18 +478,28 @@
                     liveSource.addEventListener(
                         "marketplace",
                         function (event) {
-                            // Wake this tab.
-                            dispatchLiveBellSignal({
-                                source: "server_commit",
-                                sequence: event.data || ""
-                            });
+                            let contract = {};
+                            try {
+                                contract = JSON.parse(event.data || "{}");
+                            } catch (error) {
+                                contract = {
+                                    source: "server_commit",
+                                    sequence: event.data || ""
+                                };
+                            }
+                            if (!contract.source) contract.source = "server_commit";
+                            if (!contract.sequence) contract.sequence = event.lastEventId || "";
+
+                            // Wake this tab with the existing exact committed scope.
+                            dispatchLiveBellSignal(contract);
 
                             // Wake every other BT38 tab without another
                             // server connection.
                             try {
                                 liveChannel.postMessage({
                                     type: "marketplace",
-                                    sequence: event.data || ""
+                                    sequence: contract.sequence || "",
+                                    contract: contract
                                 });
                             } catch (error) {
                                 // Bell signal remains local if channel closes.
