@@ -10,7 +10,8 @@ def test_shipment_journey_and_row_use_one_persisted_db_milestone_mapping():
     assert "row?.dataset?.firstMovementAt" in JOURNEY
     assert "row?.dataset?.deliveredAt" in JOURNEY
     assert "trackingEvents(row)" in JOURNEY
-    assert "/\\bcollected\\b/" in JOURNEY
+    assert "const firstScan = scans[0] || null;" in JOURNEY
+    assert "pickedUp: Boolean(row?.dataset?.carrierAcceptedAt || pickupEventAt)" in JOURNEY
     assert "/\\bin[ _-]?transit\\b/" in JOURNEY
     assert "/\\bdelivered\\b/" in JOURNEY
     assert "const milestones = persistedMilestones(row);" in JOURNEY
