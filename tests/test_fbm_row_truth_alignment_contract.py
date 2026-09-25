@@ -25,6 +25,8 @@ def test_journey_colours_follow_persisted_shipment_or_carrier_event_truth():
     assert "setBadge(pickedUp, pickupConfirmed)" in ROW_TRUTH
     assert "setBadge(inTransit, movementConfirmed)" in ROW_TRUTH
     assert "setBadge(delivered, deliveryConfirmed)" in ROW_TRUTH
+    assert "const deliveryConfirmed = Boolean(row.dataset.deliveredAt);" in ROW_TRUTH
+    assert "if (pickupConfirmed && /pickup not confirmed/i.test(text)) note.remove()" in ROW_TRUTH
 
 
 def test_dispatched_rows_do_not_show_pre_dispatch_route_choices():
