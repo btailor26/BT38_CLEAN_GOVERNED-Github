@@ -153,6 +153,124 @@
         }).join('') + `</div>`;
     }
 
+    function shippingCostText(row) {
+        const raw = String(row?.dataset?.shippingCost || '').trim();
+        if (!raw) return '';
+        const amount = Number(raw);
+        if (!Number.isFinite(amount)) return '';
+        const currency = String(row?.dataset?.shippingCostCurrency || '').trim().toUpperCase();
+        const symbol = currency === 'GBP' ? '£' : currency === 'EUR' ? '€' : currency === 'USD' ? '        const shippingCell = row?.children?.[5] || null;
+        const shipmentCell = row?.children?.[7] || null;
+        const shippingSource = String(row?.dataset?.shippingSource || '').trim();
+        const carrier = String(row?.dataset?.carrier || '').trim();
+        const shippingCost = shippingCostText(row);
+        if (shippingCell) shippingCell.innerHTML = (shippingSource ? `<strong>${esc(shippingSource)}</strong>` : '<span class="text-muted">—</span>') + (shippingCost ? `<div class="small fw-semibold mt-1">Cost: ${esc(shippingCost)}</div>` : '<div class="small text-muted mt-1">Cost: not recovered</div>');
+        if (shipmentCell) {
+            let carrierNode = shipmentCell.querySelector('strong');
+            if (!carrierNode) { carrierNode = document.createElement('strong'); shipmentCell.insertBefore(carrierNode, shipmentCell.firstChild); }
+            carrierNode.textContent = carrier || '—';
+            if (!carrier) carrierNode.classList.add('text-muted');
+            shipmentCell.querySelectorAll('.badge').forEach(function (badge) { if (String(badge.textContent || '').trim().toLowerCase() === 'marketplace') badge.remove(); });
+            Array.from(shipmentCell.childNodes).forEach(function (node) { if (node.nodeType === Node.TEXT_NODE && /marketplace says shipped/i.test(node.textContent || '')) node.remove(); });
+        }
+    }
+
+    function alignJourneyRowColours(row) {
+        const journeyCell = row?.children?.[8] || null;
+        if (!journeyCell) return;
+        const terminalDelivery = deliveryProven(row);
+        const milestones = persistedMilestones(row);
+        const stageTruth = {
+            'picked up': milestones.pickedUp,
+            'in transit': milestones.inTransit,
+            'delivered': deliveryProven(row)
+        };
+        Array.from(journeyCell.querySelectorAll('.badge')).forEach(function (badge) {
+            const label = String(badge.textContent || '').trim().toLowerCase();
+            if (!(label in stageTruth)) return;
+            badge.classList.remove('bg-success', 'bg-danger', 'bg-secondary', 'bg-light', 'text-muted', 'text-dark', 'border', 'border-success', 'border-danger', 'border-secondary');
+            if (stageTruth[label]) {
+                badge.classList.add('bg-success', 'text-white');
+            } else {
+                badge.classList.add('bg-light', 'text-muted', 'border', 'border-secondary');
+            }
+        });
+        Array.from(journeyCell.querySelectorAll('.fbm-row-note')).forEach(function (note) {
+            const text = String(note.textContent || '');
+            if (milestones.pickedUp && /pickup not confirmed/i.test(text)) note.remove();
+            if (terminalDelivery && /carrier pickup overdue/i.test(text)) note.remove();
+        });
+    }
+
+    function alignPromisePerformance(row) {
+        const promiseCell = row?.querySelector?.('.fbm-promise-cell') || null;
+        if (!promiseCell) return;
+        let holder = promiseCell.querySelector('.fbm-delivery-performance');
+        if (!holder) {
+            holder = document.createElement('div');
+            holder.className = 'fbm-delivery-performance mt-1';
+            promiseCell.appendChild(holder);
+        }
+        // One authority: the same persisted delivery-performance state supplies
+        // both the text and Bootstrap colour class. Never infer colour separately.
+        holder.innerHTML = performanceHtml(row);
+    }
+
+    function alignRowPerformance(row) {
+        alignShippingAndShipment(row);
+        alignJourneyRowColours(row);
+        alignPromisePerformance(row);
+    }
+
+    function openAlignedJourney(button) {
+        const row = button.closest('.fbm-order-row');
+        const modalElement = document.getElementById('fbmTrackingJourneyModal');
+        const body = document.getElementById('fbmTrackingJourneyBody');
+        const subtitle = document.getElementById('fbmTrackingJourneySubtitle');
+        if (!row || !modalElement || !body) return;
+        const tracking = button.dataset.trackingNumber || row.dataset.trackingNumber || String(button.textContent || '').trim() || '—';
+        const shipmentCell = row.children?.[7] || null;
+        const carrier = String(row.dataset.carrier || '').trim() || '—';
+        const service = String(row.dataset.service || '').trim() || String(shipmentCell?.querySelector('.text-muted')?.textContent || '').trim();
+        const providerReference = String(row.dataset.providerShipmentId || '').trim();
+        const events = trackingEvents(row);
+        if (subtitle) subtitle.textContent = tracking;
+        const shippingSource = String(row.dataset.shippingSource || '').trim() || 'Persisted shipment';
+        const shippingCost = shippingCostText(row);
+        const costRecords = Number(row.dataset.shippingCostRecords || 0);
+        const persistedSummary = `<div class="border rounded p-3 mb-3"><div class="fw-semibold mb-2">Persisted recovery records</div><div class="small"><strong>Shipment source:</strong> ${esc(shippingSource)}</div><div class="small"><strong>Shipment cost:</strong> ${shippingCost ? esc(shippingCost) : 'Not recovered'}${costRecords ? ` · ${esc(costRecords)} confirmed cost record${costRecords === 1 ? '' : 's'}` : ''}</div><div class="small"><strong>Carrier scan records:</strong> ${esc(events.length)}</div></div>`;
+        body.innerHTML = `<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3"><div><div class="fw-semibold">${esc(carrier)}${service && service !== '—' ? ` · ${esc(service)}` : ''}</div><div class="small">Tracking: <code>${esc(tracking)}</code></div><div class="small text-muted">Tracking authority: ${esc(shippingSource)} · persisted BT38 DB</div></div><div>${performanceHtml(row)}</div></div>` + persistedSummary + packageSummaryHtml(events, providerReference) + `<div class="border rounded p-3 mb-3">${promiseHtml(row)}</div><div class="fw-semibold mb-2">Shipment journey</div>${milestoneHtml(row)}` + trackingHistoryHtml(events);
+        bootstrap.Modal.getOrCreateInstance(modalElement).show();
+    }
+
+    function intercept(event) {
+        const button = event.target && event.target.closest ? event.target.closest(TRACKING_TRIGGER_SELECTOR) : null;
+        if (!button) return;
+        event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation(); openAlignedJourney(button);
+    }
+
+    function install() {
+        if (document.documentElement.dataset.bt38PromiseJourneyAligned === '15') return;
+        document.documentElement.dataset.bt38PromiseJourneyAligned = '15';
+        document.querySelectorAll('.fbm-order-row').forEach(alignRowPerformance);
+        window.addEventListener('click', intercept, true);
+        window.addEventListener('keydown', function (event) { if (event.key !== 'Enter' && event.key !== ' ') return; intercept(event); }, true);
+        document.addEventListener('fbm:rows-updated', function () { document.querySelectorAll('.fbm-order-row').forEach(alignRowPerformance); });
+        document.addEventListener('bt38-fbm-committed-snapshot-applied', function (event) {
+            const orderId = String(event?.detail?.order_id || event?.detail?.orderId || '').trim();
+            if (!orderId) return;
+            const row = document.querySelector('.fbm-order-row[data-order-id="' + CSS.escape(orderId) + '"]');
+            if (row) alignRowPerformance(row);
+        });
+    }
+
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', install, {once: true});
+    else install();
+})();
+ : (currency ? currency + ' ' : '');
+        return symbol + amount.toFixed(2);
+    }
+
     function alignShippingAndShipment(row) {
         const shippingCell = row?.children?.[5] || null;
         const shipmentCell = row?.children?.[7] || null;
