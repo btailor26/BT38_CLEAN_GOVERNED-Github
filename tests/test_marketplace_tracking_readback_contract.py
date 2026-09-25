@@ -198,8 +198,15 @@ def test_recovery_results_are_persisted_and_visible_on_fbm_page():
     assert '"shipping_cost": (shipping_spend_by_order.get(key) or {}).get("amount")' in projection
     assert 'data-shipping-cost=' in clarity
     assert 'data-shipping-cost-records=' in clarity
-    assert "Persisted recovery records" in journey
-    assert "Carrier scan records:" in journey
+    # The journey must expose persisted DB truth, not label existing rows as
+    # records recovered by the latest action. Recovery call truth is reported
+    # separately by the selected-order action.
+    assert "Tracking history" in journey
+    assert "persisted BT38 DB" in journey
+    assert "No detailed carrier scan history has been persisted yet." in journey
     assert "Cost: not recovered" in journey
-    assert "new scan records" in template
-    assert "persisted DB" in template
+    assert "CALL SUCCESSFUL" in template
+    assert "CALL FAILED" in template
+    assert "CALL NOT REQUIRED" in template
+    assert "DB readback" in template
+    assert "Recovery persisted for" not in template
