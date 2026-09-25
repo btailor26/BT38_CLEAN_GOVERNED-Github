@@ -1,9 +1,11 @@
-"""Authenticated exact Amazon order recovery routes.
+"""Authenticated exact marketplace journey recovery routes.
 
-The single-order action reuses existing governed recovery helpers. FBM keeps its
-existing tracking/label readback. FBA/AFN uses the finite exact historical FBA
-helper. MCF remains excluded. No broad scan, inventory mutation, marketplace
-write, worker, poller or scheduler is introduced by the exact-order action.
+The single-order actions reuse existing governed marketplace authorities. Recovery
+means the complete available persisted shipment journey for the exact order:
+tracking identity, package/carrier events, milestones, promise and purchased-label
+truth where already supported. FBA/AFN keeps its finite historical helper and MCF
+remains excluded. No broad scan, inventory mutation, marketplace write, worker,
+poller or scheduler is introduced by an exact-order action.
 """
 from __future__ import annotations
 
@@ -65,7 +67,7 @@ def _readback(store_id: int, order_id: str) -> list[dict]:
 
 @governed_amazon_exact_order_recovery_bp.post("/governed/actions/amazon/exact-order-recovery")
 def recover_exact_amazon_order_manually():
-    """Refresh exact Amazon-owned truth for one existing Amazon order only."""
+    """Recover the complete available Amazon-owned journey for one exact order."""
     if not _operator_authorized():
         return jsonify({
             "success": False, "ok": False, "governed": True,
