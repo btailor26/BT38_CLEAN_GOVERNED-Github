@@ -5,67 +5,8 @@
 (function (document) {
     'use strict';
 
-    function setBadge(badge, confirmed) {
-        if (!badge) return;
-        badge.classList.remove('bg-success', 'bg-danger', 'bg-primary', 'bg-warning', 'bg-info', 'bg-light', 'text-muted', 'text-dark', 'border');
-        if (confirmed) {
-            badge.classList.add('bg-success');
-        } else {
-            badge.classList.add('bg-light', 'text-muted', 'border');
-        }
-    }
-
-    function alignJourney(row, status) {
-        const journeyCell = row.children && row.children[8];
-        if (!journeyCell) return;
-        const badges = Array.from(journeyCell.querySelectorAll('.fbm-journey-steps .badge'));
-        const pickedUp = badges.find(badge => /picked up/i.test(String(badge.textContent || '')));
-        const inTransit = badges.find(badge => /in transit/i.test(String(badge.textContent || '')));
-        const delivered = badges.find(badge => /delivered/i.test(String(badge.textContent || '')));
-
-        // Journey milestones are independent persisted facts. Lifecycle state
-        // must never manufacture pickup or movement evidence. The canonical
-        // shipment timestamps remain strongest; persisted carrier tracking
-        // events are valid supporting milestone evidence when a provider has
-        // supplied the collection/movement event before the projection timestamp
-        // has been backfilled.
-        let trackingEvents = [];
-        try {
-            const parsed = JSON.parse(String(row.dataset.trackingEvents || '[]'));
-            if (Array.isArray(parsed)) trackingEvents = parsed;
-        } catch (_) {
-            trackingEvents = [];
-        }
-        const eventText = trackingEvents.map(event => [
-            event && event.status,
-            event && event.description,
-            event && event.detail
-        ].filter(Boolean).join(' ').toLowerCase());
-        const hasEvent = patterns => eventText.some(text => patterns.some(pattern => pattern.test(text)));
-
-        const pickupConfirmed = Boolean(row.dataset.carrierAcceptedAt) || hasEvent([
-            /\bcollected\b/, /\bpicked[ _-]?up\b/, /\bcarrier[ _-]?accepted\b/, /\baccepted by carrier\b/
-        ]);
-        const movementConfirmed = Boolean(row.dataset.firstMovementAt) || hasEvent([
-            /\bin[ _-]?transit\b/, /\bout for delivery\b/, /\bdelivered\b/
-        ]);
-        // Delivered is canonical DB completion only. Carrier event text can
-        // support pickup/movement presentation but cannot manufacture delivery.
-        const deliveryConfirmed = Boolean(row.dataset.deliveredAt);
-        setBadge(pickedUp, pickupConfirmed);
-        setBadge(inTransit, movementConfirmed);
-        setBadge(delivered, deliveryConfirmed);
-
-        if (pickedUp) pickedUp.title = pickupConfirmed ? 'Pickup confirmed by persisted shipment truth' : 'Pickup not confirmed';
-        if (inTransit) inTransit.title = movementConfirmed ? 'Movement confirmed by persisted shipment truth' : 'Movement not confirmed';
-        if (delivered) delivered.title = deliveryConfirmed ? 'Delivery confirmed by persisted shipment truth' : 'Delivery not confirmed';
-
-        Array.from(journeyCell.querySelectorAll('.fbm-row-note')).forEach(note => {
-            const text = String(note.textContent || '');
-            if (pickupConfirmed && /pickup not confirmed/i.test(text)) note.remove();
-            if (deliveryConfirmed && /carrier pickup overdue/i.test(text)) note.remove();
-        });
-    }
+    // Journey colour ownership lives only in fbm_delivery_promise_journey_alignment.js.
+    // This file must not independently recolour shipment milestones.
 
     function renderedRecommendation(cell) {
         if (!cell) return '';
@@ -134,7 +75,6 @@
     function alignRows() {
         document.querySelectorAll('.fbm-order-row').forEach(row => {
             const status = String(row.dataset.lifecycleStatus || '').trim().toLowerCase();
-            alignJourney(row, status);
             alignShipping(row, status);
         });
     }
