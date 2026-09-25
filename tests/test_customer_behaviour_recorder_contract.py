@@ -134,3 +134,18 @@ def test_journey_video_capture_requires_explicit_admin_acceptance_and_never_auto
     assert "audio:false" in source
     # No page/session/event hook is allowed to invoke screen capture.
     assert source.count("getDisplayMedia(") == 1
+
+
+def test_journey_video_note_structures_manual_capture_without_starting_it():
+    source = Path("services/governed_customer_behaviour_recorder.py").read_text(encoding="utf-8")
+    assert 'id="bt38JourneyVideoNotePanel"' in source
+    assert 'What should we look at?' in source
+    assert 'id="bt38JourneyVideoNote"' in source
+    assert 'maxlength="500"' in source
+    assert 'Continue to screen permission' in source
+    assert 'What to check' in source
+    assert 'showNoteOverlay()' in source
+    assert 'window.setTimeout(hideNoteOverlay,5000)' in source
+    assert 'audio:false' in source
+    assert source.count("getDisplayMedia(") == 1
+    assert source.index('startButton.addEventListener("click",async function()') < source.index("getDisplayMedia({video:true,audio:false})")
