@@ -68,3 +68,19 @@ def test_existing_sse_transport_carries_exact_committed_scope_without_second_tra
     assert "_collapse_events(unseen)" in signal
     assert "new EventSource(" not in controller
     assert "event?.detail || {}" in controller
+
+
+def test_warehouse_and_fbm_reuse_shared_event_for_exact_row_refresh():
+    controller = _read("static/js/bt38-live-page-refresh.js")
+    signal = _read("services/governed_ui_event_signal.py")
+
+    assert "async function refreshExactHtmlRow(detail)" in controller
+    assert "path === '/warehouse'" in controller
+    assert "data-stock-id" in controller
+    assert "path === '/fbm'" in controller
+    assert "data-order-id" in controller
+    assert "data-marketplace-order-id" in controller
+    assert "'X-BT38-UI-Refresh': 'targeted'" in controller
+    assert "window.location.reload()" not in controller
+    assert "setInterval(" not in controller
+    assert '"marketplace_order_id"' in signal
