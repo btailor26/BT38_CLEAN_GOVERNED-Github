@@ -161,3 +161,26 @@ def test_amazon_order_intake_persists_ready_dispatch_status_and_exact_promise():
 def test_amazon_recovery_includes_ready_dispatch_promise_gaps():
     assert '_DISPATCHED_STATUSES | {"unshipped", "confirmed", "partially_shipped", "pending"}' in RECOVERY
     assert "fos.ship_by_at IS NULL" in RECOVERY
+
+
+def test_selected_recovery_is_db_gated_before_marketplace_call():
+    route = Path("services/governed_amazon_exact_order_recovery_route.py").read_text(encoding="utf-8")
+    template = Path("templates/fbm.html").read_text(encoding="utf-8")
+
+    assert '/governed/actions/marketplace/exact-order-recovery-check' in route
+    assert "_candidate_order_ids(store_id, platform=platform)" in route
+    assert '"db_check_completed": True' in route
+    assert '"marketplace_call_started": False' in route
+    assert '"recovery_required": recovery_required' in route
+
+    handler = template.split("if(recoverButton)recoverButton.addEventListener", 1)[1]
+    precheck = handler.index("/governed/actions/marketplace/exact-order-recovery-check")
+    amazon_call = handler.index("/governed/actions/amazon/exact-order-recovery")
+    ebay_call = handler.index("/governed/actions/ebay/exact-order-recovery")
+    assert precheck < amazon_call
+    assert precheck < ebay_call
+    assert "if(check.recovery_required!==true)" in handler
+    assert "CALL NOT REQUIRED" in handler
+    assert "CALL SUCCESSFUL" in handler
+    assert "CALL FAILED" in handler
+    assert "Recovery persisted for" not in handler
