@@ -108,7 +108,10 @@
                     'carrier',
                     'service',
                     'trackingNumber',
-                    'providerShipmentId'
+                    'providerShipmentId',
+                    'shippingCost',
+                    'shippingCostCurrency',
+                    'shippingCostRecords'
                 ].forEach(key => {
                     row.dataset[key] = freshRow.dataset[key] || '';
                 });
