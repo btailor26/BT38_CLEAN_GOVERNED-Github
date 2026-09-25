@@ -453,6 +453,12 @@ def recover_exact_ebay_order_manually():
         "order_id": order_id,
         "hydration": result,
         "shipment_recovery": shipment_recovery,
+        "shipping_cost_recovery": {
+            "attempted": True,
+            "source": "existing_ebay_finances_shipping_label",
+            "purchase_confirmed": bool(shipment_recovery.get("purchase_confirmed")),
+            "shipment_id": shipment_recovery.get("shipment_id"),
+        },
         "database_readback": readback,
     }), 200
 
