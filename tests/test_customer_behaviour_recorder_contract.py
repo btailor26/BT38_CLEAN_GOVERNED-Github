@@ -4,13 +4,12 @@ from pathlib import Path
 def test_customer_behaviour_recorder_is_event_driven_and_privacy_bounded():
     text = Path("services/governed_customer_behaviour_recorder.py").read_text(encoding="utf-8")
     assert '"page_view"' in text
-    assert '"section_view"' in text
     assert '"scroll_depth"' in text
     assert '"click"' in text
     assert '"form_start"' in text
     assert '"form_submit"' in text
     assert '"page_exit"' in text
-    assert "IntersectionObserver" in text
+    assert "IntersectionObserver" not in text
     assert 'addEventListener("click"' in text
     assert 'addEventListener("scroll"' in text
     assert 'addEventListener("pagehide"' in text
@@ -91,10 +90,12 @@ def test_visual_session_replay_is_wired_for_every_bt38_html_page():
     assert 'if _operational_path(request.path) is False' not in source
     assert '"frame", "scroll_x", "scroll_y"' in source
     assert 'visualFrame("page_view")' in source
-    assert 'visualFrame("click")' in source
-    assert 'visualFrame("change")' in source
-    assert 'visualFrame("dom_change")' in source
-    assert "MutationObserver" in source
+    assert 'addEventListener("bt38-page-refreshed"' in source
+    assert 'visualFrame(reason)' in source
+    assert 'visualFrame("click")' not in source
+    assert 'visualFrame("change")' not in source
+    assert 'visualFrame("dom_change")' not in source
+    assert "MutationObserver" not in source
     assert 'pagePath==="/fbm"' not in source
     assert 'body *' in source
     assert "input_value" not in source
@@ -102,3 +103,17 @@ def test_visual_session_replay_is_wired_for_every_bt38_html_page():
     assert "bt38-replay-play" in template
     assert "bt38-replay-frame" in template
     assert "Play replay" in template
+
+
+def test_recorder_records_session_state_only_on_page_load_or_real_refresh():
+    source = Path("services/governed_customer_behaviour_recorder.py").read_text(encoding="utf-8")
+    refresh = Path("static/js/bt38-live-page-refresh.js").read_text(encoding="utf-8")
+
+    assert 'send("page_view")' in source
+    assert 'visualFrame("page_view")' in source
+    assert 'addEventListener("bt38-page-refreshed"' in source
+    assert "MutationObserver" not in source
+    assert "IntersectionObserver" not in source
+    assert 'send("display_snapshot"' not in source
+    assert "new CustomEvent('bt38-page-refreshed'" in refresh
+    assert "committed_event_refresh" in refresh
