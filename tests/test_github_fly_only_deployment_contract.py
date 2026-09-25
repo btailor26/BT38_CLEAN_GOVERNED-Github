@@ -40,3 +40,16 @@ def test_source_integrity_is_checked_before_deploy():
     deploy = WORKFLOW.index("Deploy exact GitHub commit with Fly remote builder")
     assert integrity < deploy
     assert "Null bytes found in production source" in WORKFLOW
+
+
+def test_predeploy_db_contract_never_defers_success_when_machine_is_stopped():
+    assert "DB_CHECK_DEFERRED" not in WORKFLOW
+    assert "production DB compatibility was not proven" in WORKFLOW
+    assert 'flyctl machine start "$MACHINE_ID" --app bt38-prod' in WORKFLOW
+
+
+def test_deploy_never_uses_hard_coded_fly_machine_identity():
+    assert "7849913cd19d28" not in WORKFLOW
+    assert 'MACHINE_ID="$(cat deployment-evidence/machine-before.txt)"' in WORKFLOW
+    assert 'MACHINE_ID="$(printf \'%s\' "$MACHINE_JSON" | jq -r \'.[0].id // empty\')"' in WORKFLOW
+    assert 'flyctl machine start "$MACHINE_ID" --app bt38-prod || true' not in WORKFLOW
