@@ -87,7 +87,8 @@ def test_recorder_emits_only_from_real_events_not_idle_loops():
 def test_visual_session_replay_is_wired_for_every_bt38_html_page():
     source = Path("services/governed_customer_behaviour_recorder.py").read_text(encoding="utf-8")
     template = Path("templates/admin/customer_behaviour.html").read_text(encoding="utf-8")
-    assert '"visual_frame"' in source\n    assert 'if _operational_path(request.path) is False' not in source
+    assert '"visual_frame"' in source
+    assert 'if _operational_path(request.path) is False' not in source
     assert '"frame", "scroll_x", "scroll_y"' in source
     assert 'visualFrame("page_view")' in source
     assert 'visualFrame("click")' in source
