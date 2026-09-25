@@ -126,6 +126,42 @@ _SCRIPT = r'''<script id="bt38CustomerBehaviourRecorder">
 </script>'''
 
 
+_VIDEO_CONTROL_SCRIPT = r'''<script id="bt38JourneyVideoRecorder">
+(function(){
+  "use strict";
+  if(window.__bt38JourneyVideoRecorder)return;
+  window.__bt38JourneyVideoRecorder=true;
+  if(!navigator.mediaDevices||typeof navigator.mediaDevices.getDisplayMedia!=="function"||typeof window.MediaRecorder!=="function")return;
+  var stream=null,recorder=null,chunks=[];
+  var button=document.createElement("button");
+  button.type="button";button.id="bt38JourneyVideoRecord";button.textContent="Record journey video";button.className="btn btn-sm btn-outline-danger";
+  button.style.cssText="position:fixed;right:18px;bottom:18px;z-index:2147483647;box-shadow:0 2px 10px rgba(0,0,0,.18)";
+  button.setAttribute("aria-label","Record BT38 journey video");document.body.appendChild(button);
+  function reset(){stream=null;recorder=null;chunks=[];button.disabled=false;button.textContent="Record journey video";button.className="btn btn-sm btn-outline-danger";}
+  function stop(){if(recorder&&recorder.state!=="inactive")recorder.stop();}
+  button.addEventListener("click",async function(){
+    if(recorder&&recorder.state==="recording"){stop();return;}
+    button.disabled=true;
+    try{
+      // Capture can start only from this explicit click. The browser owns the
+      // chooser/permission prompt and BT38 cannot auto-accept or bypass it.
+      stream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:false});
+      chunks=[];recorder=new MediaRecorder(stream);
+      recorder.addEventListener("dataavailable",function(e){if(e.data&&e.data.size)chunks.push(e.data);});
+      recorder.addEventListener("stop",function(){
+        var blob=new Blob(chunks,{type:recorder.mimeType||"video/webm"});
+        if(blob.size){var url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="bt38-journey-"+new Date().toISOString().replace(/[:.]/g,"-")+".webm";document.body.appendChild(a);a.click();a.remove();window.setTimeout(function(){URL.revokeObjectURL(url);},1000);}
+        if(stream)stream.getTracks().forEach(function(track){track.stop();});reset();
+      },{once:true});
+      stream.getVideoTracks().forEach(function(track){track.addEventListener("ended",stop,{once:true});});
+      recorder.start();button.disabled=false;button.textContent="Stop journey video";button.className="btn btn-sm btn-danger";
+    }catch(error){reset();if(error&&error.name!=="NotAllowedError")console.warn("[BT38 recorder] video capture unavailable",error);}
+  });
+  window.addEventListener("pagehide",stop,{once:true});
+})();
+</script>'''
+
+
 def _safe_text(value, limit=160):
     return str(value or "").replace("\x00", "").strip()[:limit]
 
@@ -315,7 +351,7 @@ def install_governed_customer_behaviour_recorder(app):
         if "text/html" not in content_type or response.direct_passthrough or response.headers.get("Content-Encoding"): return response
         body = response.get_data(as_text=True)
         if "bt38CustomerBehaviourRecorder" in body or "</body>" not in body: return response
-        body = body.replace("</body>", _SCRIPT + "\n</body>", 1)
+        injected = _SCRIPT\n        if current_user.is_authenticated and getattr(current_user, "role", "") == "admin":\n            injected += "\n" + _VIDEO_CONTROL_SCRIPT\n        body = body.replace("</body>", injected + "\n</body>", 1)
         response.set_data(body)
         response.headers.pop("Content-Length", None)
         return response
