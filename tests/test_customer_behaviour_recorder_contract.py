@@ -155,10 +155,15 @@ def test_journey_video_note_structures_manual_capture_without_starting_it():
 
 
 
-def test_journey_video_control_stays_above_bottom_workspace_bar_without_overlap():
+
+
+def test_journey_video_control_is_in_navbar_beside_notification_bell():
     source = Path("services/governed_customer_behaviour_recorder.py").read_text(encoding="utf-8")
-    assert 'right:18px;top:72px;bottom:auto' in source
-    assert 'right:18px;top:116px;bottom:auto' in source
-    assert 'max-height:calc(100vh - 134px);overflow:auto' in source
+    assert 'document.getElementById("bt38NotificationBell")' in source
+    assert 'bell.parentNode.insertBefore(button,bell)' in source
+    assert 'button.textContent="Video record"' in source
+    assert 'button.setAttribute("title","Video record")' in source
+    assert 'button.style.cssText="white-space:nowrap"' in source
     assert 'button.style.cssText="position:fixed;right:18px;bottom:18px' not in source
-    assert 'panel.style.cssText="position:fixed;right:18px;bottom:62px' not in source
+    assert 'button.style.cssText="position:fixed;right:18px;top:72px' not in source
+    assert 'panel.style.cssText="position:fixed;right:18px;top:62px;bottom:auto' in source
