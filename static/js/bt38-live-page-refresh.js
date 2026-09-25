@@ -7,7 +7,7 @@
   if (window.bt38LivePageRefreshInstalled) return;
   window.bt38LivePageRefreshInstalled = true;
 
-  let pendingWhileHidden = false;
+  let pendingWhileHidden = null;
   let lastSequence = '';
   let productLinkingRefreshRunning = false;
 
@@ -21,17 +21,23 @@
     return String(form?.querySelector('[name="search"]')?.value || '').trim();
   }
 
-  async function refreshProductLinkingSilently() {
+  async function refreshProductLinkingSilently(detail) {
     const search = currentProductLinkingSearch();
-    if (!search || productLinkingRefreshRunning) return false;
+    if (productLinkingRefreshRunning) return false;
     if (typeof window.bt38RefreshProductLinkingRecord !== 'function') return false;
+
+    const identity = {
+      warehouseId: detail?.warehouse_stock_id || null,
+      groupId: detail?.group_id || null,
+      listingId: detail?.listing_id || null,
+      listingSku: detail?.seller_sku || search || '',
+      warehouseSku: detail?.seller_sku || search || ''
+    };
+    if (!identity.warehouseId && !identity.groupId && !identity.listingId && !identity.listingSku) return false;
 
     productLinkingRefreshRunning = true;
     try {
-      await window.bt38RefreshProductLinkingRecord({
-        listingSku: search,
-        warehouseSku: search
-      });
+      await window.bt38RefreshProductLinkingRecord(identity);
       return true;
     } catch (error) {
       console.warn('[BT38 UI] Product Linking silent refresh failed', error);
@@ -45,16 +51,16 @@
     return Boolean(document.getElementById('mcf-orders-body'));
   }
 
-  async function refreshCurrentPage() {
+  async function refreshCurrentPage(detail) {
     if (pageOwnsCommittedRefresh()) return;
 
     if (document.visibilityState === 'hidden') {
-      pendingWhileHidden = true;
+      pendingWhileHidden = detail || {};
       return;
     }
 
     if (document.querySelector('[data-bt38-page="productLinking"]')) {
-      await refreshProductLinkingSilently();
+      await refreshProductLinkingSilently(detail || {});
       return;
     }
   }
@@ -63,13 +69,14 @@
     const sequence = sequenceOf(event);
     if (sequence && sequence === lastSequence) return;
     if (sequence) lastSequence = sequence;
-    void refreshCurrentPage();
+    void refreshCurrentPage(event?.detail || {});
   });
 
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState !== 'visible' || !pendingWhileHidden) return;
-    pendingWhileHidden = false;
-    void refreshCurrentPage();
+    const detail = pendingWhileHidden;
+    pendingWhileHidden = null;
+    void refreshCurrentPage(detail);
   });
 
   function installFbmShippingConnectionsNav() {
