@@ -201,7 +201,7 @@ def bt38_browser_session_alignment():
 def bt38_browser_session_response_alignment(response):
     """Stamp fresh logins and suppress the legacy remember-cookie side effect."""
     if current_user.is_authenticated and login_fresh():
-        # app.py already sets PERMANENT_SESSION_LIFETIME to 30 minutes. Mark the
+        # app.py already sets PERMANENT_SESSION_LIFETIME to 4 hours. Mark the
         # live browser session permanent so that configured sliding lifetime is
         # actually used while the user remains active.
         session.permanent = True
