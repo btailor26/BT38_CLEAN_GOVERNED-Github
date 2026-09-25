@@ -142,3 +142,27 @@ def test_ebay_shipped_notification_refresh_uses_persisted_grant_scope_set():
     assert 'governed_ebay_refresh_scopes' in EBAY_SHIPPING_NOTIFICATION
     assert 'refresh_scopes = governed_ebay_refresh_scopes(creds)' in EBAY_SHIPPING_NOTIFICATION
     assert '"scope": refresh_scopes' in EBAY_SHIPPING_NOTIFICATION
+
+
+def test_exact_marketplace_recovery_contract_is_whole_journey_not_tracking_number_only():
+    route = Path("services/governed_amazon_exact_order_recovery_route.py").read_text(encoding="utf-8")
+    ebay_route = Path("services/governed_webhook_rejection_recovery.py").read_text(encoding="utf-8")
+
+    # Amazon exact recovery already reads package event history and persists it
+    # through the existing tracking ledger authority.
+    assert "complete available persisted shipment journey" in route
+    assert "hydrate_amazon_tracking_for_order(" in route
+    assert "refresh_exact_amazon_order(row)" in route
+    assert "hydrate_amazon_purchased_label_for_order(" in route
+    assert "_persist_amazon_tracking_events(" in AMAZON_TRACKING
+    assert "FBMShipmentTrackingEvent(" in AMAZON_TRACKING
+
+    # eBay exact recovery must remain on its existing exact hydration/shipment
+    # authorities rather than degrading Recovery to a missing-tracking action.
+    assert "hydrate_exact_ebay_order(" in ebay_route
+    assert "persist_exact_ebay_purchased_shipment_authority(" in ebay_route
+
+    # Exact Recovery is finite/read-only against marketplaces.
+    assert '"broad_scan_started": False' in route
+    assert '"marketplace_write_started": False' in route
+    assert '"marketplace_write_started": False' in ebay_route
