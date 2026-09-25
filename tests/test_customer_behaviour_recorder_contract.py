@@ -152,3 +152,13 @@ def test_journey_video_note_structures_manual_capture_without_starting_it():
     assert 'audio:false' in source
     assert source.count("getDisplayMedia(") == 1
     assert source.index('startButton.addEventListener("click",async function()') < source.index("getDisplayMedia({video:true,audio:false})")
+
+
+
+def test_journey_video_control_stays_above_bottom_workspace_bar_without_overlap():
+    source = Path("services/governed_customer_behaviour_recorder.py").read_text(encoding="utf-8")
+    assert 'right:18px;top:72px;bottom:auto' in source
+    assert 'right:18px;top:116px;bottom:auto' in source
+    assert 'max-height:calc(100vh - 134px);overflow:auto' in source
+    assert 'button.style.cssText="position:fixed;right:18px;bottom:18px' not in source
+    assert 'panel.style.cssText="position:fixed;right:18px;bottom:62px' not in source
