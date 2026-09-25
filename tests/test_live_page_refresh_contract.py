@@ -37,8 +37,10 @@ def test_product_linking_reuses_existing_targeted_refresh_for_active_search():
     assert 'data-bt38-page="productLinking"' in controller
     assert "bt38ProductLinkingFilterForm" in controller
     assert "bt38RefreshProductLinkingRecord" in controller
-    assert "listingSku: search" in controller
-    assert "warehouseSku: search" in controller
+    assert "warehouseId: detail?.warehouse_stock_id" in controller
+    assert "groupId: detail?.group_id" in controller
+    assert "listingId: detail?.listing_id" in controller
+    assert "listingSku: detail?.seller_sku || search" in controller
     assert "window.bt38RefreshProductLinkingRecord = refreshAffectedRecord" in session
     assert "fetchDataset(" in session
 
@@ -51,3 +53,18 @@ def test_mcf_keeps_its_single_narrow_refresh_without_global_duplicate():
     assert "pageOwnsCommittedRefresh" in controller
     assert "bt38-marketplace-event" in mcf
     assert "new EventSource(" not in mcf
+
+
+def test_existing_sse_transport_carries_exact_committed_scope_without_second_transport():
+    base = _read("templates/base.html")
+    signal = _read("services/governed_ui_event_signal.py")
+    controller = _read("static/js/bt38-live-page-refresh.js")
+
+    assert '"/governed/ui/events/stream"' in base
+    assert "JSON.parse(event.data" in base
+    assert "contract: contract" in base
+    assert "json.dumps(contract" in signal
+    assert 'contract["sequence"] = current_revision' in signal
+    assert "_collapse_events(unseen)" in signal
+    assert "new EventSource(" not in controller
+    assert "event?.detail || {}" in controller
