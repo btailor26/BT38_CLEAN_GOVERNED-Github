@@ -116,3 +116,12 @@ def test_journey_delivery_requires_persisted_delivered_timestamp_only():
     assert "lastProviderStatus" not in delivery
     assert "deliveredAt || terminalDelivery" not in milestones
     assert "deliveredAt || terminalDelivery" not in colours
+
+
+def test_carrier_neutral_pickup_projection_uses_first_persisted_scan_after_label():
+    projection = (ROOT / "services" / "fbm_db_delivery_promise_alignment.py").read_text(encoding="utf-8")
+    assert "first_scan_at" in projection
+    assert 'event.get("event_time") or event.get("observed_at")' in projection
+    assert "pickup_at = canonical_pickup_at or first_scan_at" in projection
+    assert '"carrier_accepted_at": pickup_at' in projection
+    assert "provider ==" not in projection.split("first_scan_at = \"\"", 1)[1].split("order_id =", 1)[0]
