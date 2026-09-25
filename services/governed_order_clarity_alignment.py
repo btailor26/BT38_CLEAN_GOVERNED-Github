@@ -97,6 +97,9 @@ def _inject_db_delivery_truth(html: str) -> str:
             f' data-provider-shipment-id="{html_lib.escape(row.get("provider_shipment_id", ""), quote=True)}"'
             f' data-marketplace-order-id="{html_lib.escape(row.get("marketplace_order_id", ""), quote=True)}"'
             f' data-tracking-events="{html_lib.escape(tracking_events_json, quote=True)}"'
+            f' data-shipping-cost="{html_lib.escape(str(row.get("shipping_cost") if row.get("shipping_cost") is not None else ""), quote=True)}"'
+            f' data-shipping-cost-currency="{html_lib.escape(row.get("shipping_cost_currency", ""), quote=True)}"'
+            f' data-shipping-cost-records="{int(row.get("shipping_cost_records") or 0)}"'
         )
         value = value.replace(marker, marker + attrs, 1)
     return value
