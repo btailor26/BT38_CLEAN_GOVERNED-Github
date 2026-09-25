@@ -92,24 +92,35 @@ if(recoverButton)recoverButton.addEventListener('click',async()=>{
  const ids=selectedIds();if(!ids.length)return;
  const rows=ids.map(id=>document.querySelector(`.fbm-order-row[data-order-id="${CSS.escape(String(id))}"]`)).filter(Boolean);
  recoverButton.disabled=true;const original=recoverButton.innerHTML;recoverButton.textContent='Recovering…';
- let recovered=0,unresolved=0;
+ let recovered=0,unresolved=0;const recoveryLines=[];
+ function costText(cost,currency){if(cost===null||cost===undefined||cost==='')return 'not recovered';const n=Number(cost);if(!Number.isFinite(n))return 'not recovered';const cur=String(currency||'').toUpperCase(),sym=cur==='GBP'?'£':cur==='EUR'?'€':cur==='USD'?'
+});document.querySelector('.fbm-orders-table tbody')?.addEventListener('click',async e=>{const shipping=e.target.closest('.fbm-shipping-options');if(shipping){e.stopPropagation();openShippingOptions([shipping.dataset.orderId]);return;}const mapping=e.target.closest('.save-inline-mapping');if(mapping){e.stopPropagation();await saveMapping(mapping.closest('.mapping-editor'),mapping);return;}const status=e.target.closest('.packlink-existing-status');if(status){e.stopPropagation();status.disabled=true;try{const p=await jsonFetch(`/fbm/shipments/${status.dataset.shipmentId}/packlink/status`);alert(p.label_ready?`Packlink label ready. ${p.mapping_status==='under_review'?'Mapping under review.':'Shipment updated.'}`:(p.message||'Packlink label is not ready yet.'));}catch(err){alert(err.message);}finally{status.disabled=false;}return;}});updateSelection();
+})();
+</script>
+{% endblock %}:(cur?cur+' ':'');return sym+n.toFixed(2);}
  for(const row of rows){
   const marketplace=String(row.dataset.marketplace||'').trim().toLowerCase(),storeId=Number(row.dataset.storeId||0),orderId=String(row.dataset.marketplaceOrderId||'').trim();
   try{
+   let p=null;
    if(marketplace==='amazon'){
-    await jsonFetch('/governed/actions/amazon/exact-order-recovery',{method:'POST',body:JSON.stringify({store_id:storeId,marketplace_order_id:orderId})});
+    p=await jsonFetch('/governed/actions/amazon/exact-order-recovery',{method:'POST',body:JSON.stringify({store_id:storeId,marketplace_order_id:orderId})});
+    const h=p.hydration||{},cost=p.shipping_cost_recovery||{};
+    recoveryLines.push(`${orderId} · Amazon · tracking ${h.tracking_number||'not recovered'} · new scan records ${Number(h.tracking_events_persisted||0)} · shipment cost ${costText(cost.shipping_cost,cost.shipping_cost_currency)} · persisted DB`);
    }else if(marketplace==='ebay'){
-    await jsonFetch('/governed/actions/ebay/exact-order-recovery',{method:'POST',body:JSON.stringify({store_id:storeId,marketplace_order_id:orderId})});
+    p=await jsonFetch('/governed/actions/ebay/exact-order-recovery',{method:'POST',body:JSON.stringify({store_id:storeId,marketplace_order_id:orderId})});
+    const s=p.shipment_recovery||{},cost=p.shipping_cost_recovery||{};
+    recoveryLines.push(`${orderId} · eBay · tracking ${s.tracking_number||'not recovered'} · new scan records ${Number(s.tracking_events_inserted||0)} · shipment cost ${costText(cost.shipping_cost,cost.shipping_cost_currency)} · persisted DB`);
    }else if(String(row.dataset.shipmentProvider||'').toLowerCase()==='packlink'&&row.dataset.shipmentId){
-    await jsonFetch(`/fbm/shipments/${encodeURIComponent(row.dataset.shipmentId)}/packlink/status`);
+    p=await jsonFetch(`/fbm/shipments/${encodeURIComponent(row.dataset.shipmentId)}/packlink/status`);
+    recoveryLines.push(`${orderId} · Packlink · tracking ${p.tracking_number||p.tracking||'not recovered'} · persisted DB`);
    }else{
     throw new Error('No exact governed recovery authority is available for this selected order.');
    }
    recovered+=1;
-  }catch(e){unresolved+=1;}
+  }catch(e){unresolved+=1;recoveryLines.push(`${orderId} · ${marketplace||'marketplace'} · recovery failed: ${e.message||'unknown error'}`);}
  }
- if(unresolved){window.alert(`Recovery incomplete. BT38 processed ${recovered} selected order${recovered===1?'':'s'}, but ${unresolved} could not be recovered and need support review.`);}
- else{window.alert(`Recovery completed for ${recovered} selected order${recovered===1?'':'s'}. The page will now reload from persisted DB truth.`);}
+ const heading=unresolved?`Recovery incomplete · ${recovered} processed · ${unresolved} unresolved`:`Recovery persisted for ${recovered} selected order${recovered===1?'':'s'}`;
+ window.alert(heading+'\n\n'+recoveryLines.join('\n')+'\n\nReloading the page from persisted DB truth. Open the tracking number to see the persisted shipment records and carrier history.');
  recoverButton.innerHTML=original;updateSelection();window.location.reload();
 });document.querySelector('.fbm-orders-table tbody')?.addEventListener('click',async e=>{const shipping=e.target.closest('.fbm-shipping-options');if(shipping){e.stopPropagation();openShippingOptions([shipping.dataset.orderId]);return;}const mapping=e.target.closest('.save-inline-mapping');if(mapping){e.stopPropagation();await saveMapping(mapping.closest('.mapping-editor'),mapping);return;}const status=e.target.closest('.packlink-existing-status');if(status){e.stopPropagation();status.disabled=true;try{const p=await jsonFetch(`/fbm/shipments/${status.dataset.shipmentId}/packlink/status`);alert(p.label_ready?`Packlink label ready. ${p.mapping_status==='under_review'?'Mapping under review.':'Shipment updated.'}`:(p.message||'Packlink label is not ready yet.'));}catch(err){alert(err.message);}finally{status.disabled=false;}return;}});updateSelection();
 })();
