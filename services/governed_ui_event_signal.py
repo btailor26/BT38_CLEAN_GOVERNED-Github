@@ -9,6 +9,7 @@ Contract:
 """
 from __future__ import annotations
 
+import json
 import threading
 from collections import deque
 from datetime import datetime
@@ -316,10 +317,18 @@ def governed_ui_event_stream():
                 current_revision = int(_revision)
 
             if current_revision != seen_revision:
+                unseen = _events_after(seen_revision)
                 seen_revision = current_revision
+                contract = _collapse_events(unseen) or {
+                    "changed": True,
+                    "revision": current_revision,
+                }
+                contract["sequence"] = current_revision
                 yield (
                     "event: marketplace\n"
-                    f"data: {seen_revision}\n\n"
+                    "data: "
+                    + json.dumps(contract, separators=(",", ":"), default=str)
+                    + "\n\n"
                 )
             else:
                 # Network keepalive only.
