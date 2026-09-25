@@ -27,17 +27,38 @@
         }).join(' ').toLowerCase();
     }
 
+    function matchingEventTime(row, patterns) {
+        const events = trackingEvents(row).map(function (event) {
+            const text = [event && event.status, event && event.description, event && event.detail]
+                .filter(Boolean).join(' ').toLowerCase();
+            return {event: event, text: text};
+        }).filter(function (item) {
+            return patterns.some(function (pattern) { return pattern.test(item.text); });
+        }).sort(function (a, b) {
+            const aTime = new Date(a.event.event_time || a.event.observed_at || 0).getTime() || 0;
+            const bTime = new Date(b.event.event_time || b.event.observed_at || 0).getTime() || 0;
+            return aTime - bTime;
+        });
+        const match = events[0] && events[0].event;
+        return match ? String(match.event_time || match.observed_at || '') : '';
+    }
+
     function persistedMilestones(row) {
         // One DB authority for both the row and modal. Canonical projection
         // timestamps remain strongest; persisted carrier tracking history may
-        // confirm the same physical milestones when a projection timestamp has
-        // not yet been backfilled.
-        const eventText = trackingEventText(row);
-        const hasEvent = function (patterns) { return patterns.some(function (pattern) { return pattern.test(eventText); }); };
+        // confirm pickup/movement while preserving its persisted event time.
+        // Delivered completion remains canonical delivered_at only.
+        const pickupPatterns = [/\bcollected\b/, /\bpicked[ _-]?up\b/, /\bcarrier accepted\b/, /\baccepted by carrier\b/];
+        const movementPatterns = [/\bin[ _-]?transit\b/, /\bout for delivery\b/, /\bdelivered\b/];
+        const pickupEventAt = matchingEventTime(row, pickupPatterns);
+        const movementEventAt = matchingEventTime(row, movementPatterns);
         return {
-            pickedUp: Boolean(row?.dataset?.carrierAcceptedAt) || hasEvent([/\bcollected\b/, /\bpicked[ _-]?up\b/, /\bcarrier accepted\b/, /\baccepted by carrier\b/]),
-            inTransit: Boolean(row?.dataset?.firstMovementAt) || hasEvent([/\bin[ _-]?transit\b/, /\bout for delivery\b/, /\bdelivered\b/]),
-            delivered: Boolean(row?.dataset?.deliveredAt) || hasEvent([/\bdelivered\b/])
+            pickedUp: Boolean(row?.dataset?.carrierAcceptedAt || pickupEventAt),
+            pickedUpAt: row?.dataset?.carrierAcceptedAt || pickupEventAt,
+            inTransit: Boolean(row?.dataset?.firstMovementAt || movementEventAt),
+            inTransitAt: row?.dataset?.firstMovementAt || movementEventAt,
+            delivered: Boolean(row?.dataset?.deliveredAt),
+            deliveredAt: row?.dataset?.deliveredAt || ''
         };
     }
 
@@ -71,10 +92,10 @@
 
     function milestoneHtml(row) {
         const carrier = String(row?.dataset?.carrier || '').trim() || 'Carrier';
-        const pickedUpAt = row?.dataset?.carrierAcceptedAt || '';
-        const movementAt = row?.dataset?.firstMovementAt || '';
-        const deliveredAt = row?.dataset?.deliveredAt || '';
         const milestones = persistedMilestones(row);
+        const pickedUpAt = milestones.pickedUpAt;
+        const movementAt = milestones.inTransitAt;
+        const deliveredAt = milestones.deliveredAt;
         const pickupPassed = milestones.pickedUp;
         const transitPassed = milestones.inTransit;
         const delivered = deliveryProven(row);
@@ -170,11 +191,11 @@
                 badge.classList.add('bg-light', 'text-muted', 'border', 'border-secondary');
             }
         });
-        if (terminalDelivery) {
-            Array.from(journeyCell.querySelectorAll('.fbm-row-note')).forEach(function (note) {
-                if (/pickup not confirmed|carrier pickup overdue/i.test(String(note.textContent || ''))) note.remove();
-            });
-        }
+        Array.from(journeyCell.querySelectorAll('.fbm-row-note')).forEach(function (note) {
+            const text = String(note.textContent || '');
+            if (milestones.pickedUp && /pickup not confirmed/i.test(text)) note.remove();
+            if (terminalDelivery && /carrier pickup overdue/i.test(text)) note.remove();
+        });
     }
 
     function alignPromisePerformance(row) {
