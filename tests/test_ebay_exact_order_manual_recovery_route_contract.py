@@ -23,6 +23,8 @@ def test_manual_exact_ebay_recovery_route_is_exposed():
     assert "store_id" in block
     assert "hydrate_exact_ebay_order(" in block
     assert 'source="manual_exact_ebay_recovery"' in block
+    assert "persist_exact_ebay_purchased_shipment_authority(" in block
+    assert '"shipment_recovery": shipment_recovery' in block
 
 
 def test_manual_exact_ebay_recovery_is_existing_order_only():
