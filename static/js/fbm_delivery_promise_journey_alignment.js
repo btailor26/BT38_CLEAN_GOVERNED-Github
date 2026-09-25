@@ -236,12 +236,11 @@
         const tracking = button.dataset.trackingNumber || row.dataset.trackingNumber || String(button.textContent || '').trim() || '—';
         const shipmentCell = row.children?.[7] || null;
         const carrier = String(row.dataset.carrier || '').trim() || '—';
-        const service = String(row.dataset.service || '').trim() || String(shipmentCell?.querySelector('.text-muted')?.textContent || '').trim();
         const providerReference = String(row.dataset.providerShipmentId || '').trim();
         const events = trackingEvents(row);
         if (subtitle) subtitle.textContent = tracking;
         const shippingSource = String(row.dataset.shippingSource || '').trim() || 'Persisted shipment';
-        body.innerHTML = `<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3"><div><div class="fw-semibold">${esc(carrier)}${service && service !== '—' ? ` · ${esc(service)}` : ''}</div><div class="small">Tracking: <code>${esc(tracking)}</code></div><div class="small text-muted">Tracking authority: ${esc(shippingSource)} · persisted BT38 DB</div></div><div>${performanceHtml(row)}</div></div>` + packageSummaryHtml(events, providerReference) + `<div class="border rounded p-3 mb-3">${promiseHtml(row)}</div><div class="fw-semibold mb-2">Shipment journey</div>${milestoneHtml(row)}` + trackingHistoryHtml(events);
+        body.innerHTML = `<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3"><div><div class="fw-semibold">${esc(carrier)}</div><div class="small">Tracking: <code>${esc(tracking)}</code></div><div class="small text-muted">Tracking authority: ${esc(shippingSource)} · persisted BT38 DB</div></div><div>${performanceHtml(row)}</div></div>` + packageSummaryHtml(events, providerReference) + `<div class="border rounded p-3 mb-3">${promiseHtml(row)}</div><div class="fw-semibold mb-2">Shipment journey</div>${milestoneHtml(row)}` + trackingHistoryHtml(events);
         bootstrap.Modal.getOrCreateInstance(modalElement).show();
     }
 
