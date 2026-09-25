@@ -131,7 +131,7 @@ def test_journey_video_capture_requires_explicit_admin_acceptance_and_never_auto
     assert "new MediaRecorder(stream)" in source
     assert "recorder.start()" in source
     assert 'getattr(current_user, "role", "") == "admin"' in source
-    assert 'button.textContent="Stop journey video"' in source
+    assert 'button.textContent="Stop recording"' in source
     assert 'track.addEventListener("ended",stop' in source
     assert 'window.addEventListener("pagehide",stop' in source
     assert "audio:false" in source
