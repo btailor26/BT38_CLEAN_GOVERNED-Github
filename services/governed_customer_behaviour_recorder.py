@@ -132,35 +132,58 @@ _VIDEO_CONTROL_SCRIPT = r'''<script id="bt38JourneyVideoRecorder">
   if(window.__bt38JourneyVideoRecorder)return;
   window.__bt38JourneyVideoRecorder=true;
   if(!navigator.mediaDevices||typeof navigator.mediaDevices.getDisplayMedia!=="function"||typeof window.MediaRecorder!=="function")return;
-  var stream=null,recorder=null,chunks=[];
+  var stream=null,recorder=null,chunks=[],note="";
   var button=document.createElement("button");
   button.type="button";button.id="bt38JourneyVideoRecord";button.textContent="Record journey video";button.className="btn btn-sm btn-outline-danger";
   button.style.cssText="position:fixed;right:18px;bottom:18px;z-index:2147483647;box-shadow:0 2px 10px rgba(0,0,0,.18)";
   button.setAttribute("aria-label","Record BT38 journey video");document.body.appendChild(button);
-  function reset(){stream=null;recorder=null;chunks=[];button.disabled=false;button.textContent="Record journey video";button.className="btn btn-sm btn-outline-danger";}
+
+  var panel=document.createElement("div");
+  panel.id="bt38JourneyVideoNotePanel";panel.hidden=true;
+  panel.style.cssText="position:fixed;right:18px;bottom:62px;width:min(420px,calc(100vw - 36px));z-index:2147483647;background:#fff;border:1px solid #ced4da;border-radius:8px;padding:14px;box-shadow:0 4px 18px rgba(0,0,0,.2)";
+  panel.innerHTML='<label for="bt38JourneyVideoNote" class="form-label fw-semibold mb-1">What should we look at?</label><div class="small text-muted mb-2">Describe the issue this recording should demonstrate. Do not enter passwords, customer details or payment information.</div><textarea id="bt38JourneyVideoNote" class="form-control form-control-sm mb-2" rows="3" maxlength="500" placeholder="Example: Check the Journey column. Picked Up colour does not match the shipment journey popup."></textarea><div class="d-flex justify-content-end gap-2"><button type="button" class="btn btn-sm btn-outline-secondary" id="bt38JourneyVideoCancel">Cancel</button><button type="button" class="btn btn-sm btn-danger" id="bt38JourneyVideoStart">Continue to screen permission</button></div>';
+  document.body.appendChild(panel);
+  var noteInput=panel.querySelector("#bt38JourneyVideoNote"),startButton=panel.querySelector("#bt38JourneyVideoStart"),cancelButton=panel.querySelector("#bt38JourneyVideoCancel");
+
+  function reset(){stream=null;recorder=null;chunks=[];note="";panel.hidden=true;noteInput.value="";button.disabled=false;button.textContent="Record journey video";button.className="btn btn-sm btn-outline-danger";}
   function stop(){if(recorder&&recorder.state!=="inactive")recorder.stop();}
-  button.addEventListener("click",async function(){
+  function hideNoteOverlay(){var el=document.getElementById("bt38JourneyVideoWhatToCheck");if(el)el.remove();}
+  function showNoteOverlay(){
+    hideNoteOverlay();if(!note)return;
+    var overlay=document.createElement("div");overlay.id="bt38JourneyVideoWhatToCheck";
+    overlay.style.cssText="position:fixed;left:18px;top:18px;max-width:min(620px,calc(100vw - 36px));z-index:2147483646;background:rgba(33,37,41,.94);color:#fff;border-radius:8px;padding:12px 14px;box-shadow:0 4px 18px rgba(0,0,0,.25);pointer-events:none";
+    var title=document.createElement("div");title.className="fw-semibold mb-1";title.textContent="What to check";
+    var body=document.createElement("div");body.className="small";body.textContent=note;
+    overlay.appendChild(title);overlay.appendChild(body);document.body.appendChild(overlay);
+    window.setTimeout(hideNoteOverlay,5000);
+  }
+  button.addEventListener("click",function(){
     if(recorder&&recorder.state==="recording"){stop();return;}
-    button.disabled=true;
+    panel.hidden=false;noteInput.focus();
+  });
+  cancelButton.addEventListener("click",function(){panel.hidden=true;noteInput.value="";});
+  startButton.addEventListener("click",async function(){
+    note=String(noteInput.value||"").replace(/\s+/g," ").trim().slice(0,500);
+    panel.hidden=true;button.disabled=true;
     try{
-      // Capture can start only from this explicit click. The browser owns the
-      // chooser/permission prompt and BT38 cannot auto-accept or bypass it.
+      // Capture can start only from this explicit Continue action. The browser
+      // owns the chooser/permission prompt and BT38 cannot auto-accept/bypass it.
       stream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:false});
       chunks=[];recorder=new MediaRecorder(stream);
       recorder.addEventListener("dataavailable",function(e){if(e.data&&e.data.size)chunks.push(e.data);});
       recorder.addEventListener("stop",function(){
+        hideNoteOverlay();
         var blob=new Blob(chunks,{type:recorder.mimeType||"video/webm"});
         if(blob.size){var url=URL.createObjectURL(blob),a=document.createElement("a");a.href=url;a.download="bt38-journey-"+new Date().toISOString().replace(/[:.]/g,"-")+".webm";document.body.appendChild(a);a.click();a.remove();window.setTimeout(function(){URL.revokeObjectURL(url);},1000);}
         if(stream)stream.getTracks().forEach(function(track){track.stop();});reset();
       },{once:true});
       stream.getVideoTracks().forEach(function(track){track.addEventListener("ended",stop,{once:true});});
-      recorder.start();button.disabled=false;button.textContent="Stop journey video";button.className="btn btn-sm btn-danger";
+      recorder.start();showNoteOverlay();button.disabled=false;button.textContent="Stop journey video";button.className="btn btn-sm btn-danger";
     }catch(error){reset();if(error&&error.name!=="NotAllowedError")console.warn("[BT38 recorder] video capture unavailable",error);}
   });
   window.addEventListener("pagehide",stop,{once:true});
 })();
 </script>'''
-
 
 def _safe_text(value, limit=160):
     return str(value or "").replace("\x00", "").strip()[:limit]
