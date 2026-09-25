@@ -185,3 +185,21 @@ def test_exact_marketplace_recovery_includes_existing_confirmed_shipment_cost_au
     assert '"source": "existing_ebay_finances_shipping_label"' in ebay_route
     assert "_confirmed_finance_purchase(" in ebay_label
     assert "shipping_spend_ledger" in ebay_label
+
+
+def test_recovery_results_are_persisted_and_visible_on_fbm_page():
+    projection = Path("services/fbm_db_delivery_promise_alignment.py").read_text(encoding="utf-8")
+    clarity = Path("services/governed_order_clarity_alignment.py").read_text(encoding="utf-8")
+    journey = Path("static/js/fbm_delivery_promise_journey_alignment.js").read_text(encoding="utf-8")
+    template = Path("templates/fbm.html").read_text(encoding="utf-8")
+
+    assert "def _confirmed_shipping_spend(" in projection
+    assert "shipping_spend_ledger" in projection
+    assert '"shipping_cost": (shipping_spend_by_order.get(key) or {}).get("amount")' in projection
+    assert 'data-shipping-cost=' in clarity
+    assert 'data-shipping-cost-records=' in clarity
+    assert "Persisted recovery records" in journey
+    assert "Carrier scan records:" in journey
+    assert "Cost: not recovered" in journey
+    assert "new scan records" in template
+    assert "persisted DB" in template
