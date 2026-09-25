@@ -49,9 +49,9 @@
         const movementConfirmed = Boolean(row.dataset.firstMovementAt) || hasEvent([
             /\bin[ _-]?transit\b/, /\bout for delivery\b/, /\bdelivered\b/
         ]);
-        const deliveryConfirmed = Boolean(row.dataset.deliveredAt) || hasEvent([
-            /\bdelivered\b/
-        ]);
+        // Delivered is canonical DB completion only. Carrier event text can
+        // support pickup/movement presentation but cannot manufacture delivery.
+        const deliveryConfirmed = Boolean(row.dataset.deliveredAt);
         setBadge(pickedUp, pickupConfirmed);
         setBadge(inTransit, movementConfirmed);
         setBadge(delivered, deliveryConfirmed);
@@ -59,6 +59,12 @@
         if (pickedUp) pickedUp.title = pickupConfirmed ? 'Pickup confirmed by persisted shipment truth' : 'Pickup not confirmed';
         if (inTransit) inTransit.title = movementConfirmed ? 'Movement confirmed by persisted shipment truth' : 'Movement not confirmed';
         if (delivered) delivered.title = deliveryConfirmed ? 'Delivery confirmed by persisted shipment truth' : 'Delivery not confirmed';
+
+        Array.from(journeyCell.querySelectorAll('.fbm-row-note')).forEach(note => {
+            const text = String(note.textContent || '');
+            if (pickupConfirmed && /pickup not confirmed/i.test(text)) note.remove();
+            if (deliveryConfirmed && /carrier pickup overdue/i.test(text)) note.remove();
+        });
     }
 
     function renderedRecommendation(cell) {
