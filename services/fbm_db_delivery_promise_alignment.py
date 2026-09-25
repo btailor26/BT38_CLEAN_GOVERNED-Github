@@ -210,6 +210,34 @@ def _iso(value: Any) -> str:
     return value.isoformat() if value is not None and hasattr(value, "isoformat") else ""
 
 
+def _is_pre_scan_event(event: dict[str, Any]) -> bool:
+    """Exclude electronic pre-advice that occurs before physical carrier handling."""
+    text_value = " ".join(
+        str(event.get(field) or "").strip().lower()
+        for field in ("status", "description", "detail")
+    )
+    pre_scan_markers = (
+        "details received",
+        "information received",
+        "shipment information",
+        "shipping information",
+        "label created",
+        "label generated",
+        "label printed",
+        "tracking number",
+        "expecting your parcel",
+        "expect your parcel",
+        "expected in network",
+        "pre-advice",
+        "pre advice",
+        "prealert",
+        "pre-alert",
+        "manifest created",
+        "booking created",
+    )
+    return any(marker in text_value for marker in pre_scan_markers)
+
+
 def _tracking_events(shipment_ids: set[int]) -> dict[int, list[dict[str, Any]]]:
     """Batch-read already-persisted carrier events for the visible canonical shipments.
 
@@ -302,6 +330,8 @@ def install_fbm_db_delivery_promise_alignment(app: Any) -> None:
             first_scan_at = ""
             if shipment is not None and getattr(shipment, "label_purchased_at", None) is not None:
                 for event in shipment_events:
+                    if _is_pre_scan_event(event):
+                        continue
                     candidate = str(event.get("event_time") or event.get("observed_at") or "").strip()
                     if candidate:
                         first_scan_at = candidate
