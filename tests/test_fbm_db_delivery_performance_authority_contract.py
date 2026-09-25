@@ -121,6 +121,10 @@ def test_journey_delivery_requires_persisted_delivered_timestamp_only():
 def test_carrier_neutral_pickup_projection_uses_first_persisted_scan_after_label():
     projection = (ROOT / "services" / "fbm_db_delivery_promise_alignment.py").read_text(encoding="utf-8")
     assert "first_scan_at" in projection
+    assert "def _is_pre_scan_event(event" in projection
+    assert '"details received"' in projection
+    assert '"expected in network"' in projection
+    assert "if _is_pre_scan_event(event):" in projection
     assert 'event.get("event_time") or event.get("observed_at")' in projection
     assert "pickup_at = canonical_pickup_at or first_scan_at" in projection
     assert '"carrier_accepted_at": pickup_at' in projection
