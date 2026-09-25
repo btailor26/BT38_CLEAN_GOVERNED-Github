@@ -48,9 +48,18 @@
         // timestamps remain strongest; persisted carrier tracking history may
         // confirm pickup/movement while preserving its persisted event time.
         // Delivered completion remains canonical delivered_at only.
-        const pickupPatterns = [/\bcollected\b/, /\bpicked[ _-]?up\b/, /\bcarrier accepted\b/, /\baccepted by carrier\b/];
         const movementPatterns = [/\bin[ _-]?transit\b/, /\bout for delivery\b/, /\bdelivered\b/];
-        const pickupEventAt = matchingEventTime(row, pickupPatterns);
+        const scans = trackingEvents(row).filter(function (event) {
+            return Boolean(event && (event.event_time || event.observed_at || event.status || event.description || event.detail));
+        }).sort(function (a, b) {
+            const aTime = new Date(a.event_time || a.observed_at || 0).getTime() || 0;
+            const bTime = new Date(b.event_time || b.observed_at || 0).getTime() || 0;
+            return aTime - bTime;
+        });
+        // Simple journey contract: the first persisted carrier scan means the
+        // parcel has been picked up. Later movement scans advance In transit.
+        const firstScan = scans[0] || null;
+        const pickupEventAt = firstScan ? String(firstScan.event_time || firstScan.observed_at || '') : '';
         const movementEventAt = matchingEventTime(row, movementPatterns);
         return {
             pickedUp: Boolean(row?.dataset?.carrierAcceptedAt || pickupEventAt),
@@ -243,8 +252,8 @@
     }
 
     function install() {
-        if (document.documentElement.dataset.bt38PromiseJourneyAligned === '14') return;
-        document.documentElement.dataset.bt38PromiseJourneyAligned = '14';
+        if (document.documentElement.dataset.bt38PromiseJourneyAligned === '15') return;
+        document.documentElement.dataset.bt38PromiseJourneyAligned = '15';
         document.querySelectorAll('.fbm-order-row').forEach(alignRowPerformance);
         window.addEventListener('click', intercept, true);
         window.addEventListener('keydown', function (event) { if (event.key !== 'Enter' && event.key !== ' ') return; intercept(event); }, true);
