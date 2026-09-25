@@ -166,3 +166,22 @@ def test_exact_marketplace_recovery_contract_is_whole_journey_not_tracking_numbe
     assert '"broad_scan_started": False' in route
     assert '"marketplace_write_started": False' in route
     assert '"marketplace_write_started": False' in ebay_route
+
+
+def test_exact_marketplace_recovery_includes_existing_confirmed_shipment_cost_authority():
+    amazon_route = Path("services/governed_amazon_exact_order_recovery_route.py").read_text(encoding="utf-8")
+    ebay_route = Path("services/governed_webhook_rejection_recovery.py").read_text(encoding="utf-8")
+    amazon_label = Path("services/governed_amazon_shipping_label_readback.py").read_text(encoding="utf-8")
+    ebay_label = Path("services/governed_ebay_shipping_label_readback.py").read_text(encoding="utf-8")
+
+    assert "hydrate_amazon_purchased_label_for_order(" in amazon_route
+    assert '"shipping_cost_recovery": {' in amazon_route
+    assert '"shipping_cost_persisted": bool(shipping_label.get("shipping_cost_persisted"))' in amazon_route
+    assert "_persist_confirmed_shipping_cost(" in amazon_label
+    assert "shipping_spend_ledger" in amazon_label
+
+    assert "persist_exact_ebay_purchased_shipment_authority(" in ebay_route
+    assert '"shipping_cost_recovery": {' in ebay_route
+    assert '"source": "existing_ebay_finances_shipping_label"' in ebay_route
+    assert "_confirmed_finance_purchase(" in ebay_label
+    assert "shipping_spend_ledger" in ebay_label
