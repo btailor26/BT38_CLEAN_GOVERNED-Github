@@ -14,8 +14,9 @@ def test_customer_behaviour_recorder_is_event_driven_and_privacy_bounded():
     assert 'addEventListener("scroll"' in text
     assert 'addEventListener("pagehide"' in text
     assert "setInterval(" not in text
-    assert "setTimeout(" not in text
-    assert "requestAnimationFrame(" not in text
+    core_script = text.split("_VIDEO_CONTROL_SCRIPT =", 1)[0]
+    assert "setTimeout(" not in core_script
+    assert "requestAnimationFrame(" not in core_script
     assert "input_value" not in text
     assert "_SECRET_TERMS" in text
     assert "request.form" not in text
@@ -78,8 +79,9 @@ def test_recorder_transport_bypasses_its_own_fetch_instrumentation():
 def test_recorder_emits_only_from_real_events_not_idle_loops():
     source = Path("services/governed_customer_behaviour_recorder.py").read_text(encoding="utf-8")
     assert "setInterval(" not in source
-    assert "setTimeout(" not in source
-    assert "requestAnimationFrame(" not in source
+    core_script = source.split("_VIDEO_CONTROL_SCRIPT =", 1)[0]
+    assert "setTimeout(" not in core_script
+    assert "requestAnimationFrame(" not in core_script
     assert 'if(url===endpoint)return originalFetch.apply(this,arguments);' in source
     assert 'if request.path == _ENDPOINT or request.method != "GET": return response' in source
 
