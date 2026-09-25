@@ -42,7 +42,10 @@
     }
 
     function deliveryProven(row) {
-        return persistedMilestones(row).delivered;
+        // Canonical delivered completion remains timestamp-only DB truth.
+        // Tracking event text may support pickup/movement presentation, but
+        // must never manufacture a delivered milestone.
+        return Boolean(row?.dataset?.deliveredAt);
     }
 
     function performanceHtml(row) {
@@ -74,7 +77,7 @@
         const milestones = persistedMilestones(row);
         const pickupPassed = milestones.pickedUp;
         const transitPassed = milestones.inTransit;
-        const delivered = milestones.delivered;
+        const delivered = deliveryProven(row);
 
         function milestone(title, confirmed, exactTime) {
             const border = confirmed ? 'border-success' : 'border-secondary';
@@ -155,7 +158,7 @@
         const stageTruth = {
             'picked up': milestones.pickedUp,
             'in transit': milestones.inTransit,
-            'delivered': milestones.delivered
+            'delivered': deliveryProven(row)
         };
         Array.from(journeyCell.querySelectorAll('.badge')).forEach(function (badge) {
             const label = String(badge.textContent || '').trim().toLowerCase();
