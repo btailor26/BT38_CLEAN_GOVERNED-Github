@@ -107,7 +107,7 @@ if(recoverButton)recoverButton.addEventListener('click',async()=>{
    }else if(marketplace==='ebay'){
     p=await jsonFetch('/governed/actions/ebay/exact-order-recovery',{method:'POST',body:JSON.stringify({store_id:storeId,marketplace_order_id:orderId})});
     const shipment=p.shipment_recovery||{},cost=p.shipping_cost_recovery||{},after=p.database_readback||[];
-    recoveryLines.push(`${orderId} · eBay · CALL SUCCESSFUL · missing before: ${(check.missing||[]).join(', ')||'unknown'} · tracking ${shipment.tracking_number||'not recovered'} · new scan records ${Number(shipment.tracking_events_inserted||0)} · shipment cost ${recoveryCostText(cost.shipping_cost,cost.shipping_cost_currency)} · DB readback ${after.length?'complete':'empty'}`);
+    recoveryLines.push(`${orderId} · eBay · CALL SUCCESSFUL · missing before: ${(check.missing||[]).join(', ')||'unknown'} · tracking ${shipment.tracking_number||'not recovered'} · new marketplace events ${Number(shipment.tracking_events_inserted||0)} · shipment cost ${recoveryCostText(cost.shipping_cost,cost.shipping_cost_currency)} · DB readback ${after.length?'complete':'empty'}`);
    }else if(String(row.dataset.shipmentProvider||'').toLowerCase()==='packlink'&&row.dataset.shipmentId){
     p=await jsonFetch(`/fbm/shipments/${encodeURIComponent(row.dataset.shipmentId)}/packlink/status`);
     recoveryLines.push(`${orderId} · Packlink · CALL SUCCESSFUL · tracking ${p.tracking_number||p.tracking||'not recovered'}`);
