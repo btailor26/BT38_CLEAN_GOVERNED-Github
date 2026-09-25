@@ -54,6 +54,7 @@ _SINGULAR_SCOPE_KEYS = (
     "seller_sku",
     "listing_id",
     "order_id",
+    "marketplace_order_id",
     "warehouse_stock_id",
     "group_id",
     "store_id",
@@ -249,6 +250,7 @@ def _collapse_events(events: list[dict]) -> dict | None:
             "event_type",
             "seller_sku",
             "order_id",
+            "marketplace_order_id",
             "store_id",
         ):
             if event.get(key) not in (None, ""):
