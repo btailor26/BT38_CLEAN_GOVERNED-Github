@@ -87,7 +87,31 @@
             document.querySelectorAll('.fbm-order-row').forEach(row => {
                 const freshRow = parsed.querySelector(`.fbm-order-row[data-order-id="${CSS.escape(String(row.dataset.orderId || ''))}"]`);
                 if (!freshRow) return;
-                if (freshRow.dataset.lifecycleStatus) row.dataset.lifecycleStatus = freshRow.dataset.lifecycleStatus;
+                // Keep the visible row on the exact same persisted DB truth as
+                // the tracking popup. The fresh /fbm snapshot already carries
+                // these governed data attributes; copy them before the committed
+                // snapshot event lets the canonical journey owner recolour.
+                [
+                    'lifecycleStatus',
+                    'shipmentState',
+                    'carrierAcceptedAt',
+                    'firstMovementAt',
+                    'deliveredAt',
+                    'deliveryPerformance',
+                    'trackingEvents',
+                    'lastProviderCheckedAt',
+                    'lastProviderStatus',
+                    'shipByAt',
+                    'earliestDeliveryAt',
+                    'deliveryPromiseAt',
+                    'shippingSource',
+                    'carrier',
+                    'service',
+                    'trackingNumber',
+                    'providerShipmentId'
+                ].forEach(key => {
+                    row.dataset[key] = freshRow.dataset[key] || '';
+                });
                 row.dataset.labelReady = freshRow.dataset.labelReady || '0';
             });
             window.BT38FBMApplyCommittedSnapshot(nextData, nextCounts);
