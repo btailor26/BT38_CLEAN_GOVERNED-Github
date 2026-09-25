@@ -458,6 +458,10 @@ def recover_exact_ebay_order_manually():
             "source": "existing_ebay_finances_shipping_label",
             "purchase_confirmed": bool(shipment_recovery.get("purchase_confirmed")),
             "shipment_id": shipment_recovery.get("shipment_id"),
+            "shipping_cost_persisted": bool(shipment_recovery.get("shipping_cost_persisted")),
+            "shipping_cost": shipment_recovery.get("shipping_cost"),
+            "shipping_cost_currency": shipment_recovery.get("shipping_cost_currency"),
+            "shipping_cost_records": shipment_recovery.get("shipping_cost_records", 0),
         },
         "database_readback": readback,
     }), 200
