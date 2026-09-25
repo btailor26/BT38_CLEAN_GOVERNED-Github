@@ -47,11 +47,6 @@ _SCRIPT = r'''<script id="bt38CustomerBehaviourRecorder">
 (function(){
   "use strict";
   if(window.__bt38BehaviourRecorder)return;
-  // Operational FBM is intentionally outside customer-journey recording. Keep
-  // this browser-side guard as a second boundary even if another response
-  // wrapper ever re-injects this shared script.
-  var pagePath=String(location.pathname||"").replace(/\/$/,"")||"/";
-  if(pagePath==="/fbm"||pagePath.indexOf("/governed/fbm/")===0||pagePath==="/governed/fbm")return;
   window.__bt38BehaviourRecorder=true;
   var endpoint="/governed/ui/customer-behaviour";
   var key="bt38.customerJourney.v1";
@@ -92,12 +87,28 @@ _SCRIPT = r'''<script id="bt38CustomerBehaviourRecorder">
     nodes.forEach(function(el){if(!visible(el)||shown.length>=40)return;var t=safeText(el,180);if(!t)return;shown.push(selector(el)+":"+t);});
     send("display_snapshot",{display_text:clean(shown.join(" | "),4000)});
   }
+  function visualFrame(reason){
+    if(!document.body)return;
+    var clone=document.body.cloneNode(true);
+    [].slice.call(clone.querySelectorAll("script,style,noscript")).forEach(function(el){el.remove();});
+    [].slice.call(clone.querySelectorAll("body *")).forEach(function(el){
+      if(el.matches&&el.matches("input,textarea,select,[contenteditable=true]")){
+        if(el.tagName==="INPUT")el.setAttribute("value","");
+        if(el.tagName==="TEXTAREA")el.textContent="";
+        if(el.tagName==="SELECT")[].slice.call(el.options||[]).forEach(function(o){o.removeAttribute("selected");});
+        if(el.hasAttribute&&el.hasAttribute("contenteditable"))el.textContent="";
+      }
+      ["data-token","data-secret","data-password","data-credential"].forEach(function(name){if(el.removeAttribute)el.removeAttribute(name);});
+    });
+    send("visual_frame",{feature:clean(reason,40),frame:clone.outerHTML.slice(0,12000),scroll_x:Math.round(scrollX||0),scroll_y:Math.round(scrollY||0)});
+  }
   var originalFetch=window.fetch;
   if(originalFetch){window.fetch=function(input,init){var started=performance.now(),method=String((init&&init.method)||"GET").toUpperCase(),url="";try{url=new URL(typeof input==="string"?input:input.url,location.origin);url=url.origin===location.origin?url.pathname:"external";}catch(e){url="unknown";}if(url===endpoint)return originalFetch.apply(this,arguments);return originalFetch.apply(this,arguments).then(function(response){send("browser_request",{target:url,method:method,status_code:response.status,duration_ms:Math.round(performance.now()-started)});return response;},function(error){send("browser_error",{target:url,method:method,duration_ms:Math.round(performance.now()-started),error_name:clean(error&&error.name,80),error_message:clean(error&&error.message,180)});throw error;});};}
   window.addEventListener("error",function(e){send("browser_error",{error_name:"window_error",error_message:clean(e.message,180)});});
   window.addEventListener("unhandledrejection",function(e){send("browser_error",{error_name:"unhandled_rejection",error_message:clean(e.reason&&e.reason.message||e.reason,180)});});
   send("page_view");
   snapshot();
+  visualFrame("page_view");
   document.addEventListener("click",function(e){
     var el=e.target.closest("a,button,[role=button],input[type=submit],[data-behaviour-feature]"); if(!el)return;
     send("click",{target:selector(el),target_text:safeText(el,100),target_href:el.tagName==="A"?pathOnly(el.href):"",display_state:state(el)}); visualFrame("click");
@@ -119,6 +130,12 @@ _SCRIPT = r'''<script id="bt38CustomerBehaviourRecorder">
   var features=[].slice.call(document.querySelectorAll("[data-behaviour-feature],main button,main a,main [role=button],main .card,main .alert,main table"));
   if("IntersectionObserver" in window&&features.length){
     var fio=new IntersectionObserver(function(entries){entries.forEach(function(x){if(!x.isIntersecting||x.intersectionRatio<0.5)return;var f=clean(x.target.getAttribute("data-behaviour-feature")||selector(x.target)+":"+safeText(x.target,80),140);if(!f||seenFeatures.has(f))return;seenFeatures.add(f);send("feature_view",{feature:f,display_text:safeText(x.target,500),display_state:state(x.target)});});},{threshold:[0.5]});features.forEach(function(f){fio.observe(f);});
+  }
+  if("MutationObserver" in window&&document.body){
+    var domObserver=new MutationObserver(function(mutations){
+      if(mutations.some(function(m){return m.type==="childList"&&(m.addedNodes.length||m.removedNodes.length);}))visualFrame("dom_change");
+    });
+    domObserver.observe(document.body,{childList:true,subtree:true});
   }
   var depths=[25,50,75,100];
   window.addEventListener("scroll",function(){var h=Math.max(document.documentElement.scrollHeight-innerHeight,1);var d=Math.min(100,Math.round(scrollY/h*100));depths.forEach(function(mark){if(d>=mark&&maxDepth<mark){maxDepth=mark;send("scroll_depth",{scroll_depth:mark});}});},{passive:true});
