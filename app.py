@@ -112,7 +112,7 @@ app.config["SENTINEL_MODE"] = SENTINEL_MODE
 
 # Session configuration - use standard Flask sessions for compatibility
 app.config['SESSION_PERMANENT'] = True
-app.config['PERMANENT_SESSION_LIFETIME'] = 1800  # 30 minutes
+app.config['PERMANENT_SESSION_LIFETIME'] = 14400  # 4 hours
 
 # ============================================================================
 # SESSION COOKIE ISOLATION - CRITICAL FOR STAGING/PRODUCTION SEPARATION
