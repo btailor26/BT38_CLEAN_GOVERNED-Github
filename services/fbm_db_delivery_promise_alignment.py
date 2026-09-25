@@ -238,6 +238,40 @@ def _is_pre_scan_event(event: dict[str, Any]) -> bool:
     return any(marker in text_value for marker in pre_scan_markers)
 
 
+def _confirmed_shipping_spend(keys: set[tuple[int, str]]) -> dict[tuple[int, str], dict[str, Any]]:
+    """Batch-read confirmed persisted shipment cost for visible exact orders."""
+    if not keys:
+        return {}
+    store_ids = sorted({key[0] for key in keys})
+    order_ids = sorted({key[1] for key in keys})
+    statement = text("""
+        SELECT store_id, marketplace_order_id,
+               MIN(currency) AS currency,
+               SUM(ABS(amount)) AS amount,
+               COUNT(*) AS spend_rows
+          FROM shipping_spend_ledger
+         WHERE confirmed = TRUE
+           AND fulfillment_family = 'FBM'
+           AND store_id IN :store_ids
+           AND marketplace_order_id IN :order_ids
+         GROUP BY store_id, marketplace_order_id
+    """).bindparams(bindparam("store_ids", expanding=True), bindparam("order_ids", expanding=True))
+    try:
+        rows = db.session.execute(statement, {"store_ids": store_ids, "order_ids": order_ids}).mappings().all()
+    except Exception:
+        db.session.rollback()
+        return {}
+    return {
+        (int(row["store_id"]), str(row["marketplace_order_id"])): {
+            "amount": float(row["amount"]) if row["amount"] is not None else None,
+            "currency": str(row["currency"] or ""),
+            "spend_rows": int(row["spend_rows"] or 0),
+        }
+        for row in rows
+        if (int(row["store_id"]), str(row["marketplace_order_id"])) in keys
+    }
+
+
 def _tracking_events(shipment_ids: set[int]) -> dict[int, list[dict[str, Any]]]:
     """Batch-read already-persisted carrier events for the visible canonical shipments.
 
@@ -307,6 +341,13 @@ def install_fbm_db_delivery_promise_alignment(app: Any) -> None:
         }
         shipment_ids.discard(0)
         tracking_events_by_shipment = _tracking_events(shipment_ids)
+        visible_keys = {
+            (int(getattr(item.get("order"), "store_id", 0) or 0), str(getattr(item.get("order"), "marketplace_order_id", "") or "").strip())
+            for item in items
+            if isinstance(item, dict) and item.get("order") is not None
+        }
+        visible_keys = {key for key in visible_keys if key[0] > 0 and key[1]}
+        shipping_spend_by_order = _confirmed_shipping_spend(visible_keys)
         rendered_truth: dict[int, dict[str, Any]] = {}
 
         for item in items:
@@ -363,6 +404,9 @@ def install_fbm_db_delivery_promise_alignment(app: Any) -> None:
                     "provider_shipment_id": str(getattr(shipment, "provider_shipment_id", "") or "") if shipment is not None else "",
                     "marketplace_order_id": str(getattr(order, "marketplace_order_id", "") or ""),
                     "tracking_events": shipment_events,
+                    "shipping_cost": (shipping_spend_by_order.get(key) or {}).get("amount"),
+                    "shipping_cost_currency": (shipping_spend_by_order.get(key) or {}).get("currency", ""),
+                    "shipping_cost_records": (shipping_spend_by_order.get(key) or {}).get("spend_rows", 0),
                 }
 
             provider = str(getattr(shipment, "provider", "") or "").strip().lower()
