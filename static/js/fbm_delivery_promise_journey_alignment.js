@@ -44,26 +44,15 @@
     }
 
     function persistedMilestones(row) {
-        // One DB authority for both the row and modal. Canonical projection
-        // timestamps remain strongest; persisted carrier tracking history may
-        // confirm pickup/movement while preserving its persisted event time.
-        // Delivered completion remains canonical delivered_at only.
+        // One server-projected DB authority for both the row and modal.
+        // Pickup is already resolved server-side from canonical carrier acceptance
+        // or the first physical persisted scan after electronic pre-advice.
+        // The browser never reinterprets tracking wording for pickup.
         const movementPatterns = [/\bin[ _-]?transit\b/, /\bout for delivery\b/, /\bdelivered\b/];
-        const scans = trackingEvents(row).filter(function (event) {
-            return Boolean(event && (event.event_time || event.observed_at || event.status || event.description || event.detail));
-        }).sort(function (a, b) {
-            const aTime = new Date(a.event_time || a.observed_at || 0).getTime() || 0;
-            const bTime = new Date(b.event_time || b.observed_at || 0).getTime() || 0;
-            return aTime - bTime;
-        });
-        // Simple journey contract: the first persisted carrier scan means the
-        // parcel has been picked up. Later movement scans advance In transit.
-        const firstScan = scans[0] || null;
-        const pickupEventAt = firstScan ? String(firstScan.event_time || firstScan.observed_at || '') : '';
         const movementEventAt = matchingEventTime(row, movementPatterns);
         return {
-            pickedUp: Boolean(row?.dataset?.carrierAcceptedAt || pickupEventAt),
-            pickedUpAt: row?.dataset?.carrierAcceptedAt || pickupEventAt,
+            pickedUp: Boolean(row?.dataset?.carrierAcceptedAt),
+            pickedUpAt: row?.dataset?.carrierAcceptedAt || '',
             inTransit: Boolean(row?.dataset?.firstMovementAt || movementEventAt),
             inTransitAt: row?.dataset?.firstMovementAt || movementEventAt,
             delivered: Boolean(row?.dataset?.deliveredAt),
