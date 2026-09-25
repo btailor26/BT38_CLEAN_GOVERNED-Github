@@ -224,7 +224,15 @@ def recover_exact_amazon_order_manually():
         "broad_scan_started": False, "order_replayed": False,
         "stock_mutation_started": False, "marketplace_write_started": False,
         "store_id": store_id, "order_id": order_id,
-        "hydration": hydration, "database_readback": _readback(store_id, order_id),
+        "hydration": hydration,
+        "shipping_cost_recovery": {
+            "attempted": True,
+            "source": "existing_amazon_purchased_label_readback",
+            "shipping_cost_persisted": bool(shipping_label.get("shipping_cost_persisted")),
+            "shipping_cost": shipping_label.get("shipping_cost"),
+            "shipping_cost_currency": shipping_label.get("shipping_cost_currency"),
+        },
+        "database_readback": _readback(store_id, order_id),
     }), 200
 
 
