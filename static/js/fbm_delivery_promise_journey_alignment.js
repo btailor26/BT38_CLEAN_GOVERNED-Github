@@ -20,10 +20,29 @@
         return String(row?.dataset?.deliveryPerformance || '').trim().toLowerCase();
     }
 
+    function trackingEventText(row) {
+        return trackingEvents(row).map(function (event) {
+            return [event && event.status, event && event.description, event && event.detail]
+                .filter(Boolean).join(' ');
+        }).join(' ').toLowerCase();
+    }
+
+    function persistedMilestones(row) {
+        // One DB authority for both the row and modal. Canonical projection
+        // timestamps remain strongest; persisted carrier tracking history may
+        // confirm the same physical milestones when a projection timestamp has
+        // not yet been backfilled.
+        const eventText = trackingEventText(row);
+        const hasEvent = function (patterns) { return patterns.some(function (pattern) { return pattern.test(eventText); }); };
+        return {
+            pickedUp: Boolean(row?.dataset?.carrierAcceptedAt) || hasEvent([/\bcollected\b/, /\bpicked[ _-]?up\b/, /\bcarrier accepted\b/, /\baccepted by carrier\b/]),
+            inTransit: Boolean(row?.dataset?.firstMovementAt) || hasEvent([/\bin[ _-]?transit\b/, /\bout for delivery\b/, /\bdelivered\b/]),
+            delivered: Boolean(row?.dataset?.deliveredAt) || hasEvent([/\bdelivered\b/])
+        };
+    }
+
     function deliveryProven(row) {
-        // Journey milestones are independent persisted facts. A terminal
-        // shipment/provider state must never fabricate a delivered milestone.
-        return Boolean(row?.dataset?.deliveredAt);
+        return persistedMilestones(row).delivered;
     }
 
     function performanceHtml(row) {
@@ -52,10 +71,10 @@
         const pickedUpAt = row?.dataset?.carrierAcceptedAt || '';
         const movementAt = row?.dataset?.firstMovementAt || '';
         const deliveredAt = row?.dataset?.deliveredAt || '';
-        const terminalDelivery = deliveryProven(row);
-        const pickupPassed = Boolean(pickedUpAt);
-        const transitPassed = Boolean(movementAt);
-        const delivered = Boolean(deliveredAt);
+        const milestones = persistedMilestones(row);
+        const pickupPassed = milestones.pickedUp;
+        const transitPassed = milestones.inTransit;
+        const delivered = milestones.delivered;
 
         function milestone(title, confirmed, exactTime) {
             const border = confirmed ? 'border-success' : 'border-secondary';
@@ -132,10 +151,11 @@
         const journeyCell = row?.children?.[8] || null;
         if (!journeyCell) return;
         const terminalDelivery = deliveryProven(row);
+        const milestones = persistedMilestones(row);
         const stageTruth = {
-            'picked up': Boolean(row?.dataset?.carrierAcceptedAt),
-            'in transit': Boolean(row?.dataset?.firstMovementAt),
-            'delivered': Boolean(row?.dataset?.deliveredAt)
+            'picked up': milestones.pickedUp,
+            'in transit': milestones.inTransit,
+            'delivered': milestones.delivered
         };
         Array.from(journeyCell.querySelectorAll('.badge')).forEach(function (badge) {
             const label = String(badge.textContent || '').trim().toLowerCase();
