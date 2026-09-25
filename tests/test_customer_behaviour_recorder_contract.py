@@ -29,7 +29,8 @@ def test_customer_behaviour_recorder_is_installed_once_for_non_operational_html_
     assert "install_governed_customer_behaviour_recorder(app)" in main
     assert "@app.after_request" in recorder
     assert '"text/html"' in recorder
-    assert 'body.replace("</body>", _SCRIPT + "\\n</body>", 1)' in recorder
+    assert 'injected = _SCRIPT' in recorder
+    assert 'body.replace("</body>", injected + "\\n</body>", 1)' in recorder
     assert "_bt38_customer_behaviour_recorder_installed" in recorder
 
 
