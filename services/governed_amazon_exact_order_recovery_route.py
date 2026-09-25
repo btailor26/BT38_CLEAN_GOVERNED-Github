@@ -15,6 +15,7 @@ import re
 
 from flask import Blueprint, current_app, jsonify, request
 from flask_login import current_user
+from sqlalchemy import text
 
 from extensions import db
 from models import MarketplaceOrder, Store
@@ -119,7 +120,7 @@ def check_exact_marketplace_order_recovery():
     ebay_event_evidence = None
     if platform == "ebay":
         ebay_event_evidence = db.session.execute(
-            db.text(
+            text(
                 """
                 SELECT
                     COUNT(fte.id) AS event_count,
