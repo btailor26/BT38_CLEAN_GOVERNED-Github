@@ -110,6 +110,41 @@ def check_exact_marketplace_order_recovery():
     before = _database_readback(store_id, order_id)
     candidates = set(_candidate_order_ids(store_id, platform=platform))
     recovery_required = order_id in candidates
+
+    # eBay journey evidence is part of recovery completeness.  The proven exact
+    # eBay readback persists supported marketplace events (Sell Fulfillment
+    # shippedDate and Trading GetOrders ActualDeliveryTime) into the canonical
+    # tracking-event ledger.  Do not declare an order complete merely because
+    # carrier/tracking/promise/spend already exist.
+    ebay_event_evidence = None
+    if platform == "ebay":
+        ebay_event_evidence = db.session.execute(
+            db.text(
+                """
+                SELECT
+                    COUNT(fte.id) AS event_count,
+                    COUNT(fte.id) FILTER (WHERE LOWER(COALESCE(fte.status, '')) = 'shipped') AS shipped_count,
+                    COUNT(fte.id) FILTER (WHERE LOWER(COALESCE(fte.status, '')) = 'delivered') AS delivered_count
+                FROM fbm_shipments fs
+                LEFT JOIN fbm_shipment_tracking_events fte
+                  ON fte.shipment_id = fs.id
+                 AND fte.provider = 'ebay'
+                WHERE fs.store_id = :store_id
+                  AND fs.marketplace_order_id = :order_id
+                  AND fs.provider = 'ebay_shipping'
+                """
+            ),
+            {"store_id": store_id, "order_id": order_id},
+        ).mappings().first()
+        shipment_truth = before.get("fbm_shipment") or {}
+        event_count = int((ebay_event_evidence or {}).get("event_count") or 0)
+        shipped_count = int((ebay_event_evidence or {}).get("shipped_count") or 0)
+        delivered_count = int((ebay_event_evidence or {}).get("delivered_count") or 0)
+        if shipment_truth and (event_count == 0 or shipped_count == 0):
+            recovery_required = True
+        if shipment_truth.get("delivered_at") is not None and delivered_count == 0:
+            recovery_required = True
+
     missing = []
     if not before.get("tracking_number"):
         missing.append("tracking")
@@ -121,6 +156,15 @@ def check_exact_marketplace_order_recovery():
         missing.append("delivery promise")
     if platform == "ebay" and not before.get("confirmed_shipping_spend"):
         missing.append("confirmed shipping spend")
+    if platform == "ebay":
+        shipment_truth = before.get("fbm_shipment") or {}
+        event_count = int((ebay_event_evidence or {}).get("event_count") or 0)
+        shipped_count = int((ebay_event_evidence or {}).get("shipped_count") or 0)
+        delivered_count = int((ebay_event_evidence or {}).get("delivered_count") or 0)
+        if shipment_truth and (event_count == 0 or shipped_count == 0):
+            missing.append("eBay shipped event evidence")
+        if shipment_truth.get("delivered_at") is not None and delivered_count == 0:
+            missing.append("eBay delivered event evidence")
     if platform == "amazon" and recovery_required and not missing:
         missing.append("Amazon tracking event history")
 
@@ -129,6 +173,7 @@ def check_exact_marketplace_order_recovery():
         "db_check_completed": True, "marketplace_call_started": False,
         "store_id": store_id, "order_id": order_id, "platform": platform,
         "recovery_required": recovery_required, "missing": missing,
+        "ebay_event_evidence": dict(ebay_event_evidence) if ebay_event_evidence is not None else None,
         "database_readback": before,
     }), 200
 
