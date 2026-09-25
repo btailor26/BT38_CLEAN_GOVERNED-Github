@@ -304,6 +304,7 @@ def recover_exact_ebay_order_manually():
     from extensions import db
     from models import MarketplaceOrder, Store
     from services.governed_exact_ebay_order_hydration import hydrate_exact_ebay_order
+    from services.governed_ebay_shipping_label_readback import persist_exact_ebay_purchased_shipment_authority
 
     configured_task_key = str(os.environ.get("TASK_API_KEY") or "")
     supplied_task_key = str(request.headers.get("X-Task-Key") or "")
@@ -384,6 +385,16 @@ def recover_exact_ebay_order_manually():
             marketplace_order_id=order_id,
             source="manual_exact_ebay_recovery",
         )
+        # The existing Recovery button must recover the exact eBay shipment
+        # authority as well as the order row. This remains one bounded,
+        # read-only marketplace recovery: finance purchase proof + exact
+        # fulfillment/Trading readback persist into the existing FBMShipment
+        # and FBMShipmentTrackingEvent ledger. No broad scan or marketplace
+        # write is introduced.
+        shipment_recovery = persist_exact_ebay_purchased_shipment_authority(
+            store=store,
+            marketplace_order_id=order_id,
+        )
     except Exception as exc:
         db.session.rollback()
         app.logger.exception(
@@ -441,6 +452,7 @@ def recover_exact_ebay_order_manually():
         "store_id": store_id,
         "order_id": order_id,
         "hydration": result,
+        "shipment_recovery": shipment_recovery,
         "database_readback": readback,
     }), 200
 
