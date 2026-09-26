@@ -44,12 +44,9 @@
         const delivered = events.find(function (item) {
             return item.status === 'delivered' || /\b(parcel has been delivered|delivered)\b/.test(item.text);
         });
-        // eBay Shipping can expose only two lifecycle facts: shipped and
-        // delivered. A terminal delivery proves the parcel necessarily passed
-        // through the earlier operational journey stages, without inventing
-        // extra rows in Tracking history. Prefer the shipped timestamp for
-        // Picked up; use delivery time only to confirm In transit when no
-        // intermediate carrier movement event exists.
+        // A persisted terminal delivery completes the operational journey.
+        // Earlier stages may be confirmed from that fact, but timestamps and
+        // Tracking history rows remain limited to events actually persisted.
         return {
             pickedUp: Boolean(pickup || delivered), pickedUpAt: pickup ? pickup.time : '',
             inTransit: Boolean(movement || delivered), inTransitAt: movement ? movement.time : '',
@@ -186,10 +183,12 @@
         if (!journeyCell) return;
         const terminalDelivery = deliveryProven(row);
         const milestones = persistedMilestones(row);
+        // Terminal delivery is authoritative for completion of the whole
+        // three-stage journey. Badge wording must never change that rule.
         const stageTruth = {
-            'picked up': milestones.pickedUp,
-            'in transit': milestones.inTransit,
-            'delivered': deliveryProven(row)
+            'picked up': terminalDelivery || milestones.pickedUp,
+            'in transit': terminalDelivery || milestones.inTransit,
+            'delivered': terminalDelivery
         };
         Array.from(journeyCell.querySelectorAll('.badge')).forEach(function (badge) {
             const label = String(badge.textContent || '').trim().toLowerCase();
