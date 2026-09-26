@@ -300,6 +300,7 @@ def _tracking_events(shipment_ids: set[int]) -> dict[int, list[dict[str, Any]]]:
             "status": str(row.status or ""),
             "description": str(row.description or ""),
             "detail": str(row.detail or ""),
+            "location": str((row.raw_event or {}).get("location") or (row.raw_event or {}).get("event_location") or (row.raw_event or {}).get("eventLocation") or ""),
             "estimated_delivery_at": _iso(row.estimated_delivery_at),
             "package_count": row.package_count,
             "package_data": row.package_data,
