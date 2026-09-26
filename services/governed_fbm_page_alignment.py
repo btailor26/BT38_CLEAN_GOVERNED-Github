@@ -703,7 +703,19 @@ def install_governed_fbm_page_alignment(app) -> None:
             "ready": sum(1 for item in orders if item["route_state"] == "Ready for FBM routing"),
             "tracking": sum(1 for item in orders if item["route_state"] == "Tracking recorded"),
             "dispatched": sum(1 for item in orders if item["route_state"] == "Dispatched"),
-            "marketplace_shipping": sum(1 for item in orders if item["shipping_mode"]["marketplace_buy_shipping"]),
+            # Shipping-source summary follows persisted shipment authority, not
+            # marketplace capability. A recovered Packlink shipment must stop
+            # counting as generic marketplace shipping after its provenance is proven.
+            "marketplace_shipping": sum(
+                1 for item in orders
+                if item.get("shipment") is not None
+                and str(item["shipment"].provider or "").strip().lower() == "marketplace"
+            ),
+            "packlink_shipping": sum(
+                1 for item in orders
+                if item.get("shipment") is not None
+                and str(item["shipment"].provider or "").strip().lower() == "packlink"
+            ),
             "awaiting_acceptance": sum(1 for item in orders if item["shipment_state"] == "awaiting_carrier_acceptance"),
             "overdue": sum(1 for item in orders if item["shipment_state"] == "acceptance_overdue"),
             "mapping_review": sum(1 for item in orders if item["mapping_review"] and item["mapping_review"].status == "under_review"),
