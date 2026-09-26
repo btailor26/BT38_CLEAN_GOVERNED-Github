@@ -21,41 +21,39 @@
     }
 
     function persistedMilestones(row) {
-        // One reporting path: Tracking history is truth. Shipment journey is
-        // only a summary of those same persisted tracking events.
+        // Single display authority: Tracking history. Shipment journey is only
+        // a summary/classification of these exact same persisted events.
         const events = trackingEvents(row).map(function (event) {
             const status = String(event && event.status || '').trim().toLowerCase().replace(/[ -]+/g, '_');
             const text = [event && event.status, event && event.description, event && event.detail]
                 .filter(Boolean).join(' ').toLowerCase();
             const time = String(event && (event.event_time || event.observed_at) || '');
-            return {status: status, text: text, time: time};
+            return {event: event, status: status, text: text, time: time};
         }).sort(function (a, b) {
             return (new Date(a.time || 0).getTime() || 0) - (new Date(b.time || 0).getTime() || 0);
         });
-        const pickup = events.find(function (event) {
-            return ['carrier_accepted', 'accepted', 'picked_up', 'collected'].includes(event.status) || /\b(collected|picked up|carrier accepted)\b/.test(event.text);
+        const pickup = events.find(function (item) {
+            return ['carrier_accepted', 'accepted', 'picked_up', 'collected'].includes(item.status) || /\b(we('|’)ve collected|collected your parcel|picked up|carrier accepted)\b/.test(item.text);
         });
-        const movement = events.find(function (event) {
-            return ['in_transit', 'out_for_delivery'].includes(event.status) || /\b(in transit|out for delivery)\b/.test(event.text);
+        const movement = events.find(function (item) {
+            return ['in_transit', 'out_for_delivery'].includes(item.status) || /\b(in transit|out for delivery|on its way|arrived at your delivery depot|arrived at your delivery depot|arrived in our depot|national hub|we have your parcel|with one of our drivers)\b/.test(item.text);
         });
-        const delivered = events.find(function (event) {
-            return event.status === 'delivered' || /\bdelivered\b/.test(event.text);
+        const outForDelivery = events.find(function (item) {
+            return item.status === 'out_for_delivery' || /\b(out for delivery|with one of our drivers|driver.*delivery)\b/.test(item.text);
+        });
+        const delivered = events.find(function (item) {
+            return item.status === 'delivered' || /\b(parcel has been delivered|delivered)\b/.test(item.text);
         });
         return {
-            pickedUp: Boolean(pickup),
-            pickedUpAt: pickup ? pickup.time : '',
-            inTransit: Boolean(movement),
-            inTransitAt: movement ? movement.time : '',
-            delivered: Boolean(delivered),
-            deliveredAt: delivered ? delivered.time : ''
+            pickedUp: Boolean(pickup), pickedUpAt: pickup ? pickup.time : '',
+            inTransit: Boolean(movement), inTransitAt: movement ? movement.time : '',
+            outForDelivery: Boolean(outForDelivery), outForDeliveryAt: outForDelivery ? outForDelivery.time : '',
+            delivered: Boolean(delivered), deliveredAt: delivered ? delivered.time : ''
         };
     }
 
     function deliveryProven(row) {
-        // Canonical delivered completion remains timestamp-only DB truth.
-        // Tracking event text may support pickup/movement presentation, but
-        // must never manufacture a delivered milestone.
-        return Boolean(row?.dataset?.deliveredAt);
+        return persistedMilestones(row).delivered;
     }
 
     function performanceHtml(row) {
@@ -139,8 +137,9 @@
             const when = displayDate(event.event_time || '');
             const title = String(event.description || event.status || '').trim();
             const detail = String(event.detail || '').trim();
-            if (!title && !detail) return '';
-            return `<div class="list-group-item py-2"><div class="d-flex justify-content-between gap-3"><div>${title ? `<div class="fw-semibold">${esc(title)}</div>` : ''}${detail ? `<div class="small text-muted">${esc(detail)}</div>` : ''}</div>${index === 0 ? '<span class="badge rounded-pill px-2 py-1 bg-secondary text-white align-self-start">Latest</span>' : ''}</div>${when ? `<div class="small text-muted mt-1">${esc(when)}</div>` : ''}</div>`;
+            const location = String(event.location || '').trim();
+            if (!title && !detail && !location) return '';
+            return `<div class="list-group-item py-2"><div class="d-flex justify-content-between gap-3"><div>${title ? `<div class="fw-semibold">${esc(title)}</div>` : ''}${detail ? `<div class="small text-muted">${esc(detail)}</div>` : ''}${location ? `<div class="small text-muted">${esc(location)}</div>` : ''}</div>${index === 0 ? '<span class="badge rounded-pill px-2 py-1 bg-secondary text-white align-self-start">Latest</span>' : ''}</div>${when ? `<div class="small text-muted mt-1">${esc(when)}</div>` : ''}</div>`;
         }).join('') + `</div>`;
     }
 
