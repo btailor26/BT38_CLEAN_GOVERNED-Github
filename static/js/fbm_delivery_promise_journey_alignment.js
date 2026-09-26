@@ -20,43 +20,34 @@
         return String(row?.dataset?.deliveryPerformance || '').trim().toLowerCase();
     }
 
-    function trackingEventText(row) {
-        return trackingEvents(row).map(function (event) {
-            return [event && event.status, event && event.description, event && event.detail]
-                .filter(Boolean).join(' ');
-        }).join(' ').toLowerCase();
-    }
-
-    function matchingEventTime(row, patterns) {
+    function persistedMilestones(row) {
+        // One reporting path: Tracking history is truth. Shipment journey is
+        // only a summary of those same persisted tracking events.
         const events = trackingEvents(row).map(function (event) {
+            const status = String(event && event.status || '').trim().toLowerCase().replace(/[ -]+/g, '_');
             const text = [event && event.status, event && event.description, event && event.detail]
                 .filter(Boolean).join(' ').toLowerCase();
-            return {event: event, text: text};
-        }).filter(function (item) {
-            return patterns.some(function (pattern) { return pattern.test(item.text); });
+            const time = String(event && (event.event_time || event.observed_at) || '');
+            return {status: status, text: text, time: time};
         }).sort(function (a, b) {
-            const aTime = new Date(a.event.event_time || a.event.observed_at || 0).getTime() || 0;
-            const bTime = new Date(b.event.event_time || b.event.observed_at || 0).getTime() || 0;
-            return aTime - bTime;
+            return (new Date(a.time || 0).getTime() || 0) - (new Date(b.time || 0).getTime() || 0);
         });
-        const match = events[0] && events[0].event;
-        return match ? String(match.event_time || match.observed_at || '') : '';
-    }
-
-    function persistedMilestones(row) {
-        // One server-projected DB authority for both the row and modal.
-        // Pickup is already resolved server-side from canonical carrier acceptance
-        // or the first physical persisted scan after electronic pre-advice.
-        // The browser never reinterprets tracking wording for pickup.
-        const movementPatterns = [/\bin[ _-]?transit\b/, /\bout for delivery\b/, /\bdelivered\b/];
-        const movementEventAt = matchingEventTime(row, movementPatterns);
+        const pickup = events.find(function (event) {
+            return ['carrier_accepted', 'accepted', 'picked_up', 'collected'].includes(event.status) || /\b(collected|picked up|carrier accepted)\b/.test(event.text);
+        });
+        const movement = events.find(function (event) {
+            return ['in_transit', 'out_for_delivery'].includes(event.status) || /\b(in transit|out for delivery)\b/.test(event.text);
+        });
+        const delivered = events.find(function (event) {
+            return event.status === 'delivered' || /\bdelivered\b/.test(event.text);
+        });
         return {
-            pickedUp: Boolean(row?.dataset?.carrierAcceptedAt),
-            pickedUpAt: row?.dataset?.carrierAcceptedAt || '',
-            inTransit: Boolean(row?.dataset?.firstMovementAt || movementEventAt),
-            inTransitAt: row?.dataset?.firstMovementAt || movementEventAt,
-            delivered: Boolean(row?.dataset?.deliveredAt),
-            deliveredAt: row?.dataset?.deliveredAt || ''
+            pickedUp: Boolean(pickup),
+            pickedUpAt: pickup ? pickup.time : '',
+            inTransit: Boolean(movement),
+            inTransitAt: movement ? movement.time : '',
+            delivered: Boolean(delivered),
+            deliveredAt: delivered ? delivered.time : ''
         };
     }
 
