@@ -140,7 +140,7 @@ def _latest_distinct_fbm_rows(limit: int) -> tuple[list[MarketplaceOrder], bool]
     )
     candidates = (
         query
-        .options(joinedload(MarketplaceOrder.store), joinedload(MarketplaceOrder.warehouse_stock))
+        .options(joinedload(MarketplaceOrder.store), joinedload(MarketplaceOrder.warehouse_stock), joinedload(MarketplaceOrder.mcf_order))
         .order_by(MarketplaceOrder.id.desc())
         .limit(candidate_limit)
         .all()
@@ -659,6 +659,12 @@ def install_governed_fbm_page_alignment(app) -> None:
                 "case": case,
                 "profile": profile,
                 "mapping_review": mapping_review,
+                # Display-only MCF identity/cost. Shipment lifecycle authority stays unchanged.
+                "mcf_display": ({
+                    "source_label": "Amazon MCF",
+                    "shipping_cost": row.mcf_order.total_mcf_fee,
+                    "currency": row.mcf_order.currency or "GBP",
+                } if getattr(row, "mcf_order", None) is not None else None),
             })
 
         # Project persisted marketplace promise truth into the same row payload
