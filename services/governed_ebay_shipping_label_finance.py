@@ -290,10 +290,14 @@ def read_and_persist_exact_ebay_shipping_label_purchase(*, store, marketplace_or
             "Authorization": f"Bearer {token}",
             "Accept": "application/json",
         },
-        params={
-            "filter": f"transactionType:{{SHIPPING_LABEL}},orderId:{{{order_id}}}",
-            "limit": "100",
-        },
+        # eBay Finances combines criteria as repeated filter query
+        # parameters. A comma inside one filter value is not equivalent and
+        # can return an empty transaction set for a valid SHIPPING_LABEL debit.
+        params=[
+            ("filter", "transactionType:{SHIPPING_LABEL}"),
+            ("filter", f"orderId:{{{order_id}}}"),
+            ("limit", "100"),
+        ],
     )
     prepared = request.prepare()
     try:
