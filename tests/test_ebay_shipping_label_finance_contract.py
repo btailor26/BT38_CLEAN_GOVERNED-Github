@@ -6,8 +6,9 @@ SOURCE = (ROOT / "services" / "governed_ebay_shipping_label_finance.py").read_te
 
 
 def test_ebay_shipping_label_finance_read_is_exact_and_read_only():
-    assert 'transactionType:{SHIPPING_LABEL}' in SOURCE
-    assert 'orderId:{{{order_id}}}' in SOURCE
+    assert '("filter", "transactionType:{SHIPPING_LABEL}")' in SOURCE
+    assert '("filter", f"orderId:{{{order_id}}}")' in SOURCE
+    assert '"filter": f"transactionType:{{SHIPPING_LABEL}},orderId:{{{order_id}}}"' not in SOURCE
     assert 'EBAY_FINANCES_SCOPE' in SOURCE
     assert 'marketplace_write_started": False' in SOURCE
     assert 'shipment_created": False' in SOURCE
