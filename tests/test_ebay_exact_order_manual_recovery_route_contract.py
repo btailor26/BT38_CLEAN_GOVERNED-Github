@@ -23,8 +23,9 @@ def test_manual_exact_ebay_recovery_route_is_exposed():
     assert "store_id" in block
     assert "hydrate_exact_ebay_order(" in block
     assert 'source="manual_exact_ebay_recovery"' in block
-    assert "read_and_persist_exact_ebay_shipping_label_purchase(" in block
-    assert block.index("read_and_persist_exact_ebay_shipping_label_purchase(") < block.index("persist_exact_ebay_purchased_shipment_authority(")
+    assert 'result.get("shipping_label_finance")' in block
+    assert 'result.get("shipping_label_shipment_authority")' in block
+    assert "read_and_persist_exact_ebay_shipping_label_purchase(" not in block
     assert "persist_exact_ebay_purchased_shipment_authority(" in block
     assert '"shipment_recovery": shipment_recovery' in block
 
@@ -84,3 +85,9 @@ def test_manual_exact_ebay_recovery_exposes_finance_proof_before_cost_readback()
     assert '"transactions_persisted": finance_recovery.get("transactions_persisted", 0)' in block
     assert '"purchase_transactions": finance_recovery.get("purchase_transactions", 0)' in block
     assert '"shipping_cost_persisted": bool(shipment_recovery.get("shipping_cost_persisted"))' in block
+
+
+def test_manual_exact_ebay_recovery_requires_confirmed_spend_for_complete_success():
+    block = _function_block(SOURCE, "recover_exact_ebay_order_manually")
+    assert 'shipping_spend_recovered = bool(shipment_recovery.get("shipping_cost_persisted"))' in block
+    assert "recovery_succeeded = base_recovery_succeeded and shipping_spend_recovered" in block
