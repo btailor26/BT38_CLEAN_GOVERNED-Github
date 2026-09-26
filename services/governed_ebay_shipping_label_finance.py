@@ -326,7 +326,38 @@ def read_and_persist_exact_ebay_shipping_label_purchase(*, store, marketplace_or
             "order_id": order_id,
         }
 
-    payload = response.json() or {}
+    # Finance enrichment is optional evidence for an already-bounded exact
+    # order recovery. A successful HTTP response with an empty/non-JSON body
+    # must never abort shipment/order recovery or manufacture finance truth.
+    try:
+        payload = response.json() or {}
+    except (ValueError, requests.exceptions.JSONDecodeError):
+        return {
+            "success": False,
+            "skipped": True,
+            "reason": "ebay_finances_shipping_label_response_not_json",
+            "status_code": response.status_code,
+            "order_id": order_id,
+            "purchase_confirmed": False,
+            "transactions_seen": 0,
+            "transactions_persisted": 0,
+            "marketplace_write_started": False,
+            "shipment_created": False,
+        }
+    if not isinstance(payload, dict):
+        return {
+            "success": False,
+            "skipped": True,
+            "reason": "ebay_finances_shipping_label_response_not_object",
+            "status_code": response.status_code,
+            "order_id": order_id,
+            "purchase_confirmed": False,
+            "transactions_seen": 0,
+            "transactions_persisted": 0,
+            "marketplace_write_started": False,
+            "shipment_created": False,
+        }
+
     transactions = [
         row for row in (payload.get("transactions") or [])
         if isinstance(row, dict)
