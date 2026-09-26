@@ -138,6 +138,34 @@ def recover_confirmed_packlink_spend(shipment: FBMShipment) -> ShippingSpendLedg
     )
 
 
+def recover_packlink_provider_spend(shipment: FBMShipment, provider_payload: Any) -> ShippingSpendLedger | None:
+    """Persist exact Packlink purchase price returned by the shipment detail read."""
+    if str(shipment.provider or "").lower() != "packlink" or not isinstance(provider_payload, dict):
+        return None
+    price = provider_payload.get("price")
+    amount = None
+    currency = str(provider_payload.get("currency") or "GBP")
+    if isinstance(price, dict):
+        amount = price.get("total_price")
+        currency = str(price.get("currency") or currency)
+    elif price not in (None, ""):
+        amount = price
+    spend = confirmed_purchase_spend(
+        amount,
+        source="packlink_provider_purchase",
+        default_currency=currency or "GBP",
+    )
+    if not spend.confirmed or spend.amount is None:
+        return None
+    return _upsert_spend(
+        shipment,
+        amount=spend.amount,
+        currency=spend.currency or currency or "GBP",
+        source=spend.source or "packlink_provider_purchase",
+        source_reference=shipment.provider_shipment_id,
+    )
+
+
 def recover_historical_packlink_spend() -> int:
     """Idempotently backfill only already-confirmed Packlink purchases."""
     shipments = (
