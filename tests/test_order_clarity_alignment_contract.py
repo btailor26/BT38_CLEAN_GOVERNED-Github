@@ -17,9 +17,9 @@ def test_journey_numbers_are_removed_at_render_without_changing_state_authority(
     assert '("3 · Delivered", "Delivered")' in ALIGNMENT
     assert "journey_state = item.shipment_state" in FBM
     assert "journey_truth = g.fbm_delivery_truth_by_order_id.get(order.id, {})" in FBM
-    assert "picked_up = journey_truth.get('carrier_accepted_at') or (shipment and shipment.carrier_accepted_at)" in FBM
-    assert "in_transit = journey_truth.get('first_movement_at') or (shipment and shipment.first_movement_at)" in FBM
     assert "delivered = journey_truth.get('delivered_at') or (shipment and shipment.delivered_at)" in FBM
+    assert "picked_up = delivered or journey_truth.get('carrier_accepted_at') or (shipment and shipment.carrier_accepted_at)" in FBM
+    assert "in_transit = delivered or journey_truth.get('first_movement_at') or (shipment and shipment.first_movement_at)" in FBM
 
 
 def test_fbm_page_alignment_never_recovers_or_requeries_persisted_state_on_get():
