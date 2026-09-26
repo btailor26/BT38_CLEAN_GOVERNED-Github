@@ -59,7 +59,12 @@
     }
 
     function deliveryProven(row) {
-        return persistedMilestones(row).delivered;
+        // Persisted deliveredAt is the canonical terminal DB authority. The
+        // persisted tracking event is the same factual delivery evidence used
+        // by Tracking history; neither shipmentState nor provider status may
+        // promote a shipment to Delivered.
+        const deliveredAt = String(row?.dataset?.deliveredAt || '').trim();
+        return Boolean(deliveredAt) && persistedMilestones(row).delivered;
     }
 
     function performanceHtml(row) {
