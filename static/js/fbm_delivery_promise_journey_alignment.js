@@ -52,7 +52,7 @@
         // intermediate carrier movement event exists.
         return {
             pickedUp: Boolean(pickup || delivered), pickedUpAt: pickup ? pickup.time : '',
-            inTransit: Boolean(movement || delivered), inTransitAt: movement ? movement.time : (delivered ? delivered.time : ''),
+            inTransit: Boolean(movement || delivered), inTransitAt: movement ? movement.time : '',
             outForDelivery: Boolean(outForDelivery), outForDeliveryAt: outForDelivery ? outForDelivery.time : '',
             delivered: Boolean(delivered), deliveredAt: delivered ? delivered.time : ''
         };
