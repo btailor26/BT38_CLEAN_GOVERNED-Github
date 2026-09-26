@@ -386,20 +386,38 @@ def recover_exact_ebay_order_manually():
             marketplace_order_id=order_id,
             source="manual_exact_ebay_recovery",
         )
-        # Recovery must actively fetch the exact eBay SHIPPING_LABEL finance
-        # transaction before shipment authority consumes confirmed spend truth.
-        # This is the existing bounded Finances read: one store + one order,
-        # no polling, no broad scan and no marketplace write.
-        finance_recovery = read_and_persist_exact_ebay_shipping_label_purchase(
-            store=store,
-            marketplace_order_id=order_id,
+        # The installed exact-hydration alignment is the canonical producer for
+        # eBay SHIPPING_LABEL finance truth. Reuse its result rather than making
+        # a second Finances call from this manual route.
+        finance_recovery = (
+            result.get("shipping_label_finance")
+            if isinstance(result, dict)
+            else None
         )
-        # Re-read exact shipment authority only after the finance producer has
-        # had the opportunity to persist amount/currency into the spend ledger.
-        shipment_recovery = persist_exact_ebay_purchased_shipment_authority(
-            store=store,
-            marketplace_order_id=order_id,
+        if not isinstance(finance_recovery, dict):
+            finance_recovery = {
+                "success": False,
+                "skipped": True,
+                "reason": "canonical_ebay_finance_result_missing",
+                "purchase_confirmed": False,
+                "transactions_seen": 0,
+                "transactions_persisted": 0,
+                "purchase_transactions": 0,
+            }
+
+        # The canonical wrapper persists shipment authority when finance confirms
+        # a purchase. If finance is unavailable, still run the existing shipment
+        # readback once so tracking/shipment truth remains independent from cost.
+        shipment_recovery = (
+            result.get("shipping_label_shipment_authority")
+            if isinstance(result, dict)
+            else None
         )
+        if not isinstance(shipment_recovery, dict) or not shipment_recovery.get("success"):
+            shipment_recovery = persist_exact_ebay_purchased_shipment_authority(
+                store=store,
+                marketplace_order_id=order_id,
+            )
     except Exception as exc:
         db.session.rollback()
         app.logger.exception(
@@ -445,7 +463,9 @@ def recover_exact_ebay_order_manually():
         for row in rows
     ]
 
-    recovery_succeeded = bool(result.get("success")) or bool(shipment_recovery.get("success"))
+    base_recovery_succeeded = bool(result.get("success")) or bool(shipment_recovery.get("success"))
+    shipping_spend_recovered = bool(shipment_recovery.get("shipping_cost_persisted"))
+    recovery_succeeded = base_recovery_succeeded and shipping_spend_recovered
     return jsonify({
         "success": recovery_succeeded,
         "ok": recovery_succeeded,
