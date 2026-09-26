@@ -30,6 +30,7 @@ from services.fbm_packlink_adapter import PacklinkAdapter, PacklinkConfiguration
 from services.fbm_packlink_callback import extract_packlink_tracking, reconcile_packlink_tracking_lifecycle
 from services.fbm_post_purchase import persist_external_label
 from services.fbm_shipping_state import provider_case_eligibility, shipment_confirmation_state
+from services.governed_shipping_spend_alignment import recover_packlink_provider_spend
 
 
 governed_fbm_bp = Blueprint("governed_fbm", __name__)
@@ -703,6 +704,104 @@ def packlink_create_draft(order_id: int):
         "label_ready": False,
         "shipment_purpose": purpose or "original",
         "message": "Packlink draft created. The order remains open until tracking is provided.",
+    })
+
+
+@governed_fbm_bp.post("/fbm/shipments/<int:shipment_id>/packlink/recover")
+@login_required
+def packlink_exact_recovery(shipment_id: int):
+    """Explicit one-shot Packlink recovery for an existing FBM shipment.
+
+    Exact marketplace-order reference is the discovery boundary. This route reads
+    Packlink only, persists provider/lifecycle/spend truth, and never confirms or
+    writes a marketplace shipment.
+    """
+    shipment = db.session.get(FBMShipment, shipment_id)
+    if shipment is None:
+        return jsonify({"success": False, "message": "FBM shipment not found."}), 404
+    order = MarketplaceOrder.query.filter_by(
+        store_id=shipment.store_id,
+        marketplace_order_id=shipment.marketplace_order_id,
+    ).order_by(MarketplaceOrder.id.asc()).first()
+    if order is None:
+        return jsonify({"success": False, "message": "Marketplace order for this shipment is missing."}), 404
+
+    adapter = PacklinkAdapter()
+    try:
+        provider_payload = adapter.find_shipment_by_custom_reference(shipment.marketplace_order_id)
+        if provider_payload is None:
+            return jsonify({
+                "success": True,
+                "matched": False,
+                "shipment_id": shipment.id,
+                "marketplace_order_id": shipment.marketplace_order_id,
+                "message": "No exact Packlink shipment matched this marketplace order reference.",
+            })
+        reference = str(
+            provider_payload.get("packlink_reference")
+            or provider_payload.get("shipment_reference")
+            or provider_payload.get("reference")
+            or ""
+        ).strip()
+        if not reference:
+            return jsonify({"success": False, "message": "Packlink matched the order but returned no shipment reference."}), 502
+        tracking_history = adapter.get_tracking_status(reference=reference)
+    except (PacklinkConfigurationError, PacklinkRequestError) as exc:
+        return jsonify({"success": False, "message": str(exc)}), getattr(exc, "status_code", None) or 502
+
+    provider_state = str(provider_payload.get("state") or provider_payload.get("status") or "").strip()
+    tracking = extract_packlink_tracking(provider_payload, tracking_history, shipment.tracking_number)
+    carrier = str(provider_payload.get("carrier") or shipment.carrier or "").strip() or None
+    service = str(provider_payload.get("service") or shipment.service or "").strip() or None
+    service_id = str(provider_payload.get("service_id") or shipment.provider_service_id or "").strip() or None
+
+    # The exact Packlink order-reference match is the provenance proof. Persist it
+    # before lifecycle projection so the FBM source badge and future recovery path
+    # follow Packlink rather than the generic marketplace placeholder.
+    shipment.provider = "packlink"
+    shipment.provider_shipment_id = reference
+    shipment.provider_service_id = service_id
+    shipment.carrier = carrier
+    shipment.service = service
+    if tracking:
+        shipment.tracking_number = tracking
+    shipment.label_source = "packlink"
+    shipment.label_storage_ref = shipment.label_storage_ref or reference
+    purchase_date = str(provider_payload.get("purchase_date") or "").strip()
+    if purchase_date and shipment.label_purchased_at is None:
+        try:
+            shipment.label_purchased_at = datetime.strptime(purchase_date, "%Y/%m/%d %H:%M:%S")
+        except ValueError:
+            pass
+    if shipment.label_purchased_at is not None and tracking:
+        shipment.purchase_status = "purchased"
+        shipment.purchase_error = None
+
+    reconcile_packlink_tracking_lifecycle(
+        shipment,
+        provider_state=provider_state,
+        tracking_history=tracking_history,
+        observed_at=datetime.utcnow(),
+    )
+    spend = recover_packlink_provider_spend(shipment, provider_payload)
+    db.session.commit()
+
+    return jsonify({
+        "success": True,
+        "matched": True,
+        "shipment_id": shipment.id,
+        "marketplace_order_id": shipment.marketplace_order_id,
+        "provider": shipment.provider,
+        "provider_reference": shipment.provider_shipment_id,
+        "carrier": shipment.carrier,
+        "service": shipment.service,
+        "tracking_number": shipment.tracking_number,
+        "tracking_events_persisted": len(tracking_history),
+        "provider_status": shipment.last_provider_status,
+        "shipment_status": shipment.status,
+        "shipping_cost": float(spend.amount) if spend is not None else None,
+        "shipping_cost_currency": spend.currency if spend is not None else None,
+        "marketplace_write_attempted": False,
     })
 
 
