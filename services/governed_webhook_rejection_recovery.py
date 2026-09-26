@@ -304,7 +304,6 @@ def recover_exact_ebay_order_manually():
     from extensions import db
     from models import MarketplaceOrder, Store
     from services.governed_exact_ebay_order_hydration import hydrate_exact_ebay_order
-    from services.governed_ebay_shipping_label_finance import read_and_persist_exact_ebay_shipping_label_purchase
     from services.governed_ebay_shipping_label_readback import persist_exact_ebay_purchased_shipment_authority
 
     configured_task_key = str(os.environ.get("TASK_API_KEY") or "")
