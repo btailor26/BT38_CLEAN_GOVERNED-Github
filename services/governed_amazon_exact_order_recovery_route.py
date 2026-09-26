@@ -166,6 +166,38 @@ def check_exact_marketplace_order_recovery():
             missing.append("eBay shipped event evidence")
         if shipment_truth.get("delivered_at") is not None and delivered_count == 0:
             missing.append("eBay delivered event evidence")
+    # eBay's supported exact Sell Fulfillment / Trading reads expose shipped and
+    # delivered facts, not independent carrier pickup or movement scans. Surface
+    # those gaps without triggering a futile repeat marketplace read or inventing
+    # journey milestones. An existing recoverable gap still takes precedence.
+    unavailable_tracking_evidence = []
+    if platform == "ebay":
+        shipment_truth = before.get("fbm_shipment") or {}
+        if shipment_truth and before.get("tracking_number"):
+            milestones = db.session.execute(
+                text("""
+                    SELECT
+                        COUNT(fte.id) FILTER (
+                            WHERE LOWER(COALESCE(fte.status, '')) IN
+                                ('carrier_accepted', 'accepted', 'picked_up', 'collected')
+                        ) AS accepted_count,
+                        COUNT(fte.id) FILTER (
+                            WHERE LOWER(COALESCE(fte.status, '')) IN
+                                ('in_transit', 'out_for_delivery', 'in transit')
+                        ) AS movement_count
+                    FROM fbm_shipments fs
+                    LEFT JOIN fbm_shipment_tracking_events fte
+                      ON fte.shipment_id = fs.id
+                    WHERE fs.store_id = :store_id
+                      AND fs.marketplace_order_id = :order_id
+                      AND fs.provider = 'ebay_shipping'
+                """),
+                {"store_id": store_id, "order_id": order_id},
+            ).mappings().first()
+            if not shipment_truth.get("carrier_accepted_at") and not int((milestones or {}).get("accepted_count") or 0):
+                unavailable_tracking_evidence.append("carrier pickup scan")
+            if not shipment_truth.get("first_movement_at") and not int((milestones or {}).get("movement_count") or 0):
+                unavailable_tracking_evidence.append("in-transit carrier scan")
     if platform == "amazon" and recovery_required and not missing:
         missing.append("Amazon tracking event history")
 
@@ -174,6 +206,8 @@ def check_exact_marketplace_order_recovery():
         "db_check_completed": True, "marketplace_call_started": False,
         "store_id": store_id, "order_id": order_id, "platform": platform,
         "recovery_required": recovery_required, "missing": missing,
+        "unavailable_tracking_evidence": unavailable_tracking_evidence,
+        "carrier_history_supported_by_exact_ebay_readback": False if platform == "ebay" else None,
         "ebay_event_evidence": dict(ebay_event_evidence) if ebay_event_evidence is not None else None,
         "database_readback": before,
     }), 200
