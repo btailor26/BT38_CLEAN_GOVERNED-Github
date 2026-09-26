@@ -12,18 +12,20 @@ def test_shipment_journey_and_row_use_one_persisted_db_milestone_mapping():
     assert "trackingEvents(row)" in JOURNEY
     assert "const firstScan = scans[0] || null;" not in JOURNEY
     assert "pickupEventAt" not in JOURNEY
-    assert "pickedUp: Boolean(row?.dataset?.carrierAcceptedAt)" in JOURNEY
+    assert "'shipped'].includes(item.status)" in JOURNEY
+    assert "pickedUp: Boolean(pickup || delivered)" in JOURNEY
+    assert "inTransit: Boolean(movement || delivered)" in JOURNEY
     assert "/\\bin[ _-]?transit\\b/" in JOURNEY
     assert "/\\bdelivered\\b/" in JOURNEY
     assert "const milestones = persistedMilestones(row);" in JOURNEY
     assert "'picked up': milestones.pickedUp" in JOURNEY
     assert "'in transit': milestones.inTransit" in JOURNEY
     assert "'delivered': deliveryProven(row)" in JOURNEY
-    assert "return Boolean(row?.dataset?.deliveredAt);" in JOURNEY
-    assert "function matchingEventTime(row, patterns)" in JOURNEY
-    assert "pickedUpAt: row?.dataset?.carrierAcceptedAt || ''" in JOURNEY
-    assert "inTransitAt: row?.dataset?.firstMovementAt || movementEventAt" in JOURNEY
-    assert "deliveredAt: row?.dataset?.deliveredAt || ''" in JOURNEY
+    assert "function deliveryProven(row)" in JOURNEY
+    assert "return persistedMilestones(row).delivered;" in JOURNEY
+    assert "pickedUpAt: pickup ? pickup.time : ''" in JOURNEY
+    assert "inTransitAt: movement ? movement.time : (delivered ? delivered.time : '')" in JOURNEY
+    assert "deliveredAt: delivered ? delivered.time : ''" in JOURNEY
     assert "if (milestones.pickedUp && /pickup not confirmed/i.test(text)) note.remove()" in JOURNEY
 
 
