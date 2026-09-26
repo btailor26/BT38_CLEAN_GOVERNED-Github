@@ -584,6 +584,52 @@ class PacklinkAdapter:
             return len(text) == 2 and text.isalpha()
         return False
 
+    def find_shipment_by_custom_reference(self, custom_reference: str) -> dict[str, Any] | None:
+        """Find one exact Packlink shipment for a marketplace order on explicit recovery.
+
+        This is a user-triggered provider read only. It does not poll, create postage,
+        or mutate marketplace state. Exact shipment_custom_reference equality is the
+        authority boundary; ambiguous matches are rejected rather than guessed.
+        """
+        wanted = str(custom_reference or "").strip()
+        if not wanted:
+            return None
+        matches: dict[str, dict[str, Any]] = {}
+        for inbox in ("ALL", "READY_TO_PURCHASE", "PENDING", "DRAFT"):
+            try:
+                payload = self._get_json("shipments", query={"inbox": inbox})
+            except PacklinkRequestError as exc:
+                if exc.status_code in {400, 404}:
+                    continue
+                raise
+            rows = payload if isinstance(payload, list) else next(
+                (payload.get(key) for key in ("shipments", "items", "results", "data") if isinstance(payload, dict) and isinstance(payload.get(key), list)),
+                [],
+            )
+            for row in rows or []:
+                if not isinstance(row, dict):
+                    continue
+                row_custom = str(row.get("shipment_custom_reference") or row.get("custom_reference") or "").strip()
+                if row_custom != wanted:
+                    continue
+                reference = str(row.get("shipment_reference") or row.get("packlink_reference") or row.get("reference") or row.get("id") or "").strip()
+                if reference:
+                    matches[reference] = row
+            if matches:
+                break
+        if len(matches) > 1:
+            raise PacklinkRequestError("Packlink returned multiple shipments for this exact marketplace order; recovery was held for review.", status_code=409)
+        if not matches:
+            return None
+        reference, row = next(iter(matches.items()))
+        try:
+            exact = self.get_shipment(reference)
+        except PacklinkRequestError:
+            exact = dict(row)
+        exact.setdefault("packlink_reference", reference)
+        exact.setdefault("shipment_custom_reference", wanted)
+        return exact
+
     def get_shipment(self, reference: str) -> dict[str, Any]:
         payload = self._get_json(f"shipments/{reference}")
         if not isinstance(payload, dict):
