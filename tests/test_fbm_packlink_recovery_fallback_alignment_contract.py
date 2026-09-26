@@ -36,3 +36,12 @@ def test_amazon_recovery_uses_packlink_only_as_missing_truth_fallback():
     assert "/packlink/recover" in TEMPLATE
     assert "source Packlink" in TEMPLATE
     assert "marketplace write" in TEMPLATE
+
+
+def test_fbm_source_badges_and_summary_follow_persisted_packlink_authority():
+    PAGE = (ROOT / "services" / "governed_fbm_page_alignment.py").read_text(encoding="utf-8")
+    assert 'str(item["shipment"].provider or "").strip().lower() == "packlink"' in PAGE
+    assert '"packlink_shipping": sum(' in PAGE
+    assert "Shipping source" in TEMPLATE
+    assert "Packlink {{ counts.packlink_shipping or 0 }}" in TEMPLATE
+    assert "shipment.provider == 'packlink'" in TEMPLATE
