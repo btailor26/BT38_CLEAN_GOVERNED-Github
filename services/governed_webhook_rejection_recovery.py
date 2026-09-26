@@ -304,6 +304,7 @@ def recover_exact_ebay_order_manually():
     from extensions import db
     from models import MarketplaceOrder, Store
     from services.governed_exact_ebay_order_hydration import hydrate_exact_ebay_order
+    from services.governed_ebay_shipping_label_finance import read_and_persist_exact_ebay_shipping_label_purchase
     from services.governed_ebay_shipping_label_readback import persist_exact_ebay_purchased_shipment_authority
 
     configured_task_key = str(os.environ.get("TASK_API_KEY") or "")
@@ -385,12 +386,16 @@ def recover_exact_ebay_order_manually():
             marketplace_order_id=order_id,
             source="manual_exact_ebay_recovery",
         )
-        # The existing Recovery button must recover the exact eBay shipment
-        # authority as well as the order row. This remains one bounded,
-        # read-only marketplace recovery: finance purchase proof + exact
-        # fulfillment/Trading readback persist into the existing FBMShipment
-        # and FBMShipmentTrackingEvent ledger. No broad scan or marketplace
-        # write is introduced.
+        # Recovery must actively fetch the exact eBay SHIPPING_LABEL finance
+        # transaction before shipment authority consumes confirmed spend truth.
+        # This is the existing bounded Finances read: one store + one order,
+        # no polling, no broad scan and no marketplace write.
+        finance_recovery = read_and_persist_exact_ebay_shipping_label_purchase(
+            store=store,
+            marketplace_order_id=order_id,
+        )
+        # Re-read exact shipment authority only after the finance producer has
+        # had the opportunity to persist amount/currency into the spend ledger.
         shipment_recovery = persist_exact_ebay_purchased_shipment_authority(
             store=store,
             marketplace_order_id=order_id,
@@ -454,9 +459,15 @@ def recover_exact_ebay_order_manually():
         "order_id": order_id,
         "hydration": result,
         "shipment_recovery": shipment_recovery,
+        "finance_recovery": finance_recovery,
         "shipping_cost_recovery": {
             "attempted": True,
             "source": "existing_ebay_finances_shipping_label",
+            "finance_success": bool(finance_recovery.get("success")),
+            "finance_reason": finance_recovery.get("reason"),
+            "transactions_seen": finance_recovery.get("transactions_seen", 0),
+            "transactions_persisted": finance_recovery.get("transactions_persisted", 0),
+            "purchase_transactions": finance_recovery.get("purchase_transactions", 0),
             "purchase_confirmed": bool(shipment_recovery.get("purchase_confirmed")),
             "shipment_id": shipment_recovery.get("shipment_id"),
             "shipping_cost_persisted": bool(shipment_recovery.get("shipping_cost_persisted")),
