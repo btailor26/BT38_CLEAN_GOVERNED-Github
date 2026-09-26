@@ -167,14 +167,13 @@ def _unique_fulfillment_candidates(fulfillments: list[dict[str, Any]]) -> list[d
             "carrier": values.get("carrier") or None,
             "tracking_number": values.get("tracking_number") or None,
             "shipped_at": values.get("shipped_at"),
-            "service": _service_value(fulfillment) or None,
             "line_item_ids": sorted(_fulfillment_line_ids(fulfillment)),
         }
         existing = candidates.get(fulfillment_id)
         if existing is None:
             candidates[fulfillment_id] = candidate
             continue
-        for key in ("carrier", "tracking_number", "service"):
+        for key in ("carrier", "tracking_number"):
             if existing.get(key) and candidate.get(key) and existing[key] != candidate[key]:
                 candidates.pop(fulfillment_id, None)
                 conflicted_ids.add(fulfillment_id)
@@ -184,8 +183,6 @@ def _unique_fulfillment_candidates(fulfillments: list[dict[str, Any]]) -> list[d
                 existing["carrier"] = candidate.get("carrier")
             if not existing.get("tracking_number"):
                 existing["tracking_number"] = candidate.get("tracking_number")
-            if not existing.get("service"):
-                existing["service"] = candidate.get("service")
             if existing.get("shipped_at") is None:
                 existing["shipped_at"] = candidate.get("shipped_at")
             existing["line_item_ids"] = sorted(set(existing["line_item_ids"]) | set(candidate["line_item_ids"]))
@@ -338,7 +335,6 @@ def persist_exact_ebay_purchased_shipment_authority(*, store, marketplace_order_
 
     shipment.provider = "ebay_shipping"
     shipment.provider_shipment_id = fulfillment_id
-    shipment.service = candidate.get("service") or shipment.service
     shipment.tracking_number = candidate.get("tracking_number") or shipment.tracking_number
 
     trading_match = None
@@ -449,7 +445,6 @@ def persist_exact_ebay_purchased_shipment_authority(*, store, marketplace_order_
         "provider": "ebay_shipping",
         "provider_shipment_id": fulfillment_id,
         "carrier": shipment.carrier,
-        "service": shipment.service,
         "tracking_number": shipment.tracking_number,
         "delivered_at": shipment.delivered_at.isoformat() if shipment.delivered_at else None,
         "trading_truth_matched": bool(trading_match),
