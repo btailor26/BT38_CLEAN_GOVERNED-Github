@@ -46,3 +46,14 @@ def test_fbm_mcf_carrier_tracking_authority_is_marketplace_then_mcf_fallback():
 
     # A linked MCF row must never fall straight through to stale marketplace_orders.carrier.
     assert "{% set carrier_name = shipment.carrier if shipment and shipment.carrier else order.carrier %}" not in template
+
+
+def test_fbm_shipping_cost_display_tolerates_missing_optional_cost_keys():
+    template = (ROOT / "templates" / "fbm.html").read_text()
+    cost_cell = template.split('<td class="fbm-shipping-cost-cell">', 1)[1].split("</td>", 1)[0]
+
+    assert "shipping.get('shipping_cost') is not none" in cost_cell
+    assert "shipping.get('shipping_cost_currency')" in cost_cell
+    assert "shipping.shipping_cost is not none" not in cost_cell
+    assert "shipping.shipping_cost_currency" not in cost_cell
+    assert "Pending / unavailable" in cost_cell
