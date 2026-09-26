@@ -33,7 +33,7 @@
             return (new Date(a.time || 0).getTime() || 0) - (new Date(b.time || 0).getTime() || 0);
         });
         const pickup = events.find(function (item) {
-            return ['carrier_accepted', 'accepted', 'picked_up', 'collected'].includes(item.status) || /\b(we('|’)ve collected|collected your parcel|picked up|carrier accepted)\b/.test(item.text);
+            return ['carrier_accepted', 'accepted', 'picked_up', 'collected', 'shipped'].includes(item.status) || /\b(we('|’)ve collected|collected your parcel|picked up|carrier accepted|shipment marked shipped|marked shipped)\b/.test(item.text);
         });
         const movement = events.find(function (item) {
             return ['in_transit', 'out_for_delivery'].includes(item.status) || /\b(in transit|out for delivery|on its way|arrived at your delivery depot|arrived at your delivery depot|arrived in our depot|national hub|we have your parcel|with one of our drivers)\b/.test(item.text);
@@ -44,9 +44,15 @@
         const delivered = events.find(function (item) {
             return item.status === 'delivered' || /\b(parcel has been delivered|delivered)\b/.test(item.text);
         });
+        // eBay Shipping can expose only two lifecycle facts: shipped and
+        // delivered. A terminal delivery proves the parcel necessarily passed
+        // through the earlier operational journey stages, without inventing
+        // extra rows in Tracking history. Prefer the shipped timestamp for
+        // Picked up; use delivery time only to confirm In transit when no
+        // intermediate carrier movement event exists.
         return {
-            pickedUp: Boolean(pickup), pickedUpAt: pickup ? pickup.time : '',
-            inTransit: Boolean(movement), inTransitAt: movement ? movement.time : '',
+            pickedUp: Boolean(pickup || delivered), pickedUpAt: pickup ? pickup.time : '',
+            inTransit: Boolean(movement || delivered), inTransitAt: movement ? movement.time : (delivered ? delivered.time : ''),
             outForDelivery: Boolean(outForDelivery), outForDeliveryAt: outForDelivery ? outForDelivery.time : '',
             delivered: Boolean(delivered), deliveredAt: delivered ? delivered.time : ''
         };
