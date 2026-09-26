@@ -440,9 +440,10 @@ def recover_exact_ebay_order_manually():
         for row in rows
     ]
 
+    recovery_succeeded = bool(result.get("success")) or bool(shipment_recovery.get("success"))
     return jsonify({
-        "success": bool(result.get("success")),
-        "ok": bool(result.get("success")),
+        "success": recovery_succeeded,
+        "ok": recovery_succeeded,
         "governed": True,
         "exact_order_only": True,
         "broad_scan_started": False,
