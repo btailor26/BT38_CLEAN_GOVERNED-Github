@@ -98,7 +98,7 @@ if(recoverButton)recoverButton.addEventListener('click',async()=>{
   const marketplace=String(row.dataset.marketplace||'').trim().toLowerCase(),storeId=Number(row.dataset.storeId||0),orderId=String(row.dataset.marketplaceOrderId||'').trim();
   try{
    const check=await jsonFetch('/governed/actions/marketplace/exact-order-recovery-check',{method:'POST',body:JSON.stringify({store_id:storeId,marketplace_order_id:orderId,platform:marketplace})});
-   if(check.recovery_required!==true){skipped+=1;const gaps=check.unavailable_tracking_evidence||[];recoveryLines.push(`${orderId} · ${marketplace||'marketplace'} · DB CHECK COMPLETE · CALL NOT MADE · ${gaps.length?'carrier history unavailable from supported eBay readback: '+gaps.join(', ')+' · no evidence invented':'existing DB truth complete · nothing recovered'}`);continue;}
+   if(check.recovery_required!==true){skipped+=1;const gaps=check.unavailable_tracking_evidence||[];recoveryLines.push(`${orderId} · ${marketplace||'marketplace'} · DB CHECK COMPLETE · CALL NOT REQUIRED · ${gaps.length?'carrier history unavailable from supported eBay readback: '+gaps.join(', ')+' · no evidence invented':'existing DB truth complete · nothing recovered'}`);continue;}
    recoverButton.textContent='Recovering…';let p=null;called+=1;
    if(marketplace==='amazon'){
     p=await jsonFetch('/governed/actions/amazon/exact-order-recovery',{method:'POST',body:JSON.stringify({store_id:storeId,marketplace_order_id:orderId})});
