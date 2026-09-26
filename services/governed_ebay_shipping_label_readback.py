@@ -96,6 +96,13 @@ def _trading_shipment_truth(*, access_token: str, order_id: str) -> dict[str, An
     delivered_at = _parse_ebay_datetime(
         order.findtext(".//{*}ShippingPackageInfo/{*}ActualDeliveryTime")
     )
+    # Trading GetOrders remains useful for historical eBay Shipping records
+    # after Sell Fulfillment no longer returns shippedDate.  Keep this exact
+    # order-level marketplace timestamp as a fallback factual shipped event;
+    # never derive it from label purchase time or a tracking-number prefix.
+    shipped_at = _parse_ebay_datetime(order.findtext("{*}ShippedTime"))
+    if shipped_at is None:
+        shipped_at = _parse_ebay_datetime(order.findtext(".//{*}Transaction/{*}ShippedTime"))
 
     # Keep the exact eBay line identity needed by the already-proven
     # tracking-details source.  These are authoritative GetOrders fields; no
@@ -115,6 +122,7 @@ def _trading_shipment_truth(*, access_token: str, order_id: str) -> dict[str, An
 
     return {
         "tracking_rows": tracking_rows,
+        "shipped_at": shipped_at,
         "delivered_at": delivered_at,
         "line_identities": line_identities,
     }
@@ -194,6 +202,12 @@ def _persist_ebay_known_tracking_events(*, shipment: FBMShipment, candidate: dic
     """
     events: list[dict[str, Any]] = []
     shipped_at = candidate.get("shipped_at")
+    shipped_source = "ebay_sell_fulfillment"
+    shipped_field = "shippedDate"
+    if shipped_at is None and candidate.get("trading_shipped_at") is not None:
+        shipped_at = candidate.get("trading_shipped_at")
+        shipped_source = "ebay_trading_get_orders"
+        shipped_field = "ShippedTime"
     if shipped_at is not None:
         events.append({
             "event_key": f"ebay:fulfillment:{candidate.get('fulfillment_id')}:shipped:{shipped_at.isoformat()}",
@@ -202,8 +216,8 @@ def _persist_ebay_known_tracking_events(*, shipment: FBMShipment, candidate: dic
             "description": "Shipment marked shipped by eBay",
             "detail": None,
             "raw_event": {
-                "source": "ebay_sell_fulfillment",
-                "field": "shippedDate",
+                "source": shipped_source,
+                "field": shipped_field,
                 "fulfillment_id": candidate.get("fulfillment_id"),
                 "tracking_number": candidate.get("tracking_number"),
             },
@@ -337,6 +351,12 @@ def persist_exact_ebay_purchased_shipment_authority(*, store, marketplace_order_
 
     if trading_match and trading_match.get("carrier"):
         shipment.carrier = trading_match["carrier"]
+
+    # Older completed fulfillments can omit shippedDate from Sell Fulfillment
+    # while Trading GetOrders still exposes the exact order ShippedTime.
+    # Attach it only to this already-unambiguous physical fulfillment candidate.
+    if trading_truth and trading_match and candidate.get("shipped_at") is None:
+        candidate["trading_shipped_at"] = trading_truth.get("shipped_at")
 
     shipment.purchase_status = "purchased"
     shipment.purchase_error = None
