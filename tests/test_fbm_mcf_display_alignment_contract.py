@@ -19,8 +19,19 @@ def test_fbm_mcf_display_uses_persisted_identity_cost_and_breakdown():
 
     assert "{% if mcf_display %}" in template
     assert "{{ mcf_display.source_label }}" in template
+    assert "<th>Shipping cost</th>" in template
+    assert '<td class="fbm-shipping-cost-cell">' in template
     assert "mcf_display.shipping_cost" in template
     assert "Picking total" in template
+
+    # MCF identity stays in Shipping; its price belongs only in the dedicated cost cell.
+    route_cell = template.split('<td class="fbm-route-cell">', 1)[1].split("</td>", 1)[0]
+    cost_cell = template.split('<td class="fbm-shipping-cost-cell">', 1)[1].split("</td>", 1)[0]
+    assert "{{ mcf_display.source_label }}" in route_cell
+    assert "mcf_display.shipping_cost" not in route_cell
+    assert "mcf_display.shipping_cost" in cost_cell
+    assert "mcf_display.quantity" in cost_cell
+    assert "Picking total" in cost_cell
 
 
 def test_fbm_mcf_carrier_tracking_authority_is_marketplace_then_mcf_fallback():
