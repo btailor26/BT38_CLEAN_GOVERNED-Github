@@ -282,9 +282,10 @@ def persist_exact_ebay_purchased_shipment_authority(*, store, marketplace_order_
     if not rows:
         return {"success": False, "skipped": True, "reason": "existing_marketplace_order_missing", "order_id": order_id}
 
+    # Shipment/tracking authority is independent from label-cost authority.
+    # Finance may be unavailable for historical/external labels; never let that
+    # suppress exact eBay fulfillment persistence or invent a £0 purchase.
     purchase = _confirmed_finance_purchase(store_id=store.id, order_id=order_id)
-    if purchase is None:
-        return {"success": False, "skipped": True, "reason": "ebay_shipping_label_purchase_not_confirmed", "order_id": order_id}
 
     try:
         access_token = _ebay_access_token(store)
@@ -358,10 +359,11 @@ def persist_exact_ebay_purchased_shipment_authority(*, store, marketplace_order_
     if trading_truth and trading_match and candidate.get("shipped_at") is None:
         candidate["trading_shipped_at"] = trading_truth.get("shipped_at")
 
-    shipment.purchase_status = "purchased"
-    shipment.purchase_error = None
-    shipment.label_purchased_at = purchase["purchased_at"]
-    shipment.label_source = "ebay_finances_shipping_label"
+    if purchase is not None:
+        shipment.purchase_status = "purchased"
+        shipment.purchase_error = None
+        shipment.label_purchased_at = purchase["purchased_at"]
+        shipment.label_source = "ebay_finances_shipping_label"
     delivered_at = trading_truth.get("delivered_at") if trading_truth and trading_match else None
     if delivered_at is not None:
         shipment.delivered_at = delivered_at
@@ -369,21 +371,56 @@ def persist_exact_ebay_purchased_shipment_authority(*, store, marketplace_order_
         shipment.last_provider_status = "delivered"
     elif shipment.delivered_at is None:
         if shipment.status not in {"carrier_accepted", "in_transit", "out_for_delivery", "delivered"}:
-            shipment.status = "awaiting_carrier_acceptance" if shipment.tracking_number else "label_purchased"
+            shipment.status = "shipped" if shipment.tracking_number else ("label_purchased" if purchase is not None else "shipped")
         if _text(shipment.last_provider_status).lower() != "delivered":
             shipment.last_provider_status = "shipped"
     shipment.last_provider_checked_at = datetime.utcnow()
     shipment.marketplace_confirmation_status = "ebay_shipping_fulfillment_readback"
 
     db.session.flush()
+
+    # Keep the governed shipment/order relationship durable even when finance
+    # proof is unavailable. Replay-safe on the existing unique identity.
+    now = datetime.utcnow()
+    db.session.execute(
+        text(
+            """
+            INSERT INTO fbm_shipment_order_links (
+                shipment_id, store_id, marketplace_order_id, is_primary,
+                marketplace_confirmed_at, marketplace_confirmation_status,
+                marketplace_confirmation_error, created_at, updated_at
+            ) VALUES (
+                :shipment_id, :store_id, :order_id, TRUE,
+                :confirmed_at, 'ebay_shipping_fulfillment_readback',
+                NULL, :created_at, :updated_at
+            )
+            ON CONFLICT (shipment_id, store_id, marketplace_order_id)
+            DO UPDATE SET
+                marketplace_confirmed_at = EXCLUDED.marketplace_confirmed_at,
+                marketplace_confirmation_status = EXCLUDED.marketplace_confirmation_status,
+                marketplace_confirmation_error = NULL,
+                updated_at = EXCLUDED.updated_at
+            """
+        ),
+        {
+            "shipment_id": shipment.id,
+            "store_id": int(store.id),
+            "order_id": order_id,
+            "confirmed_at": now,
+            "created_at": now,
+            "updated_at": now,
+        },
+    )
+
     tracking_events_inserted = _persist_ebay_known_tracking_events(
         shipment=shipment,
         candidate=candidate,
         delivered_at=delivered_at,
     )
-    db.session.execute(
-        text(
-            """
+    if purchase is not None:
+        db.session.execute(
+            text(
+                """
             UPDATE shipping_spend_ledger
             SET shipment_id = :shipment_id,
                 updated_at = :updated_at
@@ -393,15 +430,15 @@ def persist_exact_ebay_purchased_shipment_authority(*, store, marketplace_order_
               AND source = 'ebay_finances_shipping_label'
               AND confirmed = TRUE
               AND (shipment_id IS NULL OR shipment_id = :shipment_id)
-            """
-        ),
-        {
-            "shipment_id": shipment.id,
-            "updated_at": datetime.utcnow(),
-            "store_id": int(store.id),
-            "order_id": order_id,
-        },
-    )
+                """
+            ),
+            {
+                "shipment_id": shipment.id,
+                "updated_at": datetime.utcnow(),
+                "store_id": int(store.id),
+                "order_id": order_id,
+            },
+        )
     db.session.commit()
 
     return {
@@ -416,11 +453,11 @@ def persist_exact_ebay_purchased_shipment_authority(*, store, marketplace_order_
         "tracking_number": shipment.tracking_number,
         "delivered_at": shipment.delivered_at.isoformat() if shipment.delivered_at else None,
         "trading_truth_matched": bool(trading_match),
-        "purchase_confirmed": True,
-        "shipping_cost_persisted": True,
-        "shipping_cost": float(purchase["amount"]) if purchase.get("amount") is not None else None,
-        "shipping_cost_currency": str(purchase.get("currency") or ""),
-        "shipping_cost_records": int(purchase.get("purchase_rows") or 0),
+        "purchase_confirmed": purchase is not None,
+        "shipping_cost_persisted": purchase is not None,
+        "shipping_cost": float(purchase["amount"]) if purchase is not None and purchase.get("amount") is not None else None,
+        "shipping_cost_currency": str(purchase.get("currency") or "") if purchase is not None else None,
+        "shipping_cost_records": int(purchase.get("purchase_rows") or 0) if purchase is not None else 0,
         "created": created,
         "tracking_events_inserted": tracking_events_inserted,
         "marketplace_write_started": False,
