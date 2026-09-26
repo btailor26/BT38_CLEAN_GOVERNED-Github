@@ -53,6 +53,44 @@
         return 'bg-light text-dark border';
     }
 
+    // Single reporting path: persisted Tracking history is the source of truth.
+    // Journey milestones come only from explicit persisted carrier events.
+    // Never promote marketplace "shipped" to pickup or "delivered" backwards into transit.
+    function milestoneTruthFromTrackingHistory(row) {
+        let events = [];
+        try { events = JSON.parse(row.dataset.trackingEvents || '[]'); } catch (_) { events = []; }
+        if (!Array.isArray(events)) events = [];
+        const norm = value => String(value || '').trim().toLowerCase().replace(/[ -]+/g, '_');
+        const eventTime = event => event.event_time || event.eventTime || event.occurred_at || event.occurredAt || event.timestamp || null;
+        const statusOf = event => norm(event.status || event.event_status || event.code);
+        const pickup = events.find(event => ['carrier_accepted','accepted','picked_up','collected'].includes(statusOf(event)));
+        const movement = events.find(event => ['in_transit','out_for_delivery'].includes(statusOf(event)));
+        const outForDelivery = events.find(event => statusOf(event) === 'out_for_delivery');
+        const delivered = events.find(event => statusOf(event) === 'delivered');
+        return {
+            carrierAcceptedAt: pickup ? eventTime(pickup) : '',
+            firstMovementAt: movement ? eventTime(movement) : '',
+            outForDeliveryAt: outForDelivery ? eventTime(outForDelivery) : '',
+            deliveredAt: delivered ? eventTime(delivered) : ''
+        };
+    }
+
+    function alignJourneyFromTrackingHistory() {
+        document.querySelectorAll('.fbm-order-row').forEach(row => {
+            if (!String(row.dataset.trackingEvents || '').trim()) return;
+            const truth = milestoneTruthFromTrackingHistory(row);
+            row.dataset.carrierAcceptedAt = truth.carrierAcceptedAt;
+            row.dataset.firstMovementAt = truth.firstMovementAt;
+            row.dataset.outForDeliveryAt = truth.outForDeliveryAt;
+            row.dataset.deliveredAt = truth.deliveredAt;
+            const badges = row.querySelectorAll('.fbm-journey-steps .badge');
+            const values = [truth.carrierAcceptedAt, truth.firstMovementAt, truth.deliveredAt];
+            badges.forEach((badge, index) => {
+                badge.className = values[index] ? 'badge bg-success' : 'badge bg-light text-muted border';
+            });
+        });
+    }
+
     function alignPersistedLifecycle() {
         document.querySelectorAll('.fbm-order-row').forEach(row => {
             const status = String(row.dataset.lifecycleStatus || '').trim().toLowerCase();
@@ -118,6 +156,7 @@
                 row.dataset.labelReady = freshRow.dataset.labelReady || '0';
             });
             window.BT38FBMApplyCommittedSnapshot(nextData, nextCounts);
+            alignJourneyFromTrackingHistory();
             alignPersistedLifecycle();
             updateSelectedPacklinkLabelAction();
         } catch (error) {
@@ -334,10 +373,12 @@
 
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
+            alignJourneyFromTrackingHistory();
             alignPersistedLifecycle();
             startSelectedPacklinkLabelAction();
         }, {once:true});
     } else {
+        alignJourneyFromTrackingHistory();
         alignPersistedLifecycle();
         startSelectedPacklinkLabelAction();
     }
