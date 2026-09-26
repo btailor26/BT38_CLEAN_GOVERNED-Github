@@ -32,3 +32,10 @@ def test_shipping_label_truth_reuses_existing_spend_ledger():
     assert 'ON CONFLICT (dispatch_key)' in SOURCE
     assert 'source_reference' in SOURCE
     assert 'confirmed' in SOURCE
+
+
+def test_non_json_finance_evidence_is_non_fatal_and_never_confirms_purchase():
+    assert 'except (ValueError, requests.exceptions.JSONDecodeError):' in SOURCE
+    assert 'ebay_finances_shipping_label_response_not_json' in SOURCE
+    assert '"purchase_confirmed": False' in SOURCE
+    assert '"transactions_persisted": 0' in SOURCE
