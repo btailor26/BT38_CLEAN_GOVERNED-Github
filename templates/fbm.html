@@ -123,7 +123,7 @@ if(recoverButton)recoverButton.addEventListener('click',async()=>{
     p=await jsonFetch(`/fbm/shipments/${encodeURIComponent(row.dataset.shipmentId)}/packlink/status`);
     recoveryLines.push(`${orderId} · Packlink · CALL SUCCESSFUL · tracking ${p.tracking_number||p.tracking||'not recovered'}`);
    }else{throw new Error('No exact governed recovery authority is available for this selected order.');}
-  }catch(err){if(err?.httpOk===true){recoveryLines.push(`${orderId} · ${marketplace||'marketplace'} · CALL COMPLETED · RECOVERY NOT APPLIED · ${err.message||err.payload?.reason||err.payload?.error||'governed recovery returned no applicable update'}`);}else{failed+=1;recoveryLines.push(`${orderId} · ${marketplace||'marketplace'} · CALL FAILED · ${err.message||'unknown error'}`);}}
+  }catch(err){if(err?.httpOk===true){recoveryLines.push(`${orderId} · ${marketplace||'marketplace'} · CALL COMPLETED · RECOVERY NOT APPLIED · ${err.payload?.shipment_recovery?.reason||err.payload?.hydration?.reason||err.payload?.shipping_cost_recovery?.finance_reason||err.payload?.reason||err.payload?.error||err.message||'governed recovery returned no applicable update'}`);}else{failed+=1;recoveryLines.push(`${orderId} · ${marketplace||'marketplace'} · CALL FAILED · ${err.message||'unknown error'}`);}}
  }
  const heading=`${called?'Recovery truth':'DB check only'} · ${called} call${called===1?'':'s'} made · ${skipped} not required · ${failed} failed`;
  window.alert(heading+'\\n\\n'+recoveryLines.join('\\n')+'\\n\\nReloading the page from persisted DB truth.');
