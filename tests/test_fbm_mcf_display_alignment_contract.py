@@ -10,7 +10,8 @@ def test_fbm_mcf_display_uses_persisted_identity_cost_and_breakdown():
 
     assert "joinedload(MarketplaceOrder.mcf_order)" in page
     assert '"source_label": "Amazon MCF"' in page
-    assert '"shipping_cost": row.mcf_order.total_mcf_fee' in page
+    assert '"shipping_fee": row.mcf_order.mcf_fulfillment_fee' in page
+    assert '"shipping_cost": row.mcf_order.mcf_per_shipment_fee' in page
     assert '"currency": row.mcf_order.currency or "GBP"' in page
     assert '"quantity": sum((item.quantity or 0)' in page
     assert '"fulfillment_fee": row.mcf_order.mcf_fulfillment_fee' in page
@@ -19,19 +20,22 @@ def test_fbm_mcf_display_uses_persisted_identity_cost_and_breakdown():
 
     assert "{% if mcf_display %}" in template
     assert "{{ mcf_display.source_label }}" in template
-    assert "<th>Shipping fee</th>" in template
+    assert "<th>Shipping Fee</th>" in template
+    assert '<td class="fbm-shipping-fee-cell">' in template
     assert '<td class="fbm-shipping-cost-cell">' in template
-    assert "mcf_display.shipping_cost" in template
-    assert "Picking total" in template
+    assert "mcf_display.shipping_fee" in template
 
-    # MCF identity stays in Shipping; its price belongs only in the dedicated cost cell.
+    # MCF identity stays in Shipping; MCF fulfilment fee belongs only in Shipping Fee.
+    # Normal carrier/label postage remains in the separate Shipping Cost cell.
     route_cell = template.split('<td class="fbm-route-cell">', 1)[1].split("</td>", 1)[0]
+    fee_cell = template.split('<td class="fbm-shipping-fee-cell">', 1)[1].split("</td>", 1)[0]
     cost_cell = template.split('<td class="fbm-shipping-cost-cell">', 1)[1].split("</td>", 1)[0]
     assert "{{ mcf_display.source_label }}" in route_cell
-    assert "mcf_display.shipping_cost" not in route_cell
-    assert "mcf_display.shipping_cost" in cost_cell
-    assert "mcf_display.quantity" in cost_cell
-    assert "Picking total" in cost_cell
+    assert "mcf_display.shipping_fee" not in route_cell
+    assert "mcf_display.shipping_fee" in fee_cell
+    assert "mcf_display.shipping_cost" not in fee_cell
+    assert "shipping.get('shipping_cost')" in cost_cell
+    assert "mcf_display.shipping_fee" not in cost_cell
 
 
 def test_fbm_mcf_carrier_tracking_authority_is_marketplace_then_mcf_fallback():
