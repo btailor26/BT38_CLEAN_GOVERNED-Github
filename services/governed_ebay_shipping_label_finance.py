@@ -296,7 +296,6 @@ def read_and_persist_exact_ebay_shipping_label_purchase(*, store, marketplace_or
         params=[
             ("filter", "transactionType:{SHIPPING_LABEL}"),
             ("filter", f"orderId:{{{order_id}}}"),
-            ("limit", "100"),
         ],
     )
     prepared = request.prepare()
