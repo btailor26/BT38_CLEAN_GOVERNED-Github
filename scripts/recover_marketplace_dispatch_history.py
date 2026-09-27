@@ -216,6 +216,14 @@ def _database_readback(store_id: int, order_id: str) -> dict[str, Any]:
     ).mappings().first()
 
     return {
+        "marketplace": _platform(rows[0].store) if rows and rows[0].store else None,
+        "store_name": _clean(rows[0].store.name) if rows and rows[0].store else None,
+        "marketplace_order_id": order_id if rows else None,
+        "order_created_at": next((row.created_at for row in rows if row.created_at is not None), None),
+        "sku": next((_clean(row.sku) for row in rows if _clean(row.sku)), None),
+        "product_name": next((_clean(row.warehouse_stock.product_name) for row in rows if row.warehouse_stock and _clean(row.warehouse_stock.product_name)), None),
+        "quantity": sum(int(row.quantity or 0) for row in rows) if rows else None,
+        "fulfillment_type": next((_clean(row.fulfillment_type) for row in rows if _clean(row.fulfillment_type)), None),
         "carrier": next((_clean(row.carrier) for row in rows if _clean(row.carrier)), None),
         "tracking_number": next(
             (_clean(row.tracking_number) for row in rows if _clean(row.tracking_number)),
