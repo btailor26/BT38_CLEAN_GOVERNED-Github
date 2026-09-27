@@ -59,6 +59,16 @@ CREATE TABLE IF NOT EXISTS support_case_attachments (
     content BYTEA NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Production may already have an earlier support_case_attachments table.
+-- CREATE TABLE IF NOT EXISTS does not add columns to an existing table, so keep
+-- the attachment schema forward-compatible with safe additive migrations.
+ALTER TABLE support_case_attachments ADD COLUMN IF NOT EXISTS uploaded_by_user_id INTEGER;
+ALTER TABLE support_case_attachments ADD COLUMN IF NOT EXISTS filename VARCHAR(255);
+ALTER TABLE support_case_attachments ADD COLUMN IF NOT EXISTS content_type VARCHAR(255);
+ALTER TABLE support_case_attachments ADD COLUMN IF NOT EXISTS size_bytes INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE support_case_attachments ADD COLUMN IF NOT EXISTS content BYTEA;
+ALTER TABLE support_case_attachments ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP;
 CREATE INDEX IF NOT EXISTS ix_support_case_attachments_case_pk ON support_case_attachments(case_pk);
 CREATE INDEX IF NOT EXISTS ix_support_case_attachments_uploaded_by_user_id ON support_case_attachments(uploaded_by_user_id);
 CREATE INDEX IF NOT EXISTS ix_support_case_attachments_created_at ON support_case_attachments(created_at);
