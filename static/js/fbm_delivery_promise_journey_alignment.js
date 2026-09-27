@@ -44,24 +44,27 @@
         const delivered = events.find(function (item) {
             return item.status === 'delivered' || /\b(parcel has been delivered|delivered)\b/.test(item.text);
         });
-        // A persisted terminal delivery completes the operational journey.
-        // Earlier stages may be confirmed from that fact, but timestamps and
-        // Tracking history rows remain limited to events actually persisted.
+        // DB-first lifecycle authority: a persisted shipped/delivered order or
+        // shipment state is enough to colour the journey summary. Detailed scan
+        // history remains event-only and is never invented from lifecycle state.
+        const lifecycle = String(row?.dataset?.lifecycleStatus || '').trim().toLowerCase();
+        const shipmentState = String(row?.dataset?.shipmentState || '').trim().toLowerCase();
+        const providerState = String(row?.dataset?.lastProviderStatus || '').trim().toLowerCase();
+        const persistedDelivered = [lifecycle, shipmentState, providerState].includes('delivered') || Boolean(String(row?.dataset?.deliveredAt || '').trim());
+        const persistedDispatched = persistedDelivered || ['shipped', 'partially_shipped', 'dispatched'].includes(lifecycle) || Boolean(String(row?.dataset?.marketplaceConfirmedAt || '').trim());
+
         return {
-            pickedUp: Boolean(pickup || delivered), pickedUpAt: pickup ? pickup.time : '',
-            inTransit: Boolean(movement || delivered), inTransitAt: movement ? movement.time : '',
+            pickedUp: Boolean(pickup || delivered || persistedDispatched), pickedUpAt: pickup ? pickup.time : '',
+            inTransit: Boolean(movement || delivered || persistedDelivered), inTransitAt: movement ? movement.time : '',
             outForDelivery: Boolean(outForDelivery), outForDeliveryAt: outForDelivery ? outForDelivery.time : '',
-            delivered: Boolean(delivered), deliveredAt: delivered ? delivered.time : ''
+            delivered: Boolean(delivered || persistedDelivered), deliveredAt: delivered ? delivered.time : String(row?.dataset?.deliveredAt || '')
         };
     }
 
     function deliveryProven(row) {
-        // Persisted deliveredAt is the canonical terminal DB authority. The
-        // persisted tracking event is the same factual delivery evidence used
-        // by Tracking history; no weaker lifecycle or provider status may
-        // promote a shipment to Delivered.
-        const deliveredAt = String(row?.dataset?.deliveredAt || '').trim();
-        return Boolean(deliveredAt) && persistedMilestones(row).delivered;
+        // Persisted DB lifecycle is sufficient for the summary badge. Carrier
+        // scan rows remain a separate truth and may still be unavailable.
+        return persistedMilestones(row).delivered;
     }
 
     function performanceHtml(row) {
