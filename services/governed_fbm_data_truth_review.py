@@ -48,6 +48,15 @@ def review_fbm_data_truth(*, store_id: int, order_id: str, platform: str, readba
     carrier_authority = "mcf_orders" if is_mcf and mcf.get("carrier") else ("fbm_shipments" if shipment.get("carrier") else "marketplace_orders")
 
     fields = {
+        # Mirror the current FBM row template. Any absent display fact is a gap/red flag.
+        "marketplace": _field("known", readback.get("marketplace"), authority="stores") if readback.get("marketplace") else _field("missing"),
+        "store_name": _field("known", readback.get("store_name"), authority="stores") if readback.get("store_name") else _field("missing"),
+        "marketplace_order_id": _field("known", readback.get("marketplace_order_id"), authority="marketplace_orders") if readback.get("marketplace_order_id") else _field("missing"),
+        "order_created_at": _field("known", readback.get("order_created_at"), authority="marketplace_orders") if readback.get("order_created_at") is not None else _field("missing"),
+        "product_name": _field("known", readback.get("product_name"), authority="warehouse_stock") if readback.get("product_name") else _field("missing"),
+        "sku": _field("known", readback.get("sku"), authority="marketplace_orders") if readback.get("sku") else _field("missing"),
+        "quantity": _field("known", readback.get("quantity"), authority="marketplace_orders") if readback.get("quantity") is not None else _field("missing"),
+        "fulfillment_type": _field("known", readback.get("fulfillment_type"), authority="marketplace_orders") if readback.get("fulfillment_type") else _field("missing"),
         "tracking_number": _field("known", tracking, authority=tracking_authority) if tracking else _field("missing"),
         "carrier": _field("known", carrier, authority=carrier_authority) if carrier else _field("missing"),
         "shipping_source": (
