@@ -107,9 +107,24 @@ if(recoverButton)recoverButton.addEventListener('click',async()=>{
     const h=p.hydration||{},cost=p.shipping_cost_recovery||{};
     let gapsAfter=Array.isArray(p.gaps_after)?p.gaps_after.slice():[],packlink=null;
     const packlinkGaps=new Set(['provider_reference','tracking_history','shipping_fee']);
-    if(row.dataset.shipmentId&&gapsAfter.some(g=>packlinkGaps.has(g))){
-     called+=1;
-     packlink=await jsonFetch(`/fbm/shipments/${encodeURIComponent(row.dataset.shipmentId)}/packlink/recover`,{method:'POST',body:JSON.stringify({})});
+    if(gapsAfter.some(g=>packlinkGaps.has(g))){
+     // Amazon recovery may have just created/persisted the governed shipment.
+     // The row's pre-recovery dataset can therefore have no shipment id.
+     // Resolve the exact persisted shipment from the Amazon recovery response
+     // before falling back to the row snapshot; never skip Packlink merely
+     // because the browser rendered before that shipment existed.
+     const recoveredShipmentId=String(
+       p.shipment_id||
+       p.shipment?.shipment_id||
+       p.hydration?.shipment_id||
+       p.hydration?.shipment?.shipment_id||
+       ''
+     ).trim();
+     const packlinkShipmentId=recoveredShipmentId||String(row.dataset.shipmentId||'').trim();
+     if(packlinkShipmentId){
+      called+=1;
+      packlink=await jsonFetch(`/fbm/shipments/${encodeURIComponent(packlinkShipmentId)}/packlink/recover`,{method:'POST',body:JSON.stringify({})});
+     }
     }
     const verified=await jsonFetch('/governed/actions/marketplace/exact-order-recovery-check',{method:'POST',body:JSON.stringify({store_id:storeId,marketplace_order_id:orderId,platform:marketplace})});
     const finalGaps=[...(verified.missing||[]),...(verified.unverified||[])],beforeGaps=[...(check.missing||[]),...(check.unverified||[])];
