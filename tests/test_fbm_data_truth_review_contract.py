@@ -42,3 +42,16 @@ def test_fbm_has_one_canonical_shipping_fee_column():
     assert "function ensureCostHeader()" not in DISPATCH
     assert "head.insertBefore(th,head.lastElementChild)" not in DISPATCH
     assert "function addCostCell(row,info){{return;}}" in DISPATCH
+
+
+def test_data_truth_asks_existing_mcf_authority_before_generic_marketplace_truth():
+    source = Path("services/governed_fbm_data_truth_review.py").read_text()
+    readback = Path("scripts/recover_marketplace_dispatch_history.py").read_text()
+    assert '"mcf_order": dict(mcf) if mcf else None' in readback
+    assert "FROM mcf_orders" in readback
+    assert "source_store_id = :store_id" in readback
+    assert "source_order_id = :order_id" in readback
+    assert 'shipping_source = "amazon_mcf" if is_mcf else provider' in source
+    assert 'source_authority = "mcf_orders" if is_mcf' in source
+    assert 'authority="mcf_orders"' in source
+    assert 'mcf.get("total_mcf_fee")' in source
