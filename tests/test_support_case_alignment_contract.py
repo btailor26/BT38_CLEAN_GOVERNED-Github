@@ -50,7 +50,11 @@ def test_support_centre_warns_against_secret_submission():
 
 
 def test_support_module_does_not_create_marketplace_provider_or_inventory_actions():
-    for token in ('requests.','configured_revolut_client','amazon_client','ebay_client','push_quantity','propagate_quantity','MarketplaceOrder.query','WarehouseStock.query'):
+    # Manual Upload is deliberately DB-first: it may read MarketplaceOrder to
+    # match persisted order identity before opening the existing support case.
+    # It must still never call providers/marketplaces or mutate inventory.
+    assert "MarketplaceOrder.query" in SUPPORT
+    for token in ('requests.','configured_revolut_client','amazon_client','ebay_client','push_quantity','propagate_quantity','WarehouseStock.query'):
         assert token not in SUPPORT
 
 
