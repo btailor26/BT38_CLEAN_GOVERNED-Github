@@ -19,7 +19,7 @@ def test_fbm_mcf_display_uses_persisted_identity_cost_and_breakdown():
 
     assert "{% if mcf_display %}" in template
     assert "{{ mcf_display.source_label }}" in template
-    assert "<th>Shipping cost</th>" in template
+    assert "<th>Shipping fee</th>" in template
     assert '<td class="fbm-shipping-cost-cell">' in template
     assert "mcf_display.shipping_cost" in template
     assert "Picking total" in template
