@@ -379,6 +379,47 @@ def recover_exact_ebay_order_manually():
             "marketplace_write_started": False,
         }), 404
 
+    # Existing DB shipment truth can already prove that an old eBay row was
+    # fulfilled by Amazon Logistics even when the newer mcf_order_id relationship
+    # did not exist at the time. Recovery must not make eBay/provider calls for
+    # that case. This is classification only: do not manufacture an MCFOrder or
+    # rewrite historical relationships that the DB cannot prove.
+    db_mcf_shipment = db.session.execute(
+        text(
+            """
+            SELECT id, carrier, tracking_number, status
+            FROM fbm_shipments
+            WHERE store_id = :store_id
+              AND marketplace_order_id = :order_id
+              AND LOWER(COALESCE(carrier, '')) LIKE 'amazon logistics%'
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ),
+        {"store_id": store_id, "order_id": order_id},
+    ).mappings().first()
+    if db_mcf_shipment is not None:
+        return jsonify({
+            "success": True,
+            "ok": True,
+            "governed": True,
+            "skipped": True,
+            "reason": "existing_db_mcf_shipping_truth",
+            "store_id": store_id,
+            "order_id": order_id,
+            "mcf_identity_source": "persisted_fbm_shipment_amazon_logistics",
+            "shipment_id": int(db_mcf_shipment["id"]),
+            "carrier": db_mcf_shipment["carrier"],
+            "tracking_number": db_mcf_shipment["tracking_number"],
+            "shipment_status": db_mcf_shipment["status"],
+            "exact_order_only": True,
+            "broad_scan_started": False,
+            "external_call_started": False,
+            "order_replayed": False,
+            "stock_mutation_started": False,
+            "marketplace_write_started": False,
+        }), 200
+
     try:
         result = hydrate_exact_ebay_order(
             store=store,
