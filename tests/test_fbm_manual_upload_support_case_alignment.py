@@ -27,3 +27,14 @@ def test_uploaded_evidence_is_admin_reviewable_on_existing_case():
     assert "Only Admin can map or approve an unknown format." in CASE
     assert '@app.get("/admin/support/cases/<case_id>/attachments/<int:attachment_id>")' in SUPPORT
     assert "if not _is_admin()" in SUPPORT
+
+
+def test_manual_upload_checks_persisted_db_truth_before_support_fallback():
+    source = SUPPORT.read_text(encoding="utf-8")
+    route = source.split('@app.post("/support/cases/manual-upload-review")', 1)[1].split('@app.get("/admin/support/cases/', 1)[0]
+    assert "MarketplaceOrder.query" in route
+    assert "matched_order_ids" in route
+    assert '"completed": True' in route
+    assert route.index("MarketplaceOrder.query") < route.index("case = SupportCase(")
+    assert "no marketplace/provider call" in route.lower()
+    assert "db.session.commit()" in route
