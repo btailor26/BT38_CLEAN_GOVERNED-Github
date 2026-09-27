@@ -274,10 +274,24 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   var sdsBadge=document.createElement('span');sdsBadge.className='fbm-lifecycle-tab';sdsBadge.textContent='SDS';sdsBadge.title='Seller Delivery Service';tabBar.appendChild(sdsBadge);
   // Manual Upload remains a separate user action on the right.
   var lifecycleActions=document.createElement('div');lifecycleActions.className='fbm-lifecycle-actions';
-  var manualUpload=document.createElement('button');manualUpload.type='button';manualUpload.className='fbm-lifecycle-action';manualUpload.textContent='Manual Upload';manualUpload.title='Select CSV or PDF evidence';lifecycleActions.appendChild(manualUpload);
-  var manualUploadInput=document.createElement('input');manualUploadInput.type='file';manualUploadInput.accept='.csv,.pdf,text/csv,application/pdf';manualUploadInput.multiple=true;manualUploadInput.hidden=true;lifecycleActions.appendChild(manualUploadInput);
+  var manualUpload=document.createElement('button');manualUpload.type='button';manualUpload.className='fbm-lifecycle-action';manualUpload.textContent='Manual Upload';manualUpload.title='Upload evidence in any file format';lifecycleActions.appendChild(manualUpload);
+  var manualUploadInput=document.createElement('input');manualUploadInput.type='file';manualUploadInput.multiple=true;manualUploadInput.hidden=true;lifecycleActions.appendChild(manualUploadInput);
   manualUpload.addEventListener('click',function(){manualUploadInput.click()});
-  manualUploadInput.addEventListener('change',function(){var names=Array.from(manualUploadInput.files||[]).map(function(file){return file.name});manualUpload.title=names.length?names.join(', '):'Select CSV or PDF evidence';manualUpload.textContent=names.length?'Manual Upload ('+names.length+')':'Manual Upload';});
+  manualUploadInput.addEventListener('change',async function(){
+    var files=Array.from(manualUploadInput.files||[]);if(!files.length)return;
+    var originalText=manualUpload.textContent;manualUpload.disabled=true;manualUpload.textContent='Uploading…';
+    try{
+      var form=new FormData();files.forEach(function(file){form.append('files',file,file.name)});
+      var csrf=document.querySelector('input[name="csrf_token"]');if(csrf&&csrf.value)form.append('csrf_token',csrf.value);
+      var response=await fetch('/support/cases/manual-upload-review',{method:'POST',credentials:'same-origin',body:form,headers:{'X-CSRFToken':csrf&&csrf.value?csrf.value:''}});
+      var result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||('HTTP '+response.status));
+      manualUpload.textContent='Under Review · '+result.case_id;
+      manualUpload.title='Support case '+result.case_id+' — Admin review required';
+      if(result.case_url)window.location.assign(result.case_url);
+    }catch(error){
+      console.error('BT38 manual upload failed',error);manualUpload.textContent='Upload failed';manualUpload.title=String(error&&error.message||error);
+    }finally{manualUpload.disabled=false;manualUploadInput.value='';if(manualUpload.textContent==='Upload failed')setTimeout(function(){manualUpload.textContent=originalText},3000);}
+  });
   tabBar.appendChild(lifecycleActions);
   var header=card.querySelector('.card-header');if(header)header.insertAdjacentElement('afterend',tabBar);else card.insertBefore(tabBar,card.firstChild);
   var pageSizeSelect=document.getElementById('bt38ResultsPerPageSelect');var previousPage=document.getElementById('bt38FbmPreviousPage');var nextPage=document.getElementById('bt38FbmNextPage');var pageStatus=document.querySelector('#bt38FbmOrderFlow .bt38-page-status');var tableCount=document.querySelector('#bt38FbmOrderFlow .bt38-table-count');var currentPage=1;var pageSize=Number(saved.page_size||pageSizeSelect&&pageSizeSelect.value||15)||15;if(pageSizeSelect)pageSizeSelect.value=String(pageSize);
