@@ -46,3 +46,21 @@ def test_existing_attachment_table_is_additively_aligned_before_upload():
     assert "def _align_support_attachment_schema()" in SUPPORT
     assert "db.create_all()" in SUPPORT
     assert SUPPORT.index("db.create_all()") < SUPPORT.index("_align_support_attachment_schema()")
+
+
+def test_manual_upload_populates_live_attachment_authority_columns():
+    assert "uploader_role = db.Column" in SUPPORT
+    assert "byte_size = db.Column" in SUPPORT
+    assert "sha256_hex = db.Column" in SUPPORT
+    assert "payload = db.Column" in SUPPORT
+    route = SUPPORT.split('@app.post("/support/cases/manual-upload-review")', 1)[1].split('@app.get("/admin/support/cases/', 1)[0]
+    assert 'uploader_role="admin" if _is_admin() else "customer"' in route
+    assert "byte_size=evidence_size" in route
+    assert "hashlib.sha256(payload).hexdigest()" in route
+    assert "payload=payload" in route
+    assert "size_bytes=evidence_size" in route
+    assert "content=payload" in route
+
+
+def test_attachment_download_supports_existing_and_newer_payload_alias():
+    assert "attachment.content if attachment.content is not None else attachment.payload" in SUPPORT
