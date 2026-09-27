@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from datetime import datetime
 import json
+import re
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit
 
 from flask import abort, flash, redirect, render_template, request, url_for, jsonify, Response
@@ -16,6 +17,7 @@ from flask_login import current_user, login_required
 from app import app
 from extensions import db
 from services.account_profile_alignment import _account_for_user
+from models import MarketplaceOrder
 
 
 SUPPORT_CATEGORIES = (
@@ -237,7 +239,7 @@ def bt38_support_create_case():
 @app.post("/support/cases/manual-upload-review")
 @login_required
 def bt38_support_manual_upload_review():
-    """Quarantine unrecognised manual evidence in the existing support workflow."""
+    """DB-first manual evidence review; support is only the unresolved fallback."""
     account, _ = _customer_scope()
     if account is None:
         return jsonify({"ok": False, "error": "customer_account_required"}), 400
@@ -245,33 +247,78 @@ def bt38_support_manual_upload_review():
     if not files:
         return jsonify({"ok": False, "error": "no_files"}), 400
 
-    # No approved manual-format recogniser is registered yet. Therefore every
-    # manual upload is truthfully quarantined for Admin review rather than being
-    # guessed into operational order/shipment truth.
-    names = [_clean(item.filename, 255) for item in files]
+    # Read each upload once. Before a support case can exist, ask persisted order
+    # truth whether the evidence names an order BT38 already knows. This is a
+    # DB-only review: no marketplace/provider call and no operational mutation.
+    evidence = []
+    candidate_order_ids = set()
+    names = []
+    for item in files:
+        name = _clean(item.filename, 255)
+        payload = item.read()
+        names.append(name)
+        evidence.append((name, _clean(item.mimetype, 255) or None, payload))
+        sample = payload[:2_000_000].decode("utf-8", errors="ignore")
+        for token in re.findall(r"(?<![A-Za-z0-9])(?:\\d{3}-\\d{7}-\\d{7}|\\d{2}-\\d{5}-\\d{5})(?![A-Za-z0-9])", sample):
+            candidate_order_ids.add(token)
+
+    matched_orders = []
+    if candidate_order_ids:
+        rows = (
+            MarketplaceOrder.query
+            .filter(MarketplaceOrder.marketplace_order_id.in_(sorted(candidate_order_ids)))
+            .all()
+        )
+        matched_orders = sorted({
+            str(row.marketplace_order_id)
+            for row in rows
+            if getattr(row, "marketplace_order_id", None)
+        })
+
+    db_review = {
+        "completed": True,
+        "authority": "marketplace_orders",
+        "candidate_order_ids": sorted(candidate_order_ids),
+        "matched_order_ids": matched_orders,
+    }
+
+    # An order match does not prove what an unknown file column/format means.
+    # No approved FBM manual-file format mapping exists yet, so unresolved
+    # evidence falls through to the existing support authority only after the
+    # persisted DB review above. Never guess fields into shipment/order truth.
     case = SupportCase(
         account_id=account.id,
         opened_by_user_id=int(current_user.id),
         category="data_review",
         subject="Manual Upload — Pending / Under Review",
-        description="BT38 could not verify an approved source/format mapping for the uploaded evidence. Admin mapping is required before any operational truth may be updated.\n\nFiles: " + ", ".join(names),
+        description=(
+            "BT38 checked persisted DB truth first. "
+            + (f"Matched order(s): {', '.join(matched_orders)}. " if matched_orders else "No exact persisted order match was found. ")
+            + "The uploaded source/format is not yet an approved FBM manual-file mapping, so Admin mapping is required before any operational truth may be updated.\n\nFiles: "
+            + ", ".join(names)
+        ),
         priority="normal",
         status="open",
         affected_area="FBM Manual Upload",
         source_page="/fbm",
-        context_json=json.dumps({"source_page": "/fbm", "manual_upload": True, "review_state": "under_review", "filenames": names}, ensure_ascii=False, sort_keys=True),
+        context_json=json.dumps({
+            "source_page": "/fbm",
+            "manual_upload": True,
+            "review_state": "under_review",
+            "filenames": names,
+            "db_review": db_review,
+        }, ensure_ascii=False, sort_keys=True),
     )
     db.session.add(case)
     db.session.flush()
     case.case_id = _case_number(case)
 
-    for item, name in zip(files, names):
-        payload = item.read()
+    for name, content_type, payload in evidence:
         db.session.add(SupportCaseAttachment(
             case_pk=case.id,
             uploaded_by_user_id=int(current_user.id),
             filename=name,
-            content_type=_clean(item.mimetype, 255) or None,
+            content_type=content_type,
             size_bytes=len(payload),
             content=payload,
         ))
@@ -281,6 +328,7 @@ def bt38_support_manual_upload_review():
         "review_state": "under_review",
         "case_id": case.case_id,
         "case_url": url_for("bt38_support_case_page", case_id=case.case_id),
+        "db_review": db_review,
     })
 
 
