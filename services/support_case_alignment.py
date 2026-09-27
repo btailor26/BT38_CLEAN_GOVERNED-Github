@@ -7,6 +7,7 @@ payment providers or carriers and never mutates inventory/order truth.
 from __future__ import annotations
 
 from datetime import datetime
+import hashlib
 import json
 import re
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit
@@ -89,10 +90,15 @@ class SupportCaseAttachment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     case_pk = db.Column(db.Integer, db.ForeignKey("support_cases.id", ondelete="CASCADE"), nullable=False, index=True)
     uploaded_by_user_id = db.Column(db.Integer, nullable=False, index=True)
+    uploader_role = db.Column(db.String(20), nullable=False, default="customer")
     filename = db.Column(db.String(255), nullable=False)
-    content_type = db.Column(db.String(255))
+    content_type = db.Column(db.String(255), nullable=False, default="application/octet-stream")
+    byte_size = db.Column(db.Integer, nullable=False, default=0)
+    sha256_hex = db.Column(db.String(64), nullable=False)
+    payload = db.Column(db.LargeBinary, nullable=False)
+    # Newer aliases are retained for compatibility with the current support UI.
     size_bytes = db.Column(db.Integer, nullable=False, default=0)
-    content = db.Column(db.LargeBinary, nullable=False)
+    content = db.Column(db.LargeBinary, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
 
 
@@ -331,12 +337,18 @@ def bt38_support_manual_upload_review():
     case.case_id = _case_number(case)
 
     for name, content_type, payload in evidence:
+        evidence_type = content_type or "application/octet-stream"
+        evidence_size = len(payload)
         db.session.add(SupportCaseAttachment(
             case_pk=case.id,
             uploaded_by_user_id=int(current_user.id),
+            uploader_role="admin" if _is_admin() else "customer",
             filename=name,
-            content_type=content_type,
-            size_bytes=len(payload),
+            content_type=evidence_type,
+            byte_size=evidence_size,
+            sha256_hex=hashlib.sha256(payload).hexdigest(),
+            payload=payload,
+            size_bytes=evidence_size,
             content=payload,
         ))
     db.session.commit()
@@ -358,7 +370,8 @@ def bt38_admin_support_case_attachment(case_id, attachment_id):
     attachment = SupportCaseAttachment.query.filter_by(id=attachment_id, case_pk=case.id).first()
     if attachment is None:
         abort(404)
-    response = Response(attachment.content, mimetype=attachment.content_type or "application/octet-stream")
+    evidence_payload = attachment.content if attachment.content is not None else attachment.payload
+    response = Response(evidence_payload, mimetype=attachment.content_type or "application/octet-stream")
     response.headers["Content-Disposition"] = 'attachment; filename="' + attachment.filename.replace('"', "") + '"'
     return response
 
