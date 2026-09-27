@@ -55,3 +55,16 @@ def test_data_truth_asks_existing_mcf_authority_before_generic_marketplace_truth
     assert 'source_authority = "mcf_orders" if is_mcf' in source
     assert 'authority="mcf_orders"' in source
     assert 'mcf.get("total_mcf_fee")' in source
+
+
+def test_marketplace_channel_is_never_presented_as_shipping_source():
+    template = Path("templates/fbm.html").read_text()
+    page = Path("services/governed_fbm_page_alignment.py").read_text()
+    truth = Path("services/governed_fbm_data_truth_review.py").read_text()
+    shipping_cell = template.split('<td class="fbm-route-cell">', 1)[1].split("</td>", 1)[0]
+    assert "Source unverified" in shipping_cell
+    assert "source_label = 'Marketplace'" not in shipping_cell
+    assert "shipment.provider != 'marketplace'" in shipping_cell
+    assert '"marketplace_shipping": 0' in page
+    assert 'provider and provider != "marketplace"' in truth
+    assert '_field("unverified", provider or None' in truth
