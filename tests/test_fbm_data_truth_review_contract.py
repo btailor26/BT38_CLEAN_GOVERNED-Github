@@ -88,3 +88,21 @@ def test_data_truth_review_covers_current_fbm_template_row_facts():
         assert f'"{field}"' in readback
     assert 'if fact["state"] in {"missing", "unverified"}' in TRUTH
     assert '"recovery_required": bool(gaps)' in TRUTH
+
+
+def test_amazon_generic_marketplace_shipment_is_broad_amazon_shipping_source():
+    source = DATA_TRUTH.read_text()
+    template = TEMPLATE.read_text()
+    assert 'amazon_marketplace_source' in source
+    assert '"amazon_shipping" if amazon_marketplace_source' in source
+    assert "shipment.provider == 'marketplace' and platform_key == 'amazon'" in template
+    assert '>Amazon Shipping</span>' in template
+
+
+def test_journey_summary_uses_persisted_lifecycle_before_scan_history():
+    journey = (ROOT / "static/js/fbm_delivery_promise_journey_alignment.js").read_text()
+    assert "persistedDelivered" in journey
+    assert "persistedDispatched" in journey
+    assert "delivered: Boolean(delivered || persistedDelivered)" in journey
+    assert "return persistedMilestones(row).delivered;" in journey
+    assert "No detailed carrier scan history has been persisted yet." in journey
