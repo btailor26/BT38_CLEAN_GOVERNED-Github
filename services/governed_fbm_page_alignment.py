@@ -655,10 +655,10 @@ def install_governed_fbm_page_alignment(app) -> None:
                 "route_state": route_state,
                 "shipping_mode": {
                     **_workspace_shipping_mode(row, platform, profile),
-                    # Canonical persisted postage cost for the FBM row. Display only;
-                    # do not duplicate this value into the finance/fees layer.
-                    "shipping_cost": row.shipping_cost if row.shipping_cost is not None and row.shipping_cost > 0 else None,
-                    "shipping_cost_currency": "GBP",
+                    # Persisted carrier/label fee belongs to the Shipping Fee UI column.
+                    # Keep Shipping Cost as its separate existing display authority.
+                    "shipping_fee": row.shipping_cost if row.shipping_cost is not None and row.shipping_cost > 0 else None,
+                    "shipping_fee_currency": "GBP",
                 },
                 "shipment": shipment,
                 "shipment_state": shipment_state,
