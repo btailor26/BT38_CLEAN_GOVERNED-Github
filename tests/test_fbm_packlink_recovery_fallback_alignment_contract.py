@@ -55,3 +55,15 @@ def test_amazon_recovery_packlink_fallback_uses_newly_persisted_shipment_identit
     amazon_recovery = TEMPLATE.split("if(marketplace==='amazon'){", 1)[1].split("}else if(marketplace==='ebay')", 1)[0]
     assert "if(row.dataset.shipmentId&&gapsAfter.some" not in amazon_recovery
     assert "if(gapsAfter.some(g=>packlinkGaps.has(g)))" in amazon_recovery
+
+
+def test_packlink_recovery_accepts_known_reference_only_after_exact_provider_proof():
+    recovery = ROUTES.split("def packlink_exact_recovery", 1)[1].split('@governed_fbm_bp.get("/fbm/shipments/', 1)[0]
+    assert 'body.get("provider_reference")' in recovery
+    assert "adapter.get_shipment(requested_reference)" in recovery
+    assert 'provider_payload.get("shipment_custom_reference")' in recovery
+    assert "provider_custom_reference != shipment.marketplace_order_id" in recovery
+    assert '"matched": False' in recovery
+    assert "}), 409" in recovery
+    assert 'provider_payload.setdefault("packlink_reference", requested_reference)' in recovery
+    assert '"marketplace_write_attempted": False' in recovery
