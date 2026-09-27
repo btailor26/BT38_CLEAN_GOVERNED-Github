@@ -662,7 +662,11 @@ def install_governed_fbm_page_alignment(app) -> None:
                 # Display-only MCF identity/cost. Shipment lifecycle authority stays unchanged.
                 "mcf_display": ({
                     "source_label": "Amazon MCF",
-                    "shipping_cost": row.mcf_order.total_mcf_fee,
+                    # Keep the persisted MCF components separate for display:
+                    # shipment/postage charge -> Shipping Cost;
+                    # picking/fulfilment charge -> Shipping Fee.
+                    "shipping_cost": row.mcf_order.mcf_per_shipment_fee,
+                    "shipping_fee": row.mcf_order.mcf_fulfillment_fee,
                     "currency": row.mcf_order.currency or "GBP",
                     # Marketplace shipment truth remains first authority. When no
                     # governed shipment carrier exists, MCF is the safe fallback;
