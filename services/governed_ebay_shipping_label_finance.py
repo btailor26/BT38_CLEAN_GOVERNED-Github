@@ -13,7 +13,7 @@ from __future__ import annotations
 import base64
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
 from urllib.parse import urlsplit
@@ -329,6 +329,82 @@ def read_and_persist_exact_ebay_shipping_label_purchase(*, store, marketplace_or
             "order_id": order_id,
         }
 
+    # Recovery must reuse the same proven SHIPPING_LABEL finance authority as a
+    # live eBay Buy Shipping purchase. eBay can return 204 for an older exact
+    # orderId lookup, so make one bounded historical read around this existing
+    # order's own create/ship timestamps. Returned rows are still accepted only
+    # when eBay itself identifies the exact order_id below. No scan, polling,
+    # marketplace write, or alternate provider authority is introduced.
+    historical_fallback_used = False
+    if response.status_code == 204:
+        bounds = db.session.execute(
+            text(
+                """
+                SELECT MIN(created_at) AS created_at, MAX(shipped_at) AS shipped_at
+                FROM marketplace_orders
+                WHERE store_id = :store_id
+                  AND marketplace_order_id = :order_id
+                """
+            ),
+            {"store_id": int(store.id), "order_id": order_id},
+        ).mappings().first()
+        created_at = bounds.get("created_at") if bounds else None
+        shipped_at = bounds.get("shipped_at") if bounds else None
+        if created_at:
+            start_at = created_at - timedelta(days=1)
+            end_at = (shipped_at or created_at) + timedelta(days=2)
+            date_filter = (
+                "transactionDate:["
+                f"{start_at.strftime('%Y-%m-%dT%H:%M:%S.000Z')}.."
+                f"{end_at.strftime('%Y-%m-%dT%H:%M:%S.999Z')}]"
+            )
+            fallback_request = requests.Request(
+                "GET",
+                EBAY_FINANCES_TRANSACTIONS_URL,
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Accept": "application/json",
+                },
+                params=[
+                    ("filter", "transactionType:{SHIPPING_LABEL}"),
+                    ("filter", date_filter),
+                ],
+            )
+            fallback_prepared = fallback_request.prepare()
+            try:
+                fallback_prepared.headers.update(
+                    _signature_headers(method="GET", url=fallback_prepared.url)
+                )
+                response = requests.Session().send(fallback_prepared, timeout=30)
+                historical_fallback_used = True
+            except requests.RequestException as exc:
+                return {
+                    "success": False,
+                    "skipped": False,
+                    "reason": "ebay_finances_shipping_label_historical_read_failed",
+                    "error": str(exc)[:1000],
+                    "order_id": order_id,
+                    "historical_fallback_used": True,
+                }
+            except Exception as exc:
+                return {
+                    "success": False,
+                    "skipped": False,
+                    "reason": str(exc) or "ebay_finances_signature_failed",
+                    "order_id": order_id,
+                    "historical_fallback_used": True,
+                }
+            if response.status_code >= 400:
+                return {
+                    "success": False,
+                    "skipped": False,
+                    "reason": "ebay_finances_shipping_label_historical_read_failed",
+                    "status_code": response.status_code,
+                    "error": response.text[:1000],
+                    "order_id": order_id,
+                    "historical_fallback_used": True,
+                }
+
     # Finance enrichment is optional evidence for an already-bounded exact
     # order recovery. A successful HTTP response with an empty/non-JSON body
     # must never abort shipment/order recovery or manufacture finance truth.
@@ -392,6 +468,7 @@ def read_and_persist_exact_ebay_shipping_label_purchase(*, store, marketplace_or
         "transactions_persisted": persisted,
         "purchase_transactions": purchase_transactions,
         "purchase_confirmed": purchase_transactions > 0,
+        "historical_fallback_used": historical_fallback_used,
         "marketplace_write_started": False,
         "shipment_created": False,
     }
