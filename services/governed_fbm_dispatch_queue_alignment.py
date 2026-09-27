@@ -245,6 +245,25 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   function saveSession(extra){{var next=Object.assign({{tab:active,search:search,range:range,from:from,to:to,dirty:false,session_epoch:sessionEpoch}},extra||{{}});if(window.BT38&&typeof window.BT38.setPageSession==='function')window.BT38.setPageSession('fbm',next);return next;}}
   var searchInput=document.getElementById('bt38FbmGlobalSearchInput');
   var clearSearch=document.getElementById('bt38FbmGlobalSearchClear');
+  var truthFilter='all';
+  var truthFilterSelect=document.getElementById('bt38FbmTruthFilter');
+  if(!truthFilterSelect&&clearSearch){{
+    truthFilterSelect=document.createElement('select');
+    truthFilterSelect.id='bt38FbmTruthFilter';
+    truthFilterSelect.className='form-select form-select-sm';
+    truthFilterSelect.style.width='auto';
+    truthFilterSelect.setAttribute('aria-label','Data truth action filter');
+    [
+      ['all','All data truth'],
+      ['source_unverified','Source unverified'],
+      ['tracking_missing','Tracking missing'],
+      ['ship_by_missing','Ship by missing'],
+      ['delivery_missing','Deliver by missing'],
+      ['shipping_cost_missing','Shipping cost missing'],
+      ['shipping_fee_missing','Shipping fee missing']
+    ].forEach(function(option){{var node=document.createElement('option');node.value=option[0];node.textContent=option[1];truthFilterSelect.appendChild(node)}});
+    clearSearch.insertAdjacentElement('afterend',truthFilterSelect);
+  }}
   var historyForm=document.getElementById('bt38FbmControls');
   var rangeInput=document.getElementById('bt38FbmRangeSelect')||document.getElementById('bt38FbmRange');
   var fromInput=document.getElementById('bt38FbmFrom')||(historyForm&&historyForm.querySelector('[name="fbm_from"]'));
@@ -280,6 +299,29 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   function historyBounds(){{var today=new Date();today=new Date(today.getFullYear(),today.getMonth(),today.getDate());if(range==='custom'){{var a=from?new Date(from+'T00:00:00'):null,b=to?new Date(to+'T23:59:59'):null;return {{start:a,end:b}};}}var days={{'3d':3,'7d':7,'30d':30,'90d':90,'1y':365}}[range]||3;var start=new Date(today);start.setDate(start.getDate()-(days-1));var end=new Date(today);end.setHours(23,59,59,999);return {{start:start,end:end}};}}
   function inHistory(row){{var d=localDay(row.dataset.fbmCreatedAt);if(!d)return false;var bounds=historyBounds();if(bounds.start&&d<bounds.start)return false;if(bounds.end&&d>bounds.end)return false;return true;}}
   function localCounts(){{var result={{ready_dispatch:0,pending:0,dispatched:0,cancelled:0,replacements:0,refunds:0}};rows.forEach(function(row){{if(!inHistory(row))return;var q=row.dataset.fbmQueue;if(Object.prototype.hasOwnProperty.call(result,q))result[q]+=1;}});return result;}}
+  function rowTruthFlags(row){{
+    var flags=[];
+    var source=String(row.querySelector('.fbm-route-cell')?.textContent||'').toLowerCase();
+    if(source.indexOf('source unverified')>=0)flags.push('source_unverified');
+    var promiseLines=row.querySelectorAll('.fbm-promise-line');
+    if(promiseLines[0]&&String(promiseLines[0].textContent||'').toLowerCase().indexOf('pending')>=0)flags.push('ship_by_missing');
+    if(promiseLines[1]&&String(promiseLines[1].textContent||'').toLowerCase().indexOf('pending')>=0)flags.push('delivery_missing');
+    var shipmentCell=row.children[7];
+    var trackingCode=shipmentCell&&shipmentCell.querySelector('code');
+    var trackingText=String(trackingCode&&trackingCode.textContent||'').trim().toLowerCase();
+    var shipmentText=String(shipmentCell&&shipmentCell.textContent||'').toLowerCase();
+    if(!trackingCode||!trackingText||trackingText==='parcel id pending'||shipmentText.indexOf('unshipped')>=0||shipmentText.indexOf('marketplace says shipped')>=0)flags.push('tracking_missing');
+    var shippingCost=String(row.querySelector('.fbm-shipping-cost-cell')?.textContent||'').toLowerCase();
+    if(shippingCost.indexOf('pending / unavailable')>=0)flags.push('shipping_cost_missing');
+    var shippingFee=String(row.querySelector('[data-fbm-shipping-fees="1"]')?.textContent||'').toLowerCase();
+    if(shippingFee.indexOf('pending / unavailable')>=0)flags.push('shipping_fee_missing');
+    return flags;
+  }}
+  function refreshTruthSummary(){{
+    var counts={{source_unverified:0,tracking_missing:0,ship_by_missing:0,delivery_missing:0,shipping_cost_missing:0,shipping_fee_missing:0}};
+    rows.forEach(function(row){{if(!inHistory(row))return;rowTruthFlags(row).forEach(function(flag){{if(Object.prototype.hasOwnProperty.call(counts,flag))counts[flag]+=1}})}});
+    Object.keys(counts).forEach(function(flag){{var node=document.querySelector('[data-bt38-truth-count="'+flag+'"]');if(node)node.textContent=String(counts[flag])}});
+  }}
   function addWorkflowButton(bar,name,label){{var button=document.createElement('button');button.type='button';button.dataset.fbmTab=name;button.className='fbm-lifecycle-tab'+(active===name?' active':'');button.innerHTML=label+' <span class="badge bg-light text-dark border">0</span>';button.addEventListener('click',function(){{active=name;currentPage=1;saveSession();render()}});bar.appendChild(button)}}
   function addTruthLink(bar,label,href,count){{var link=document.createElement('a');link.className='fbm-lifecycle-tab';link.href=href;link.innerHTML=label+' <span class="badge bg-light text-dark border">'+Number(count||0)+'</span>';bar.appendChild(link)}}
   var tabBar=document.createElement('div');tabBar.className='fbm-lifecycle-tabs';
@@ -319,16 +361,17 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
     var counts=localCounts();
     if(initialRender&&Number(counts[active]||0)===0){{var fallback=['pending','ready_dispatch','dispatched','replacements','refunds','cancelled'].find(function(name){{return Number(counts[name]||0)>0}});if(fallback)active=fallback;}}
     initialRender=false;
-    var matched=rows.filter(function(row){{return row.dataset.fbmHistoryMatch==='1'&&row.dataset.fbmQueue===active&&(!search||String(row.dataset.fbmSearch||'').indexOf(search)>=0)}});
+    var matched=rows.filter(function(row){{return row.dataset.fbmHistoryMatch==='1'&&row.dataset.fbmQueue===active&&(!search||String(row.dataset.fbmSearch||'').indexOf(search)>=0)&&(truthFilter==='all'||rowTruthFlags(row).indexOf(truthFilter)>=0)}});
     var matchedSet=new Set(matched);
     rows.forEach(function(row){{if(!matchedSet.has(row))row.hidden=true}});
     renderExistingPager(matched);
     refreshBadges();
+    refreshTruthSummary();
     tabBar.querySelectorAll('[data-fbm-tab]').forEach(function(button){{var selected=button.dataset.fbmTab===active;button.classList.toggle('active',selected);button.setAttribute('aria-selected',selected?'true':'false')}});
     var title=card.querySelector('.card-header .fw-semibold');if(title&&labels[active])title.textContent=labels[active];
-    var actionable=active==='ready_dispatch';var actionArea=document.getElementById('readyToShipSelected');var selectAll=document.getElementById('selectAllOrders');var selectedCount=document.getElementById('selectedOrderCount');var actionHint=card.querySelector('.card-header .text-muted.small');if(actionArea)actionArea.classList.toggle('d-none',!actionable);if(selectAll)selectAll.disabled=!actionable;
-    rows.forEach(function(row){{var cb=row.querySelector('.fbm-order-checkbox');if(cb){{cb.checked=false;cb.closest('td').classList.toggle('invisible',!actionable)}}var option=row.querySelector('.fbm-shipping-options');if(option)option.classList.toggle('d-none',!actionable)}});
-    if(selectedCount)selectedCount.classList.toggle('d-none',!actionable);if(actionHint)actionHint.classList.toggle('d-none',!actionable);saveSession();
+    var readyAction=active==='ready_dispatch';var selectionAction=readyAction||truthFilter!=='all';var actionArea=document.getElementById('readyToShipSelected');var selectAll=document.getElementById('selectAllOrders');var selectedCount=document.getElementById('selectedOrderCount');var actionHint=card.querySelector('.card-header .text-muted.small');if(actionArea)actionArea.classList.toggle('d-none',!readyAction);if(selectAll)selectAll.disabled=!selectionAction;
+    rows.forEach(function(row){{var cb=row.querySelector('.fbm-order-checkbox');if(cb){{cb.checked=false;cb.closest('td').classList.toggle('invisible',!selectionAction)}}var option=row.querySelector('.fbm-shipping-options');if(option)option.classList.toggle('d-none',!readyAction)}});
+    if(selectedCount)selectedCount.classList.toggle('d-none',!selectionAction);if(actionHint)actionHint.classList.toggle('d-none',!selectionAction);saveSession();
     document.dispatchEvent(new CustomEvent('bt38-fbm-session-rendered'));
   }}
   // Keep the established single FBM browser-session owner reachable by the
@@ -346,6 +389,7 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   if(toInput)toInput.addEventListener('change',function(){{if(range==='custom'||String(rangeInput&&rangeInput.value||'')==='custom'){{range='custom';if(toInput.value&&fromInput&&fromInput.value)applyHistory();}}}});
   if(searchInput)searchInput.addEventListener('input',function(){{search=String(searchInput.value||'').trim().toLowerCase();currentPage=1;saveSession();render()}});
   if(clearSearch)clearSearch.addEventListener('click',function(event){{event.preventDefault();if(searchInput)searchInput.value='';search='';currentPage=1;saveSession();render()}});
+  if(truthFilterSelect)truthFilterSelect.addEventListener('change',function(){{truthFilter=String(truthFilterSelect.value||'all');currentPage=1;render()}});
   if(!loadedCoversRequestedHistory())applyHistory();else render();
 }})();
 </script>'''
