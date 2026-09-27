@@ -42,3 +42,13 @@ def test_data_truth_filter_does_not_add_polling_or_provider_reads():
     assert "setTimeout(" not in truth_filter_section
     assert "marketplace" not in truth_filter_section.lower()
     assert "provider" not in truth_filter_section.lower()
+
+
+def test_recovery_uses_only_explicitly_checked_rows_even_if_working_set_state_changes():
+    template = (ROOT / "templates" / "fbm.html").read_text(encoding="utf-8")
+    assert "function selectedIds(){return checkboxes.filter(b=>b.checked).map(b=>b.value);}" in template
+    assert "if(recoverButton)recoverButton.addEventListener('click'" in template
+    assert "const ids=selectedIds();if(!ids.length)return;" in template
+    assert "const rows=ids.map(id=>document.querySelector" in template
+    assert "exact-order-recovery-check" in template
+    assert "selectableCheckboxes().forEach(b=>b.checked=selectAll.checked)" in template
