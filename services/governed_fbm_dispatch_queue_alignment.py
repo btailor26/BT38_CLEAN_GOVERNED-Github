@@ -138,9 +138,24 @@ def _presentation(rows: list[MarketplaceOrder]) -> dict[str, dict]:
             "queue": queue,
             "status": str(getattr(row, "status", "") or "").strip().lower(),
             "created_at": row.created_at.isoformat() if getattr(row, "created_at", None) else None,
-            "shipping_cost": float(spend.amount) if spend is not None else None,
-            "shipping_currency": str(spend.currency or "GBP").upper() if spend is not None else None,
-            "shipping_cost_confirmed": spend is not None,
+            # Display-only fee authority: MCF picking/fulfilment fee belongs in
+            # Shipping Fees; normal FBM continues to use confirmed shipping spend.
+            "shipping_cost": (
+                float(row.mcf_order.mcf_fulfillment_fee)
+                if getattr(row, "mcf_order", None) is not None
+                and row.mcf_order.mcf_fulfillment_fee is not None
+                else (float(spend.amount) if spend is not None else None)
+            ),
+            "shipping_currency": (
+                str(row.mcf_order.currency or "GBP").upper()
+                if getattr(row, "mcf_order", None) is not None
+                and row.mcf_order.mcf_fulfillment_fee is not None
+                else (str(spend.currency or "GBP").upper() if spend is not None else None)
+            ),
+            "shipping_cost_confirmed": (
+                getattr(row, "mcf_order", None) is not None
+                and row.mcf_order.mcf_fulfillment_fee is not None
+            ) or spend is not None,
         }
     return payload
 
