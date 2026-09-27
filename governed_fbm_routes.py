@@ -728,7 +728,26 @@ def packlink_exact_recovery(shipment_id: int):
 
     adapter = PacklinkAdapter()
     try:
-        provider_payload = adapter.find_shipment_by_custom_reference(shipment.marketplace_order_id)
+        body = request.get_json(silent=True) or {}
+        requested_reference = str(body.get("provider_reference") or "").strip()
+        if requested_reference:
+            # A caller may supply a known Packlink reference, but it is authority
+            # only after Packlink itself proves the exact marketplace-order link.
+            provider_payload = adapter.get_shipment(requested_reference)
+            provider_custom_reference = str(
+                provider_payload.get("shipment_custom_reference") or ""
+            ).strip()
+            if provider_custom_reference != shipment.marketplace_order_id:
+                return jsonify({
+                    "success": False,
+                    "matched": False,
+                    "shipment_id": shipment.id,
+                    "marketplace_order_id": shipment.marketplace_order_id,
+                    "message": "Packlink reference does not belong to this exact marketplace order.",
+                }), 409
+            provider_payload.setdefault("packlink_reference", requested_reference)
+        else:
+            provider_payload = adapter.find_shipment_by_custom_reference(shipment.marketplace_order_id)
         if provider_payload is None:
             return jsonify({
                 "success": True,
