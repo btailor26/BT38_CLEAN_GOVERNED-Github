@@ -44,3 +44,21 @@ CREATE INDEX IF NOT EXISTS ix_support_cases_updated_at ON support_cases(updated_
 CREATE INDEX IF NOT EXISTS ix_support_case_messages_case_pk ON support_case_messages(case_pk);
 CREATE INDEX IF NOT EXISTS ix_support_case_messages_author_user_id ON support_case_messages(author_user_id);
 CREATE INDEX IF NOT EXISTS ix_support_case_messages_created_at ON support_case_messages(created_at);
+
+
+-- Manual Upload evidence stays inside the existing support-case authority.
+-- Unknown formats/sources are quarantined here for Admin review; this table
+-- does not mutate marketplace, order, shipment, inventory or shipping truth.
+CREATE TABLE IF NOT EXISTS support_case_attachments (
+    id SERIAL PRIMARY KEY,
+    case_pk INTEGER NOT NULL REFERENCES support_cases(id) ON DELETE CASCADE,
+    uploaded_by_user_id INTEGER NOT NULL,
+    filename VARCHAR(255) NOT NULL,
+    content_type VARCHAR(255),
+    size_bytes INTEGER NOT NULL DEFAULT 0,
+    content BYTEA NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS ix_support_case_attachments_case_pk ON support_case_attachments(case_pk);
+CREATE INDEX IF NOT EXISTS ix_support_case_attachments_uploaded_by_user_id ON support_case_attachments(uploaded_by_user_id);
+CREATE INDEX IF NOT EXISTS ix_support_case_attachments_created_at ON support_case_attachments(created_at);
