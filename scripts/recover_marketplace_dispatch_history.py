@@ -199,6 +199,21 @@ def _database_readback(store_id: int, order_id: str) -> dict[str, Any]:
         ),
         {"store_id": int(store_id), "order_id": order_id},
     ).mappings().first()
+    mcf = db.session.execute(
+        text(
+            """
+            SELECT id, source_order_id, source_channel, source_store_id,
+                   seller_fulfillment_order_id, fba_store_id, status, amazon_status,
+                   carrier, tracking_number, total_mcf_fee, currency
+            FROM mcf_orders
+            WHERE source_store_id = :store_id
+              AND source_order_id = :order_id
+            ORDER BY id DESC
+            LIMIT 1
+            """
+        ),
+        {"store_id": int(store_id), "order_id": order_id},
+    ).mappings().first()
 
     return {
         "carrier": next((_clean(row.carrier) for row in rows if _clean(row.carrier)), None),
@@ -218,6 +233,7 @@ def _database_readback(store_id: int, order_id: str) -> dict[str, Any]:
         "marketplace_checked_at": operational.get("marketplace_checked_at") if operational else None,
         "confirmed_shipping_spend": dict(spend) if spend else None,
         "fbm_shipment": dict(shipment) if shipment else None,
+        "mcf_order": dict(mcf) if mcf else None,
     }
 
 
