@@ -269,11 +269,15 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   function addTruthLink(bar,label,href,count){{var link=document.createElement('a');link.className='fbm-lifecycle-tab';link.href=href;link.innerHTML=label+' <span class="badge bg-light text-dark border">'+Number(count||0)+'</span>';bar.appendChild(link)}}
   var tabBar=document.createElement('div');tabBar.className='fbm-lifecycle-tabs';
   addWorkflowButton(tabBar,'pending','Pending');addWorkflowButton(tabBar,'ready_dispatch','Ready to dispatch');addWorkflowButton(tabBar,'dispatched','Dispatched');addWorkflowButton(tabBar,'cancelled','Cancelled');addTruthLink(tabBar,'FBA','/governed/amazon-fba-stock',{int(fba_count)});addWorkflowButton(tabBar,'replacements','Replacement');addWorkflowButton(tabBar,'refunds','Refunds');
-  // Recovery entry points live on the right of the lifecycle strip. They are
-  // deliberately presentation-only until their governed persistence paths exist.
+  // SDS is a display badge only. It is not a lifecycle queue and has no
+  // marketplace-specific behaviour.
+  var sdsBadge=document.createElement('span');sdsBadge.className='fbm-lifecycle-tab';sdsBadge.textContent='SDS';sdsBadge.title='Seller Delivery Service';tabBar.appendChild(sdsBadge);
+  // Manual Upload remains a separate user action on the right.
   var lifecycleActions=document.createElement('div');lifecycleActions.className='fbm-lifecycle-actions';
-  var manualUpload=document.createElement('button');manualUpload.type='button';manualUpload.className='fbm-lifecycle-action';manualUpload.textContent='Manual Upload';manualUpload.title='CSV / PDF manual recovery — persistence wiring pending';manualUpload.disabled=true;lifecycleActions.appendChild(manualUpload);
-  var sdsBadge=document.createElement('button');sdsBadge.type='button';sdsBadge.className='fbm-lifecycle-action';sdsBadge.textContent='SDS';sdsBadge.title='SDS alignment pending';sdsBadge.disabled=true;lifecycleActions.appendChild(sdsBadge);
+  var manualUpload=document.createElement('button');manualUpload.type='button';manualUpload.className='fbm-lifecycle-action';manualUpload.textContent='Manual Upload';manualUpload.title='Select CSV or PDF evidence';lifecycleActions.appendChild(manualUpload);
+  var manualUploadInput=document.createElement('input');manualUploadInput.type='file';manualUploadInput.accept='.csv,.pdf,text/csv,application/pdf';manualUploadInput.multiple=true;manualUploadInput.hidden=true;lifecycleActions.appendChild(manualUploadInput);
+  manualUpload.addEventListener('click',function(){manualUploadInput.click()});
+  manualUploadInput.addEventListener('change',function(){var names=Array.from(manualUploadInput.files||[]).map(function(file){return file.name});manualUpload.title=names.length?names.join(', '):'Select CSV or PDF evidence';manualUpload.textContent=names.length?'Manual Upload ('+names.length+')':'Manual Upload';});
   tabBar.appendChild(lifecycleActions);
   var header=card.querySelector('.card-header');if(header)header.insertAdjacentElement('afterend',tabBar);else card.insertBefore(tabBar,card.firstChild);
   var pageSizeSelect=document.getElementById('bt38ResultsPerPageSelect');var previousPage=document.getElementById('bt38FbmPreviousPage');var nextPage=document.getElementById('bt38FbmNextPage');var pageStatus=document.querySelector('#bt38FbmOrderFlow .bt38-page-status');var tableCount=document.querySelector('#bt38FbmOrderFlow .bt38-table-count');var currentPage=1;var pageSize=Number(saved.page_size||pageSizeSelect&&pageSizeSelect.value||15)||15;if(pageSizeSelect)pageSizeSelect.value=String(pageSize);
