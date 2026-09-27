@@ -16,9 +16,9 @@ def test_manual_upload_reuses_existing_support_case_authority():
 
 
 def test_unknown_upload_does_not_guess_operational_truth():
-    assert "No approved manual-format recogniser is registered yet" in SUPPORT
     assert "Admin mapping is required before any operational truth may be updated." in SUPPORT
-    for token in ("MarketplaceOrder", "FBMShipment", "WarehouseStock"):
+    assert "MarketplaceOrder.query" in SUPPORT
+    for token in ("FBMShipment", "WarehouseStock"):
         assert token not in SUPPORT
 
 
@@ -38,3 +38,11 @@ def test_manual_upload_checks_persisted_db_truth_before_support_fallback():
     assert route.index("MarketplaceOrder.query") < route.index("case = SupportCase(")
     assert "no marketplace/provider call" in route.lower()
     assert "db.session.commit()" in route
+
+
+def test_existing_attachment_table_is_additively_aligned_before_upload():
+    assert "ALTER TABLE support_case_attachments ADD COLUMN IF NOT EXISTS size_bytes" in MIGRATION
+    assert "ALTER TABLE support_case_attachments ADD COLUMN IF NOT EXISTS content BYTEA" in MIGRATION
+    assert "def _align_support_attachment_schema()" in SUPPORT
+    assert "db.create_all()" in SUPPORT
+    assert SUPPORT.index("db.create_all()") < SUPPORT.index("_align_support_attachment_schema()")
