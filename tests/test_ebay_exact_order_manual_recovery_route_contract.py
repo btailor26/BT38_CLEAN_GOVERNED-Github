@@ -91,3 +91,14 @@ def test_manual_exact_ebay_recovery_requires_confirmed_spend_for_complete_succes
     block = _function_block(SOURCE, "recover_exact_ebay_order_manually")
     assert 'shipping_spend_recovered = bool(shipment_recovery.get("shipping_cost_persisted"))' in block
     assert "recovery_succeeded = base_recovery_succeeded and shipping_spend_recovered" in block
+
+
+def test_existing_db_amazon_logistics_truth_short_circuits_external_recovery():
+    assert "existing_db_mcf_shipping_truth" in SOURCE
+    assert "persisted_fbm_shipment_amazon_logistics" in SOURCE
+    db_pos = SOURCE.index("db_mcf_shipment = db.session.execute")
+    hydrate_pos = SOURCE.index("result = hydrate_exact_ebay_order(", db_pos)
+    return_pos = SOURCE.index('"external_call_started": False', db_pos)
+    assert db_pos < return_pos < hydrate_pos
+    assert "LOWER(COALESCE(carrier, '')) LIKE 'amazon logistics%'" in SOURCE
+    assert '"marketplace_write_started": False' in SOURCE
