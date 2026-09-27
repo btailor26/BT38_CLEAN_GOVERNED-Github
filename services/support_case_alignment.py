@@ -10,7 +10,7 @@ from datetime import datetime
 import json
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit
 
-from flask import abort, flash, redirect, render_template, request, url_for
+from flask import abort, flash, redirect, render_template, request, url_for, jsonify, Response
 from flask_login import current_user, login_required
 
 from app import app
@@ -78,6 +78,19 @@ class SupportCaseMessage(db.Model):
     author_user_id = db.Column(db.Integer, nullable=True, index=True)
     author_role = db.Column(db.String(20), nullable=False, default="customer")
     body = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+
+class SupportCaseAttachment(db.Model):
+    """File evidence attached to the existing support-case authority."""
+    __tablename__ = "support_case_attachments"
+    id = db.Column(db.Integer, primary_key=True)
+    case_pk = db.Column(db.Integer, db.ForeignKey("support_cases.id", ondelete="CASCADE"), nullable=False, index=True)
+    uploaded_by_user_id = db.Column(db.Integer, nullable=False, index=True)
+    filename = db.Column(db.String(255), nullable=False)
+    content_type = db.Column(db.String(255))
+    size_bytes = db.Column(db.Integer, nullable=False, default=0)
+    content = db.Column(db.LargeBinary, nullable=False)
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
 
 
@@ -221,6 +234,70 @@ def bt38_support_create_case():
     return redirect(url_for("bt38_support_case_page", case_id=case.case_id))
 
 
+@app.post("/support/cases/manual-upload-review")
+@login_required
+def bt38_support_manual_upload_review():
+    """Quarantine unrecognised manual evidence in the existing support workflow."""
+    account, _ = _customer_scope()
+    if account is None:
+        return jsonify({"ok": False, "error": "customer_account_required"}), 400
+    files = [item for item in request.files.getlist("files") if item and item.filename]
+    if not files:
+        return jsonify({"ok": False, "error": "no_files"}), 400
+
+    # No approved manual-format recogniser is registered yet. Therefore every
+    # manual upload is truthfully quarantined for Admin review rather than being
+    # guessed into operational order/shipment truth.
+    names = [_clean(item.filename, 255) for item in files]
+    case = SupportCase(
+        account_id=account.id,
+        opened_by_user_id=int(current_user.id),
+        category="data_review",
+        subject="Manual Upload — Pending / Under Review",
+        description="BT38 could not verify an approved source/format mapping for the uploaded evidence. Admin mapping is required before any operational truth may be updated.\n\nFiles: " + ", ".join(names),
+        priority="normal",
+        status="open",
+        affected_area="FBM Manual Upload",
+        source_page="/fbm",
+        context_json=json.dumps({"source_page": "/fbm", "manual_upload": True, "review_state": "under_review", "filenames": names}, ensure_ascii=False, sort_keys=True),
+    )
+    db.session.add(case)
+    db.session.flush()
+    case.case_id = _case_number(case)
+
+    for item, name in zip(files, names):
+        payload = item.read()
+        db.session.add(SupportCaseAttachment(
+            case_pk=case.id,
+            uploaded_by_user_id=int(current_user.id),
+            filename=name,
+            content_type=_clean(item.mimetype, 255) or None,
+            size_bytes=len(payload),
+            content=payload,
+        ))
+    db.session.commit()
+    return jsonify({
+        "ok": True,
+        "review_state": "under_review",
+        "case_id": case.case_id,
+        "case_url": url_for("bt38_support_case_page", case_id=case.case_id),
+    })
+
+
+@app.get("/admin/support/cases/<case_id>/attachments/<int:attachment_id>")
+@login_required
+def bt38_admin_support_case_attachment(case_id, attachment_id):
+    if not _is_admin():
+        abort(403)
+    case = _case_or_404(case_id)
+    attachment = SupportCaseAttachment.query.filter_by(id=attachment_id, case_pk=case.id).first()
+    if attachment is None:
+        abort(404)
+    response = Response(attachment.content, mimetype=attachment.content_type or "application/octet-stream")
+    response.headers["Content-Disposition"] = 'attachment; filename="' + attachment.filename.replace('"', "") + '"'
+    return response
+
+
 @app.route("/support/cases/<case_id>", methods=["GET", "POST"])
 @login_required
 def bt38_support_case_page(case_id):
@@ -242,7 +319,9 @@ def bt38_support_case_page(case_id):
         return redirect(url_for("bt38_support_case_page", case_id=case.case_id))
     messages = (SupportCaseMessage.query.filter_by(case_pk=case.id)
                 .order_by(SupportCaseMessage.created_at.asc(), SupportCaseMessage.id.asc()).all())
-    return render_template("support_case.html", case=case, messages=messages,
+    attachments = (SupportCaseAttachment.query.filter_by(case_pk=case.id)
+                   .order_by(SupportCaseAttachment.created_at.asc(), SupportCaseAttachment.id.asc()).all())
+    return render_template("support_case.html", case=case, messages=messages, attachments=attachments,
                            case_context=_case_context(case), is_support_admin=_is_admin())
 
 
