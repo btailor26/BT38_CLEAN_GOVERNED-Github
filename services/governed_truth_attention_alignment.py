@@ -212,7 +212,14 @@ def _panel(page_key: str, risks: tuple[tuple[str, str, str], ...]) -> str:
             '<div class="bt38-truth-attention-panel" data-bt38-truth-attention="1">'
             '<div class="bt38-truth-attention-title">'
             '<span class="bt38-truth-attention-main">&#9888; Data truth review</span>'
-            '<span id="bt38FbmTruthSummary" class="bt38-truth-attention-sub">Select order(s), then recover only missing persisted truth through the governed recovery path.</span>'
+            '</div>'
+            '<div id="bt38FbmTruthSummary" class="bt38-truth-attention-items" aria-label="Missing or unverified facts in the current FBM history set">'
+            '<span class="bt38-truth-count">Source <strong data-bt38-truth-count="source_unverified">0</strong></span>'
+            '<span class="bt38-truth-count">Tracking <strong data-bt38-truth-count="tracking_missing">0</strong></span>'
+            '<span class="bt38-truth-count">Ship by <strong data-bt38-truth-count="ship_by_missing">0</strong></span>'
+            '<span class="bt38-truth-count">Deliver by <strong data-bt38-truth-count="delivery_missing">0</strong></span>'
+            '<span class="bt38-truth-count">Shipping cost <strong data-bt38-truth-count="shipping_cost_missing">0</strong></span>'
+            '<span class="bt38-truth-count">Shipping fee <strong data-bt38-truth-count="shipping_fee_missing">0</strong></span>'
             '</div>'
             '<div class="mt-2"><button id="recoverMissingSelected" class="btn btn-sm btn-outline-danger" type="button" disabled>'
             '<span aria-hidden="true">&#8635;</span> Recover Missing</button></div>'
@@ -238,7 +245,7 @@ def _assets() -> str:
 <style id="bt38-truth-attention-style">
 .bt38-truth-attention-panel{border:1px solid #dc3545;border-left:4px solid #dc3545;background:#fff5f5;border-radius:.45rem;padding:.55rem .7rem;margin:0 0 .7rem 0;position:relative;z-index:20}
 .bt38-truth-attention-title{display:flex;align-items:baseline;gap:.65rem;flex-wrap:wrap;margin-bottom:.35rem}.bt38-truth-attention-main{color:#b02a37;font-weight:700;font-size:.82rem}.bt38-truth-attention-sub{color:#6c757d;font-size:.72rem}
-.bt38-truth-attention-items{display:flex;gap:.4rem;flex-wrap:wrap}.bt38-truth-warning{position:relative;display:inline-flex;align-items:center;gap:.28rem;border:1px solid #dc3545;background:#fff;color:#b02a37;border-radius:999px;padding:.18rem .48rem;font-size:.7rem;font-weight:600;cursor:help;outline:none}.bt38-truth-warning-icon{font-size:.82rem;line-height:1}.bt38-truth-warning-label{white-space:nowrap}
+.bt38-truth-attention-items{display:flex;gap:.4rem;flex-wrap:wrap}.bt38-truth-count{display:inline-flex;gap:.3rem;align-items:center;border:1px solid #f1aeb5;background:#fff;color:#842029;border-radius:999px;padding:.18rem .48rem;font-size:.7rem;font-weight:600}.bt38-truth-count strong{font-size:.78rem}.bt38-truth-warning{position:relative;display:inline-flex;align-items:center;gap:.28rem;border:1px solid #dc3545;background:#fff;color:#b02a37;border-radius:999px;padding:.18rem .48rem;font-size:.7rem;font-weight:600;cursor:help;outline:none}.bt38-truth-warning-icon{font-size:.82rem;line-height:1}.bt38-truth-warning-label{white-space:nowrap}
 .bt38-truth-warning-box{display:none;position:absolute;left:0;top:calc(100% + 6px);z-index:10000;width:min(360px,80vw);background:#fff;color:#212529;border:1px solid #dc3545;border-radius:.45rem;box-shadow:0 .45rem 1.2rem rgba(0,0,0,.16);padding:.65rem;font-weight:400;font-size:.76rem;line-height:1.35}.bt38-truth-warning:hover .bt38-truth-warning-box,.bt38-truth-warning:focus-within .bt38-truth-warning-box,.bt38-truth-warning:focus .bt38-truth-warning-box{display:block}.bt38-truth-warning-box strong{display:block;color:#b02a37;margin-bottom:.25rem}.bt38-truth-warning-copy{display:block;margin-bottom:.5rem}.bt38-truth-review-check{display:flex;gap:.4rem;align-items:center;font-weight:600;cursor:pointer;margin:0}.bt38-truth-review-status{display:block;margin-top:.35rem;font-size:.7rem}.bt38-truth-review-status.is-ok{color:#198754}.bt38-truth-review-status.is-error{color:#dc3545}
 .bt38-row-truth-warning{margin-left:.35rem;vertical-align:middle}.bt38-row-truth-warning .bt38-truth-warning-label{display:none}.bt38-row-truth-warning .bt38-truth-warning-icon{font-size:.9rem}
 </style>
