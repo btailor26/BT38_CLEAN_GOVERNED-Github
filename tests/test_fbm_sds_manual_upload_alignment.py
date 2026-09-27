@@ -10,9 +10,10 @@ def test_sds_is_display_badge_only_and_not_amazon_or_queue_logic():
     assert "addWorkflowButton(tabBar,'sds'" not in ALIGNMENT
 
 
-def test_manual_upload_is_active_csv_pdf_file_picker():
-    assert "manualUpload.disabled=true" not in ALIGNMENT
+def test_manual_upload_accepts_all_formats_and_routes_to_existing_support_review():
     assert "manualUploadInput.type='file'" in ALIGNMENT
-    assert "manualUploadInput.accept='.csv,.pdf,text/csv,application/pdf'" in ALIGNMENT
+    assert "manualUploadInput.accept=" not in ALIGNMENT
     assert "manualUploadInput.multiple=true" in ALIGNMENT
     assert "manualUploadInput.click()" in ALIGNMENT
+    assert "/support/cases/manual-upload-review" in ALIGNMENT
+    assert "Under Review · " in ALIGNMENT
