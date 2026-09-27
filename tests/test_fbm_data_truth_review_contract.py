@@ -14,6 +14,14 @@ def test_data_truth_review_is_db_only_and_structured():
     for state in ("known", "missing", "unverified", "unavailable", "not_applicable"):
         assert state in TRUTH
     for field in (
+        "marketplace",
+        "store_name",
+        "marketplace_order_id",
+        "order_created_at",
+        "product_name",
+        "sku",
+        "quantity",
+        "fulfillment_type",
         "tracking_number",
         "carrier",
         "shipping_source",
@@ -68,3 +76,15 @@ def test_marketplace_channel_is_never_presented_as_shipping_source():
     assert '"marketplace_shipping": 0' in page
     assert 'provider and provider != "marketplace"' in truth
     assert '_field("unverified", provider or None' in truth
+
+
+def test_data_truth_review_covers_current_fbm_template_row_facts():
+    readback = Path("scripts/recover_marketplace_dispatch_history.py").read_text()
+    for field in (
+        "marketplace", "store_name", "marketplace_order_id", "order_created_at",
+        "product_name", "sku", "quantity", "fulfillment_type",
+    ):
+        assert f'"{field}"' in TRUTH
+        assert f'"{field}"' in readback
+    assert 'if fact["state"] in {"missing", "unverified"}' in TRUTH
+    assert '"recovery_required": bool(gaps)' in TRUTH
