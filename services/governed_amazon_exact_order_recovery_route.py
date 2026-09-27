@@ -146,30 +146,23 @@ def check_exact_marketplace_order_recovery():
         if shipment_truth.get("delivered_at") is not None and delivered_count == 0:
             recovery_required = True
 
-    missing = []
-    if not before.get("tracking_number"):
-        missing.append("tracking")
-    if not before.get("carrier"):
-        missing.append("carrier")
-    if before.get("ship_by_at") is None:
-        missing.append("ship-by promise")
-    if before.get("earliest_delivery_at") is None and before.get("latest_delivery_at") is None:
-        missing.append("delivery promise")
-    if platform == "ebay" and not before.get("confirmed_shipping_spend"):
-        missing.append("confirmed shipping spend")
-    if platform == "ebay":
-        shipment_truth = before.get("fbm_shipment") or {}
-        event_count = int((ebay_event_evidence or {}).get("event_count") or 0)
-        shipped_count = int((ebay_event_evidence or {}).get("shipped_count") or 0)
-        delivered_count = int((ebay_event_evidence or {}).get("delivered_count") or 0)
-        if shipment_truth and (event_count == 0 or shipped_count == 0):
-            missing.append("eBay shipped event evidence")
-        if shipment_truth.get("delivered_at") is not None and delivered_count == 0:
-            missing.append("eBay delivered event evidence")
-    # eBay's supported exact Sell Fulfillment / Trading reads expose shipped and
-    # delivered facts, not independent carrier pickup or movement scans. Surface
-    # those gaps without triggering a futile repeat marketplace read or inventing
-    # journey milestones. An existing recoverable gap still takes precedence.
+    # Canonical Data Truth Review owns the definition of known/missing/unverified.
+    # Recovery is a consumer of this DB-derived manifest; the browser must not
+    # invent a separate truth-gap model.
+    from services.governed_fbm_data_truth_review import review_fbm_data_truth
+    truth_review = review_fbm_data_truth(
+        store_id=store_id,
+        order_id=order_id,
+        platform=platform,
+        readback=before,
+    )
+    recovery_required = bool(truth_review["recovery_required"])
+    missing = list(truth_review["missing"])
+    unverified = list(truth_review["unverified"])
+
+    # eBay's supported marketplace readback cannot independently prove carrier
+    # pickup/movement scans. Keep that capability fact visible; other connected
+    # shipping authorities may still be eligible to recover those DB gaps.
     unavailable_tracking_evidence = []
     if platform == "ebay":
         shipment_truth = before.get("fbm_shipment") or {}
@@ -190,7 +183,6 @@ def check_exact_marketplace_order_recovery():
                       ON fte.shipment_id = fs.id
                     WHERE fs.store_id = :store_id
                       AND fs.marketplace_order_id = :order_id
-                      AND fs.provider = 'ebay_shipping'
                 """),
                 {"store_id": store_id, "order_id": order_id},
             ).mappings().first()
@@ -198,14 +190,13 @@ def check_exact_marketplace_order_recovery():
                 unavailable_tracking_evidence.append("carrier pickup scan")
             if not shipment_truth.get("first_movement_at") and not int((milestones or {}).get("movement_count") or 0):
                 unavailable_tracking_evidence.append("in-transit carrier scan")
-    if platform == "amazon" and recovery_required and not missing:
-        missing.append("Amazon tracking event history")
 
     return jsonify({
         "success": True, "ok": True, "governed": True,
         "db_check_completed": True, "marketplace_call_started": False,
         "store_id": store_id, "order_id": order_id, "platform": platform,
-        "recovery_required": recovery_required, "missing": missing,
+        "recovery_required": recovery_required, "missing": missing, "unverified": unverified,
+        "truth_review": truth_review,
         "unavailable_tracking_evidence": unavailable_tracking_evidence,
         "carrier_history_supported_by_exact_ebay_readback": False if platform == "ebay" else None,
         "ebay_event_evidence": dict(ebay_event_evidence) if ebay_event_evidence is not None else None,
