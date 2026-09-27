@@ -596,25 +596,37 @@ class PacklinkAdapter:
             return None
         matches: dict[str, dict[str, Any]] = {}
         for inbox in ("ALL", "READY_TO_PURCHASE", "PENDING", "DRAFT"):
-            try:
-                payload = self._get_json("shipments", query={"inbox": inbox})
-            except PacklinkRequestError as exc:
-                if exc.status_code in {400, 404}:
-                    continue
-                raise
-            rows = payload if isinstance(payload, list) else next(
-                (payload.get(key) for key in ("shipments", "items", "results", "data") if isinstance(payload, dict) and isinstance(payload.get(key), list)),
-                [],
-            )
-            for row in rows or []:
-                if not isinstance(row, dict):
-                    continue
-                row_custom = str(row.get("shipment_custom_reference") or row.get("custom_reference") or "").strip()
-                if row_custom != wanted:
-                    continue
-                reference = str(row.get("shipment_reference") or row.get("packlink_reference") or row.get("reference") or row.get("id") or "").strip()
-                if reference:
-                    matches[reference] = row
+            page = 1
+            while True:
+                try:
+                    payload = self._get_json("shipments", query={"inbox": inbox, "page": page})
+                except PacklinkRequestError as exc:
+                    if exc.status_code in {400, 404}:
+                        break
+                    raise
+                rows = payload if isinstance(payload, list) else next(
+                    (payload.get(key) for key in ("shipments", "items", "results", "data") if isinstance(payload, dict) and isinstance(payload.get(key), list)),
+                    [],
+                )
+                for row in rows or []:
+                    if not isinstance(row, dict):
+                        continue
+                    row_custom = str(row.get("shipment_custom_reference") or row.get("custom_reference") or "").strip()
+                    if row_custom != wanted:
+                        continue
+                    reference = str(row.get("shipment_reference") or row.get("packlink_reference") or row.get("reference") or row.get("id") or "").strip()
+                    if reference:
+                        matches[reference] = row
+                pagination = payload.get("pagination") if isinstance(payload, dict) and isinstance(payload.get("pagination"), dict) else {}
+                try:
+                    current_page = int(pagination.get("current_page") or page)
+                    total_pages = int(pagination.get("total_pages") or current_page)
+                except (TypeError, ValueError):
+                    current_page = page
+                    total_pages = page
+                if current_page >= total_pages or not rows:
+                    break
+                page = current_page + 1
             if matches:
                 break
         if len(matches) > 1:
