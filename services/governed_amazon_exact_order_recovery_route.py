@@ -206,7 +206,7 @@ def check_exact_marketplace_order_recovery():
 
 @governed_amazon_exact_order_recovery_bp.post("/governed/actions/amazon/exact-order-recovery")
 def recover_exact_amazon_order_manually():
-    """Recover the complete available Amazon-owned journey for one exact order."""
+    """DB-first exact Amazon recovery: call only authorities required by persisted gaps."""
     if not _operator_authorized():
         return jsonify({
             "success": False, "ok": False, "governed": True,
@@ -281,7 +281,6 @@ def recover_exact_amazon_order_manually():
                 "marketplace_write_started": False, "polling_started": False,
                 "worker_started": False,
             }), 502
-
         return jsonify({
             "success": bool(result.get("success")), "ok": bool(result.get("success")),
             "governed": True, "fulfillment_type": "FBA", "exact_order_only": True,
@@ -301,100 +300,136 @@ def recover_exact_amazon_order_manually():
             "stock_mutation_started": False, "marketplace_write_started": False,
         }), 404
 
-    try:
-        result = hydrate_amazon_tracking_for_order(
-            store=store,
-            marketplace_order_id=order_id,
-            source="manual_exact_amazon_recovery",
-        )
-    except Exception as exc:
-        db.session.rollback()
-        current_app.logger.exception(
-            "BT38 manual exact Amazon recovery failed store_id=%s order_id=%s", store_id, order_id,
-        )
-        return jsonify({
-            "success": False, "ok": False, "governed": True,
-            "reason": "exact_amazon_recovery_exception", "error": str(exc)[:500],
-            "store_id": store_id, "order_id": order_id, "exact_order_only": True,
-            "broad_scan_started": False, "order_replayed": False,
-            "stock_mutation_started": False, "marketplace_write_started": False,
-        }), 502
+    # DB is the authority. Build the recovery plan from persisted Data Truth before
+    # any provider call. A provider is contacted only for a gap it can fill.
+    from scripts.recover_marketplace_dispatch_history import _database_readback
+    from services.governed_fbm_data_truth_review import review_fbm_data_truth
 
-    if not bool(result.get("success")):
-        upstream_status = result.get("status_code")
+    before = _database_readback(store_id, order_id)
+    before_review = review_fbm_data_truth(
+        store_id=store_id, order_id=order_id, platform="amazon", readback=before,
+    )
+    gaps = set(before_review.get("missing") or []) | set(before_review.get("unverified") or [])
+
+    tracking_gaps = {"tracking_number", "tracking_history", "carrier"}
+    promise_gaps = {"ship_by_promise", "delivery_promise"}
+    label_gaps = {"provider_reference", "shipping_fee"}
+
+    calls_started = []
+    tracking_result = {"success": True, "skipped": True, "reason": "db_truth_complete"}
+    promise_readback = []
+    shipping_label = {"success": True, "skipped": True, "reason": "db_truth_complete"}
+
+    if gaps & tracking_gaps:
+        calls_started.append("amazon_tracking")
         try:
-            response_status = int(upstream_status)
-        except (TypeError, ValueError):
-            response_status = 502
-        if response_status < 400 or response_status > 599:
-            response_status = 502
-        return jsonify({
-            "success": False, "ok": False, "governed": True,
-            "reason": result.get("reason") or "amazon_exact_tracking_recovery_failed",
-            "error": result.get("error"),
-            "status_code": upstream_status,
-            "store_id": store_id, "order_id": order_id, "fulfillment_type": "FBM",
-            "exact_order_only": True, "broad_scan_started": False,
-            "order_replayed": False, "stock_mutation_started": False,
-            "marketplace_write_started": False,
-            "tracking_recovery": result,
-            "promise_recovery_started": False,
-            "shipping_label_recovery_started": False,
-            "database_readback": _readback(store_id, order_id),
-        }), response_status
+            tracking_result = hydrate_amazon_tracking_for_order(
+                store=store,
+                marketplace_order_id=order_id,
+                source="manual_exact_amazon_recovery",
+            )
+        except Exception as exc:
+            db.session.rollback()
+            current_app.logger.exception(
+                "BT38 manual exact Amazon tracking recovery failed store_id=%s order_id=%s",
+                store_id, order_id,
+            )
+            return jsonify({
+                "success": False, "ok": False, "governed": True,
+                "reason": "exact_amazon_tracking_recovery_exception", "error": str(exc)[:500],
+                "store_id": store_id, "order_id": order_id, "exact_order_only": True,
+                "db_check_completed": True, "gaps_before": sorted(gaps),
+                "calls_started": calls_started, "marketplace_write_started": False,
+            }), 502
+        if not bool(tracking_result.get("success")):
+            upstream_status = tracking_result.get("status_code")
+            try:
+                response_status = int(upstream_status)
+            except (TypeError, ValueError):
+                response_status = 502
+            if response_status < 400 or response_status > 599:
+                response_status = 502
+            return jsonify({
+                "success": False, "ok": False, "governed": True,
+                "reason": tracking_result.get("reason") or "amazon_exact_tracking_recovery_failed",
+                "error": tracking_result.get("error"), "status_code": upstream_status,
+                "store_id": store_id, "order_id": order_id, "fulfillment_type": "FBM",
+                "exact_order_only": True, "db_check_completed": True,
+                "gaps_before": sorted(gaps), "calls_started": calls_started,
+                "marketplace_write_started": False,
+                "tracking_recovery": tracking_result,
+            }), response_status
 
-    try:
-        promise_readback = [refresh_exact_amazon_order(row) for row in fbm_rows]
-    except Exception as exc:
-        db.session.rollback()
-        current_app.logger.exception(
-            "BT38 manual exact Amazon promise recovery failed store_id=%s order_id=%s", store_id, order_id,
-        )
-        return jsonify({
-            "success": False, "ok": False, "governed": True,
-            "reason": "exact_amazon_promise_recovery_exception", "error": str(exc)[:500],
-            "store_id": store_id, "order_id": order_id, "exact_order_only": True,
-            "broad_scan_started": False, "order_replayed": False,
-            "stock_mutation_started": False, "marketplace_write_started": False,
-        }), 502
+    if gaps & promise_gaps:
+        calls_started.append("amazon_promise")
+        try:
+            promise_readback = [refresh_exact_amazon_order(row) for row in fbm_rows]
+        except Exception as exc:
+            db.session.rollback()
+            current_app.logger.exception(
+                "BT38 manual exact Amazon promise recovery failed store_id=%s order_id=%s",
+                store_id, order_id,
+            )
+            return jsonify({
+                "success": False, "ok": False, "governed": True,
+                "reason": "exact_amazon_promise_recovery_exception", "error": str(exc)[:500],
+                "store_id": store_id, "order_id": order_id, "exact_order_only": True,
+                "db_check_completed": True, "gaps_before": sorted(gaps),
+                "calls_started": calls_started, "marketplace_write_started": False,
+            }), 502
 
-    try:
-        shipping_label = hydrate_amazon_purchased_label_for_order(
-            store=store,
-            marketplace_order_id=order_id,
-            source="manual_exact_amazon_recovery",
-        )
-    except Exception as exc:
-        db.session.rollback()
-        current_app.logger.exception(
-            "BT38 manual exact Amazon purchased-label recovery failed store_id=%s order_id=%s",
-            store_id, order_id,
-        )
-        shipping_label = {
-            "success": False, "skipped": False,
-            "reason": "amazon_purchased_label_recovery_exception",
-            "error": str(exc)[:500], "order_id": order_id,
-            "marketplace_write_started": False,
-        }
+    if gaps & label_gaps:
+        calls_started.append("amazon_purchased_label")
+        try:
+            shipping_label = hydrate_amazon_purchased_label_for_order(
+                store=store,
+                marketplace_order_id=order_id,
+                source="manual_exact_amazon_recovery",
+            )
+        except Exception as exc:
+            db.session.rollback()
+            current_app.logger.exception(
+                "BT38 manual exact Amazon purchased-label recovery failed store_id=%s order_id=%s",
+                store_id, order_id,
+            )
+            shipping_label = {
+                "success": False, "skipped": False,
+                "reason": "amazon_purchased_label_recovery_exception",
+                "error": str(exc)[:500], "order_id": order_id,
+                "marketplace_write_started": False,
+            }
 
-    hydration = dict(result)
+    # Provider return values are never the final truth. Expire the session, read the
+    # canonical DB again, and re-run Data Truth. Only persisted changes count.
+    db.session.expire_all()
+    after = _database_readback(store_id, order_id)
+    after_review = review_fbm_data_truth(
+        store_id=store_id, order_id=order_id, platform="amazon", readback=after,
+    )
+    gaps_after = set(after_review.get("missing") or []) | set(after_review.get("unverified") or [])
+    persisted_recovered = sorted(gaps - gaps_after)
+
+    hydration = dict(tracking_result)
     hydration["promise_readback"] = promise_readback
     hydration["shipping_label"] = shipping_label
     return jsonify({
-        "success": bool(result.get("success")), "ok": bool(result.get("success")),
-        "governed": True, "fulfillment_type": "FBM", "exact_order_only": True,
-        "broad_scan_started": False, "order_replayed": False,
+        "success": True, "ok": True, "governed": True, "fulfillment_type": "FBM",
+        "exact_order_only": True, "broad_scan_started": False, "order_replayed": False,
         "stock_mutation_started": False, "marketplace_write_started": False,
         "store_id": store_id, "order_id": order_id,
+        "db_check_completed": True, "db_authority": True,
+        "gaps_before": sorted(gaps), "calls_started": calls_started,
+        "calls_made": len(calls_started), "persisted_recovered": persisted_recovered,
+        "gaps_after": sorted(gaps_after), "truth_review_after": after_review,
         "hydration": hydration,
         "shipping_cost_recovery": {
-            "attempted": True,
+            "attempted": "amazon_purchased_label" in calls_started,
             "source": "existing_amazon_purchased_label_readback",
             "shipping_cost_persisted": bool(shipping_label.get("shipping_cost_persisted")),
             "shipping_cost": shipping_label.get("shipping_cost"),
             "shipping_cost_currency": shipping_label.get("shipping_cost_currency"),
         },
-        "database_readback": _readback(store_id, order_id),
+        "database_readback": after,
     }), 200
 
 
