@@ -370,7 +370,7 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
     tabBar.querySelectorAll('[data-fbm-tab]').forEach(function(button){{var selected=button.dataset.fbmTab===active;button.classList.toggle('active',selected);button.setAttribute('aria-selected',selected?'true':'false')}});
     var title=card.querySelector('.card-header .fw-semibold');if(title&&labels[active])title.textContent=labels[active];
     var readyAction=active==='ready_dispatch';var selectionAction=readyAction||truthFilter!=='all';var actionArea=document.getElementById('readyToShipSelected');var selectAll=document.getElementById('selectAllOrders');var selectedCount=document.getElementById('selectedOrderCount');var actionHint=card.querySelector('.card-header .text-muted.small');if(actionArea)actionArea.classList.toggle('d-none',!readyAction);if(selectAll)selectAll.disabled=!selectionAction;
-    rows.forEach(function(row){{var cb=row.querySelector('.fbm-order-checkbox');if(cb){{cb.checked=false;cb.closest('td').classList.toggle('invisible',!selectionAction)}}var option=row.querySelector('.fbm-shipping-options');if(option)option.classList.toggle('d-none',!readyAction)}});
+    rows.forEach(function(row){{var cb=row.querySelector('.fbm-order-checkbox');if(cb){{var selectable=selectionAction&&matchedSet.has(row);cb.checked=false;cb.disabled=!selectable;cb.closest('td').classList.toggle('invisible',!selectable)}}var option=row.querySelector('.fbm-shipping-options');if(option)option.classList.toggle('d-none',!readyAction)}});
     if(selectedCount)selectedCount.classList.toggle('d-none',!selectionAction);if(actionHint)actionHint.classList.toggle('d-none',!selectionAction);saveSession();
     document.dispatchEvent(new CustomEvent('bt38-fbm-session-rendered'));
   }}
