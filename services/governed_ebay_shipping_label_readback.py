@@ -257,10 +257,11 @@ def _persist_ebay_known_tracking_events(*, shipment: FBMShipment, candidate: dic
 
 
 def persist_exact_ebay_purchased_shipment_authority(*, store, marketplace_order_id: str) -> dict[str, Any]:
-    """Join exact eBay finance purchase proof to exact fulfillment identity.
+    """Persist every unique eBay shipping fulfillment for one exact order.
 
-    Exactly one durable fulfillment id is required. Multiple physical
-    fulfillments are never collapsed into an invented order-level shipment.
+    eBay models an order as one or more packages/shipping fulfillments. Each
+    durable fulfillment id therefore owns its own FBMShipment. Multiple valid
+    fulfillments are not ambiguous and are never collapsed into one shipment.
     Tracking remains optional; fulfillmentId is the durable shipment identity.
     """
     order_id = _text(marketplace_order_id)
@@ -304,156 +305,177 @@ def persist_exact_ebay_purchased_shipment_authority(*, store, marketplace_order_
         }
 
     candidates = _unique_fulfillment_candidates(fulfillments)
-    if len(candidates) != 1:
+    if not candidates:
         return {
             "success": False,
             "skipped": True,
-            "reason": "ebay_fulfillment_ambiguous" if candidates else "ebay_fulfillment_identity_missing",
+            "reason": "ebay_fulfillment_identity_missing",
             "order_id": order_id,
             "fulfillments_seen": len(fulfillments),
-            "candidate_count": len(candidates),
+            "candidate_count": 0,
         }
 
-    candidate = candidates[0]
-    fulfillment_id = candidate["fulfillment_id"]
-    shipment = FBMShipment.query.filter_by(
-        store_id=store.id,
-        marketplace_order_id=order_id,
-        provider="ebay_shipping",
-        provider_shipment_id=fulfillment_id,
-    ).first()
-    created = shipment is None
-    if shipment is None:
-        shipment = FBMShipment(
+    persisted_shipments: list[dict[str, Any]] = []
+    total_tracking_events_inserted = 0
+    now = datetime.utcnow()
+
+    for candidate in candidates:
+        fulfillment_id = candidate["fulfillment_id"]
+        shipment = FBMShipment.query.filter_by(
             store_id=store.id,
             marketplace_order_id=order_id,
             provider="ebay_shipping",
             provider_shipment_id=fulfillment_id,
-            purchase_key=f"ebay_shipping_readback:{store.id}:{order_id}:{fulfillment_id}"[:200],
-        )
-        db.session.add(shipment)
-
-    shipment.provider = "ebay_shipping"
-    shipment.provider_shipment_id = fulfillment_id
-    shipment.tracking_number = candidate.get("tracking_number") or shipment.tracking_number
-
-    trading_match = None
-    if trading_truth and shipment.tracking_number:
-        matches = [
-            row for row in trading_truth.get("tracking_rows", [])
-            if row.get("tracking_number") == shipment.tracking_number
-        ]
-        if len(matches) == 1:
-            trading_match = matches[0]
-
-    if trading_match and trading_match.get("carrier"):
-        shipment.carrier = trading_match["carrier"]
-
-    # Older completed fulfillments can omit shippedDate from Sell Fulfillment
-    # while Trading GetOrders still exposes the exact order ShippedTime.
-    # Attach it only to this already-unambiguous physical fulfillment candidate.
-    if trading_truth and trading_match and candidate.get("shipped_at") is None:
-        candidate["trading_shipped_at"] = trading_truth.get("shipped_at")
-
-    if purchase is not None:
-        shipment.purchase_status = "purchased"
-        shipment.purchase_error = None
-        shipment.label_purchased_at = purchase["purchased_at"]
-        shipment.label_source = "ebay_finances_shipping_label"
-    delivered_at = trading_truth.get("delivered_at") if trading_truth and trading_match else None
-    if delivered_at is not None:
-        shipment.delivered_at = delivered_at
-        shipment.status = "delivered"
-        shipment.last_provider_status = "delivered"
-    elif shipment.delivered_at is None:
-        if shipment.status not in {"carrier_accepted", "in_transit", "out_for_delivery", "delivered"}:
-            shipment.status = "shipped" if shipment.tracking_number else ("label_purchased" if purchase is not None else "shipped")
-        if _text(shipment.last_provider_status).lower() != "delivered":
-            shipment.last_provider_status = "shipped"
-    shipment.last_provider_checked_at = datetime.utcnow()
-    shipment.marketplace_confirmation_status = "ebay_shipping_fulfillment_readback"
-
-    db.session.flush()
-
-    # Keep the governed shipment/order relationship durable even when finance
-    # proof is unavailable. Replay-safe on the existing unique identity.
-    now = datetime.utcnow()
-    db.session.execute(
-        text(
-            """
-            INSERT INTO fbm_shipment_order_links (
-                shipment_id, store_id, marketplace_order_id, is_primary,
-                marketplace_confirmed_at, marketplace_confirmation_status,
-                marketplace_confirmation_error, created_at, updated_at
-            ) VALUES (
-                :shipment_id, :store_id, :order_id, TRUE,
-                :confirmed_at, 'ebay_shipping_fulfillment_readback',
-                NULL, :created_at, :updated_at
+        ).first()
+        created = shipment is None
+        if shipment is None:
+            shipment = FBMShipment(
+                store_id=store.id,
+                marketplace_order_id=order_id,
+                provider="ebay_shipping",
+                provider_shipment_id=fulfillment_id,
+                purchase_key=f"ebay_shipping_readback:{store.id}:{order_id}:{fulfillment_id}"[:200],
             )
-            ON CONFLICT (shipment_id, store_id, marketplace_order_id)
-            DO UPDATE SET
-                marketplace_confirmed_at = EXCLUDED.marketplace_confirmed_at,
-                marketplace_confirmation_status = EXCLUDED.marketplace_confirmation_status,
-                marketplace_confirmation_error = NULL,
-                updated_at = EXCLUDED.updated_at
-            """
-        ),
-        {
-            "shipment_id": shipment.id,
-            "store_id": int(store.id),
-            "order_id": order_id,
-            "confirmed_at": now,
-            "created_at": now,
-            "updated_at": now,
-        },
-    )
+            db.session.add(shipment)
 
-    tracking_events_inserted = _persist_ebay_known_tracking_events(
-        shipment=shipment,
-        candidate=candidate,
-        delivered_at=delivered_at,
-    )
-    if purchase is not None:
+        shipment.provider = "ebay_shipping"
+        shipment.provider_shipment_id = fulfillment_id
+        shipment.tracking_number = candidate.get("tracking_number") or shipment.tracking_number
+
+        trading_match = None
+        if trading_truth and shipment.tracking_number:
+            matches = [
+                row for row in trading_truth.get("tracking_rows", [])
+                if row.get("tracking_number") == shipment.tracking_number
+            ]
+            if len(matches) == 1:
+                trading_match = matches[0]
+
+        if trading_match and trading_match.get("carrier"):
+            shipment.carrier = trading_match["carrier"]
+
+        if trading_truth and trading_match and candidate.get("shipped_at") is None:
+            candidate["trading_shipped_at"] = trading_truth.get("shipped_at")
+
+        # Finance is order-level purchase truth. Preserve it without assigning
+        # the same ledger row to every package or inventing a per-package cost.
+        if purchase is not None:
+            shipment.purchase_status = "purchased"
+            shipment.purchase_error = None
+            shipment.label_purchased_at = purchase["purchased_at"]
+            shipment.label_source = "ebay_finances_shipping_label"
+
+        delivered_at = trading_truth.get("delivered_at") if trading_truth and trading_match else None
+        if delivered_at is not None:
+            shipment.delivered_at = delivered_at
+            shipment.status = "delivered"
+            shipment.last_provider_status = "delivered"
+        elif shipment.delivered_at is None:
+            if shipment.status not in {"carrier_accepted", "in_transit", "out_for_delivery", "delivered"}:
+                shipment.status = "shipped" if shipment.tracking_number else ("label_purchased" if purchase is not None else "shipped")
+            if _text(shipment.last_provider_status).lower() != "delivered":
+                shipment.last_provider_status = "shipped"
+        shipment.last_provider_checked_at = now
+        shipment.marketplace_confirmation_status = "ebay_shipping_fulfillment_readback"
+
+        db.session.flush()
+
         db.session.execute(
             text(
                 """
-            UPDATE shipping_spend_ledger
-            SET shipment_id = :shipment_id,
-                updated_at = :updated_at
-            WHERE store_id = :store_id
-              AND marketplace_order_id = :order_id
-              AND provider = 'ebay'
-              AND source = 'ebay_finances_shipping_label'
-              AND confirmed = TRUE
-              AND (shipment_id IS NULL OR shipment_id = :shipment_id)
+                INSERT INTO fbm_shipment_order_links (
+                    shipment_id, store_id, marketplace_order_id, is_primary,
+                    marketplace_confirmed_at, marketplace_confirmation_status,
+                    marketplace_confirmation_error, created_at, updated_at
+                ) VALUES (
+                    :shipment_id, :store_id, :order_id, :is_primary,
+                    :confirmed_at, 'ebay_shipping_fulfillment_readback',
+                    NULL, :created_at, :updated_at
+                )
+                ON CONFLICT (shipment_id, store_id, marketplace_order_id)
+                DO UPDATE SET
+                    is_primary = EXCLUDED.is_primary,
+                    marketplace_confirmed_at = EXCLUDED.marketplace_confirmed_at,
+                    marketplace_confirmation_status = EXCLUDED.marketplace_confirmation_status,
+                    marketplace_confirmation_error = NULL,
+                    updated_at = EXCLUDED.updated_at
                 """
             ),
             {
                 "shipment_id": shipment.id,
+                "store_id": int(store.id),
+                "order_id": order_id,
+                "is_primary": len(persisted_shipments) == 0,
+                "confirmed_at": now,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+
+        tracking_events_inserted = _persist_ebay_known_tracking_events(
+            shipment=shipment,
+            candidate=candidate,
+            delivered_at=delivered_at,
+        )
+        total_tracking_events_inserted += tracking_events_inserted
+        persisted_shipments.append({
+            "shipment_id": shipment.id,
+            "provider_shipment_id": fulfillment_id,
+            "carrier": shipment.carrier,
+            "tracking_number": shipment.tracking_number,
+            "delivered_at": shipment.delivered_at.isoformat() if shipment.delivered_at else None,
+            "trading_truth_matched": bool(trading_match),
+            "created": created,
+            "tracking_events_inserted": tracking_events_inserted,
+            "line_item_ids": candidate.get("line_item_ids") or [],
+        })
+
+    # Keep the order-level finance ledger linked only when there is one physical
+    # fulfillment. With multiple packages the DB has no proved per-package cost
+    # allocation, so preserve the confirmed order-level spend without guessing.
+    if purchase is not None and len(persisted_shipments) == 1:
+        db.session.execute(
+            text(
+                """
+                UPDATE shipping_spend_ledger
+                SET shipment_id = :shipment_id,
+                    updated_at = :updated_at
+                WHERE store_id = :store_id
+                  AND marketplace_order_id = :order_id
+                  AND provider = 'ebay'
+                  AND source = 'ebay_finances_shipping_label'
+                  AND confirmed = TRUE
+                  AND (shipment_id IS NULL OR shipment_id = :shipment_id)
+                """
+            ),
+            {
+                "shipment_id": persisted_shipments[0]["shipment_id"],
                 "updated_at": datetime.utcnow(),
                 "store_id": int(store.id),
                 "order_id": order_id,
             },
         )
+
     db.session.commit()
 
     return {
         "success": True,
         "skipped": False,
         "order_id": order_id,
-        "shipment_id": shipment.id,
         "provider": "ebay_shipping",
-        "provider_shipment_id": fulfillment_id,
-        "carrier": shipment.carrier,
-        "tracking_number": shipment.tracking_number,
-        "delivered_at": shipment.delivered_at.isoformat() if shipment.delivered_at else None,
-        "trading_truth_matched": bool(trading_match),
+        "fulfillments_seen": len(fulfillments),
+        "candidate_count": len(candidates),
+        "shipments_persisted": len(persisted_shipments),
+        "shipments": persisted_shipments,
+        "shipment_id": persisted_shipments[0]["shipment_id"] if len(persisted_shipments) == 1 else None,
+        "provider_shipment_id": persisted_shipments[0]["provider_shipment_id"] if len(persisted_shipments) == 1 else None,
+        "carrier": persisted_shipments[0]["carrier"] if len(persisted_shipments) == 1 else None,
+        "tracking_number": persisted_shipments[0]["tracking_number"] if len(persisted_shipments) == 1 else None,
         "purchase_confirmed": purchase is not None,
         "shipping_cost_persisted": purchase is not None,
         "shipping_cost": float(purchase["amount"]) if purchase is not None and purchase.get("amount") is not None else None,
         "shipping_cost_currency": str(purchase.get("currency") or "") if purchase is not None else None,
         "shipping_cost_records": int(purchase.get("purchase_rows") or 0) if purchase is not None else 0,
-        "created": created,
-        "tracking_events_inserted": tracking_events_inserted,
+        "tracking_events_inserted": total_tracking_events_inserted,
         "marketplace_write_started": False,
     }
