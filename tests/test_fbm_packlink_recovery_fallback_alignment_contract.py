@@ -45,3 +45,13 @@ def test_fbm_source_badges_and_summary_follow_persisted_packlink_authority():
     assert "Shipping source" in TEMPLATE
     assert "Packlink {{ counts.packlink_shipping or 0 }}" in TEMPLATE
     assert "shipment.provider == 'packlink'" in TEMPLATE
+
+
+def test_amazon_recovery_packlink_fallback_uses_newly_persisted_shipment_identity():
+    assert "p.shipment_id||" in TEMPLATE
+    assert "p.hydration?.shipment_id||" in TEMPLATE
+    assert "p.hydration?.shipment?.shipment_id||" in TEMPLATE
+    assert "recoveredShipmentId||String(row.dataset.shipmentId||'').trim()" in TEMPLATE
+    amazon_recovery = TEMPLATE.split("if(marketplace==='amazon'){", 1)[1].split("}else if(marketplace==='ebay')", 1)[0]
+    assert "if(row.dataset.shipmentId&&gapsAfter.some" not in amazon_recovery
+    assert "if(gapsAfter.some(g=>packlinkGaps.has(g)))" in amazon_recovery
