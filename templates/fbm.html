@@ -99,21 +99,22 @@ if(recoverButton)recoverButton.addEventListener('click',async()=>{
   try{
    const check=await jsonFetch('/governed/actions/marketplace/exact-order-recovery-check',{method:'POST',body:JSON.stringify({store_id:storeId,marketplace_order_id:orderId,platform:marketplace})});
    if(check.recovery_required!==true){skipped+=1;const gaps=check.unavailable_tracking_evidence||[];recoveryLines.push(`${orderId} · ${marketplace||'marketplace'} · DB CHECK COMPLETE · CALL NOT REQUIRED · ${gaps.length?'carrier history unavailable from supported eBay readback: '+gaps.join(', ')+' · no evidence invented':'existing DB truth complete · nothing recovered'}`);continue;}
-   recoverButton.textContent='Recovering…';let p=null;called+=1;
+   recoverButton.textContent='Recovering…';let p=null;
    if(marketplace==='amazon'){
     p=await jsonFetch('/governed/actions/amazon/exact-order-recovery',{method:'POST',body:JSON.stringify({store_id:storeId,marketplace_order_id:orderId})});
-    const h=p.hydration||{},cost=p.shipping_cost_recovery||{},after=p.database_readback||[];
-    let packlink=null;
-    if(row.dataset.shipmentId&&(Number(h.tracking_events_persisted||0)===0||cost.shipping_cost===null||cost.shipping_cost===undefined)){
+    called+=Number(p.calls_made||0);
+    const h=p.hydration||{},cost=p.shipping_cost_recovery||{};
+    let gapsAfter=Array.isArray(p.gaps_after)?p.gaps_after.slice():[],packlink=null;
+    const packlinkGaps=new Set(['provider_reference','tracking_history','shipping_fee']);
+    if(row.dataset.shipmentId&&gapsAfter.some(g=>packlinkGaps.has(g))){
      called+=1;
      packlink=await jsonFetch(`/fbm/shipments/${encodeURIComponent(row.dataset.shipmentId)}/packlink/recover`,{method:'POST',body:JSON.stringify({})});
     }
-    if(packlink&&packlink.matched===true){
-     recoveryLines.push(`${orderId} · Amazon + Packlink · CALL SUCCESSFUL · source Packlink · carrier ${packlink.carrier||'not recovered'} · tracking ${packlink.tracking_number||h.tracking_number||'not recovered'} · Packlink scan records ${Number(packlink.tracking_events_persisted||0)} · shipment cost ${recoveryCostText(packlink.shipping_cost,packlink.shipping_cost_currency)} · marketplace write ${packlink.marketplace_write_attempted===false?'not attempted':'unknown'}`);
-    }else{
-     recoveryLines.push(`${orderId} · Amazon · CALL SUCCESSFUL · missing before: ${(check.missing||[]).join(', ')||'unknown'} · tracking ${h.tracking_number||'not recovered'} · new scan records ${Number(h.tracking_events_persisted||0)} · shipment cost ${recoveryCostText(cost.shipping_cost,cost.shipping_cost_currency)} · DB readback ${after.length?'complete':'empty'}`);
-    }
-   }else if(marketplace==='ebay'){
+    const verified=await jsonFetch('/governed/actions/marketplace/exact-order-recovery-check',{method:'POST',body:JSON.stringify({store_id:storeId,marketplace_order_id:orderId,platform:marketplace})});
+    const finalGaps=[...(verified.missing||[]),...(verified.unverified||[])],beforeGaps=[...(check.missing||[]),...(check.unverified||[])];
+    const recovered=beforeGaps.filter((g,i,a)=>a.indexOf(g)===i&&!finalGaps.includes(g));
+    recoveryLines.push(`${orderId} · Amazon${packlink?' + Packlink':''} · DB VERIFIED · recovered and persisted: ${recovered.join(', ')||'none'} · still missing/unverified: ${finalGaps.join(', ')||'none'} · external authority calls: ${Number(p.calls_made||0)+(packlink?1:0)}`);
+   }else if(marketplace==='ebay'){called+=1;
     p=await jsonFetch('/governed/actions/ebay/exact-order-recovery',{method:'POST',body:JSON.stringify({store_id:storeId,marketplace_order_id:orderId})});
     const shipment=p.shipment_recovery||{},cost=p.shipping_cost_recovery||{},after=p.database_readback||[];
     recoveryLines.push(`${orderId} · eBay · CALL SUCCESSFUL · missing before: ${(check.missing||[]).join(', ')||'unknown'} · tracking ${shipment.tracking_number||'not recovered'} · new marketplace events ${Number(shipment.tracking_events_inserted||0)} · shipment cost ${recoveryCostText(cost.shipping_cost,cost.shipping_cost_currency)} · DB readback ${after.length?'complete':'empty'}`);
