@@ -706,11 +706,7 @@ def install_governed_fbm_page_alignment(app) -> None:
             # Shipping-source summary follows persisted shipment authority, not
             # marketplace capability. A recovered Packlink shipment must stop
             # counting as generic marketplace shipping after its provenance is proven.
-            "marketplace_shipping": sum(
-                1 for item in orders
-                if item.get("shipment") is not None
-                and str(item["shipment"].provider or "").strip().lower() == "marketplace"
-            ),
+            "marketplace_shipping": 0,
             "packlink_shipping": sum(
                 1 for item in orders
                 if item.get("shipment") is not None
