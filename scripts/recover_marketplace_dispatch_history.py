@@ -186,7 +186,7 @@ def _database_readback(store_id: int, order_id: str) -> dict[str, Any]:
     shipment = db.session.execute(
         text(
             """
-            SELECT id, provider, carrier, service, tracking_number,
+            SELECT id, provider, provider_shipment_id, carrier, service, tracking_number,
                    status, label_purchased_at, handover_due_at,
                    carrier_accepted_at, first_movement_at, delivered_at,
                    last_provider_status, last_provider_checked_at,
