@@ -41,3 +41,10 @@ def test_non_json_finance_evidence_is_non_fatal_and_never_confirms_purchase():
     assert 'ebay_finances_shipping_label_response_not_json' in SOURCE
     assert '"purchase_confirmed": False' in SOURCE
     assert '"transactions_persisted": 0' in SOURCE
+
+def test_exact_recovery_has_bounded_historical_finance_fallback():
+    assert 'if response.status_code == 204:' in SOURCE
+    assert 'MIN(created_at) AS created_at, MAX(shipped_at) AS shipped_at' in SOURCE
+    assert '("filter", date_filter)' in SOURCE
+    assert 'historical_fallback_used = True' in SOURCE
+    assert 'and _text(row.get("orderId")) == order_id' in SOURCE
