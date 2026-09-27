@@ -102,3 +102,14 @@ def test_existing_db_amazon_logistics_truth_short_circuits_external_recovery():
     assert db_pos < return_pos < hydrate_pos
     assert "LOWER(COALESCE(carrier, '')) LIKE 'amazon logistics%'" in SOURCE
     assert '"marketplace_write_started": False' in SOURCE
+
+
+def test_ebay_readback_supports_multiple_fulfillments_without_ambiguity():
+    readback = Path("services/governed_ebay_shipping_label_readback.py").read_text(encoding="utf-8")
+    assert "if len(candidates) != 1:" not in readback
+    assert '"ebay_fulfillment_ambiguous"' not in readback
+    assert "for candidate in candidates:" in readback
+    assert '"shipments_persisted": len(persisted_shipments)' in readback
+    assert '"shipments": persisted_shipments' in readback
+    assert "provider_shipment_id=fulfillment_id" in readback
+    assert "len(persisted_shipments) == 1" in readback
