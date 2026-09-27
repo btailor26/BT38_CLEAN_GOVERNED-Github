@@ -278,7 +278,7 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
     var head=document.querySelector('.fbm-orders-table thead tr');
     if(!head||head.querySelector('[data-fbm-shipping-fees="1"]'))return;
     var th=document.createElement('th');
-    th.textContent='Shipping Fees';
+    th.textContent='Shipping Fee';
     th.dataset.fbmShippingFees='1';
     head.insertBefore(th,head.lastElementChild);
   }}
