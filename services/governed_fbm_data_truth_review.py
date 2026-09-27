@@ -42,7 +42,11 @@ def review_fbm_data_truth(*, store_id: int, order_id: str, platform: str, readba
     carrier = (mcf.get("carrier") if is_mcf else None) or shipment.get("carrier") or readback.get("carrier")
     spend = readback.get("confirmed_shipping_spend")
     mcf_fee = mcf.get("total_mcf_fee") if is_mcf else None
-    shipping_source = "amazon_mcf" if is_mcf else provider
+    # A persisted generic marketplace shipment on an Amazon order is already
+    # sufficient to identify the broad shipping source as Amazon Shipping. It
+    # does not prove the narrower Amazon Buy Shipping product.
+    amazon_marketplace_source = str(platform or "").strip().lower() == "amazon" and provider == "marketplace"
+    shipping_source = "amazon_mcf" if is_mcf else ("amazon_shipping" if amazon_marketplace_source else provider)
     source_authority = "mcf_orders" if is_mcf else ("fbm_shipments" if provider else None)
     tracking_authority = "mcf_orders" if is_mcf and mcf.get("tracking_number") else ("fbm_shipments" if shipment.get("tracking_number") else "marketplace_orders")
     carrier_authority = "mcf_orders" if is_mcf and mcf.get("carrier") else ("fbm_shipments" if shipment.get("carrier") else "marketplace_orders")
@@ -61,7 +65,7 @@ def review_fbm_data_truth(*, store_id: int, order_id: str, platform: str, readba
         "carrier": _field("known", carrier, authority=carrier_authority) if carrier else _field("missing"),
         "shipping_source": (
             _field("known", shipping_source, authority=source_authority)
-            if is_mcf or (provider and provider != "marketplace")
+            if is_mcf or amazon_marketplace_source or (provider and provider != "marketplace")
             else _field("unverified", provider or None, authority="fbm_shipments" if provider else None)
         ),
         "provider_reference": (
