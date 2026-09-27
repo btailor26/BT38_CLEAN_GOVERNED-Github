@@ -11,7 +11,10 @@ SPEND = (ROOT / "services" / "governed_shipping_spend_alignment.py").read_text(e
 def test_packlink_recovery_discovers_only_exact_marketplace_reference():
     assert "def find_shipment_by_custom_reference" in ADAPTER
     assert 'row_custom != wanted' in ADAPTER
-    assert 'query={"inbox": inbox}' in ADAPTER
+    assert 'query={"inbox": inbox, "page": page}' in ADAPTER
+    assert 'pagination.get("current_page")' in ADAPTER
+    assert 'pagination.get("total_pages")' in ADAPTER
+    assert "page = current_page + 1" in ADAPTER
     assert "multiple shipments for this exact marketplace order" in ADAPTER
 
 
