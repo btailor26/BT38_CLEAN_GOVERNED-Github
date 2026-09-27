@@ -96,8 +96,25 @@ class SupportCaseAttachment(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow, index=True)
 
 
+def _align_support_attachment_schema() -> None:
+    """Safely align an older existing attachment table before uploads use it."""
+    from sqlalchemy import text
+    statements = (
+        "ALTER TABLE support_case_attachments ADD COLUMN IF NOT EXISTS uploaded_by_user_id INTEGER",
+        "ALTER TABLE support_case_attachments ADD COLUMN IF NOT EXISTS filename VARCHAR(255)",
+        "ALTER TABLE support_case_attachments ADD COLUMN IF NOT EXISTS content_type VARCHAR(255)",
+        "ALTER TABLE support_case_attachments ADD COLUMN IF NOT EXISTS size_bytes INTEGER NOT NULL DEFAULT 0",
+        "ALTER TABLE support_case_attachments ADD COLUMN IF NOT EXISTS content BYTEA",
+        "ALTER TABLE support_case_attachments ADD COLUMN IF NOT EXISTS created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP",
+    )
+    for statement in statements:
+        db.session.execute(text(statement))
+    db.session.commit()
+
+
 with app.app_context():
     db.create_all()
+    _align_support_attachment_schema()
 
 
 def _is_admin() -> bool:
