@@ -273,9 +273,9 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   function localDay(value){{if(!value)return null;var d=new Date(value);return isNaN(d.getTime())?null:new Date(d.getFullYear(),d.getMonth(),d.getDate());}}
   function historyBounds(){{var today=new Date();today=new Date(today.getFullYear(),today.getMonth(),today.getDate());if(range==='custom'){{var a=from?new Date(from+'T00:00:00'):null,b=to?new Date(to+'T23:59:59'):null;return {{start:a,end:b}};}}var days={{'3d':3,'7d':7,'30d':30,'90d':90,'1y':365}}[range]||3;var start=new Date(today);start.setDate(start.getDate()-(days-1));var end=new Date(today);end.setHours(23,59,59,999);return {{start:start,end:end}};}}
   function inHistory(row){{var d=localDay(row.dataset.fbmCreatedAt);if(!d)return false;var bounds=historyBounds();if(bounds.start&&d<bounds.start)return false;if(bounds.end&&d>bounds.end)return false;return true;}}
-  var cachedCounts={{ready_dispatch:0,pending:0,dispatched:0,cancelled:0,replacements:0,refunds:0}};
+  var cachedCounts={{ready_dispatch:0,pending:0,dispatched:0,cancelled:0,fba:0,replacements:0,refunds:0}};
   var cachedTruthCounts={{source_unverified:0,tracking_missing:0,ship_by_missing:0,delivery_missing:0,shipping_cost_missing:0}};
-  var cachedRowsByQueue={{ready_dispatch:[],pending:[],dispatched:[],cancelled:[],replacements:[],refunds:[]}};
+  var cachedRowsByQueue={{ready_dispatch:[],pending:[],dispatched:[],cancelled:[],fba:[],replacements:[],refunds:[]}};
   function localCounts(){{return cachedCounts;}}
   function rowTruthFlags(row){{
     var flags=[];
