@@ -2,9 +2,9 @@
 
 The registered /fbm page remains the one workspace and existing order table.
 The DB supplies one bounded canonical FBM working set. History, lifecycle tabs,
-search, Health and pagination consume that same browser-session projection. An
-explicit lifecycle request may hydrate missing bounded persisted rows into the same
-table; no competing browser controller or marketplace/provider read is introduced.
+search, Health and pagination consume that same browser-session projection. Wider
+History is an explicit one-shot DB expansion into the same table; no competing
+browser controller, polling, or marketplace/provider read is introduced.
 """
 from __future__ import annotations
 
@@ -160,15 +160,6 @@ def _presentation(rows: list[MarketplaceOrder]) -> dict[str, dict]:
     return payload
 
 
-def _counts_from_payload(payload: dict[str, dict]) -> dict[str, int]:
-    counts = {name: 0 for name in _WORKFLOW_LABELS}
-    for info in payload.values():
-        queue = str(info.get("queue") or "")
-        if queue in counts:
-            counts[queue] += 1
-    return counts
-
-
 def _fba_count() -> int:
     try:
         return int(db.session.query(MarketplaceOrder.id).filter(
@@ -225,11 +216,8 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
     // is deliberately ignored once, then the canonical session is saved below.
     saved=storedEpoch===sessionEpoch?window.BT38.getPageSession('fbm',sessionDefaults):sessionDefaults;
   }}
-  var params=new URLSearchParams(window.location.search);
-  var legacyTab=params.get('fbm_tab');
-  var legacySearch=params.get('search')||params.get('q');
-  var active=(legacyTab&&labels[legacyTab])?legacyTab:(saved.tab&&labels[saved.tab]?saved.tab:'pending');
-  var search=String(legacySearch!=null?legacySearch:(saved.search||'')).trim().toLowerCase();
+  var active=saved.tab&&labels[saved.tab]?saved.tab:'pending';
+  var search=String(saved.search||'').trim().toLowerCase();
   // Initial HTML is always the bounded 3-day working set. Wider History is
   // added only after an explicit History selection through the existing
   // expansion path; stale URL/session state cannot enlarge initial loading.
@@ -239,9 +227,6 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   var range=String(saved.range||'3d').toLowerCase();
   var from=String(saved.from||'');
   var to=String(saved.to||'');
-  function historyScope(){{return range==='custom'?'custom:'+from+':'+to:range;}}
-  function lifecycleLoadedKey(name){{return 'bt38_fbm_loaded_'+historyScope()+'_'+name;}}
-  if(legacyTab&&['ready_dispatch','pending','dispatched','cancelled','replacements','refunds'].indexOf(legacyTab)>=0)sessionStorage.setItem(lifecycleLoadedKey(legacyTab),'1');
   function saveSession(extra){{var next=Object.assign({{tab:active,search:search,range:range,from:from,to:to,dirty:false,session_epoch:sessionEpoch}},extra||{{}});if(window.BT38&&typeof window.BT38.setPageSession==='function')window.BT38.setPageSession('fbm',next);return next;}}
   var searchInput=document.getElementById('bt38FbmGlobalSearchInput');
   var clearSearch=document.getElementById('bt38FbmGlobalSearchClear');
@@ -360,7 +345,6 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
     var readyAction=active==='ready_dispatch';var selectionAction=readyAction||truthFilter!=='all';var actionArea=document.getElementById('readyToShipSelected');var selectAll=document.getElementById('selectAllOrders');var selectedCount=document.getElementById('selectedOrderCount');var actionHint=card.querySelector('.card-header .text-muted.small');if(actionArea)actionArea.classList.toggle('d-none',!readyAction);if(selectAll)selectAll.disabled=!selectionAction;
     rows.forEach(function(row){{var cb=row.querySelector('.fbm-order-checkbox');if(cb){{var selectable=selectionAction&&matchedSet.has(row);cb.checked=false;cb.disabled=!selectable;cb.closest('td').classList.toggle('invisible',!selectable)}}var option=row.querySelector('.fbm-shipping-options');if(option)option.classList.toggle('d-none',!readyAction)}});
     if(selectedCount)selectedCount.classList.toggle('d-none',!selectionAction);if(actionHint)actionHint.classList.toggle('d-none',!selectionAction);saveSession();
-    document.dispatchEvent(new CustomEvent('bt38-fbm-session-rendered'));
   }}
   // Keep the established single FBM browser-session owner reachable by the
   // shared page controller after it builds/refreshed its row cache. This is a
