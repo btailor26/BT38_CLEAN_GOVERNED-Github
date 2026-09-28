@@ -13,7 +13,7 @@ from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 from flask import g, request
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import joinedload
 from sqlalchemy.orm.attributes import set_committed_value
 
@@ -32,7 +32,7 @@ _CANCELLED_STATUSES = {"cancelled", "canceled", "cancelled_by_buyer", "cancelled
 _REPLACEMENT_TERMS = ("replacement", "replaced")
 _REFUND_TERMS = ("refund", "refunded", "return", "returned", "inr", "case", "claim", "dispute", "issue")
 _DISPATCHED_STATUS_TERMS = ("shipped", "dispatched", "delivered", "fulfilled", "completed")
-_WORKFLOW_TABS = {"ready_dispatch", "pending", "dispatched", "cancelled", "sds", "replacements", "refunds"}
+_WORKFLOW_TABS = {"ready_dispatch", "pending", "dispatched", "cancelled", "fba", "sds", "replacements", "refunds"}
 
 
 def _search_term() -> str:
@@ -183,12 +183,24 @@ def _session_snapshot_rows() -> tuple[list[MarketplaceOrder], bool]:
         return list(cached), bool(getattr(g, "_bt38_fbm_session_truncated", False))
     from services import governed_fbm_page_alignment as page_alignment
     _, start_at, end_at, _ = _range_bounds()
-    eligible = (func.upper(func.coalesce(MarketplaceOrder.fulfillment_type, "")).notin_(("FBA", "AFN", "MCF")), ~func.lower(func.coalesce(MarketplaceOrder.status, "")).like("mcf_%"))
-    # History is the browser-session working-set boundary. Load the selected
-    # bounded History period independently of the visible 15/30/50/100 pager so
-    # lifecycle counts and rows are derived from the same canonical truth set.
+    fulfillment = func.upper(func.coalesce(MarketplaceOrder.fulfillment_type, ""))
+    status = func.lower(func.coalesce(MarketplaceOrder.status, ""))
+    normal_fbm = fulfillment.notin_(("FBA", "AFN", "MCF"))
+    dispatched_fba = (
+        fulfillment.in_(("FBA", "AFN"))
+        & (
+            status.in_(tuple(page_alignment._FBA_DISPATCHED_STATUSES))
+            | MarketplaceOrder.shipped_at.isnot(None)
+            | (MarketplaceOrder.tracking_number.isnot(None) & (MarketplaceOrder.tracking_number != ""))
+        )
+    )
+    # History is the browser-session working-set boundary. FBA contributes only
+    # persisted dispatched FBA/AFN rows; MCF remains outside this FBA tab.
     candidate_limit = _RANGE_ROW_CAP + 1
-    candidates = (db.session.query(MarketplaceOrder).filter(*eligible).filter(MarketplaceOrder.store_id.isnot(None), MarketplaceOrder.marketplace_order_id.isnot(None)).filter(MarketplaceOrder.created_at >= start_at, MarketplaceOrder.created_at < end_at).options(joinedload(MarketplaceOrder.store), joinedload(MarketplaceOrder.warehouse_stock)).order_by(MarketplaceOrder.id.desc()).limit(candidate_limit).all())
+    candidates = (db.session.query(MarketplaceOrder).filter(
+        or_(normal_fbm, dispatched_fba),
+        ~status.like("mcf_%"),
+    ).filter(MarketplaceOrder.store_id.isnot(None), MarketplaceOrder.marketplace_order_id.isnot(None)).filter(MarketplaceOrder.created_at >= start_at, MarketplaceOrder.created_at < end_at).options(joinedload(MarketplaceOrder.store), joinedload(MarketplaceOrder.warehouse_stock)).order_by(MarketplaceOrder.id.desc()).limit(candidate_limit).all())
     candidate_truncated = len(candidates) >= candidate_limit
     canonical = _canonical_order_rows(candidates)
     profiles = page_alignment._profile_map([row for row in canonical if _platform(row).strip().lower() == "amazon"])
