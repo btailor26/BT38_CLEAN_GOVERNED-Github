@@ -132,7 +132,10 @@ def test_ebay_tracking_recovery_hydrates_complete_exact_order_truth():
     assert 'row.quantity = exact_quantity' in EBAY_TRACKING
     assert 'row.unit_price = exact_unit_price' in EBAY_TRACKING
     assert 'row.line_total = exact_line_total' in EBAY_TRACKING
-    assert 'row.shipping_charged = exact_order_shipping_charged' in EBAY_TRACKING
+    # Buyer-paid shipping is order-level truth. Multi-line orders must persist
+    # it once on the canonical line rather than duplicate revenue on every row.
+    assert 'canonical_shipping_paid = exact_order_shipping_charged if row is rows[0] else 0.0' in EBAY_TRACKING
+    assert 'row.shipping_charged = canonical_shipping_paid' in EBAY_TRACKING
     assert '"line_economics_updates": line_economics_updates' in EBAY_TRACKING
     assert '"price_updates": price_updates' in EBAY_TRACKING
     assert '"marketplace_write_started": False' in EBAY_TRACKING
