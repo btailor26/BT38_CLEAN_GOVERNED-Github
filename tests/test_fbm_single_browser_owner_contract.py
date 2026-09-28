@@ -38,3 +38,11 @@ def test_lifecycle_filters_remain_browser_session_only():
     assert "button.addEventListener('click',function(){{active=name;currentPage=1;saveSession();render()}})" in DISPATCH
     assert "setInterval(" not in DISPATCH
     assert "X-BT38-FBM-History-Expansion" in DISPATCH
+
+
+def test_tab_render_reuses_committed_history_classification():
+    assert "function refreshHistoryMatches()" in DISPATCH
+    render_body = DISPATCH.split("function render(){{", 1)[1].split("// Keep the established single FBM browser-session owner", 1)[0]
+    assert "inHistory(row)" not in render_body
+    assert "refreshHistoryMatches();render();return;" in DISPATCH
+    assert "refreshHistoryMatches();document.dispatchEvent" in DISPATCH
