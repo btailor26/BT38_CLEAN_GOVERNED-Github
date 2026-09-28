@@ -197,10 +197,15 @@ def _install() -> None:
             "var labels={ready_dispatch:'Ready to dispatch',pending:'Pending',dispatched:'Dispatched',cancelled:'Cancelled',fba:'FBA',replacements:'Replacement',refunds:'Refunds'};",
             1,
         )
+        # The current single browser owner caches both counts and row lists.
+        # Register FBA in those existing caches; do not create another controller.
         rendered = rendered.replace(
-            "var result={ready_dispatch:0,pending:0,dispatched:0,cancelled:0,replacements:0,refunds:0};",
-            "var result={ready_dispatch:0,pending:0,dispatched:0,cancelled:0,fba:0,replacements:0,refunds:0};",
-            1,
+            "var cachedCounts={ready_dispatch:0,pending:0,dispatched:0,cancelled:0,replacements:0,refunds:0};",
+            "var cachedCounts={ready_dispatch:0,pending:0,dispatched:0,cancelled:0,fba:0,replacements:0,refunds:0};",
+        )
+        rendered = rendered.replace(
+            "var cachedRowsByQueue={ready_dispatch:[],pending:[],dispatched:[],cancelled:[],replacements:[],refunds:[]};",
+            "var cachedRowsByQueue={ready_dispatch:[],pending:[],dispatched:[],cancelled:[],fba:[],replacements:[],refunds:[]};",
         )
         rendered = rendered.replace(
             f"addTruthLink(tabBar,'FBA','/amazon-fba-stock',{int(local_fba_count)});",
