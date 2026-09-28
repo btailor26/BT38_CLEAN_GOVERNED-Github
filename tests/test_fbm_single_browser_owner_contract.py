@@ -74,3 +74,22 @@ def test_history_expansion_returns_rows_not_full_fbm_page():
     assert 'extends "base.html"' not in fragment
     assert 'class="fbm-order-row"' in fragment
     assert 'fbm-orders-table' in fragment
+
+
+def test_history_fragment_contract_has_rows_and_data_without_second_controller():
+    assert "def _inject_history_fragment_data" in DISPATCH
+    assert 'request.headers.get("X-BT38-FBM-History-Expansion") == "1"' in DISPATCH
+    helper = DISPATCH.split("def _inject_history_fragment_data", 1)[1].split(
+        "def install_governed_fbm_dispatch_queue_alignment", 1
+    )[0]
+    assert 'id="bt38FbmLifecycleTabsData"' in helper
+    assert "bt38FbmLifecycleTabsScript" not in helper
+    assert "bt38FbmLifecycleTabsAlignment" not in helper
+    assert "</body>" not in helper
+
+    install = DISPATCH.split("def install_governed_fbm_dispatch_queue_alignment", 1)[1]
+    history_branch = install.split(
+        'if request.headers.get("X-BT38-FBM-History-Expansion") == "1":', 1
+    )[1].split("response.set_data(_inject(", 1)[0]
+    assert "_inject_history_fragment_data" in history_branch
+    assert "_fba_count()" not in history_branch
