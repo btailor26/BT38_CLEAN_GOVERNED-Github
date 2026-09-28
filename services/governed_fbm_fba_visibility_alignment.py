@@ -171,6 +171,18 @@ def _install() -> None:
     if getattr(dispatch_queue, "_bt38_fba_visibility_patched", False):
         return
     original_inject = dispatch_queue._inject
+    original_history_fragment_inject = dispatch_queue._inject_history_fragment_data
+
+    def aligned_history_fragment_inject(html, payload):
+        # History expansion must preserve the same read-only FBA rows/facts that
+        # the initial FBM browser session owns, without adding another controller.
+        try:
+            html, fba_payload, _local_fba_count = _insert_rows(html, _canonical_fba_rows())
+        except Exception:
+            fba_payload = {}
+        next_payload = dict(payload or {})
+        next_payload.update(fba_payload)
+        return original_history_fragment_inject(html, next_payload)
 
     def aligned_inject(html, payload, _fba_count):
         try:
@@ -205,6 +217,7 @@ def _install() -> None:
         return rendered
 
     dispatch_queue._inject = aligned_inject
+    dispatch_queue._inject_history_fragment_data = aligned_history_fragment_inject
     dispatch_queue._bt38_fba_visibility_patched = True
 
 
