@@ -64,3 +64,13 @@ def test_lifecycle_tab_render_uses_cached_browser_snapshot():
     render_body = DISPATCH.split("function render(){{", 1)[1].split("// Keep the established single FBM browser-session owner", 1)[0]
     assert "rows.filter(function(row)" not in render_body
     assert "if(!inHistory(row))return" not in render_body
+
+
+def test_history_expansion_returns_rows_not_full_fbm_page():
+    page = Path("services/governed_fbm_page_alignment.py").read_text(encoding="utf-8")
+    fragment = Path("templates/_fbm_history_rows.html").read_text(encoding="utf-8")
+    assert 'request.headers.get("X-BT38-FBM-History-Expansion") == "1"' in page
+    assert 'return render_template("_fbm_history_rows.html", orders=orders)' in page
+    assert 'extends "base.html"' not in fragment
+    assert 'class="fbm-order-row"' in fragment
+    assert 'fbm-orders-table' in fragment
