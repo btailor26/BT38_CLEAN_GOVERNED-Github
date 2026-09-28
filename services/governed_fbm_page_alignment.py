@@ -94,8 +94,32 @@ def _profile_map(rows: list[MarketplaceOrder]) -> dict[tuple[int, str], FBMOrder
     return result
 
 
+_FBA_DISPATCHED_STATUSES = {
+    "shipped", "dispatched", "delivered", "fulfilled", "completed",
+    "partially_shipped", "partiallyshipped", "picked_up_by_carrier",
+    "pickedupbycarrier", "in_transit", "intransit", "out_for_delivery",
+    "outfordelivery",
+}
+
+
+def _is_fba_dispatched_db_truth(row: MarketplaceOrder, profile: FBMOrderProfile | None = None) -> bool:
+    """FBA tab authority is persisted DB truth only: FBA/AFN + dispatched."""
+    fulfillment = str(getattr(row, "fulfillment_type", "") or "").strip().upper()
+    profile_channel = str(getattr(profile, "fulfillment_channel", "") or "").strip().upper() if profile else ""
+    is_fba = fulfillment in {"FBA", "AFN"} or profile_channel in {"FBA", "AFN"}
+    status = str(getattr(row, "status", "") or "").strip().lower()
+    dispatched = bool(
+        status in _FBA_DISPATCHED_STATUSES
+        or getattr(row, "shipped_at", None)
+        or getattr(row, "tracking_number", None)
+    )
+    return is_fba and dispatched
+
+
 def _workspace_fbm_eligible(row: MarketplaceOrder, profile: FBMOrderProfile | None = None) -> bool:
-    """Require seller-fulfilled persisted truth before an order enters FBM."""
+    """Expose normal FBM plus dispatched FBA/AFN DB truth for the FBA tab."""
+    if _is_fba_dispatched_db_truth(row, profile):
+        return True
     if not _is_fbm_eligible(row):
         return False
 
@@ -113,13 +137,22 @@ def _workspace_fbm_eligible(row: MarketplaceOrder, profile: FBMOrderProfile | No
 
 
 def _latest_distinct_fbm_rows(limit: int) -> tuple[list[MarketplaceOrder], bool]:
-    """Read newest persisted FBM rows from a bounded candidate window."""
-    eligible = (
-        func.upper(func.coalesce(MarketplaceOrder.fulfillment_type, "")).notin_(("FBA", "AFN", "MCF")),
-        ~func.lower(func.coalesce(MarketplaceOrder.status, "")).like("mcf_%"),
+    """Read newest persisted FBM plus dispatched FBA rows from a bounded window."""
+    fulfillment = func.upper(func.coalesce(MarketplaceOrder.fulfillment_type, ""))
+    status = func.lower(func.coalesce(MarketplaceOrder.status, ""))
+    dispatched_fba = (
+        fulfillment.in_(("FBA", "AFN"))
+        & (
+            status.in_(tuple(_FBA_DISPATCHED_STATUSES))
+            | MarketplaceOrder.shipped_at.isnot(None)
+            | (MarketplaceOrder.tracking_number.isnot(None) & (MarketplaceOrder.tracking_number != ""))
+        )
     )
-
-    query = db.session.query(MarketplaceOrder).filter(*eligible)
+    normal_fbm = fulfillment.notin_(("FBA", "AFN", "MCF"))
+    query = db.session.query(MarketplaceOrder).filter(
+        or_(normal_fbm, dispatched_fba),
+        ~status.like("mcf_%"),
+    )
 
     platform_filter = str(request.args.get("platform") or "").strip().lower()
     status_filter = str(request.args.get("status") or "").strip().lower()
