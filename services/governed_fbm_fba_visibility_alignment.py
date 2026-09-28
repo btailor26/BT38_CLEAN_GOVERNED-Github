@@ -168,22 +168,56 @@ def _insert_rows(html: str, rows: list[MarketplaceOrder]):
 
 
 def _install() -> None:
-    """Restore the original FBA authority boundary.
-
-    FBA/AFN inventory belongs to /governed/amazon-fba-stock and
-    AmazonFBAInventory. FBM must not manufacture or own FBA rows.
-    """
     if getattr(dispatch_queue, "_bt38_fba_visibility_patched", False):
         return
     original_inject = dispatch_queue._inject
+    original_history_fragment_inject = dispatch_queue._inject_history_fragment_data
 
-    def aligned_inject(html, payload, fba_count):
-        rendered = original_inject(html, payload, fba_count)
-        # The lifecycle owner already renders the canonical FBA navigation link
-        # to /governed/amazon-fba-stock. Do not replace it with a local FBM tab.
+    def aligned_history_fragment_inject(html, payload):
+        # History expansion must preserve the same read-only FBA rows/facts that
+        # the initial FBM browser session owns, without adding another controller.
+        try:
+            html, fba_payload, _local_fba_count = _insert_rows(html, _canonical_fba_rows())
+        except Exception:
+            fba_payload = {}
+        next_payload = dict(payload or {})
+        next_payload.update(fba_payload)
+        return original_history_fragment_inject(html, next_payload)
+
+    def aligned_inject(html, payload, _fba_count):
+        try:
+            html, fba_payload, local_fba_count = _insert_rows(html, _canonical_fba_rows())
+        except Exception:
+            fba_payload, local_fba_count = {}, 0
+        next_payload = dict(payload or {})
+        next_payload.update(fba_payload)
+        rendered = original_inject(html, next_payload, local_fba_count)
+        rendered = rendered.replace(
+            "var labels={ready_dispatch:'Ready to dispatch',pending:'Pending',dispatched:'Dispatched',cancelled:'Cancelled',replacements:'Replacement',refunds:'Refunds'};",
+            "var labels={ready_dispatch:'Ready to dispatch',pending:'Pending',dispatched:'Dispatched',cancelled:'Cancelled',fba:'FBA',replacements:'Replacement',refunds:'Refunds'};",
+            1,
+        )
+        rendered = rendered.replace(
+            "var result={ready_dispatch:0,pending:0,dispatched:0,cancelled:0,replacements:0,refunds:0};",
+            "var result={ready_dispatch:0,pending:0,dispatched:0,cancelled:0,fba:0,replacements:0,refunds:0};",
+            1,
+        )
+        rendered = rendered.replace(
+            f"addTruthLink(tabBar,'FBA','/amazon-fba-stock',{int(local_fba_count)});",
+            "addWorkflowButton(tabBar,'fba','FBA');",
+            1,
+        )
+        # Existing rows can originate in the shared FBM renderer. Reconcile only
+        # FBA presentation from the already-loaded DB payload; never call Amazon.
+        rendered = rendered.replace(
+            "applyPayload();render();",
+            "applyPayload();rows.forEach(function(row){var info=payload[String(row.dataset.orderId||'')];if(!info||!info.fba_read_only)return;var cells=row.querySelectorAll('td');if(cells.length<10)return;cells[5].innerHTML='<strong>Amazon FBA</strong><div class=\"small text-muted mt-1\">Fulfilment by Amazon · Read only</div>';cells[6].innerHTML='<strong>'+esc(info.fba_ship_deliver||'Amazon managed')+'</strong>';cells[7].innerHTML='<strong>'+esc(info.fba_shipment||'Awaiting Amazon tracking')+'</strong>';cells[8].innerHTML='<span class=\"badge bg-light text-dark border\">'+esc(info.fba_journey||'FBA')+'</span>';cells[9].innerHTML='<span class=\"badge bg-light text-dark border\">Read only</span>';});render();",
+            1,
+        )
         return rendered
 
     dispatch_queue._inject = aligned_inject
+    dispatch_queue._inject_history_fragment_data = aligned_history_fragment_inject
     dispatch_queue._bt38_fba_visibility_patched = True
 
 
