@@ -273,7 +273,10 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   function localDay(value){{if(!value)return null;var d=new Date(value);return isNaN(d.getTime())?null:new Date(d.getFullYear(),d.getMonth(),d.getDate());}}
   function historyBounds(){{var today=new Date();today=new Date(today.getFullYear(),today.getMonth(),today.getDate());if(range==='custom'){{var a=from?new Date(from+'T00:00:00'):null,b=to?new Date(to+'T23:59:59'):null;return {{start:a,end:b}};}}var days={{'3d':3,'7d':7,'30d':30,'90d':90,'1y':365}}[range]||3;var start=new Date(today);start.setDate(start.getDate()-(days-1));var end=new Date(today);end.setHours(23,59,59,999);return {{start:start,end:end}};}}
   function inHistory(row){{var d=localDay(row.dataset.fbmCreatedAt);if(!d)return false;var bounds=historyBounds();if(bounds.start&&d<bounds.start)return false;if(bounds.end&&d>bounds.end)return false;return true;}}
-  function localCounts(){{var result={{ready_dispatch:0,pending:0,dispatched:0,cancelled:0,replacements:0,refunds:0}};rows.forEach(function(row){{if(!inHistory(row))return;var q=row.dataset.fbmQueue;if(Object.prototype.hasOwnProperty.call(result,q))result[q]+=1;}});return result;}}
+  var cachedCounts={{ready_dispatch:0,pending:0,dispatched:0,cancelled:0,replacements:0,refunds:0}};
+  var cachedTruthCounts={{source_unverified:0,tracking_missing:0,ship_by_missing:0,delivery_missing:0,shipping_cost_missing:0}};
+  var cachedRowsByQueue={{ready_dispatch:[],pending:[],dispatched:[],cancelled:[],replacements:[],refunds:[]}};
+  function localCounts(){{return cachedCounts;}}
   function rowTruthFlags(row){{
     var flags=[];
     var source=String(row.querySelector('.fbm-route-cell')?.textContent||'').toLowerCase();
@@ -291,9 +294,7 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
     return flags;
   }}
   function refreshTruthSummary(){{
-    var counts={{source_unverified:0,tracking_missing:0,ship_by_missing:0,delivery_missing:0,shipping_cost_missing:0}};
-    rows.forEach(function(row){{if(!inHistory(row))return;rowTruthFlags(row).forEach(function(flag){{if(Object.prototype.hasOwnProperty.call(counts,flag))counts[flag]+=1}})}});
-    Object.keys(counts).forEach(function(flag){{var node=document.querySelector('[data-bt38-truth-count="'+flag+'"]');if(node)node.textContent=String(counts[flag])}});
+    Object.keys(cachedTruthCounts).forEach(function(flag){{var node=document.querySelector('[data-bt38-truth-count="'+flag+'"]');if(node)node.textContent=String(cachedTruthCounts[flag])}});
   }}
   function addWorkflowButton(bar,name,label){{var button=document.createElement('button');button.type='button';button.dataset.fbmTab=name;button.className='fbm-lifecycle-tab'+(active===name?' active':'');button.innerHTML=label+' <span class="badge bg-light text-dark border">0</span>';button.addEventListener('click',function(){{active=name;currentPage=1;saveSession();render()}});bar.appendChild(button)}}
   function addTruthLink(bar,label,href,count){{var link=document.createElement('a');link.className='fbm-lifecycle-tab';link.href=href;link.innerHTML=label+' <span class="badge bg-light text-dark border">'+Number(count||0)+'</span>';bar.appendChild(link)}}
@@ -329,13 +330,25 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   if(pageSizeSelect)pageSizeSelect.addEventListener('change',function(){{pageSize=Number(pageSizeSelect.value||15)||15;currentPage=1;saveSession({{page_size:pageSize}});render()}});if(previousPage)previousPage.addEventListener('click',function(){{if(currentPage>1){{currentPage-=1;render()}}}});if(nextPage)nextPage.addEventListener('click',function(){{currentPage+=1;render()}});
   function refreshBadges(){{var counts=localCounts();tabBar.querySelectorAll('[data-fbm-tab]').forEach(function(button){{var badge=button.querySelector('.badge');if(badge)badge.textContent=Number(counts[button.dataset.fbmTab]||0)}});}}
   var initialRender=true;
-  function refreshHistoryMatches(){{rows.forEach(function(row){{row.dataset.fbmHistoryMatch=inHistory(row)?'1':'0'}})}}
+  function refreshHistoryMatches(){{
+    cachedCounts={{ready_dispatch:0,pending:0,dispatched:0,cancelled:0,replacements:0,refunds:0}};
+    cachedTruthCounts={{source_unverified:0,tracking_missing:0,ship_by_missing:0,delivery_missing:0,shipping_cost_missing:0}};
+    cachedRowsByQueue={{ready_dispatch:[],pending:[],dispatched:[],cancelled:[],replacements:[],refunds:[]}};
+    rows.forEach(function(row){{
+      var matches=inHistory(row);row.dataset.fbmHistoryMatch=matches?'1':'0';
+      if(!matches)return;
+      var q=row.dataset.fbmQueue;
+      if(Object.prototype.hasOwnProperty.call(cachedCounts,q)){{cachedCounts[q]+=1;cachedRowsByQueue[q].push(row)}}
+      rowTruthFlags(row).forEach(function(flag){{if(Object.prototype.hasOwnProperty.call(cachedTruthCounts,flag))cachedTruthCounts[flag]+=1}});
+    }});
+  }}
   refreshHistoryMatches();
   function render(){{
     var counts=localCounts();
     if(initialRender&&Number(counts[active]||0)===0){{var fallback=['pending','ready_dispatch','dispatched','replacements','refunds','cancelled'].find(function(name){{return Number(counts[name]||0)>0}});if(fallback)active=fallback;}}
     initialRender=false;
-    var matched=rows.filter(function(row){{return row.dataset.fbmHistoryMatch==='1'&&row.dataset.fbmQueue===active&&(!search||String(row.dataset.fbmSearch||'').indexOf(search)>=0)&&(truthFilter==='all'||rowTruthFlags(row).indexOf(truthFilter)>=0)}});
+    var queueRows=cachedRowsByQueue[active]||[];
+    var matched=(!search&&truthFilter==='all')?queueRows:queueRows.filter(function(row){{return (!search||String(row.dataset.fbmSearch||'').indexOf(search)>=0)&&(truthFilter==='all'||rowTruthFlags(row).indexOf(truthFilter)>=0)}});
     var matchedSet=new Set(matched);
     rows.forEach(function(row){{if(!matchedSet.has(row))row.hidden=true}});
     renderExistingPager(matched);
