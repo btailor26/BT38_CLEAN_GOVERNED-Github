@@ -53,3 +53,14 @@ def test_history_expansion_renders_complete_bounded_working_set():
     assert 'request.headers.get("X-BT38-FBM-History-Expansion") == "1"' in page
     assert "rows, has_more = global_search._session_snapshot_rows()" in page
     assert "rows, has_more = _latest_distinct_fbm_rows(visible_limit)" in page
+
+
+def test_lifecycle_tab_render_uses_cached_browser_snapshot():
+    assert "var cachedCounts=" in DISPATCH
+    assert "var cachedTruthCounts=" in DISPATCH
+    assert "var cachedRowsByQueue=" in DISPATCH
+    assert "var queueRows=cachedRowsByQueue[active]||[]" in DISPATCH
+    assert "function localCounts(){{return cachedCounts;}}" in DISPATCH
+    render_body = DISPATCH.split("function render(){{", 1)[1].split("// Keep the established single FBM browser-session owner", 1)[0]
+    assert "rows.filter(function(row)" not in render_body
+    assert "if(!inHistory(row))return" not in render_body
