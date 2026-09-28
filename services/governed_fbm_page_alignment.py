@@ -668,11 +668,11 @@ def install_governed_fbm_page_alignment(app) -> None:
                 "mcf_display": ({
                     "source_label": "Amazon MCF",
                     # Persisted MCF authority:
-                    # fulfilment fee -> Picking Fee;
+                    # per-shipment fee -> Picking Fee;
                     # total_mcf_fee -> final Shipping Cost;
-                    # per-shipment fee remains the shipment component for breakdown only.
+                    # persisted DB values are display authority.
                     "shipping_cost": row.mcf_order.total_mcf_fee,
-                    "picking_fee": row.mcf_order.mcf_fulfillment_fee,
+                    "picking_fee": row.mcf_order.mcf_per_shipment_fee,
                     "shipment_fee": row.mcf_order.mcf_per_shipment_fee,
                     "currency": row.mcf_order.currency or "GBP",
                     # Marketplace shipment truth remains first authority. When no
