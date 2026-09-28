@@ -83,11 +83,13 @@ def test_pending_is_first_and_returns_are_separate_from_refunds():
     assert 'setInterval(' not in SESSION
 
 
-def test_final_browser_guard_can_only_hide_rows_outside_the_active_queue():
-    assert 'function enforceActiveQueue()' in OVERLAY
-    assert "if(String(row.dataset.fbmQueue||'')!==queue){row.hidden=true;row.style.display='none';}" in OVERLAY
-    assert 'queueMicrotask(enforceActiveQueue)' in OVERLAY
+def test_final_browser_guard_is_retired_in_favour_of_single_session_owner():
+    assert 'function enforceActiveQueue()' not in OVERLAY
+    assert "row.style.display='none'" not in OVERLAY
+    assert 'queueMicrotask(enforceActiveQueue)' not in OVERLAY
     assert 'setInterval(' not in OVERLAY
+    assert "function render()" in DISPATCH
+    assert "window.BT38FBMApplyCommittedSnapshot=render" in DISPATCH
 
 
 def test_final_bell_is_single_fbm_display_projection():
