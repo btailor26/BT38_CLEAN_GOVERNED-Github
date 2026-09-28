@@ -91,4 +91,6 @@ def test_fba_is_registered_in_current_cached_browser_owner():
     assert DISPATCH.count(
         "var cachedRowsByQueue={ready_dispatch:[],pending:[],dispatched:[],cancelled:[],replacements:[],refunds:[]};"
     ) == 2
-    assert "addTruthLink(tabBar,'FBA','/amazon-fba-stock',{int(fba_count)});" in DISPATCH
+    assert "addWorkflowButton(tabBar,'fba','FBA');" in DISPATCH
+    assert "/amazon-fba-stock" not in DISPATCH
+    assert "/amazon-fba-stock" not in ALIGNMENT
