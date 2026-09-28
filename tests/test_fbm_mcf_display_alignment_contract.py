@@ -12,16 +12,18 @@ def test_mcf_projection_keeps_persisted_cost_components_for_display_only():
     assert '"shipping_cost": row.mcf_order.mcf_per_shipment_fee' in page
 
 
-def test_fbm_ui_has_one_shipping_cost_column_and_no_fee_column():
+def test_fbm_ui_has_picking_fee_and_one_shipping_cost_column_with_no_shipping_fee():
     template = _text("templates/fbm.html")
     header = template.split("<thead", 1)[1].split("</thead>", 1)[0]
     row = template.split('<tr class="fbm-order-row"', 1)[1].split("</tr>", 1)[0]
     assert header.count("<th>Shipping Cost</th>") == 1
     assert "Shipping Fee" not in header
-    assert "Picking Fee" not in header
+    assert header.count("<th>Picking Fee</th>") == 1
+    assert header.index("<th>Picking Fee</th>") < header.index("<th>Shipping Cost</th>")
+    assert row.count('class="fbm-picking-fee-cell"') == 1
     assert row.count('class="fbm-shipping-cost-cell"') == 1
     assert 'class="fbm-shipping-fee-cell"' not in row
-    assert 'colspan="11" class="text-center text-muted py-5"' in template
+    assert 'colspan="12" class="text-center text-muted py-5"' in template
 
 
 def test_mcf_shipping_cost_is_picking_plus_shipment_with_hover_breakdown():
