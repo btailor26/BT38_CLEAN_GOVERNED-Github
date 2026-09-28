@@ -423,7 +423,7 @@ def hydrate_exact_ebay_order(*, store, marketplace_order_id: str, source: str) -
         else None
     )
     exact_order_shipping_charged = None
-    if len(rows) == 1 and isinstance(delivery_cost, dict) and delivery_cost.get("value") not in (None, ""):
+    if isinstance(delivery_cost, dict) and delivery_cost.get("value") not in (None, ""):
         exact_order_shipping_charged = _safe_float(delivery_cost.get("value"))
 
     for row in rows:
@@ -498,8 +498,12 @@ def hydrate_exact_ebay_order(*, store, marketplace_order_id: str, source: str) -
                 row_changed = True
 
         if exact_order_shipping_charged is not None:
-            if float(getattr(row, "shipping_charged", 0.0) or 0.0) != exact_order_shipping_charged:
-                row.shipping_charged = exact_order_shipping_charged
+            # Shipping paid is order-level marketplace economics. Persist it once
+            # on the canonical first order line so multi-line orders do not
+            # duplicate buyer-paid shipping into revenue/profit calculations.
+            canonical_shipping_paid = exact_order_shipping_charged if row is rows[0] else 0.0
+            if float(getattr(row, "shipping_charged", 0.0) or 0.0) != canonical_shipping_paid:
+                row.shipping_charged = canonical_shipping_paid
                 shipping_charged_updates += 1
                 row_changed = True
 
