@@ -24,6 +24,8 @@ def test_fbm_mcf_display_uses_persisted_identity_cost_and_breakdown():
     cost_cell = template.split('<td class="fbm-shipping-cost-cell">', 1)[1].split("</td>", 1)[0]
     assert "mcf_display.shipping_fee" in fee_cell
     assert "shipping.get('shipping_cost')" not in fee_cell
+    assert 'data-shipping-cost="{{ mcf_display.shipping_cost if mcf_display and mcf_display.shipping_cost is not none else' in template
+    assert 'data-shipping-cost-currency="{{ mcf_display.currency if mcf_display and mcf_display.shipping_cost is not none else' in template
     assert "mcf_display.shipping_fee" not in cost_cell
     assert "mcf_display.shipping_cost" in cost_cell
     assert "shipping.get('shipping_cost')" in cost_cell
@@ -46,7 +48,9 @@ def test_fbm_shipping_cost_display_tolerates_missing_optional_cost_keys():
     template = (ROOT / "templates" / "fbm.html").read_text()
     cost_cell = template.split('<td class="fbm-shipping-cost-cell">', 1)[1].split("</td>", 1)[0]
 
-    assert "shipping.get('shipping_cost') is not none" in cost_cell
+    assert "canonical_shipping_cost is not none" in cost_cell
+    assert "canonical_shipping_currency" in cost_cell
+    assert "shipping.get('shipping_cost')" in cost_cell
     assert "shipping.get('shipping_cost_currency')" in cost_cell
     assert "shipping.shipping_cost is not none" not in cost_cell
     assert "shipping.shipping_cost_currency" not in cost_cell
