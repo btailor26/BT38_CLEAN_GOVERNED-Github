@@ -13,30 +13,16 @@ def test_fbm_mcf_display_uses_persisted_identity_cost_and_breakdown():
     assert '"shipping_fee": row.mcf_order.mcf_fulfillment_fee' in page
     assert '"shipping_cost": row.mcf_order.mcf_per_shipment_fee' in page
     assert '"currency": row.mcf_order.currency or "GBP"' in page
-    assert '"quantity": sum((item.quantity or 0)' in page
-    assert '"fulfillment_fee": row.mcf_order.mcf_fulfillment_fee' in page
-    assert '"first_unit_fee": sum((item.mcf_first_unit_fee or 0)' in page
-    assert '"additional_unit_fee": sum((item.mcf_additional_unit_fee or 0)' in page
 
     assert "{% if mcf_display %}" in template
     assert "{{ mcf_display.source_label }}" in template
-    assert "<th>Shipping Fee</th>" in template
-    assert '<td class="fbm-shipping-fee-cell">' in template
+    assert "<th>Shipping Fee</th>" not in template
+    assert 'class="fbm-shipping-fee-cell"' not in template
     assert '<td class="fbm-shipping-cost-cell">' in template
-    assert "mcf_display.shipping_fee" in template
 
-    # MCF identity stays in Shipping; MCF fulfilment fee belongs only in Shipping Fee.
-    # Normal carrier/label postage remains in the separate Shipping Cost cell.
-    route_cell = template.split('<td class="fbm-route-cell">', 1)[1].split("</td>", 1)[0]
-    fee_cell = template.split('<td class="fbm-shipping-fee-cell">', 1)[1].split("</td>", 1)[0]
     cost_cell = template.split('<td class="fbm-shipping-cost-cell">', 1)[1].split("</td>", 1)[0]
-    assert "{{ mcf_display.source_label }}" in route_cell
-    assert "mcf_display.shipping_fee" not in route_cell
-    assert "mcf_display.shipping_fee" in fee_cell
-    assert "mcf_display.shipping_cost" not in fee_cell
     assert "shipping.get('shipping_cost')" in cost_cell
     assert "mcf_display.shipping_fee" not in cost_cell
-
 
 def test_fbm_mcf_carrier_tracking_authority_is_marketplace_then_mcf_fallback():
     page = (ROOT / "services" / "governed_fbm_page_alignment.py").read_text()
@@ -63,13 +49,12 @@ def test_fbm_shipping_cost_display_tolerates_missing_optional_cost_keys():
     assert "Pending / unavailable" in cost_cell
 
 
-def test_fbm_has_exactly_one_shipping_fee_and_one_shipping_cost_column():
+def test_fbm_has_only_original_shipping_cost_column():
     template = (ROOT / "templates" / "fbm.html").read_text()
-
     header = template.split('<table class="table table-hover align-middle mb-0 fbm-orders-table">', 1)[1].split("</thead>", 1)[0]
     row = template.split('<tr class="fbm-order-row"', 1)[1].split("</tr>", 1)[0]
 
-    assert header.count("<th>Shipping Fee</th>") == 1
+    assert header.count("<th>Shipping Fee</th>") == 0
     assert header.count("<th>Shipping Cost</th>") == 1
-    assert row.count('class="fbm-shipping-fee-cell"') == 1
+    assert row.count('class="fbm-shipping-fee-cell"') == 0
     assert row.count('class="fbm-shipping-cost-cell"') == 1
