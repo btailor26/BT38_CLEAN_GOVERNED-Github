@@ -1,4 +1,4 @@
-const CACHE_NAME = 'bt38-scanner-v3';
+const CACHE_NAME = 'bt38-scanner-v2';
 const urlsToCache = [
   '/mobile/scan',
   '/static/manifest.json',
@@ -18,18 +18,6 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('fetch', event => {
-  const requestUrl = new URL(event.request.url);
-  const isScannerCacheTarget =
-    urlsToCache.includes(requestUrl.pathname) ||
-    urlsToCache.includes(event.request.url);
-
-  // Scanner offline support owns only its explicit asset allowlist.
-  // Dynamic governed pages such as /fbm must always reach the server so the
-  // deployed template and persisted DB truth remain the display authority.
-  if (!isScannerCacheTarget) {
-    return;
-  }
-
   event.respondWith(
     caches.match(event.request)
       .then(response => {
@@ -37,7 +25,7 @@ self.addEventListener('fetch', event => {
           return response;
         }
         return fetch(event.request).then(response => {
-          if (!response || response.status !== 200) {
+          if (!response || response.status !== 200 || response.type !== 'basic') {
             return response;
           }
           const responseToCache = response.clone();
