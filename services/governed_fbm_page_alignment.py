@@ -632,7 +632,13 @@ def install_governed_fbm_page_alignment(app) -> None:
         status_filter = str(request.args.get("status") or "").strip().lower()
         visible_limit = _requested_limit()
 
-        rows, has_more = _latest_distinct_fbm_rows(visible_limit)
+        if request.headers.get("X-BT38-FBM-History-Expansion") == "1":
+            # Explicit History expansion must render the complete bounded History
+            # working set, not the normal visible page-size slice.
+            from services import governed_fbm_global_search_alignment as global_search
+            rows, has_more = global_search._session_snapshot_rows()
+        else:
+            rows, has_more = _latest_distinct_fbm_rows(visible_limit)
         shipments = _shipment_map(rows)
         profiles = _profile_map(rows)
 
