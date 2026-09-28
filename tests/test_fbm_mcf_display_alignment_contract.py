@@ -61,3 +61,15 @@ def test_fbm_shipping_cost_display_tolerates_missing_optional_cost_keys():
     assert "shipping.shipping_cost is not none" not in cost_cell
     assert "shipping.shipping_cost_currency" not in cost_cell
     assert "Pending / unavailable" in cost_cell
+
+
+def test_fbm_has_exactly_one_shipping_fee_and_one_shipping_cost_column():
+    template = (ROOT / "templates" / "fbm.html").read_text()
+
+    header = template.split('<table class="table table-hover align-middle mb-0 fbm-orders-table">', 1)[1].split("</thead>", 1)[0]
+    row = template.split('<tr class="fbm-order-row"', 1)[1].split("</tr>", 1)[0]
+
+    assert header.count("<th>Shipping Fee</th>") == 1
+    assert header.count("<th>Shipping Cost</th>") == 1
+    assert row.count('class="fbm-shipping-fee-cell"') == 1
+    assert row.count('class="fbm-shipping-cost-cell"') == 1
