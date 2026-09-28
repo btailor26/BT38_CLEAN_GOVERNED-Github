@@ -207,11 +207,6 @@ def _install() -> None:
             "var cachedRowsByQueue={ready_dispatch:[],pending:[],dispatched:[],cancelled:[],replacements:[],refunds:[]};",
             "var cachedRowsByQueue={ready_dispatch:[],pending:[],dispatched:[],cancelled:[],fba:[],replacements:[],refunds:[]};",
         )
-        rendered = rendered.replace(
-            f"addTruthLink(tabBar,'FBA','/amazon-fba-stock',{int(local_fba_count)});",
-            "addWorkflowButton(tabBar,'fba','FBA');",
-            1,
-        )
         # Existing rows can originate in the shared FBM renderer. Reconcile only
         # FBA presentation from the already-loaded DB payload; never call Amazon.
         rendered = rendered.replace(
