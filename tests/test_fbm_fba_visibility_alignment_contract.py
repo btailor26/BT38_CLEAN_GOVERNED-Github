@@ -4,6 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ALIGNMENT = (ROOT / "services" / "governed_fbm_fba_visibility_alignment.py").read_text(encoding="utf-8")
 SERVICES_INIT = (ROOT / "services" / "__init__.py").read_text(encoding="utf-8")
+DISPATCH = (ROOT / "services" / "governed_fbm_dispatch_queue_alignment.py").read_text(encoding="utf-8")
 
 
 def test_fba_visibility_is_installed_without_replacing_fbm_shipping_eligibility():
@@ -59,3 +60,35 @@ def test_history_fragment_preserves_read_only_fba_visibility():
     assert "next_payload.update(fba_payload)" in history
     assert "original_history_fragment_inject(html, next_payload)" in history
     assert "dispatch_queue._inject_history_fragment_data = aligned_history_fragment_inject" in source
+
+
+def test_fba_is_registered_in_current_cached_browser_owner():
+    # The current FBM controller owns cached lifecycle counts and row lists.
+    # FBA must join those exact caches, including the reset performed whenever
+    # History is recomputed, rather than patching the retired `var result` shape.
+    assert "var result={ready_dispatch:0" not in ALIGNMENT
+    assert (
+        '"var cachedCounts={ready_dispatch:0,pending:0,dispatched:0,cancelled:0,replacements:0,refunds:0};"'
+        in ALIGNMENT
+    )
+    assert (
+        '"var cachedRowsByQueue={ready_dispatch:[],pending:[],dispatched:[],cancelled:[],replacements:[],refunds:[]};"'
+        in ALIGNMENT
+    )
+    assert (
+        '"var cachedCounts={ready_dispatch:0,pending:0,dispatched:0,cancelled:0,fba:0,replacements:0,refunds:0};"'
+        in ALIGNMENT
+    )
+    assert (
+        '"var cachedRowsByQueue={ready_dispatch:[],pending:[],dispatched:[],cancelled:[],fba:[],replacements:[],refunds:[]};"'
+        in ALIGNMENT
+    )
+    # Both cache declarations occur twice in the current owner: initial build
+    # and refreshHistoryMatches reset. Unbounded str.replace must align both.
+    assert DISPATCH.count(
+        "var cachedCounts={ready_dispatch:0,pending:0,dispatched:0,cancelled:0,replacements:0,refunds:0};"
+    ) == 2
+    assert DISPATCH.count(
+        "var cachedRowsByQueue={ready_dispatch:[],pending:[],dispatched:[],cancelled:[],replacements:[],refunds:[]};"
+    ) == 2
+    assert "addTruthLink(tabBar,'FBA','/amazon-fba-stock',{int(fba_count)});" in DISPATCH
