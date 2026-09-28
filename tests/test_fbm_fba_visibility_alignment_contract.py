@@ -62,39 +62,20 @@ def test_history_fragment_preserves_read_only_fba_visibility():
     assert "dispatch_queue._inject_history_fragment_data = aligned_history_fragment_inject" in source
 
 
-def test_fba_is_registered_in_current_cached_browser_owner():
-    # The current FBM controller owns cached lifecycle counts and row lists.
-    # FBA must join those exact caches, including the reset performed whenever
-    # History is recomputed, rather than patching the retired `var result` shape.
-    assert "var result={ready_dispatch:0" not in ALIGNMENT
-    assert (
-        '"var cachedCounts={ready_dispatch:0,pending:0,dispatched:0,cancelled:0,replacements:0,refunds:0};"'
-        in ALIGNMENT
-    )
-    assert (
-        '"var cachedRowsByQueue={ready_dispatch:[],pending:[],dispatched:[],cancelled:[],replacements:[],refunds:[]};"'
-        in ALIGNMENT
-    )
-    assert (
-        '"var cachedCounts={ready_dispatch:0,pending:0,dispatched:0,cancelled:0,fba:0,replacements:0,refunds:0};"'
-        in ALIGNMENT
-    )
-    assert (
-        '"var cachedRowsByQueue={ready_dispatch:[],pending:[],dispatched:[],cancelled:[],fba:[],replacements:[],refunds:[]};"'
-        in ALIGNMENT
-    )
-    # Both cache declarations occur twice in the current owner: initial build
-    # and refreshHistoryMatches reset. Unbounded str.replace must align both.
-    assert DISPATCH.count(
-        "var cachedCounts={ready_dispatch:0,pending:0,dispatched:0,cancelled:0,replacements:0,refunds:0};"
-    ) == 2
-    assert DISPATCH.count(
-        "var cachedRowsByQueue={ready_dispatch:[],pending:[],dispatched:[],cancelled:[],replacements:[],refunds:[]};"
-    ) == 2
+def test_fba_is_owned_directly_by_the_single_fbm_browser_controller():
+    # FBA is a native queue of the one existing FBM browser-session owner.
+    # No compatibility layer may rewrite the controller caches at render time.
     assert "addWorkflowButton(tabBar,'fba','FBA');" in DISPATCH
+    assert DISPATCH.count(
+        "var cachedCounts={{ready_dispatch:0,pending:0,dispatched:0,cancelled:0,fba:0,replacements:0,refunds:0}};"
+    ) == 2
+    assert DISPATCH.count(
+        "var cachedRowsByQueue={{ready_dispatch:[],pending:[],dispatched:[],cancelled:[],fba:[],replacements:[],refunds:[]}};"
+    ) == 2
+    assert '"var cachedCounts={{ready_dispatch:0' not in ALIGNMENT
+    assert '"var cachedRowsByQueue={{ready_dispatch:[]' not in ALIGNMENT
     assert "/amazon-fba-stock" not in DISPATCH
     assert "/amazon-fba-stock" not in ALIGNMENT
-
 
 def test_fba_tab_authority_is_locked_local_and_cannot_be_replaced_by_navigation():
     # Permanent authority boundary: the FBM FBA control is a local workflow tab.
