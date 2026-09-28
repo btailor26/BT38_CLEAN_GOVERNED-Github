@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import json
 
-from flask import g, make_response
+from flask import g, make_response, request
 from flask_login import login_required
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
@@ -382,6 +382,13 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
     return html.replace(marker, block + marker, 1) if marker in html else html + block
 
 
+
+def _inject_history_fragment_data(html: str, payload: dict[str, dict]) -> str:
+    """Append only the lifecycle facts required by the existing History owner."""
+    data = json.dumps(payload, separators=(",", ":"), sort_keys=True).replace("</", "<\\/")
+    return html + f'<script id="bt38FbmLifecycleTabsData" type="application/json">{data}</script>'
+
+
 def install_governed_fbm_dispatch_queue_alignment(app) -> None:
     if getattr(app, "_bt38_fbm_dispatch_queue_alignment_installed", False):
         return
@@ -400,6 +407,11 @@ def install_governed_fbm_dispatch_queue_alignment(app) -> None:
         if not rows:
             rows = list(getattr(g, "_bt38_fbm_session_rows", []) or [])
         payload = _presentation(rows)
+        if request.headers.get("X-BT38-FBM-History-Expansion") == "1":
+            # The existing browser owner needs canonical rows plus lifecycle facts
+            # only. Do not append a second lifecycle controller, CSS or page shell.
+            response.set_data(_inject_history_fragment_data(response.get_data(as_text=True), payload))
+            return response
         response.set_data(_inject(response.get_data(as_text=True), payload, _fba_count()))
         return response
 
