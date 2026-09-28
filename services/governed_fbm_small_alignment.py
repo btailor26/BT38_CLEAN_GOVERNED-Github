@@ -280,15 +280,6 @@ def _browser_alignment_script() -> str:
     if(status){status.className='small text-muted mt-2';status.textContent='Saved label printer: '+saved+' · Connect QZ to verify';}
   }
 
-  function enforceActiveQueue(){
-    var active=document.querySelector('.fbm-lifecycle-tab.active[data-fbm-tab]');
-    if(!active)return;
-    var queue=String(active.dataset.fbmTab||'');
-    document.querySelectorAll('tr.fbm-order-row').forEach(function(row){
-      if(String(row.dataset.fbmQueue||'')!==queue){row.hidden=true;row.style.display='none';}
-    });
-  }
-
   async function checkPacklinkWithoutReload(button){
     var shipmentId=String(button&&button.dataset&&button.dataset.shipmentId||'').trim();
     if(!shipmentId)return;
@@ -303,18 +294,15 @@ def _browser_alignment_script() -> str:
   }
 
   document.addEventListener('click',function(event){
-    var tab=event.target&&event.target.closest?event.target.closest('.fbm-lifecycle-tab[data-fbm-tab]'):null;
-    if(tab)queueMicrotask(enforceActiveQueue);
     var button=event.target&&event.target.closest?event.target.closest('.packlink-existing-status'):null;
     if(!button)return;
     event.preventDefault();event.stopPropagation();event.stopImmediatePropagation();
     void checkPacklinkWithoutReload(button);
   },false);
 
-  function initialise(){restoreSavedPrinter();enforceActiveQueue();}
+  function initialise(){restoreSavedPrinter();}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initialise,{once:true});
   else initialise();
-  window.addEventListener('load',enforceActiveQueue,{once:true});
 })();
 </script>
 '''
