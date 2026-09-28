@@ -138,23 +138,23 @@ def _presentation(rows: list[MarketplaceOrder]) -> dict[str, dict]:
             "queue": queue,
             "status": str(getattr(row, "status", "") or "").strip().lower(),
             "created_at": row.created_at.isoformat() if getattr(row, "created_at", None) else None,
-            # Display-only fee authority: MCF picking/fulfilment fee belongs in
-            # Shipping Fees; normal FBM continues to use confirmed shipping spend.
+            # Canonical Shipping Cost authority: MCF uses persisted total MCF fee;
+            # normal FBM uses confirmed persisted shipping spend.
             "shipping_cost": (
-                float(row.mcf_order.mcf_fulfillment_fee)
+                float(row.mcf_order.total_mcf_fee)
                 if getattr(row, "mcf_order", None) is not None
-                and row.mcf_order.mcf_fulfillment_fee is not None
+                and row.mcf_order.total_mcf_fee is not None
                 else (float(spend.amount) if spend is not None else None)
             ),
             "shipping_currency": (
                 str(row.mcf_order.currency or "GBP").upper()
                 if getattr(row, "mcf_order", None) is not None
-                and row.mcf_order.mcf_fulfillment_fee is not None
+                and row.mcf_order.total_mcf_fee is not None
                 else (str(spend.currency or "GBP").upper() if spend is not None else None)
             ),
             "shipping_cost_confirmed": (
                 getattr(row, "mcf_order", None) is not None
-                and row.mcf_order.mcf_fulfillment_fee is not None
+                and row.mcf_order.total_mcf_fee is not None
             ) or spend is not None,
         }
     return payload
@@ -272,29 +272,20 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   if(rangeInput)rangeInput.value=range;
   if(fromInput){{fromInput.value=from;fromInput.style.display=range==='custom'?'':'none';}}
   if(toInput){{toInput.value=to;toInput.style.display=range==='custom'?'':'none';}}
-  // Keep the canonical Shipping Cost column untouched. The existing secondary
-  // spend column remains separate and is labelled Shipping Fees only.
-  function ensureFeesHeader(){{
-    var head=document.querySelector('.fbm-orders-table thead tr');
-    if(!head||head.querySelector('[data-fbm-shipping-fees="1"]'))return;
-    var th=document.createElement('th');
-    th.textContent='Shipping Fee';
-    th.dataset.fbmShippingFees='1';
-    head.insertBefore(th,head.lastElementChild);
+  // One Shipping Cost column only. Persisted MCF total cost or confirmed
+  // shipping-spend ledger truth updates that canonical cell; no secondary fee column.
+  function alignCanonicalShippingCost(row,info){{
+    if(!row||!info.shipping_cost_confirmed||info.shipping_cost===null||info.shipping_cost===undefined)return;
+    var td=row.querySelector('.fbm-shipping-cost-cell');
+    if(!td)return;
+    var currency=String(info.shipping_currency||'GBP').toUpperCase();
+    var amount=Number(info.shipping_cost);
+    td.textContent=currency==='GBP'?'£'+amount.toFixed(2):amount.toFixed(2)+' '+currency;
+    td.classList.remove('text-muted');
+    row.dataset.shippingCost=String(info.shipping_cost);
+    row.dataset.shippingCostCurrency=currency;
   }}
-  function addCostCell(row,info){{
-    if(!row||row.querySelector('[data-fbm-shipping-fees="1"]'))return;
-    var td=document.createElement('td');
-    td.dataset.fbmShippingFees='1';
-    if(info.shipping_cost_confirmed&&info.shipping_cost!==null&&info.shipping_cost!==undefined){{
-      var currency=String(info.shipping_currency||'GBP').toUpperCase();
-      var amount=Number(info.shipping_cost);
-      td.textContent=currency==='GBP'?'£'+amount.toFixed(2):amount.toFixed(2)+' '+currency;
-    }}else{{td.textContent='Pending / unavailable';td.className='text-muted';}}
-    row.insertBefore(td,row.lastElementChild);
-  }}
-  ensureFeesHeader();
-  rows.forEach(function(row){{var info=data[row.dataset.orderId]||{{queue:'unclassified',shipping_cost_confirmed:false,created_at:null}};row.dataset.fbmQueue=info.queue;row.dataset.fbmCreatedAt=info.created_at||'';row.dataset.fbmPlatform=info.platform||'';row.dataset.fbmShipmentState=info.shipment_state||'';row.dataset.fbmMappingReview=info.mapping_review?'1':'0';row.dataset.fbmReturnEvent=info.return_event?'1':'0';row.dataset.fbmSearch=(row.textContent||'').toLowerCase();addCostCell(row,info)}});
+  rows.forEach(function(row){{var info=data[row.dataset.orderId]||{{queue:'unclassified',shipping_cost_confirmed:false,created_at:null}};row.dataset.fbmQueue=info.queue;row.dataset.fbmCreatedAt=info.created_at||'';row.dataset.fbmPlatform=info.platform||'';row.dataset.fbmShipmentState=info.shipment_state||'';row.dataset.fbmMappingReview=info.mapping_review?'1':'0';row.dataset.fbmReturnEvent=info.return_event?'1':'0';alignCanonicalShippingCost(row,info);row.dataset.fbmSearch=(row.textContent||'').toLowerCase();}});
   function localDay(value){{if(!value)return null;var d=new Date(value);return isNaN(d.getTime())?null:new Date(d.getFullYear(),d.getMonth(),d.getDate());}}
   function historyBounds(){{var today=new Date();today=new Date(today.getFullYear(),today.getMonth(),today.getDate());if(range==='custom'){{var a=from?new Date(from+'T00:00:00'):null,b=to?new Date(to+'T23:59:59'):null;return {{start:a,end:b}};}}var days={{'3d':3,'7d':7,'30d':30,'90d':90,'1y':365}}[range]||3;var start=new Date(today);start.setDate(start.getDate()-(days-1));var end=new Date(today);end.setHours(23,59,59,999);return {{start:start,end:end}};}}
   function inHistory(row){{var d=localDay(row.dataset.fbmCreatedAt);if(!d)return false;var bounds=historyBounds();if(bounds.start&&d<bounds.start)return false;if(bounds.end&&d>bounds.end)return false;return true;}}
