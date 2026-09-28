@@ -46,3 +46,10 @@ def test_tab_render_reuses_committed_history_classification():
     assert "inHistory(row)" not in render_body
     assert "refreshHistoryMatches();render();return;" in DISPATCH
     assert "refreshHistoryMatches();document.dispatchEvent" in DISPATCH
+
+
+def test_history_expansion_renders_complete_bounded_working_set():
+    page = Path("services/governed_fbm_page_alignment.py").read_text(encoding="utf-8")
+    assert 'request.headers.get("X-BT38-FBM-History-Expansion") == "1"' in page
+    assert "rows, has_more = global_search._session_snapshot_rows()" in page
+    assert "rows, has_more = _latest_distinct_fbm_rows(visible_limit)" in page
