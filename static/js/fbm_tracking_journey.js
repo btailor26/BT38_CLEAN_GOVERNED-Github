@@ -105,8 +105,6 @@
                     'earliestDeliveryAt',
                     'deliveryPromiseAt',
                     'shippingSource',
-                    'shippingFee',
-                    'shippingFeeCurrency',
                     'carrier',
                     'service',
                     'trackingNumber',
