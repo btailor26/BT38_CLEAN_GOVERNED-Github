@@ -39,6 +39,9 @@ def _representative_rank(row: MarketplaceOrder) -> tuple:
     status = _text(getattr(row, "status", None)).lower()
     source = _text(getattr(row, "import_source", None)).lower()
     return (
+        # Order-level buyer-paid shipping is persisted once on a canonical line.
+        # Prefer that line for the one-row FBM order projection when present.
+        1 if float(getattr(row, "shipping_charged", 0.0) or 0.0) > 0 else 0,
         1 if _text(getattr(row, "tracking_number", None)) else 0,
         1 if getattr(row, "shipped_at", None) is not None else 0,
         1 if status in {"shipped", "dispatched", "fulfilled", "delivered"} else 0,
