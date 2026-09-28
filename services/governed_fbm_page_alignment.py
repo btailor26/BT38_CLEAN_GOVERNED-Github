@@ -715,6 +715,13 @@ def install_governed_fbm_page_alignment(app) -> None:
                 operational_promises.get(key),
             )
 
+        if request.headers.get("X-BT38-FBM-History-Expansion") == "1":
+            # History expansion is a row-fragment read, not a second full FBM page.
+            # The browser already owns the page shell, controls, modals and scripts.
+            # Return only canonical persisted rows; downstream lifecycle alignment
+            # appends the existing presentation facts used by the browser owner.
+            return render_template("_fbm_history_rows.html", orders=orders)
+
         counts = {
             "total": len(orders),
             "ready": sum(1 for item in orders if item["route_state"] == "Ready for FBM routing"),
