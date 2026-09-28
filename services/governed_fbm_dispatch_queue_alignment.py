@@ -27,6 +27,7 @@ _WORKFLOW_LABELS = {
     "pending": "Pending",
     "dispatched": "Dispatched",
     "cancelled": "Cancelled",
+    "fba": "FBA",
     "replacements": "Replacement",
     "refunds": "Refunds",
 }
@@ -84,6 +85,8 @@ def _aligned_workflow_queue_for(row: MarketplaceOrder, shipment=None) -> str:
     """Classify every lifecycle tab from the same persisted truth hierarchy."""
     status = str(getattr(row, "status", "") or "").strip().lower()
     reason = global_search._status_reason(status)
+    if page_alignment._is_fba_dispatched_db_truth(row):
+        return "fba"
     if status in global_search._CANCELLED_STATUSES or status.startswith("cancel"):
         return "cancelled"
     if status == "pending" and "amazon" in _marketplace_platform_for(row):
@@ -161,9 +164,17 @@ def _presentation(rows: list[MarketplaceOrder]) -> dict[str, dict]:
 
 
 def _fba_count() -> int:
+    """Count only persisted dispatched FBA/AFN truth."""
     try:
+        fulfillment = db.func.upper(db.func.coalesce(MarketplaceOrder.fulfillment_type, ""))
+        status = db.func.lower(db.func.coalesce(MarketplaceOrder.status, ""))
         return int(db.session.query(MarketplaceOrder.id).filter(
-            db.func.upper(db.func.coalesce(MarketplaceOrder.fulfillment_type, "")).in_(("FBA", "AFN"))
+            fulfillment.in_(("FBA", "AFN")),
+            (
+                status.in_(tuple(page_alignment._FBA_DISPATCHED_STATUSES))
+                | MarketplaceOrder.shipped_at.isnot(None)
+                | (MarketplaceOrder.tracking_number.isnot(None) & (MarketplaceOrder.tracking_number != ""))
+            ),
         ).count())
     except Exception:
         return 0
@@ -200,7 +211,7 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   var card=table.closest('.card');if(!card)return;
   var body=table.querySelector('tbody');
   var rows=Array.from(body.querySelectorAll('tr.fbm-order-row'));
-  var labels={{ready_dispatch:'Ready to dispatch',pending:'Pending',dispatched:'Dispatched',cancelled:'Cancelled',replacements:'Replacement',refunds:'Refunds'}};
+  var labels={{ready_dispatch:'Ready to dispatch',pending:'Pending',dispatched:'Dispatched',cancelled:'Cancelled',fba:'FBA',replacements:'Replacement',refunds:'Refunds'}};
   var sessionEpoch='fbm-history-3d-v1';
   var sessionDefaults={{tab:'pending',search:'',range:'3d',from:'',to:'',dirty:false,session_epoch:sessionEpoch}};
   var saved=sessionDefaults;
@@ -331,9 +342,9 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   function refreshBadges(){{var counts=localCounts();tabBar.querySelectorAll('[data-fbm-tab]').forEach(function(button){{var badge=button.querySelector('.badge');if(badge)badge.textContent=Number(counts[button.dataset.fbmTab]||0)}});}}
   var initialRender=true;
   function refreshHistoryMatches(){{
-    cachedCounts={{ready_dispatch:0,pending:0,dispatched:0,cancelled:0,replacements:0,refunds:0}};
+    cachedCounts={{ready_dispatch:0,pending:0,dispatched:0,cancelled:0,fba:0,replacements:0,refunds:0}};
     cachedTruthCounts={{source_unverified:0,tracking_missing:0,ship_by_missing:0,delivery_missing:0,shipping_cost_missing:0}};
-    cachedRowsByQueue={{ready_dispatch:[],pending:[],dispatched:[],cancelled:[],replacements:[],refunds:[]}};
+    cachedRowsByQueue={{ready_dispatch:[],pending:[],dispatched:[],cancelled:[],fba:[],replacements:[],refunds:[]}};
     rows.forEach(function(row){{
       var matches=inHistory(row);row.dataset.fbmHistoryMatch=matches?'1':'0';
       if(!matches)return;
