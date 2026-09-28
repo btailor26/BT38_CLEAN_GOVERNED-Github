@@ -5,8 +5,8 @@ DISPATCH = Path("services/governed_fbm_dispatch_queue_alignment.py").read_text(e
 
 
 def test_fba_keeps_original_separate_authority():
-    assert "/governed/amazon-fba-stock" in DISPATCH
-    assert "addTruthLink(tabBar,'FBA','/governed/amazon-fba-stock'" in DISPATCH
+    assert "/amazon-fba-stock" in DISPATCH
+    assert "addTruthLink(tabBar,'FBA','/amazon-fba-stock'" in DISPATCH
     install = FBA.split("def _install() -> None:", 1)[1]
     assert "addWorkflowButton(tabBar,'fba','FBA')" not in install
     assert "_canonical_fba_rows()" not in install
