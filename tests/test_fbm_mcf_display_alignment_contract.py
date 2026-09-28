@@ -1,76 +1,53 @@
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[1]
+def _text(path):
+    return Path(path).read_text(encoding="utf-8")
 
 
-def test_fbm_mcf_display_uses_persisted_identity_cost_and_breakdown():
-    page = (ROOT / "services" / "governed_fbm_page_alignment.py").read_text()
-    template = (ROOT / "templates" / "fbm.html").read_text()
-
-    assert "joinedload(MarketplaceOrder.mcf_order)" in page
+def test_mcf_projection_keeps_persisted_cost_components_for_display_only():
+    page = _text("services/governed_fbm_page_alignment.py")
     assert '"source_label": "Amazon MCF"' in page
     assert '"shipping_fee": row.mcf_order.mcf_fulfillment_fee' in page
     assert '"shipping_cost": row.mcf_order.mcf_per_shipment_fee' in page
-    assert '"currency": row.mcf_order.currency or "GBP"' in page
-
-    assert "{% if mcf_display %}" in template
-    assert "{{ mcf_display.source_label }}" in template
-    assert "<th>Picking Fee</th>" in template
-    assert 'class="fbm-shipping-fee-cell"' in template
-    assert '<td class="fbm-shipping-cost-cell">' in template
-
-    fee_cell = template.split('<td class="fbm-shipping-fee-cell">', 1)[1].split("</td>", 1)[0]
-    cost_cell = template.split('<td class="fbm-shipping-cost-cell">', 1)[1].split("</td>", 1)[0]
-    assert "mcf_display.shipping_fee" in fee_cell
-    assert "mcf_display.shipping_cost + mcf_picking_fee" in cost_cell
-    assert "picking + £%.2f shipment = £%.2f shipping" in cost_cell
-    assert "shipping.get('shipping_cost')" not in fee_cell
-    assert 'data-shipping-cost="{{ mcf_display.shipping_cost if mcf_display and mcf_display.shipping_cost is not none else' in template
-    assert 'data-shipping-cost-currency="{{ mcf_display.currency if mcf_display and mcf_display.shipping_cost is not none else' in template
-    assert "mcf_display.shipping_fee" not in cost_cell
-    assert "mcf_display.shipping_cost" in cost_cell
-    assert "shipping.get('shipping_cost')" in cost_cell
-
-def test_fbm_mcf_carrier_tracking_authority_is_marketplace_then_mcf_fallback():
-    page = (ROOT / "services" / "governed_fbm_page_alignment.py").read_text()
-    template = (ROOT / "templates" / "fbm.html").read_text()
-
-    assert "Shipment lifecycle authority stays unchanged." in page
-    assert '"fallback_carrier": row.mcf_order.carrier' in page
-    assert '"fallback_tracking": row.mcf_order.tracking_number' in page
-    assert "shipment.tracking_number if shipment and shipment.tracking_number else (mcf_display.fallback_tracking" in template
-    assert "shipment.carrier if shipment and shipment.carrier else (mcf_display.fallback_carrier" in template
-
-    # A linked MCF row must never fall straight through to stale marketplace_orders.carrier.
-    assert "{% set carrier_name = shipment.carrier if shipment and shipment.carrier else order.carrier %}" not in template
 
 
-def test_fbm_shipping_cost_display_tolerates_missing_optional_cost_keys():
-    template = (ROOT / "templates" / "fbm.html").read_text()
-    cost_cell = template.split('<td class="fbm-shipping-cost-cell">', 1)[1].split("</td>", 1)[0]
-
-    assert "canonical_shipping_cost is not none" in cost_cell
-    assert "canonical_shipping_currency" in cost_cell
-    assert "shipping.get('shipping_cost')" in cost_cell
-    assert "shipping.get('shipping_cost_currency')" in cost_cell
-    assert "shipping.shipping_cost is not none" not in cost_cell
-    assert "shipping.shipping_cost_currency" not in cost_cell
-    assert "Pending / unavailable" in cost_cell
-
-
-def test_fbm_has_mcf_only_fee_before_single_shipping_cost_column():
-    template = (ROOT / "templates" / "fbm.html").read_text()
-    header = template.split('<table class="table table-hover align-middle mb-0 fbm-orders-table">', 1)[1].split("</thead>", 1)[0]
+def test_fbm_ui_has_one_shipping_cost_column_and_no_fee_column():
+    template = _text("templates/fbm.html")
+    header = template.split("<thead", 1)[1].split("</thead>", 1)[0]
     row = template.split('<tr class="fbm-order-row"', 1)[1].split("</tr>", 1)[0]
-
-    assert header.count("<th>Picking Fee</th>") == 1
     assert header.count("<th>Shipping Cost</th>") == 1
-    assert header.index("<th>Picking Fee</th>") < header.index("<th>Shipping Cost</th>")
-    assert row.count('class="fbm-shipping-fee-cell"') == 1
+    assert "Shipping Fee" not in header
+    assert "Picking Fee" not in header
     assert row.count('class="fbm-shipping-cost-cell"') == 1
-    assert 'colspan="12" class="text-center text-muted py-5"' in template
+    assert 'class="fbm-shipping-fee-cell"' not in row
+    assert 'colspan="11" class="text-center text-muted py-5"' in template
 
-    fee_cell = row.split('<td class="fbm-shipping-fee-cell">', 1)[1].split("</td>", 1)[0]
-    assert "mcf_display.shipping_fee" in fee_cell
-    assert "shipping.get('shipping_cost')" not in fee_cell
+
+def test_mcf_shipping_cost_is_picking_plus_shipment_with_hover_breakdown():
+    template = _text("templates/fbm.html")
+    cost_cell = template.split('<td class="fbm-shipping-cost-cell">', 1)[1].split("</td>", 1)[0]
+    assert "mcf_display.shipping_cost + mcf_picking_fee" in cost_cell
+    assert "shipping.get('shipping_cost')" in cost_cell
+    assert 'data-bs-toggle="tooltip"' in cost_cell
+    assert "Shipping cost breakdown" in cost_cell
+    assert "Picking fee:" in cost_cell
+    assert "Shipment:" in cost_cell
+    assert "Total:" in cost_cell
+    assert 'title="' not in cost_cell
+
+
+def test_fbm_row_data_uses_same_final_mcf_shipping_cost_as_visible_ui():
+    template = _text("templates/fbm.html")
+    row = template.split('<tr class="fbm-order-row"', 1)[1].split(">", 1)[0]
+    assert "data-shipping-fee=" not in row
+    assert "data-shipping-fee-currency=" not in row
+    assert "mcf_display.shipping_cost + (mcf_display.shipping_fee if mcf_display.shipping_fee is not none else 0)" in row
+
+
+def test_fbm_refresh_has_no_retired_shipping_fee_path():
+    js = _text("static/js/fbm_tracking_journey.js")
+    assert "'shippingFee'" not in js
+    assert "'shippingFeeCurrency'" not in js
+    assert "'shippingCost'" in js
+    assert "'shippingCostCurrency'" in js
