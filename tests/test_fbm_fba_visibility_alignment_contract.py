@@ -94,3 +94,19 @@ def test_fba_is_registered_in_current_cached_browser_owner():
     assert "addWorkflowButton(tabBar,'fba','FBA');" in DISPATCH
     assert "/amazon-fba-stock" not in DISPATCH
     assert "/amazon-fba-stock" not in ALIGNMENT
+
+
+def test_fba_tab_authority_is_locked_local_and_cannot_be_replaced_by_navigation():
+    # Permanent authority boundary: the FBM FBA control is a local workflow tab.
+    # Neither the base controller nor compatibility alignment may turn it into
+    # a front-end/back-end route, redirect, link, or stock-page replacement.
+    assert "addWorkflowButton(tabBar,'fba','FBA');" in DISPATCH
+    assert "addTruthLink(tabBar,'FBA'" not in DISPATCH
+    assert "addTruthLink(tabBar,'FBA'" not in ALIGNMENT
+    for forbidden in (
+        "/amazon-fba-stock",
+        "/governed/amazon-fba-stock",
+        "window.location",
+        "location.href",
+    ):
+        assert forbidden not in ALIGNMENT
