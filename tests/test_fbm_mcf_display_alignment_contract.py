@@ -63,6 +63,7 @@ def test_fbm_has_mcf_only_fee_before_single_shipping_cost_column():
     assert header.index("<th>Shipping Fee</th>") < header.index("<th>Shipping Cost</th>")
     assert row.count('class="fbm-shipping-fee-cell"') == 1
     assert row.count('class="fbm-shipping-cost-cell"') == 1
+    assert 'colspan="12" class="text-center text-muted py-5"' in template
 
     fee_cell = row.split('<td class="fbm-shipping-fee-cell">', 1)[1].split("</td>", 1)[0]
     assert "mcf_display.shipping_fee" in fee_cell
