@@ -259,8 +259,7 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
       ['tracking_missing','Tracking missing'],
       ['ship_by_missing','Ship by missing'],
       ['delivery_missing','Deliver by missing'],
-      ['shipping_cost_missing','Shipping cost missing'],
-      ['shipping_fee_missing','Shipping fee missing']
+      ['shipping_cost_missing','Shipping cost missing']
     ].forEach(function(option){{var node=document.createElement('option');node.value=option[0];node.textContent=option[1];truthFilterSelect.appendChild(node)}});
     clearSearch.insertAdjacentElement('afterend',truthFilterSelect);
   }}
@@ -304,12 +303,10 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
     if(!trackingCode||!trackingText||trackingText==='parcel id pending'||shipmentText.indexOf('unshipped')>=0||shipmentText.indexOf('marketplace says shipped')>=0)flags.push('tracking_missing');
     var shippingCost=String(row.querySelector('.fbm-shipping-cost-cell')?.textContent||'').toLowerCase();
     if(shippingCost.indexOf('pending / unavailable')>=0)flags.push('shipping_cost_missing');
-    var shippingFee=String(row.querySelector('[data-fbm-shipping-fees="1"]')?.textContent||'').toLowerCase();
-    if(shippingFee.indexOf('pending / unavailable')>=0)flags.push('shipping_fee_missing');
     return flags;
   }}
   function refreshTruthSummary(){{
-    var counts={{source_unverified:0,tracking_missing:0,ship_by_missing:0,delivery_missing:0,shipping_cost_missing:0,shipping_fee_missing:0}};
+    var counts={{source_unverified:0,tracking_missing:0,ship_by_missing:0,delivery_missing:0,shipping_cost_missing:0}};
     rows.forEach(function(row){{if(!inHistory(row))return;rowTruthFlags(row).forEach(function(flag){{if(Object.prototype.hasOwnProperty.call(counts,flag))counts[flag]+=1}})}});
     Object.keys(counts).forEach(function(flag){{var node=document.querySelector('[data-bt38-truth-count="'+flag+'"]');if(node)node.textContent=String(counts[flag])}});
   }}
