@@ -16,13 +16,15 @@ def test_fbm_mcf_display_uses_persisted_identity_cost_and_breakdown():
 
     assert "{% if mcf_display %}" in template
     assert "{{ mcf_display.source_label }}" in template
-    assert "<th>Shipping Fee</th>" in template
+    assert "<th>Picking Fee</th>" in template
     assert 'class="fbm-shipping-fee-cell"' in template
     assert '<td class="fbm-shipping-cost-cell">' in template
 
     fee_cell = template.split('<td class="fbm-shipping-fee-cell">', 1)[1].split("</td>", 1)[0]
     cost_cell = template.split('<td class="fbm-shipping-cost-cell">', 1)[1].split("</td>", 1)[0]
     assert "mcf_display.shipping_fee" in fee_cell
+    assert "mcf_display.shipping_cost + mcf_picking_fee" in cost_cell
+    assert "picking + £%.2f shipment = £%.2f shipping" in cost_cell
     assert "shipping.get('shipping_cost')" not in fee_cell
     assert 'data-shipping-cost="{{ mcf_display.shipping_cost if mcf_display and mcf_display.shipping_cost is not none else' in template
     assert 'data-shipping-cost-currency="{{ mcf_display.currency if mcf_display and mcf_display.shipping_cost is not none else' in template
@@ -62,9 +64,9 @@ def test_fbm_has_mcf_only_fee_before_single_shipping_cost_column():
     header = template.split('<table class="table table-hover align-middle mb-0 fbm-orders-table">', 1)[1].split("</thead>", 1)[0]
     row = template.split('<tr class="fbm-order-row"', 1)[1].split("</tr>", 1)[0]
 
-    assert header.count("<th>Shipping Fee</th>") == 1
+    assert header.count("<th>Picking Fee</th>") == 1
     assert header.count("<th>Shipping Cost</th>") == 1
-    assert header.index("<th>Shipping Fee</th>") < header.index("<th>Shipping Cost</th>")
+    assert header.index("<th>Picking Fee</th>") < header.index("<th>Shipping Cost</th>")
     assert row.count('class="fbm-shipping-fee-cell"') == 1
     assert row.count('class="fbm-shipping-cost-cell"') == 1
     assert 'colspan="12" class="text-center text-muted py-5"' in template
