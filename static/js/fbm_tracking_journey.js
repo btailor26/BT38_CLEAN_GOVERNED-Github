@@ -323,6 +323,84 @@
 
     document.addEventListener('click', event => { void handleExistingPacklinkLabel(event); }, true);
 
+    function escapeJourney(value) {
+        return String(value == null ? '' : value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+    }
+
+    function journeyDate(value) {
+        if (!value) return 'Time unavailable';
+        const parsed = new Date(value);
+        return Number.isNaN(parsed.getTime()) ? String(value) : parsed.toLocaleString('en-GB', {day:'2-digit',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    }
+
+    function persistedTrackingEvents(row) {
+        try {
+            const value = JSON.parse(row.dataset.trackingEvents || '[]');
+            return Array.isArray(value) ? value : [];
+        } catch (_error) {
+            return [];
+        }
+    }
+
+    function openPersistedJourney(button) {
+        const row = button.closest('.fbm-order-row');
+        const modalElement = document.getElementById('fbmTrackingJourneyModal');
+        const body = document.getElementById('fbmTrackingJourneyBody');
+        const subtitle = document.getElementById('fbmTrackingJourneySubtitle');
+        if (!row || !modalElement || !body) return;
+
+        const tracking = row.dataset.trackingNumber || button.dataset.trackingNumber || String(button.textContent || '').trim();
+        const carrier = row.dataset.carrier || '—';
+        const service = row.dataset.service || '';
+        const events = persistedTrackingEvents(row);
+        const accepted = row.dataset.carrierAcceptedAt || '';
+        const moved = row.dataset.firstMovementAt || '';
+        const delivered = row.dataset.deliveredAt || '';
+        const performance = String(row.dataset.deliveryPerformance || '').toLowerCase();
+        const latestPromise = row.dataset.deliveryPromiseAt || '';
+
+        const state = delivered ? 'Delivered' : moved ? 'In transit' : accepted ? 'Picked up' : 'Waiting for carrier update';
+        const journey = [
+            ['Picked up', Boolean(accepted || moved || delivered)],
+            ['In transit', Boolean(moved || delivered)],
+            ['Delivered', Boolean(delivered)]
+        ].map(([label, active]) => '<span class="badge '+(active ? 'bg-success' : 'bg-light text-muted border')+' me-1">'+label+'</span>').join('');
+
+        const promise = latestPromise
+            ? '<div class="border rounded p-3 mb-3"><div class="small text-muted">Marketplace delivery promise</div><div>'+escapeJourney(journeyDate(latestPromise))+(performance === 'late' ? ' <span class="badge bg-danger">Late</span>' : '')+'</div></div>'
+            : '<div class="alert alert-light border">Marketplace delivery promise unavailable in persisted BT38 DB.</div>';
+
+        const history = events.length ? events.map(event => {
+            const title = event.description || event.status || 'Carrier update';
+            const detail = event.detail && event.detail !== title ? '<div class="small text-muted">'+escapeJourney(event.detail)+'</div>' : '';
+            const location = event.location ? '<div class="small text-muted">'+escapeJourney(event.location)+'</div>' : '';
+            return '<div class="border-start border-3 ps-3 py-2 mb-2"><div class="fw-semibold">'+escapeJourney(title)+'</div>'+detail+location+'<div class="small text-muted">'+escapeJourney(journeyDate(event.event_time || event.observed_at))+'</div></div>';
+        }).join('') : '<div class="text-muted">No detailed carrier scan history has been persisted yet.</div>';
+
+        if (subtitle) subtitle.textContent = tracking || 'Tracking history';
+        body.innerHTML =
+            '<div class="fw-semibold">'+escapeJourney(carrier)+(service ? ' · '+escapeJourney(service) : '')+'</div>'+
+            '<div class="small mb-1">Tracking: <code>'+escapeJourney(tracking || '—')+'</code></div>'+
+            '<div class="small text-muted mb-3">Tracking authority: Persisted shipment · persisted BT38 DB</div>'+
+            promise+
+            '<div class="fw-semibold mb-2">Shipment journey</div>'+
+            '<div class="mb-2">'+journey+'</div>'+
+            '<div class="fw-semibold mb-3">'+escapeJourney(state)+'</div>'+
+            (!accepted && !moved && !delivered ? '<div class="text-muted mb-3">No carrier tracking movement has been received yet.</div>' : '')+
+            '<div class="fw-semibold mb-2">Tracking history</div>'+
+            history;
+        bootstrap.Modal.getOrCreateInstance(modalElement).show();
+    }
+
+    document.addEventListener('click', event => {
+        const button = event.target && event.target.closest ? event.target.closest('.fbm-tracking-journey') : null;
+        if (!button) return;
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+        openPersistedJourney(button);
+    }, true);
+
     // Retired child alignment loaders. Their active behavior is owned by the
     // canonical FBM page assets/injected authorities; this bootstrap must not
     // load duplicate eBay, legacy journey, or delivery-promise scripts.
