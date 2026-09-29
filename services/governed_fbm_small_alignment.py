@@ -364,6 +364,13 @@ def install_governed_fbm_small_alignment(app) -> None:
     _install_final_bell_alignment(app)
     _install_final_fbm_page_overlay(app)
 
+    # Missing/unverified FBM cells may be completed manually, but only through
+    # their existing persisted authorities. This adds no polling/provider read.
+    from services.governed_fbm_unverified_fallback_alignment import (
+        install_governed_fbm_unverified_fallback_alignment,
+    )
+    install_governed_fbm_unverified_fallback_alignment(app)
+
     app._bt38_fbm_small_alignment_installed = True
     app.logger.info(
         "BT38 small FBM alignment installed: Pending-first workflow, separate Returns, commercial lifecycle bell, persisted Amazon promise, London promise display, saved QZ printer and no-reload Packlink status handoff"
