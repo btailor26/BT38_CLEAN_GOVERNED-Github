@@ -187,8 +187,12 @@ def _shipping_source(shipment: Any) -> str:
         return "Packlink"
     if label_source == "ebay_finances_shipping_label":
         return "eBay Shipping"
-    if label_source in {"amazon_buy_shipping", "amazon_shipping"}:
+    if label_source == "amazon_buy_shipping":
         return "Amazon Buy Shipping"
+    if label_source == "amazon_shipping":
+        return "Amazon Shipping"
+    if label_source:
+        return label_source.replace("_", " ").title()
     if provider in {"amazon_buy_shipping", "amazon_shipping"}:
         return "Amazon Buy Shipping"
     # Older verified shipment rows may pre-date label_source. Require a persisted
