@@ -101,7 +101,10 @@
   }
 
   function pageOwnsCommittedRefresh() {
-    return Boolean(document.getElementById('mcf-orders-body'));
+    return Boolean(
+      document.getElementById('mcf-orders-body') ||
+      document.querySelector('.fbm-orders-table')
+    );
   }
 
   async function refreshCurrentPage(detail) {
