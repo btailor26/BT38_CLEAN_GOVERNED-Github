@@ -123,7 +123,15 @@ def _source_options(order: MarketplaceOrder) -> list[str]:
            AND COALESCE(NULLIF(label_source, ''), NULLIF(provider, '')) <> 'marketplace'
          ORDER BY source
     """)).scalars().all()
+    platform = _normal(getattr(getattr(order, "store", None), "platform", None)).lower()
     labels = {_source_label(value) for value in rows if _normal(value)}
+    # Never offer a marketplace-native shipping source to the wrong marketplace.
+    if platform == "amazon":
+        labels = {label for label in labels if label != "eBay Shipping"}
+    elif platform == "ebay":
+        labels = {label for label in labels if label not in {"Amazon Shipping", "Amazon Buy Shipping"}}
+    else:
+        labels = {label for label in labels if label not in {"Amazon Shipping", "Amazon Buy Shipping", "eBay Shipping"}}
     return sorted(labels)
 
 
@@ -180,6 +188,7 @@ def install_governed_fbm_unverified_fallback_alignment(app) -> None:
         body = request.get_json(silent=True) or {}
         field = _normal(body.get("field")).lower()
         value = _normal(body.get("value"))
+        carrier = _normal(body.get("carrier"))
         if not value:
             return jsonify({"success": False, "message": "A value is required."}), 400
 
@@ -236,15 +245,19 @@ def install_governed_fbm_unverified_fallback_alignment(app) -> None:
         if field == "tracking":
             if _normal(getattr(order, "tracking_number", None)):
                 return jsonify({"success": False, "message": "Tracking is already supplied."}), 409
-            # Tracking is exact-order completion only. It is never a reusable
-            # product/SKU mapping and never copied to another order.
+            if not carrier:
+                return jsonify({"success": False, "message": "Carrier is required with a tracking number."}), 400
+            # Carrier + tracking are one exact-order correction. They are never
+            # a reusable product/SKU mapping and never copied to another order.
+            order.carrier = carrier
             order.tracking_number = value
             db.session.commit()
             return jsonify({
                 "success": True,
                 "field": field,
                 "value": value,
-                "authority": "marketplace_orders.tracking_number",
+                "carrier": carrier,
+                "authority": "marketplace_orders.carrier+tracking_number",
                 "reusable_mapping": False,
             })
 
