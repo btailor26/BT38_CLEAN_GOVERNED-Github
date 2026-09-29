@@ -254,6 +254,18 @@ def _confirmed_shipping_spend(keys: set[tuple[int, str]]) -> dict[tuple[int, str
            AND fulfillment_family = 'FBM'
            AND store_id IN :store_ids
            AND marketplace_order_id IN :order_ids
+           AND (
+                source <> 'manual_fallback'
+                OR NOT EXISTS (
+                    SELECT 1
+                      FROM shipping_spend_ledger automatic
+                     WHERE automatic.store_id = shipping_spend_ledger.store_id
+                       AND automatic.marketplace_order_id = shipping_spend_ledger.marketplace_order_id
+                       AND automatic.fulfillment_family = 'FBM'
+                       AND automatic.confirmed = TRUE
+                       AND automatic.source <> 'manual_fallback'
+                )
+           )
          GROUP BY store_id, marketplace_order_id
     """).bindparams(bindparam("store_ids", expanding=True), bindparam("order_ids", expanding=True))
     try:
