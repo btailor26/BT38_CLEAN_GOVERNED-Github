@@ -349,8 +349,14 @@ def _bt38_existing_ui_signal_before_flush(
 
     from fbm_models import FBMShipment
     from models import MarketplaceListing, MarketplaceOrder, SyncLog
+    from shipping_spend_models import ShippingSpendLedger
 
-    canonical_rows = (MarketplaceListing, MarketplaceOrder, FBMShipment)
+    canonical_rows = (
+        MarketplaceListing,
+        MarketplaceOrder,
+        FBMShipment,
+        ShippingSpendLedger,
+    )
 
     for row in session_obj.new:
         if isinstance(row, canonical_rows):
