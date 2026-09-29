@@ -171,6 +171,17 @@ def install_governed_fbm_marketplace_dispatch_authority_alignment() -> None:
             for key, shipment in existing.items()
             if _confirmed_physical_shipment(shipment)
         }
+        # A manually completed label source remains a marketplace fallback,
+        # never physical provider proof. Preserve it only when no stronger
+        # physical shipment exists; recovered provider truth therefore wins.
+        for key, shipment in existing.items():
+            if key in result or shipment is None:
+                continue
+            if (
+                str(getattr(shipment, "provider", "") or "").strip().lower() == "marketplace"
+                and str(getattr(shipment, "label_source", "") or "").strip()
+            ):
+                result[key] = shipment
         for row in rows:
             if row.store_id is None or not row.marketplace_order_id:
                 continue
