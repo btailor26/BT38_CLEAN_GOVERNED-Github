@@ -316,7 +316,7 @@ def install_fbm_db_delivery_promise_alignment(app: Any) -> None:
 
     @before_render_template.connect_via(app)
     def _inject_fbm_delivery_promises(sender, template, context, **extra):
-        if getattr(template, "name", None) != "fbm.html":
+        if getattr(template, "name", None) not in {"fbm.html", "_fbm_history_rows.html"}:
             return
         items = context.get("orders") or []
         # The canonical FBM page now projects promise truth before render. Keep
