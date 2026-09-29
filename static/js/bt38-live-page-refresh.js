@@ -24,7 +24,7 @@
   function cssEscape(value) {
     const text = String(value ?? '');
     if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(text);
-    return text.replace(/["\\]/g, '\\  async function refreshProductLinkingSilently(detail) {');
+    return text.replace(/["\\]/g, '\\return text.replace(/["\\]/g, '\\  async function refreshProductLinkingSilently(detail) {');');
   }
 
   async function refreshExactHtmlRow(detail) {
