@@ -256,21 +256,21 @@ jobs:
           set -euo pipefail
           MACHINE_JSON="$(flyctl machines list --app bt38-prod --json || printf '[]')"
           printf '%s\n' "$MACHINE_JSON" > deployment-evidence/fly-machines-after.json
-          BT38_EVIDENCE_OUT=deployment-evidence/deployment-evidence.json \
-          BT38_DEPLOY_COMMIT="${{ github.sha }}" \
-          BT38_PREVIOUS_DEPLOY_COMMIT="$(cat deployment-evidence/previous-commit.txt 2>/dev/null || true)" \
-          BT38_FLY_APP=bt38-prod \
-          BT38_MACHINE_BEFORE="$(cat deployment-evidence/machine-before.txt 2>/dev/null || true)" \
-          BT38_MACHINE_AFTER="$(printf '%s' "$MACHINE_JSON" | jq -r '.[0].id // empty')" \
-          BT38_IMAGE_BEFORE="$(cat deployment-evidence/image-before.txt 2>/dev/null || true)" \
-          BT38_IMAGE_AFTER="$(printf '%s' "$MACHINE_JSON" | jq -r '.[0].config.image // empty')" \
-          BT38_DB_CONTRACT_RESULT="$(cat deployment-evidence/db-contract.txt 2>/dev/null || printf NOT_COMPLETED)" \
-          BT38_PUBLIC_SMOKE_RESULT="$(cat deployment-evidence/public-smoke.txt 2>/dev/null || printf NOT_COMPLETED)" \
-          BT38_EXPECTED_SOURCE_HASH_FILE=deployment-evidence/source-production-hashes.txt \
-          BT38_PRODUCTION_SOURCE_HASH_FILE=deployment-evidence/production-source-hashes.txt \
-          BT38_CHANGED_FILES_FILE=deployment-evidence/changed-files.txt \
-          BT38_LOADED_MODULES_FILE=deployment-evidence/loaded-bt38-modules.txt \
-          BT38_REGISTERED_ROUTES_FILE=deployment-evidence/registered-routes.txt \
+          export BT38_EVIDENCE_OUT=deployment-evidence/deployment-evidence.json
+          export BT38_DEPLOY_COMMIT="${{ github.sha }}"
+          export BT38_PREVIOUS_DEPLOY_COMMIT="$(cat deployment-evidence/previous-commit.txt 2>/dev/null || true)"
+          export BT38_FLY_APP=bt38-prod
+          export BT38_MACHINE_BEFORE="$(cat deployment-evidence/machine-before.txt 2>/dev/null || true)"
+          export BT38_MACHINE_AFTER="$(printf '%s' "$MACHINE_JSON" | jq -r '.[0].id // empty')"
+          export BT38_IMAGE_BEFORE="$(cat deployment-evidence/image-before.txt 2>/dev/null || true)"
+          export BT38_IMAGE_AFTER="$(printf '%s' "$MACHINE_JSON" | jq -r '.[0].config.image // empty')"
+          export BT38_DB_CONTRACT_RESULT="$(cat deployment-evidence/db-contract.txt 2>/dev/null || printf NOT_COMPLETED)"
+          export BT38_PUBLIC_SMOKE_RESULT="$(cat deployment-evidence/public-smoke.txt 2>/dev/null || printf NOT_COMPLETED)"
+          export BT38_EXPECTED_SOURCE_HASH_FILE=deployment-evidence/source-production-hashes.txt
+          export BT38_PRODUCTION_SOURCE_HASH_FILE=deployment-evidence/production-source-hashes.txt
+          export BT38_CHANGED_FILES_FILE=deployment-evidence/changed-files.txt
+          export BT38_LOADED_MODULES_FILE=deployment-evidence/loaded-bt38-modules.txt
+          export BT38_REGISTERED_ROUTES_FILE=deployment-evidence/registered-routes.txt
           if ! python scripts/record_governed_deployment_evidence.py; then
             # The recorder deliberately marks incomplete deployments unverified.
             # Preserve that evidence without creating a second misleading failure:
