@@ -729,20 +729,33 @@ def install_governed_fbm_page_alignment(app) -> None:
                 )
                 for row in missing_spend_rows
             }
-            remembered_rows = db.session.execute(text("""
-                SELECT mo.sku,
-                       COALESCE(mo.quantity, 1) AS quantity,
-                       LOWER(COALESCE(mo.carrier, '')) AS carrier,
-                       ssl.amount,
-                       ssl.currency
-                  FROM shipping_spend_ledger ssl
-                  JOIN marketplace_orders mo
-                    ON mo.store_id = ssl.store_id
-                   AND mo.marketplace_order_id = ssl.marketplace_order_id
-                 WHERE ssl.confirmed = TRUE
-                   AND ssl.fulfillment_family = 'FBM'
-                   AND mo.sku IS NOT NULL
-            """)).all()
+            # Keep remembered-price lookup bounded to the exact product keys
+            # present in this working set. History expansion must never scan the
+            # complete confirmed FBM spend ledger just to render selected days.
+            remembered_rows = (
+                db.session.query(
+                    MarketplaceOrder.sku.label("sku"),
+                    func.coalesce(MarketplaceOrder.quantity, 1).label("quantity"),
+                    func.lower(func.coalesce(MarketplaceOrder.carrier, "")).label("carrier"),
+                    ShippingSpendLedger.amount.label("amount"),
+                    ShippingSpendLedger.currency.label("currency"),
+                )
+                .join(
+                    MarketplaceOrder,
+                    (MarketplaceOrder.store_id == ShippingSpendLedger.store_id)
+                    & (MarketplaceOrder.marketplace_order_id == ShippingSpendLedger.marketplace_order_id),
+                )
+                .filter(
+                    ShippingSpendLedger.confirmed.is_(True),
+                    ShippingSpendLedger.fulfillment_family == "FBM",
+                    tuple_(
+                        MarketplaceOrder.sku,
+                        func.coalesce(MarketplaceOrder.quantity, 1),
+                        func.lower(func.coalesce(MarketplaceOrder.carrier, "")),
+                    ).in_(sorted(product_keys)),
+                )
+                .all()
+            )
             candidates = {}
             for remembered in remembered_rows:
                 remembered_key = (
