@@ -242,6 +242,23 @@ def install_governed_fbm_unverified_fallback_alignment(app) -> None:
                 "authority": "shipping_spend_ledger",
             })
 
+        if field == "carrier":
+            # Carrier is an independent exact-order fact. Tracking may remain
+            # NULL when the marketplace/provider has not supplied it.
+            if _normal(getattr(order, "carrier", None)):
+                return jsonify({"success": False, "message": "Carrier is already supplied."}), 409
+            order.carrier = value
+            db.session.commit()
+            return jsonify({
+                "success": True,
+                "field": field,
+                "value": value,
+                "carrier": value,
+                "tracking_number": _normal(getattr(order, "tracking_number", None)) or None,
+                "authority": "marketplace_orders.carrier",
+                "reusable_mapping": False,
+            })
+
         if field == "tracking":
             if _normal(getattr(order, "tracking_number", None)):
                 return jsonify({"success": False, "message": "Tracking is already supplied."}), 409
