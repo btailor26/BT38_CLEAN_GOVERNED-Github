@@ -15,7 +15,7 @@ from zoneinfo import ZoneInfo
 
 from flask import jsonify, request, render_template
 from flask_login import login_required
-from sqlalchemy import func, or_, tuple_
+from sqlalchemy import func, or_, text, tuple_
 from sqlalchemy.orm import joinedload
 
 from extensions import db
@@ -729,7 +729,7 @@ def install_governed_fbm_page_alignment(app) -> None:
                 )
                 for row in missing_spend_rows
             }
-            remembered_rows = db.session.execute(db.text("""
+            remembered_rows = db.session.execute(text("""
                 SELECT mo.sku,
                        COALESCE(mo.quantity, 1) AS quantity,
                        LOWER(COALESCE(mo.carrier, '')) AS carrier,
