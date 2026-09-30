@@ -85,39 +85,21 @@
             const nextData = JSON.parse(dataNode.textContent || '{}');
             const nextCounts = JSON.parse(countsNode.textContent || '{}');
             document.querySelectorAll('.fbm-order-row').forEach(row => {
-                const freshRow = parsed.querySelector(`.fbm-order-row[data-order-id="${CSS.escape(String(row.dataset.orderId || ''))}"]`);
+                const orderId = String(row.dataset.orderId || '');
+                const freshRow = parsed.querySelector(`.fbm-order-row[data-order-id="${CSS.escape(orderId)}"]`);
                 if (!freshRow) return;
-                // Keep the visible row on the exact same persisted DB truth as
-                // the tracking popup. The fresh /fbm snapshot already carries
-                // these governed data attributes; copy them before the committed
-                // snapshot event lets the canonical journey owner recolour.
-                [
-                    'lifecycleStatus',
-                    'shipmentState',
-                    'carrierAcceptedAt',
-                    'firstMovementAt',
-                    'deliveredAt',
-                    'deliveryPerformance',
-                    'trackingEvents',
-                    'lastProviderCheckedAt',
-                    'lastProviderStatus',
-                    'shipByAt',
-                    'earliestDeliveryAt',
-                    'deliveryPromiseAt',
-                    'shippingSource',
-                    'carrier',
-                    'service',
-                    'trackingNumber',
-                    'providerShipmentId',
-                    'shippingCost',
-                    'shippingCostCurrency',
-                    'shippingCostRecords'
-                ].forEach(key => {
-                    row.dataset[key] = freshRow.dataset[key] || '';
-                });
-                row.dataset.labelReady = freshRow.dataset.labelReady || '0';
+                // The server-rendered row is the committed DB presentation
+                // authority. Replace the exact row rather than copying only
+                // datasets, otherwise visible tracking/journey/cost/source can
+                // remain stale while hidden data is already current.
+                row.replaceWith(document.importNode(freshRow, true));
             });
+            // Rebuild the existing FBM browser-session owner from the replaced
+            // rows; no second refresh owner, timer, poller or marketplace read.
             window.BT38FBMApplyCommittedSnapshot(nextData, nextCounts);
+            document.dispatchEvent(new CustomEvent('bt38-fbm-working-set-expanded', {
+                detail: {reason: 'committed_event_refresh'}
+            }));
             alignPersistedLifecycle();
             updateSelectedPacklinkLabelAction();
         } catch (error) {
