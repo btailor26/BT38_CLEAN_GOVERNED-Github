@@ -21,6 +21,7 @@ from sqlalchemy.orm import joinedload
 from extensions import db
 from fbm_models import FBMOrderProfile
 from models import MarketplaceOrder, ProductPackMapping
+from shipping_spend_models import ShippingSpendLedger
 from governed_fbm_routes import (
     _is_fbm_eligible,
     _marketplace_shipping_mode,
@@ -675,6 +676,38 @@ def install_governed_fbm_page_alignment(app) -> None:
         shipments = _shipment_map(rows)
         profiles = _profile_map(rows)
 
+        # ShippingSpendLedger is the persisted shipping-cost authority. Project
+        # confirmed spend into the existing FBM read model in one bounded query;
+        # provider/automatic truth wins, with manual_fallback used only when no
+        # stronger confirmed spend exists. No new authority or marketplace read.
+        spend_keys = {
+            (int(row.store_id), str(row.marketplace_order_id))
+            for row in rows
+            if row.store_id is not None and row.marketplace_order_id
+        }
+        spend_by_order = {}
+        if spend_keys:
+            spend_rows = (
+                db.session.query(ShippingSpendLedger)
+                .filter(
+                    tuple_(
+                        ShippingSpendLedger.store_id,
+                        ShippingSpendLedger.marketplace_order_id,
+                    ).in_(sorted(spend_keys)),
+                    ShippingSpendLedger.confirmed.is_(True),
+                )
+                .order_by(ShippingSpendLedger.updated_at.desc(), ShippingSpendLedger.id.desc())
+                .all()
+            )
+            for spend in spend_rows:
+                spend_key = (int(spend.store_id), str(spend.marketplace_order_id))
+                current = spend_by_order.get(spend_key)
+                if current is None or (
+                    str(current.source or "").strip().lower() == "manual_fallback"
+                    and str(spend.source or "").strip().lower() != "manual_fallback"
+                ):
+                    spend_by_order[spend_key] = spend
+
         orders = []
         for row in rows:
             key = (int(row.store_id), str(row.marketplace_order_id))
@@ -687,6 +720,17 @@ def install_governed_fbm_page_alignment(app) -> None:
             shipment_state = shipment_confirmation_state(shipment) if shipment else "not_started"
             case = provider_case_eligibility(shipment) if shipment else {"eligible": False, "reason": "shipment_not_started", "case_type": None}
             mapping_review = getattr(shipment, "mapping_review", None) if shipment else None
+            confirmed_spend = spend_by_order.get(key)
+            persisted_shipping_cost = (
+                confirmed_spend.amount
+                if confirmed_spend is not None
+                else (row.shipping_cost if row.shipping_cost is not None and row.shipping_cost > 0 else None)
+            )
+            persisted_shipping_currency = (
+                confirmed_spend.currency
+                if confirmed_spend is not None
+                else "GBP"
+            )
             orders.append({
                 "order": row,
                 "platform": platform,
@@ -694,9 +738,10 @@ def install_governed_fbm_page_alignment(app) -> None:
                 "route_state": route_state,
                 "shipping_mode": {
                     **_workspace_shipping_mode(row, platform, profile),
-                    # Canonical carrier/label postage remains Shipping Cost.
-                    "shipping_cost": row.shipping_cost if row.shipping_cost is not None and row.shipping_cost > 0 else None,
-                    "shipping_cost_currency": "GBP",
+                    # Confirmed ledger spend is canonical carrier/label postage.
+                    # marketplace_orders.shipping_cost remains the legacy fallback.
+                    "shipping_cost": persisted_shipping_cost,
+                    "shipping_cost_currency": persisted_shipping_currency,
                 },
                 "shipment": shipment,
                 "shipment_state": shipment_state,
