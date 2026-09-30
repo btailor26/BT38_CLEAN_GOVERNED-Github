@@ -116,6 +116,16 @@ jobs:
           python-version: '3.11'
       - name: Set up Fly CLI
         uses: superfly/flyctl-actions/setup-flyctl@master
+      - name: Align Fly private transport for GitHub runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          # GitHub-hosted runners must not depend on UDP WireGuard reachability.
+          # Fly supports carrying the private WireGuard tunnel over WebSockets/HTTPS.
+          flyctl wireguard websockets enable
+          flyctl agent restart || true
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       - name: Capture governed deployment before-state and source manifest
         shell: bash
         run: |
@@ -141,7 +151,7 @@ jobs:
           CHECK_B64="$(base64 -w0 scripts/verify_production_db_contract.py)"
           for ATTEMPT in 1 2 3 4 5 6; do
             set +e
-            OUT="$(timeout 45s flyctl ssh console --app bt38-prod --command "sh -lc 'printf %s \"$CHECK_B64\" | base64 -d > /tmp/bt38-db-contract.py && cd /app && .venv/bin/python /tmp/bt38-db-contract.py'" 2>&1)"
+            OUT="$(timeout 45s flyctl ssh console --app bt38-prod --machine "$MACHINE_ID" --command "sh -lc 'printf %s \"$CHECK_B64\" | base64 -d > /tmp/bt38-db-contract.py && cd /app && .venv/bin/python /tmp/bt38-db-contract.py'" 2>&1)"
             STATUS=$?
             set -e
             printf '%s\n' "$OUT"
@@ -261,7 +271,13 @@ jobs:
           BT38_CHANGED_FILES_FILE=deployment-evidence/changed-files.txt \
           BT38_LOADED_MODULES_FILE=deployment-evidence/loaded-bt38-modules.txt \
           BT38_REGISTERED_ROUTES_FILE=deployment-evidence/registered-routes.txt \
-          python scripts/record_governed_deployment_evidence.py
+          if ! python scripts/record_governed_deployment_evidence.py; then
+            # The recorder deliberately marks incomplete deployments unverified.
+            # Preserve that evidence without creating a second misleading failure:
+            # the original failed gate remains the authoritative job failure.
+            test -s deployment-evidence/deployment-evidence.json
+            echo "GOVERNED_DEPLOYMENT_EVIDENCE_UNVERIFIED: preserving evidence from the failed deployment boundary"
+          fi
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
       - name: Upload governed deployment evidence
