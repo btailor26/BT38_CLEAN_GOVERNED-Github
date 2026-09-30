@@ -694,6 +694,7 @@ def install_governed_fbm_page_alignment(app) -> None:
                         ShippingSpendLedger.store_id,
                         ShippingSpendLedger.marketplace_order_id,
                     ).in_(sorted(spend_keys)),
+                    ShippingSpendLedger.fulfillment_family == "FBM",
                     ShippingSpendLedger.confirmed.is_(True),
                 )
                 .order_by(ShippingSpendLedger.updated_at.desc(), ShippingSpendLedger.id.desc())
@@ -708,6 +709,56 @@ def install_governed_fbm_page_alignment(app) -> None:
                 ):
                     spend_by_order[spend_key] = spend
 
+        # Existing fallback-price memory is SKU + quantity + carrier truth, not
+        # tracking truth. Reuse a confirmed price only when the matching memory
+        # resolves to one unambiguous amount. The spend ledger remains the
+        # authority; this only projects that existing memory into rows which do
+        # not yet have their own confirmed spend.
+        fallback_price_by_product = {}
+        missing_spend_rows = [
+            row for row in rows
+            if (int(row.store_id), str(row.marketplace_order_id)) not in spend_by_order
+            and str(getattr(row, "sku", "") or "").strip()
+        ]
+        if missing_spend_rows:
+            product_keys = {
+                (
+                    str(row.sku).strip(),
+                    max(1, int(getattr(row, "quantity", 1) or 1)),
+                    str(getattr(row, "carrier", "") or "").strip().lower(),
+                )
+                for row in missing_spend_rows
+            }
+            remembered_rows = db.session.execute(db.text("""
+                SELECT mo.sku,
+                       COALESCE(mo.quantity, 1) AS quantity,
+                       LOWER(COALESCE(mo.carrier, '')) AS carrier,
+                       ssl.amount,
+                       ssl.currency
+                  FROM shipping_spend_ledger ssl
+                  JOIN marketplace_orders mo
+                    ON mo.store_id = ssl.store_id
+                   AND mo.marketplace_order_id = ssl.marketplace_order_id
+                 WHERE ssl.confirmed = TRUE
+                   AND ssl.fulfillment_family = 'FBM'
+                   AND mo.sku IS NOT NULL
+            """)).all()
+            candidates = {}
+            for remembered in remembered_rows:
+                remembered_key = (
+                    str(remembered.sku or "").strip(),
+                    max(1, int(remembered.quantity or 1)),
+                    str(remembered.carrier or "").strip().lower(),
+                )
+                if remembered_key not in product_keys:
+                    continue
+                candidates.setdefault(remembered_key, {})[
+                    (remembered.amount, remembered.currency or "GBP")
+                ] = True
+            for remembered_key, prices in candidates.items():
+                if len(prices) == 1:
+                    fallback_price_by_product[remembered_key] = next(iter(prices))
+
         orders = []
         for row in rows:
             key = (int(row.store_id), str(row.marketplace_order_id))
@@ -721,15 +772,24 @@ def install_governed_fbm_page_alignment(app) -> None:
             case = provider_case_eligibility(shipment) if shipment else {"eligible": False, "reason": "shipment_not_started", "case_type": None}
             mapping_review = getattr(shipment, "mapping_review", None) if shipment else None
             confirmed_spend = spend_by_order.get(key)
+            fallback_price = fallback_price_by_product.get((
+                str(getattr(row, "sku", "") or "").strip(),
+                max(1, int(getattr(row, "quantity", 1) or 1)),
+                str(getattr(row, "carrier", "") or "").strip().lower(),
+            ))
             persisted_shipping_cost = (
                 confirmed_spend.amount
                 if confirmed_spend is not None
-                else (row.shipping_cost if row.shipping_cost is not None and row.shipping_cost > 0 else None)
+                else (
+                    fallback_price[0]
+                    if fallback_price is not None
+                    else (row.shipping_cost if row.shipping_cost is not None and row.shipping_cost > 0 else None)
+                )
             )
             persisted_shipping_currency = (
                 confirmed_spend.currency
                 if confirmed_spend is not None
-                else "GBP"
+                else (fallback_price[1] if fallback_price is not None else "GBP")
             )
             orders.append({
                 "order": row,
