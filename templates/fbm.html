@@ -171,8 +171,10 @@ async function bt38OpenMissingField(cell,row,field){
    input='<select class="form-select form-select-sm bt38-fallback-choice"><option value="">Select known source…</option>'+options.map(v=>'<option value="'+bt38FallbackEsc(v)+'">'+bt38FallbackEsc(v)+'</option>').join('')+'</select><input class="form-control form-control-sm mt-1 bt38-fallback-manual" placeholder="Or enter source manually">';
   }else if(field==='cost'){
    input='<input type="number" min="0" step="0.01" class="form-control form-control-sm bt38-fallback-manual" placeholder="Enter actual shipping cost">';
+  }else if(field==='carrier'){
+   input='<input class="form-control form-control-sm bt38-fallback-manual" placeholder="Enter carrier">';
   }else{
-   input='<input class="form-control form-control-sm bt38-fallback-carrier" placeholder="Enter carrier"><input class="form-control form-control-sm mt-1 bt38-fallback-manual" placeholder="Enter tracking number">';
+   input='<input class="form-control form-control-sm bt38-fallback-carrier" placeholder="Enter carrier" value="'+bt38FallbackEsc(String(row.dataset.carrier||''))+'"><input class="form-control form-control-sm mt-1 bt38-fallback-manual" placeholder="Enter tracking number">';
   }
   cell.innerHTML='<div class="bt38-missing-field-editor" data-no-row-click="1">'+input+'<div class="d-flex gap-1 mt-1"><button type="button" class="btn btn-sm btn-primary bt38-fallback-save">Save</button><button type="button" class="btn btn-sm btn-outline-secondary bt38-fallback-cancel">Cancel</button></div></div>';
   const editor=cell.querySelector('.bt38-missing-field-editor');
@@ -209,15 +211,25 @@ async function bt38OpenMissingField(cell,row,field){
     }else{
       cell.innerHTML='<div><strong></strong></div>';
       const strong=cell.querySelector('strong');
-      if(strong)strong.textContent=String(saved.carrier||carrier||'');
-      if(saved.value){
-        const tracking=document.createElement('div');
-        tracking.className='small text-muted';
-        tracking.textContent=String(saved.value);
-        cell.appendChild(tracking);
+      if(field==='carrier'){
+        if(strong)strong.textContent=String(saved.value||value);
+        const pending=document.createElement('div');
+        pending.className='small text-muted';
+        pending.textContent='Parcel ID pending';
+        cell.appendChild(pending);
+        row.dataset.carrier=String(saved.value||value);
+        row.dataset.trackingNumber=String(saved.tracking_number||'');
+      }else{
+        if(strong)strong.textContent=String(saved.carrier||carrier||'');
+        if(saved.value){
+          const tracking=document.createElement('div');
+          tracking.className='small text-muted';
+          tracking.textContent=String(saved.value);
+          cell.appendChild(tracking);
+        }
+        row.dataset.carrier=String(saved.carrier||carrier||'');
+        row.dataset.trackingNumber=String(saved.value||value||'');
       }
-      row.dataset.carrier=String(saved.carrier||carrier||'');
-      row.dataset.trackingNumber=String(saved.value||value||'');
     }
     cell.dataset.fallbackEditing='';
    }catch(err){window.alert(err.message||String(err));button.disabled=false;}
@@ -232,7 +244,11 @@ document.querySelector('.fbm-orders-table tbody')?.addEventListener('dblclick',e
  const sourceCell=cells[5],shipmentCell=cells[7],costCell=cells[11];
  if(cell===sourceCell&&/Source unverified/i.test(sourceCell.textContent||'')){event.preventDefault();event.stopPropagation();void bt38OpenMissingField(cell,row,'source');return;}
  if(cell===costCell&&/Pending\s*\/\s*unavailable/i.test(costCell.textContent||'')){event.preventDefault();event.stopPropagation();void bt38OpenMissingField(cell,row,'cost');return;}
- if(cell===shipmentCell&&!String(row.dataset.trackingNumber||'').trim()){event.preventDefault();event.stopPropagation();void bt38OpenMissingField(cell,row,'tracking');}
+ if(cell===shipmentCell){
+   const carrier=String(row.dataset.carrier||'').trim(),tracking=String(row.dataset.trackingNumber||'').trim();
+   if(!carrier){event.preventDefault();event.stopPropagation();void bt38OpenMissingField(cell,row,'carrier');return;}
+   if(!tracking){event.preventDefault();event.stopPropagation();void bt38OpenMissingField(cell,row,'tracking');}
+ }
 });
 
 updateSelection();
