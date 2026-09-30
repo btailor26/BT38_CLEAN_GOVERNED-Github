@@ -139,8 +139,10 @@ if(recoverButton)recoverButton.addEventListener('click',async()=>{
   }catch(err){if(err?.httpOk===true){recoveryLines.push(`${orderId} · ${marketplace||'marketplace'} · CALL COMPLETED · RECOVERY NOT APPLIED · ${err.payload?.shipment_recovery?.reason||err.payload?.hydration?.reason||err.payload?.shipping_cost_recovery?.finance_reason||err.payload?.reason||err.payload?.error||err.message||'governed recovery returned no applicable update'}`);}else{failed+=1;recoveryLines.push(`${orderId} · ${marketplace||'marketplace'} · CALL FAILED · ${err.message||'unknown error'}`);}}
  }
  const heading=`${called?'Recovery truth':'DB check only'} · ${called} call${called===1?'':'s'} made · ${skipped} not required · ${failed} failed`;
- window.alert(heading+'\\n\\n'+recoveryLines.join('\\n')+'\\n\\nReloading the page from persisted DB truth.');
- recoverButton.innerHTML=original;updateSelection();window.location.reload();
+ window.alert(heading+'\\n\\n'+recoveryLines.join('\\n')+'\\n\\nPersisted DB truth will refresh silently.');
+ recoverButton.innerHTML=original;updateSelection();
+ // Recovery commits publish the existing governed event; the single FBM
+ // refresh owner replaces persisted rows and reapplies History/Health.
 });
 document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(el=>{if(window.bootstrap?.Tooltip)bootstrap.Tooltip.getOrCreateInstance(el);});
 document.querySelector('.fbm-orders-table tbody')?.addEventListener('click',async e=>{const shipping=e.target.closest('.fbm-shipping-options');if(shipping){e.stopPropagation();openShippingOptions([shipping.dataset.orderId]);return;}const status=e.target.closest('.packlink-existing-status');if(status){e.stopPropagation();status.disabled=true;try{const p=await jsonFetch(`/fbm/shipments/${status.dataset.shipmentId}/packlink/status`);alert(p.label_ready?`Packlink label ready. ${p.mapping_status==='under_review'?'Mapping under review.':'Shipment updated.'}`:(p.message||'Packlink label is not ready yet.'));}catch(err){alert(err.message);}finally{status.disabled=false;}return;}});
