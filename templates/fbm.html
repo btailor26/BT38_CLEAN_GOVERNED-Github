@@ -189,7 +189,36 @@ async function bt38OpenMissingField(cell,row,field){
    const button=e.currentTarget;button.disabled=true;
    try{
     const saved=await jsonFetch('/fbm/orders/'+encodeURIComponent(orderId)+'/unverified-field',{method:'POST',body:JSON.stringify({field,value,carrier})});
-    cell.innerHTML='<span class="text-muted small">Saved · committed DB refresh pending</span>';
+    // The committed write publishes the governed UI event. Reflect the exact
+    // committed response immediately so the warning is removed without waiting
+    // for a page reload; the event-driven DB snapshot then silently reconciles
+    // the complete row from persisted authority.
+    if(field==='cost'){
+      const amount=Number(saved.value);
+      const currency=String(saved.currency||'GBP').trim()||'GBP';
+      cell.innerHTML='<span class="fw-semibold"></span>';
+      const valueNode=cell.querySelector('.fw-semibold');
+      if(valueNode)valueNode.textContent=currency==='GBP'&&Number.isFinite(amount)?'£'+amount.toFixed(2):(Number.isFinite(amount)?amount.toFixed(2)+' '+currency:String(saved.value||value));
+      row.dataset.shippingCost=Number.isFinite(amount)?String(amount):String(saved.value||value);
+      row.dataset.shippingCostCurrency=currency;
+    }else if(field==='source'){
+      cell.innerHTML='<div class="small mt-1"><span class="badge bg-primary"></span></div>';
+      const badge=cell.querySelector('.badge');
+      if(badge)badge.textContent=String(saved.value||value);
+      row.dataset.shippingSource=String(saved.value||value);
+    }else{
+      cell.innerHTML='<div><strong></strong></div>';
+      const strong=cell.querySelector('strong');
+      if(strong)strong.textContent=String(saved.carrier||carrier||'');
+      if(saved.value){
+        const tracking=document.createElement('div');
+        tracking.className='small text-muted';
+        tracking.textContent=String(saved.value);
+        cell.appendChild(tracking);
+      }
+      row.dataset.carrier=String(saved.carrier||carrier||'');
+      row.dataset.trackingNumber=String(saved.value||value||'');
+    }
     cell.dataset.fallbackEditing='';
    }catch(err){window.alert(err.message||String(err));button.disabled=false;}
   });
