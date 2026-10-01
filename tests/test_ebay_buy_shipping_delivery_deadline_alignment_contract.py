@@ -28,3 +28,15 @@ def test_deadline_event_reuses_exact_ebay_hydration_without_polling():
     assert "hydrate_exact_ebay_order(" in runtime
     assert "confirmed_ebay_buy_shipping" in alignment
     assert "poll" not in alignment.lower().replace("poller", "")
+
+
+def test_shipment_commit_publishes_canonical_marketplace_order_refresh_identity():
+    source = Path("services/governed_exact_record_event_alignment.py").read_text(encoding="utf-8")
+    browser = Path("static/js/fbm_tracking_journey.js").read_text(encoding="utf-8")
+
+    assert 'scope["marketplace_order_id"] = marketplace_order_id' in source
+    assert 'scope["store_id"] = _value(row, "store_id")' in source
+    assert "committedRefreshIdentity(detail)" in browser
+    assert "detail?.marketplace_order_id" in browser
+    assert "applyCommittedFbmSnapshot(detail)" in browser
+    assert "openPersistedJourney(currentTrackingButton)" in browser
