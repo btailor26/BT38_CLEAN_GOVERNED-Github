@@ -630,11 +630,120 @@ def login():
     else:
         error = ""
 
+    import os
+
+    google_client_id = (os.environ.get("GOOGLE_CLIENT_ID") or "").strip()
     return render_template(
         "login.html",
         error=error,
         next_url=next_url,
+        google_client_id=google_client_id,
+        google_login_uri=url_for("governed.google_login", _external=True) if google_client_id else "",
     )
+
+
+@governed_bp.post("/login/google")
+def google_login():
+    """Authenticate an existing BT38 user from a verified Google ID token.
+
+    Google is authentication only. It does not create a public BT38 user,
+    customer account, package, store, or second onboarding path.
+    """
+    import base64
+    import json as json_module
+    import os
+    import time
+
+    import requests as http_requests
+    from Crypto.Hash import SHA256
+    from Crypto.PublicKey import RSA
+    from Crypto.Signature import pkcs1_15
+    from flask_login import login_user
+
+    from extensions import db
+    from models import SystemLog, User
+
+    def _login_error(message):
+        return render_template(
+            "login.html",
+            error=message,
+            next_url="",
+            google_client_id=client_id,
+            google_login_uri=url_for("governed.google_login", _external=True),
+        ), 401
+
+    client_id = (os.environ.get("GOOGLE_CLIENT_ID") or "").strip()
+    if not client_id:
+        return _login_error("Google sign-in is not configured.")
+
+    # Google Identity Services requires its POST token to match the cookie.
+    submitted_csrf = str(request.form.get("g_csrf_token") or "")
+    cookie_csrf = str(request.cookies.get("g_csrf_token") or "")
+    if not submitted_csrf or not cookie_csrf or not hmac.compare_digest(submitted_csrf, cookie_csrf):
+        return _login_error("Google sign-in could not be verified.")
+
+    credential = str(request.form.get("credential") or "")
+    parts = credential.split(".")
+    if len(parts) != 3:
+        return _login_error("Google sign-in could not be verified.")
+
+    def _decode(segment):
+        padding = "=" * (-len(segment) % 4)
+        return base64.urlsafe_b64decode((segment + padding).encode("ascii"))
+
+    try:
+        header = json_module.loads(_decode(parts[0]))
+        claims = json_module.loads(_decode(parts[1]))
+        if header.get("alg") != "RS256" or not header.get("kid"):
+            raise ValueError("unsupported Google token")
+
+        cert_response = http_requests.get(
+            "https://www.googleapis.com/oauth2/v1/certs",
+            timeout=5,
+        )
+        cert_response.raise_for_status()
+        certificate = (cert_response.json() or {}).get(str(header["kid"]))
+        if not certificate:
+            raise ValueError("Google signing key unavailable")
+
+        signing_input = f"{parts[0]}.{parts[1]}".encode("ascii")
+        signature = _decode(parts[2])
+        pkcs1_15.new(RSA.import_key(certificate)).verify(
+            SHA256.new(signing_input),
+            signature,
+        )
+
+        now = int(time.time())
+        if claims.get("aud") != client_id:
+            raise ValueError("wrong Google audience")
+        if claims.get("iss") not in {"accounts.google.com", "https://accounts.google.com"}:
+            raise ValueError("wrong Google issuer")
+        if int(claims.get("exp") or 0) <= now:
+            raise ValueError("expired Google token")
+        email = str(claims.get("email") or "").strip().lower()
+        if not email or claims.get("email_verified") is not True:
+            raise ValueError("Google email is not verified")
+    except Exception:
+        return _login_error("Google sign-in could not be verified.")
+
+    user = db.session.query(User).filter(db.func.lower(User.email) == email).first()
+    if not user or not user.is_active:
+        return _login_error("This Google account is not registered for BT38 access.")
+
+    user.last_login = datetime.utcnow()
+    db.session.add(SystemLog(
+        log_type="authentication",
+        message="Google sign-in succeeded",
+        details=json_module.dumps({
+            "provider": "google",
+            "method": "google_identity_services",
+            "user_id": user.id,
+            "signed_in_at": datetime.utcnow().isoformat() + "Z",
+        }),
+    ))
+    db.session.commit()
+    login_user(user, remember=True)
+    return redirect(url_for("governed.governed_warehouse_page"))
 
 
 def _bt38_structure_secret_ok(payload: dict) -> bool:
