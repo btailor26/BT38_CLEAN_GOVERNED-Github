@@ -122,3 +122,25 @@ def test_open_tracking_modal_refresh_is_exact_identity_only():
     assert "modalElement.dataset.marketplaceOrderId = String(identityRow.dataset.marketplaceOrderId || '')" in source
     assert "String(openTrackingModal.dataset.storeId || '') === storeId" in source
     assert "String(openTrackingModal.dataset.marketplaceOrderId || '') === marketplaceOrderId" in source
+
+
+def test_full_page_and_targeted_refresh_share_one_canonical_row_renderer():
+    full_page = Path("templates/fbm.html").read_text(encoding="utf-8")
+    fragment = Path("templates/_fbm_history_rows.html").read_text(encoding="utf-8")
+    canonical = Path("templates/_fbm_order_rows.html").read_text(encoding="utf-8")
+
+    assert "{% include '_fbm_order_rows.html' %}" in full_page
+    assert "{% include '_fbm_order_rows.html' %}" in fragment
+    assert full_page.count('class="fbm-order-row"') == 0
+    assert fragment.count('class="fbm-order-row"') == 0
+    assert canonical.count('class="fbm-order-row"') == 1
+    assert 'data-lifecycle-status="{{ lifecycle_status }}"' in canonical
+    assert "persisted_delivered" in canonical
+
+
+def test_exact_browser_row_replacement_uses_store_and_marketplace_order_identity():
+    source = Path("static/js/fbm_tracking_journey.js").read_text(encoding="utf-8")
+
+    assert 'data-marketplace-order-id="${CSS.escape(marketplaceOrderId)}"' in source
+    assert 'data-store-id="${CSS.escape(storeId)}"' in source
+    assert "const freshRowSelector =" in source
