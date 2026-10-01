@@ -100,3 +100,24 @@ def test_tracking_history_stays_aligned_when_exact_row_refreshes():
     assert "document.querySelector('#fbmTrackingJourneyModal.show')" in source
     assert "replacementRow.querySelector('.fbm-tracking-journey')" in source
     assert "openPersistedJourney(currentTrackingButton)" in source
+
+
+def test_verified_recovery_calls_single_exact_refresh_owner_directly():
+    template = Path("templates/fbm.html").read_text(encoding="utf-8")
+    source = Path("static/js/fbm_tracking_journey.js").read_text(encoding="utf-8")
+
+    assert "window.bt38RefreshExactCommittedFbmRow = function(detail)" in source
+    assert "enqueueCommittedFbmRefresh(detail || {})" in source
+    assert "typeof window.bt38RefreshExactCommittedFbmRow==='function'" in template
+    assert "window.bt38RefreshExactCommittedFbmRow(scope)" in template
+    assert "location.reload(" not in template
+    assert "setInterval(" not in source
+
+
+def test_open_tracking_modal_refresh_is_exact_identity_only():
+    source = Path("static/js/fbm_tracking_journey.js").read_text(encoding="utf-8")
+
+    assert "modalElement.dataset.storeId = String(identityRow.dataset.storeId || '')" in source
+    assert "modalElement.dataset.marketplaceOrderId = String(identityRow.dataset.marketplaceOrderId || '')" in source
+    assert "String(openTrackingModal.dataset.storeId || '') === storeId" in source
+    assert "String(openTrackingModal.dataset.marketplaceOrderId || '') === marketplaceOrderId" in source
