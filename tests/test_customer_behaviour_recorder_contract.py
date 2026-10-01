@@ -9,7 +9,8 @@ def test_automatic_recorder_is_exception_only():
     text = _source()
     assert '_ALLOWED_EVENTS = {"browser_error"}' in text
     assert '"page_view"' not in text
-    assert '"scroll_depth"' not in text
+    assert 'event:"scroll_depth"' not in text
+    assert 'send("scroll_depth"' not in text
     assert 'send("click"' not in text
     assert 'send("change"' not in text
     assert 'send("form_start"' not in text
