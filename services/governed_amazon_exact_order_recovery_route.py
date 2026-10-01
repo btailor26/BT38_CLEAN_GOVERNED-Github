@@ -12,6 +12,7 @@ from __future__ import annotations
 import hmac
 import os
 import re
+from datetime import datetime
 
 from flask import Blueprint, current_app, jsonify, request
 from flask_login import current_user
@@ -19,9 +20,13 @@ from sqlalchemy import text
 
 from extensions import db
 from models import MarketplaceOrder, Store
+from fbm_models import FBMShipment
 from services.governed_amazon_shipping_label_readback import hydrate_amazon_purchased_label_for_order
 from services.governed_amazon_tracking_readback import hydrate_amazon_tracking_for_order
 from services.governed_amazon_fbm_profile_event_alignment import refresh_exact_amazon_order
+from services.fbm_packlink_adapter import PacklinkAdapter, PacklinkRequestError
+from services.fbm_packlink_callback import extract_packlink_tracking, reconcile_packlink_tracking_lifecycle
+from services.governed_shipping_spend_alignment import recover_confirmed_packlink_spend, recover_packlink_provider_spend
 
 
 governed_amazon_exact_order_recovery_bp = Blueprint("governed_amazon_exact_order_recovery", __name__)
@@ -314,6 +319,88 @@ def recover_exact_amazon_order_manually():
     tracking_gaps = {"tracking_number", "tracking_history", "carrier"}
     promise_gaps = {"ship_by_promise", "delivery_promise"}
     label_gaps = {"provider_reference", "shipping_fee"}
+
+    # Shipping recovery follows the persisted shipping source, not the marketplace.
+    # Amazon remains authority only for Amazon-owned marketplace facts such as promises.
+    shipment_truth = dict(before.get("fbm_shipment") or {})
+    shipping_source = str(shipment_truth.get("provider") or "").strip().lower()
+    shipping_gaps = gaps & (tracking_gaps | label_gaps)
+    if shipping_source == "packlink" and shipping_gaps:
+        shipment = db.session.get(FBMShipment, shipment_truth.get("id")) if shipment_truth.get("id") else None
+        provider_reference = str(shipment_truth.get("provider_shipment_id") or "").strip()
+        if shipment is None or not provider_reference:
+            return jsonify({
+                "success": False, "ok": False, "governed": True,
+                "reason": "persisted_packlink_shipment_identity_incomplete",
+                "store_id": store_id, "order_id": order_id, "exact_order_only": True,
+                "db_check_completed": True, "gaps_before": sorted(gaps),
+                "shipping_source": shipping_source, "calls_started": [],
+                "marketplace_write_started": False,
+            }), 409
+
+        calls_started = []
+        packlink_result = {"success": True, "skipped": True, "reason": "db_truth_complete"}
+        try:
+            adapter = PacklinkAdapter()
+            provider_payload = None
+            tracking_history = None
+            if shipping_gaps & label_gaps:
+                calls_started.append("packlink_shipment")
+                provider_payload = adapter.get_shipment(provider_reference)
+                recover_packlink_provider_spend(shipment, provider_payload)
+                recover_confirmed_packlink_spend(shipment)
+            if shipping_gaps & tracking_gaps:
+                calls_started.append("packlink_tracking")
+                tracking_history = adapter.get_tracking_status(reference=provider_reference)
+                tracking = extract_packlink_tracking(provider_payload or {}, tracking_history, shipment.tracking_number)
+                if tracking:
+                    shipment.tracking_number = tracking
+                reconcile_packlink_tracking_lifecycle(
+                    shipment,
+                    provider_state=str((provider_payload or {}).get("state") or (provider_payload or {}).get("status") or shipment.last_provider_status or ""),
+                    tracking_history=tracking_history,
+                    observed_at=datetime.utcnow(),
+                )
+            db.session.commit()
+            packlink_result = {
+                "success": True, "skipped": False,
+                "provider_reference": provider_reference,
+                "tracking_events_observed": len(tracking_history or []),
+            }
+        except PacklinkRequestError as exc:
+            db.session.rollback()
+            return jsonify({
+                "success": False, "ok": False, "governed": True,
+                "reason": "exact_packlink_shipping_recovery_failed", "error": str(exc)[:500],
+                "status_code": exc.status_code, "store_id": store_id, "order_id": order_id,
+                "exact_order_only": True, "db_check_completed": True,
+                "gaps_before": sorted(gaps), "shipping_source": shipping_source,
+                "calls_started": calls_started, "marketplace_write_started": False,
+            }), exc.status_code or 502
+
+        # Amazon is contacted only for marketplace-owned promise gaps.
+        promise_readback = []
+        if gaps & promise_gaps:
+            calls_started.append("amazon_promise")
+            promise_readback = [refresh_exact_amazon_order(row) for row in fbm_rows]
+
+        db.session.expire_all()
+        after = _database_readback(store_id, order_id)
+        after_review = review_fbm_data_truth(
+            store_id=store_id, order_id=order_id, platform="amazon", readback=after,
+        )
+        gaps_after = set(after_review.get("missing") or []) | set(after_review.get("unverified") or [])
+        return jsonify({
+            "success": True, "ok": True, "governed": True, "fulfillment_type": "FBM",
+            "exact_order_only": True, "broad_scan_started": False, "order_replayed": False,
+            "stock_mutation_started": False, "marketplace_write_started": False,
+            "store_id": store_id, "order_id": order_id, "db_check_completed": True,
+            "db_authority": True, "shipping_source": shipping_source,
+            "gaps_before": sorted(gaps), "calls_started": calls_started,
+            "calls_made": len(calls_started), "persisted_recovered": sorted(gaps - gaps_after),
+            "gaps_after": sorted(gaps_after), "truth_review_after": after_review,
+            "hydration": {"shipping_source_recovery": packlink_result, "promise_readback": promise_readback},
+        }), 200
 
     calls_started = []
     tracking_result = {"success": True, "skipped": True, "reason": "db_truth_complete"}
