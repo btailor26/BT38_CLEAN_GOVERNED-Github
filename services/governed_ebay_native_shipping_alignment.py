@@ -384,21 +384,6 @@ def install_governed_ebay_native_shipping_alignment(app) -> None:
         order = _get_ebay_order(order_id)
         if order is None:
             return jsonify({"success": False, "message": "eBay FBM order not found."}), 404
-        store = order.store
-        if (
-            str(getattr(store, "auth_status", "") or "").strip().lower() == "auth_error"
-            or str(getattr(store, "auth_error_code", "") or "").strip()
-            == "ebay_notification_reauthorization_required"
-        ):
-            return jsonify({
-                "success": False,
-                "message": "Approve eBay before getting eBay Shipping rates.",
-                "authorization_required": True,
-                "limited_release_required": False,
-                "required_scope": EBAY_LOGISTICS_SCOPE,
-                "authorize_url": f"/ebay-oauth/authorize?store_id={order.store_id}",
-                "seller_hub_fallback": False,
-            }), 403
         body = request.get_json(silent=True) or {}
         resolved = apply_parcel_overrides(parcel_from_db(order), body.get("parcel") or {})
         parcel = resolved.to_dict()
