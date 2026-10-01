@@ -502,6 +502,8 @@ def governed_amazon_oauth_authorize():
     application_id = (
         os.getenv("AMAZON_SP_API_APPLICATION_ID")
         or os.getenv("AMAZON_APPLICATION_ID")
+        or os.getenv("SP_API_APPLICATION_ID")
+        or os.getenv("AMAZON_APP_ID")
     )
     if not application_id:
         return jsonify({
@@ -524,6 +526,7 @@ def governed_amazon_oauth_authorize():
     return redirect(auth_url)
 
 
+@governed_bp.get("/amazon/callback")
 @governed_bp.get("/amazon-oauth/callback")
 @login_required
 def governed_amazon_oauth_callback():
