@@ -84,3 +84,19 @@ def test_verified_manual_recovery_reuses_exact_committed_refresh_owner():
     assert "store_id:storeId,marketplace_order_id:orderId" in source
     assert "recoveredRefreshScopes.forEach(scope=>window.dispatchEvent(new CustomEvent('bt38-marketplace-event',{detail:scope})))" in source
     assert "window.location.reload()" not in source
+
+
+def test_tracking_history_stays_aligned_when_exact_row_refreshes():
+    source = Path("static/js/fbm_tracking_journey.js").read_text(encoding="utf-8")
+
+    # Tracking History must never defer committed truth until its modal closes.
+    assert "'#fbmShippingModal.show, #fbmTrackingJourneyModal.show'" not in source
+    assert "const activeShippingModal = document.querySelector('#fbmShippingModal.show')" in source
+
+    # The exact replacement row is the modal authority too. If Tracking History
+    # is already open, re-render it immediately from the newly persisted row.
+    assert "const replacementRow = document.importNode(freshRow, true)" in source
+    assert "row.replaceWith(replacementRow)" in source
+    assert "document.querySelector('#fbmTrackingJourneyModal.show')" in source
+    assert "replacementRow.querySelector('.fbm-tracking-journey')" in source
+    assert "openPersistedJourney(currentTrackingButton)" in source
