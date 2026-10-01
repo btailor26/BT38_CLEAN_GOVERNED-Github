@@ -480,14 +480,147 @@ def governed_store_delete_preview(store_id):
     })
 
 
-@governed_bp.get("/governed/stores/amazon/setup-preview")
-def governed_amazon_setup_preview():
-    return jsonify({
-        "ok": True,
-        "success": True,
-        "message": "Amazon setup preview only. Live credential setup is not wired through old routes.",
-        "governed": True
+def _governed_marketplace_account_id():
+    """Resolve the logged-in customer account for marketplace authorization."""
+    account_id, _, _, _ = _bt38_customer_scope()
+    return int(account_id) if account_id is not None else None
+
+
+@governed_bp.get("/amazon-oauth/authorize")
+@login_required
+def governed_amazon_oauth_authorize():
+    """Start the published Amazon Selling Partner authorization flow."""
+    import os
+    import secrets
+    import urllib.parse
+    from flask import session
+
+    account_id = _governed_marketplace_account_id()
+    if account_id is None:
+        return jsonify({"ok": False, "success": False, "governed": True, "error": "customer_account_required"}), 403
+
+    application_id = (
+        os.getenv("AMAZON_SP_API_APPLICATION_ID")
+        or os.getenv("AMAZON_APPLICATION_ID")
+    )
+    if not application_id:
+        return jsonify({
+            "ok": False,
+            "success": False,
+            "governed": True,
+            "error": "missing_amazon_application_id",
+            "missing": {"AMAZON_SP_API_APPLICATION_ID": True},
+        }), 200
+
+    state = secrets.token_urlsafe(24)
+    session["governed_amazon_oauth_state"] = state
+    session["governed_amazon_oauth_account_id"] = account_id
+
+    params = {"application_id": application_id, "state": state}
+    auth_url = "https://sellercentral.amazon.co.uk/apps/authorize/consent?" + urllib.parse.urlencode(params)
+
+    if request.args.get("json") == "1":
+        return jsonify({"ok": True, "success": True, "governed": True, "auth_url": auth_url}), 200
+    return redirect(auth_url)
+
+
+@governed_bp.get("/amazon-oauth/callback")
+@login_required
+def governed_amazon_oauth_callback():
+    """Exchange Amazon's authorization code and bind the store to this customer only."""
+    import os
+    import requests
+    from flask import session
+    from app import db
+    from models import Store
+
+    code = request.args.get("spapi_oauth_code")
+    state = request.args.get("state")
+    seller_id = request.args.get("selling_partner_id")
+    expected_state = session.get("governed_amazon_oauth_state")
+    authorized_account_id = session.get("governed_amazon_oauth_account_id")
+    current_account_id = _governed_marketplace_account_id()
+
+    if not code or not seller_id:
+        return jsonify({"ok": False, "success": False, "governed": True, "error": "missing_amazon_oauth_callback_fields"}), 200
+    if not expected_state or not state or state != expected_state:
+        return jsonify({"ok": False, "success": False, "governed": True, "error": "state_mismatch"}), 200
+    if current_account_id is None or int(authorized_account_id or 0) != int(current_account_id):
+        return jsonify({"ok": False, "success": False, "governed": True, "error": "account_mismatch"}), 403
+
+    client_id = (
+        os.getenv("AMAZON_LWA_CLIENT_ID")
+        or os.getenv("AMAZON_LWA_APP_ID")
+        or os.getenv("SP_API_LWA_CLIENT_ID")
+    )
+    client_secret = os.getenv("AMAZON_LWA_CLIENT_SECRET") or os.getenv("SP_API_LWA_CLIENT_SECRET")
+    if not client_id or not client_secret:
+        return jsonify({
+            "ok": False, "success": False, "governed": True,
+            "error": "missing_amazon_lwa_env",
+            "missing": {"client_id": not bool(client_id), "client_secret": not bool(client_secret)},
+        }), 200
+
+    resp = requests.post(
+        "https://api.amazon.com/auth/o2/token",
+        data={
+            "grant_type": "authorization_code",
+            "code": code,
+            "client_id": client_id,
+            "client_secret": client_secret,
+        },
+        timeout=30,
+    )
+    try:
+        token = resp.json()
+    except Exception:
+        token = {"raw": resp.text}
+
+    refresh_token = token.get("refresh_token")
+    if resp.status_code >= 300 or not refresh_token:
+        return jsonify({
+            "ok": False, "success": False, "governed": True,
+            "error": "amazon_token_exchange_failed",
+            "status_code": resp.status_code,
+        }), 200
+
+    store = Store.query.filter(
+        Store.account_id == current_account_id,
+        Store.platform.ilike("%amazon%"),
+    ).order_by(Store.id).first()
+    if store is None:
+        store = Store(
+            account_id=current_account_id,
+            name="Amazon",
+            platform="Amazon",
+            fba_import_enabled=True,
+            fbm_sync_enabled=True,
+            is_active=True,
+            store_mode="live",
+            auth_status="ok",
+        )
+        db.session.add(store)
+
+    store.api_key = json.dumps({
+        "refresh_token": refresh_token,
+        "lwa_app_id": client_id,
+        "lwa_client_secret": client_secret,
+        "seller_id": seller_id,
+        "marketplace_id": "A1F83G8C2ARO7P",
+        "oauth_source": "governed_amazon_oauth_callback",
+        "connected_at": datetime.utcnow().isoformat(),
     })
+    store.is_active = True
+    store.store_mode = "live"
+    store.auth_status = "ok"
+    store.auth_error_code = None
+    store.auth_error_message = None
+    store.auth_error_at = None
+    db.session.commit()
+
+    session.pop("governed_amazon_oauth_state", None)
+    session.pop("governed_amazon_oauth_account_id", None)
+    return redirect(f"/stores?amazon_oauth=success&store_id={store.id}")
 
 
 @governed_bp.get("/settings")
