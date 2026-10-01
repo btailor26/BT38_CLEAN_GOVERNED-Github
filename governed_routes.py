@@ -546,7 +546,7 @@ def governed_amazon_oauth_callback():
 
     if not code or not seller_id:
         return jsonify({"ok": False, "success": False, "governed": True, "error": "missing_amazon_oauth_callback_fields"}), 200
-    if not expected_state or not state or state != expected_state:
+    if not state or str(state) not in pending_states:
         return jsonify({"ok": False, "success": False, "governed": True, "error": "state_mismatch"}), 200
     if current_account_id is None or int(authorized_account_id or 0) != int(current_account_id):
         return jsonify({"ok": False, "success": False, "governed": True, "error": "account_mismatch"}), 403
@@ -5621,6 +5621,15 @@ def governed_ebay_oauth_authorize():
         }), 200
 
     state = secrets.token_urlsafe(24)
+    pending_states = [
+        str(value)
+        for value in (session.get("governed_ebay_oauth_pending_states") or [])
+        if value
+    ]
+    pending_states.append(state)
+    session["governed_ebay_oauth_pending_states"] = pending_states[-5:]
+    # Keep the legacy single value during rollout; callback accepts either the
+    # current value or one of the bounded pending states.
     session["governed_ebay_oauth_state"] = state
     session["governed_ebay_oauth_store_id"] = store.id if store else None
     session["governed_ebay_oauth_account_id"] = account_id
@@ -5666,6 +5675,13 @@ def governed_ebay_oauth_callback():
     code = request.args.get("code")
     state = request.args.get("state")
     expected_state = session.get("governed_ebay_oauth_state")
+    pending_states = {
+        str(value)
+        for value in (session.get("governed_ebay_oauth_pending_states") or [])
+        if value
+    }
+    if expected_state:
+        pending_states.add(str(expected_state))
     selected_store_id = session.get("governed_ebay_oauth_store_id")
     authorized_account_id = session.get("governed_ebay_oauth_account_id")
     current_account_id = _governed_marketplace_account_id()
@@ -5797,6 +5813,7 @@ def governed_ebay_oauth_callback():
     db.session.commit()
 
     session.pop("governed_ebay_oauth_state", None)
+    session.pop("governed_ebay_oauth_pending_states", None)
     session.pop("governed_ebay_oauth_store_id", None)
     session.pop("governed_ebay_oauth_account_id", None)
 
