@@ -744,7 +744,9 @@ def install_governed_fbm_page_alignment(app) -> None:
             if (int(row.store_id), str(row.marketplace_order_id)) not in spend_by_order
             and str(getattr(row, "sku", "") or "").strip()
         ]
-        if missing_spend_rows:
+        # Targeted committed refresh is strictly selected-record isolated.
+        # Cross-order remembered-price projection is valid only for normal/history views.
+        if missing_spend_rows and not targeted_refresh:
             product_keys = {
                 (
                     str(row.sku).strip(),
