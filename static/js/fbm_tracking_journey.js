@@ -119,7 +119,13 @@
                 `.fbm-order-row[data-marketplace-order-id="${CSS.escape(marketplaceOrderId)}"]`
             );
             if (!freshRow) return;
-            row.replaceWith(document.importNode(freshRow, true));
+            const replacementRow = document.importNode(freshRow, true);
+            row.replaceWith(replacementRow);
+            const openTrackingModal = document.querySelector('#fbmTrackingJourneyModal.show');
+            if (openTrackingModal) {
+                const currentTrackingButton = replacementRow.querySelector('.fbm-tracking-journey');
+                if (currentTrackingButton) openPersistedJourney(currentTrackingButton);
+            }
             document.dispatchEvent(new CustomEvent('bt38-fbm-working-set-expanded', {
                 detail: {reason: 'committed_event_refresh', marketplace_order_id: marketplaceOrderId}
             }));
@@ -157,9 +163,9 @@
 
     function refreshFbmFromGovernedEvent(event) {
         const detail = event?.detail || {};
-        const activeModal = document.querySelector('#fbmShippingModal.show, #fbmTrackingJourneyModal.show');
-        if (activeModal) {
-            activeModal.addEventListener('hidden.bs.modal', () => enqueueCommittedFbmRefresh(detail), {once:true});
+        const activeShippingModal = document.querySelector('#fbmShippingModal.show');
+        if (activeShippingModal) {
+            activeShippingModal.addEventListener('hidden.bs.modal', () => enqueueCommittedFbmRefresh(detail), {once:true});
             return;
         }
         enqueueCommittedFbmRefresh(detail);
