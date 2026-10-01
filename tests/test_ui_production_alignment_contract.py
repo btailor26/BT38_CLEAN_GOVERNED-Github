@@ -9,7 +9,10 @@ WAREHOUSE_ROUTE = Path("governed_routes.py")
 WAREHOUSE_GOVERNED_JS = Path("static/js/warehouse-governed.js")
 WAREHOUSE_RUNTIME_VISIBILITY = Path("governed_runtime_visibility_routes.py")
 STORES = Path("templates/stores.html")
-MAIN = Path("main.py")\nFBM_TRACKING_JOURNEY = Path("static/js/fbm_tracking_journey.js")\nFBM_PAGE_ALIGNMENT = Path("services/governed_fbm_page_alignment.py")\nUI_EVENT_SIGNAL = Path("services/governed_ui_event_signal.py")
+MAIN = Path("main.py")
+FBM_TRACKING_JOURNEY = Path("static/js/fbm_tracking_journey.js")
+FBM_PAGE_ALIGNMENT = Path("services/governed_fbm_page_alignment.py")
+UI_EVENT_SIGNAL = Path("services/governed_ui_event_signal.py")
 
 
 def _source(path):
