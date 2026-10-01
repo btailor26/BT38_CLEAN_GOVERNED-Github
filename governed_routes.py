@@ -15,6 +15,22 @@ except Exception:
 
 governed_bp = Blueprint("governed", __name__)
 
+
+def _bt38_customer_scope():
+    """Return the authenticated customer account and its owned store/warehouse IDs."""
+    if not current_user or not current_user.is_authenticated:
+        return None, [], [], []
+    from services.account_profile_alignment import CustomerAccountMember
+    from models import Store, Warehouse
+    member = CustomerAccountMember.query.filter_by(user_id=int(current_user.id)).first()
+    if not member:
+        return None, [], [], []
+    account_id = int(member.account_id)
+    store_ids = [row[0] for row in Store.query.with_entities(Store.id).filter(Store.account_id == account_id).all()]
+    warehouse_ids = [row[0] for row in Warehouse.query.with_entities(Warehouse.id).filter(Warehouse.account_id == account_id).all()]
+    member_ids = [row[0] for row in CustomerAccountMember.query.with_entities(CustomerAccountMember.user_id).filter_by(account_id=account_id).all()]
+    return account_id, store_ids, warehouse_ids, member_ids
+
 @governed_bp.route("/logout")
 @login_required
 def logout():
@@ -118,43 +134,54 @@ def governed_dashboard_page():
     from types import SimpleNamespace
     from models import Store, SystemLog, MarketplaceOrder, SalesOrder, SalesOrderItem, MCFOrder
 
-    stores = Store.query.order_by(Store.id).all()
+    account_id, store_ids, warehouse_ids, member_ids = _bt38_customer_scope()
+    stores = Store.query.filter(Store.account_id == account_id).order_by(Store.id).all() if account_id else []
 
-    webhook_logs = (
-        SystemLog.query
-        .filter(SystemLog.log_type == "marketplace_webhook")
-        .order_by(SystemLog.created_at.desc())
-        .limit(12)
-        .all()
-    )
+    # Customer-facing dashboard evidence is account-scoped. A fresh account has
+    # no stores and therefore no inherited marketplace/runtime history.
+    webhook_logs = []
+    if store_ids:
+        webhook_logs = (
+            SystemLog.query
+            .filter(SystemLog.log_type == "marketplace_webhook")
+            .filter(db.or_(*[SystemLog.details.like(f'%"store_id": {sid}%') for sid in store_ids]))
+            .order_by(SystemLog.created_at.desc())
+            .limit(12)
+            .all()
+        )
 
     marketplace_orders = (
         MarketplaceOrder.query
+        .filter(MarketplaceOrder.store_id.in_(store_ids))
         .order_by(MarketplaceOrder.created_at.desc())
         .limit(50)
         .all()
-    )
+    ) if store_ids else []
 
     sales_orders = (
         SalesOrder.query
+        .filter(SalesOrder.created_by_id.in_(member_ids))
         .order_by(SalesOrder.created_at.desc())
         .limit(50)
         .all()
-    )
+    ) if member_ids else []
+    sales_order_ids = [row.id for row in sales_orders]
 
     sales_order_items = (
         SalesOrderItem.query
+        .filter(SalesOrderItem.order_id.in_(sales_order_ids))
         .order_by(SalesOrderItem.created_at.desc())
         .limit(50)
         .all()
-    )
+    ) if sales_order_ids else []
 
     mcf_orders = (
         MCFOrder.query
+        .filter(db.or_(MCFOrder.source_store_id.in_(store_ids), MCFOrder.fba_store_id.in_(store_ids)))
         .order_by(MCFOrder.created_at.desc())
         .limit(50)
         .all()
-    )
+    ) if store_ids else []
 
     attention_items = []
 
@@ -387,7 +414,8 @@ def governed_dashboard_page():
 def governed_stores_page():
     from models import Store
 
-    stores = Store.query.order_by(Store.id).all()
+    account_id, _, _, _ = _bt38_customer_scope()
+    stores = Store.query.filter(Store.account_id == account_id).order_by(Store.id).all() if account_id else []
     return render_template("stores.html", stores=stores)
 
 
@@ -1950,6 +1978,8 @@ def governed_warehouse_page():
         page = 1
     page = max(page, 1)
 
+    account_id, store_ids, warehouse_ids, _ = _bt38_customer_scope()
+
     listing_query = (
         db.session.query(MarketplaceListing)
         .options(
@@ -1957,6 +1987,7 @@ def governed_warehouse_page():
             joinedload(MarketplaceListing.warehouse_stock),
         )
         .filter(MarketplaceListing.is_active == True)  # noqa: E712
+        .filter(MarketplaceListing.store_id.in_(store_ids))
         # FBA Read Only quantity uses the value already handed over by the governed FBA import.
         # Do not show generated "Amazon SKU ..." shadow rows as separate Master Stock listings.
         .filter(~MarketplaceListing.title.ilike("Amazon SKU%"))
@@ -2120,6 +2151,7 @@ def governed_warehouse_page():
             db.session.query(WarehouseStock)
             .options(joinedload(WarehouseStock.warehouse))
             .filter(WarehouseStock.is_active == True)  # noqa: E712
+            .filter(WarehouseStock.warehouse_id.in_(warehouse_ids))
             .filter(WarehouseStock.is_deleted == False)  # noqa: E712
             .populate_existing()
         )
@@ -2210,6 +2242,7 @@ def governed_warehouse_page():
             ),
         )
         .filter(WarehouseStock.is_active == True)  # noqa: E712
+        .filter(WarehouseStock.warehouse_id.in_(warehouse_ids))
         .filter(WarehouseStock.is_deleted == False)  # noqa: E712
         .one()
     )
@@ -2221,6 +2254,7 @@ def governed_warehouse_page():
     listing_count = (
         db.session.query(MarketplaceListing)
         .filter(MarketplaceListing.is_active == True)  # noqa: E712
+        .filter(MarketplaceListing.store_id.in_(store_ids))
         .count()
     )
 
