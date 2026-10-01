@@ -9,7 +9,7 @@ WAREHOUSE_ROUTE = Path("governed_routes.py")
 WAREHOUSE_GOVERNED_JS = Path("static/js/warehouse-governed.js")
 WAREHOUSE_RUNTIME_VISIBILITY = Path("governed_runtime_visibility_routes.py")
 STORES = Path("templates/stores.html")
-MAIN = Path("main.py")
+MAIN = Path("main.py")\nFBM_TRACKING_JOURNEY = Path("static/js/fbm_tracking_journey.js")\nFBM_PAGE_ALIGNMENT = Path("services/governed_fbm_page_alignment.py")\nUI_EVENT_SIGNAL = Path("services/governed_ui_event_signal.py")
 
 
 def _source(path):
@@ -297,3 +297,24 @@ def test_web_entrypoint_does_not_run_ebay_recovery_during_import():
     assert "align_ebay_notifications_and_recover_missed_changes" not in main
     assert "governed_ebay_post_deploy_alignment" not in main
     assert "start_event_only_runtime" not in main
+
+
+def test_fbm_committed_refresh_is_exact_row_and_event_driven():
+    journey = _source(FBM_TRACKING_JOURNEY)
+    page = _source(FBM_PAGE_ALIGNMENT)
+    signal = _source(UI_EVENT_SIGNAL)
+
+    assert "fetch(window.location.href" not in journey
+    assert "X-BT38-UI-Refresh':'targeted'" in journey
+    assert "bt38_marketplace_order_id" in journey
+    assert "data-marketplace-order-id" in journey
+    assert "row.replaceWith" in journey
+    assert "setInterval(" not in journey
+
+    assert 'request.headers.get("X-BT38-UI-Refresh") == "targeted"' in page
+    assert "MarketplaceOrder.marketplace_order_id == targeted_marketplace_order_id" in page
+    assert 'return render_template("_fbm_history_rows.html", orders=orders)' in page
+
+    assert '"marketplace_order_id": getattr(row, "marketplace_order_id", None)' not in signal
+    assert 'scope["marketplace_order_id"] = getattr(row, "marketplace_order_id", None)' in signal
+    assert 'source="committed_marketplace_state"' in signal
