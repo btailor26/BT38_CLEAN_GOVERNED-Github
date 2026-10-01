@@ -103,3 +103,11 @@ def test_limited_release_or_scope_failure_never_falls_back_to_browser_purchase()
     assert "authorization_required" in alignment
     assert '"seller_hub_fallback": False' in alignment
     assert "No postage purchase was attempted" in ui
+
+
+def test_notification_reauthorization_does_not_preempt_native_shipping_token_authority():
+    alignment = _text(ALIGNMENT)
+    rates = alignment.split("def ebay_rates(order_id: int):", 1)[1].split("def ebay_purchase", 1)[0]
+    assert "ebay_notification_reauthorization_required" not in rates
+    assert "_create_quote(order, parcel)" in rates
+    assert "_access_token(order.store)" in alignment
