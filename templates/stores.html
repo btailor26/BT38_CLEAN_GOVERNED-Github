@@ -3,6 +3,12 @@
 {% block title %}Stores - Inventory Management{% endblock %}
 
 {% block content %}
+{% set connected = namespace(amazon=false, ebay=false) %}
+{% for store in stores %}
+    {% if store.platform and 'amazon' in store.platform|lower %}{% set connected.amazon = true %}{% endif %}
+    {% if store.platform and 'ebay' in store.platform|lower %}{% set connected.ebay = true %}{% endif %}
+{% endfor %}
+
 <div class="row">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
@@ -10,36 +16,17 @@
                 <i data-feather="shopping-bag" class="me-2"></i>
                 Stores
             </h1>
-            <div class="btn-group">
-                <!-- Quick Setup Amazon Store Button -->
-                <button type="button" class="btn btn-success dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-                    <i data-feather="zap" class="me-1"></i>
-                    Quick Setup
-                </button>
-                <ul class="dropdown-menu">
-                    <li><h6 class="dropdown-header">Amazon Unified Store</h6></li>
-                    <li><a class="dropdown-item" href="#" onclick="quickSetupAmazonUnified()">
-                        <i data-feather="layers" class="me-2"></i>
-                        Amazon (FBA + FBM)
-                        <small class="text-muted d-block">Both FBA import and FBM push</small>
-                    </a></li>
-                    <li><hr class="dropdown-divider"></li>
-                    <li><h6 class="dropdown-header">Individual Modes</h6></li>
-                    <li><a class="dropdown-item" href="#" onclick="quickSetupAmazonOnly()">
-                        <i data-feather="upload-cloud" class="me-2"></i>
-                        Amazon FBM Only
-                        <small class="text-muted d-block">Warehouse push enabled only</small>
-                    </a></li>
-                    <li><a class="dropdown-item" href="#" onclick="quickSetupAmazonOnly()">
-                        <i data-feather="download-cloud" class="me-2"></i>
-                        Amazon FBA Only
-                        <small class="text-muted d-block">Read-only FBA import</small>
-                    </a></li>
-                </ul>
-                <a href="{{ '#' }}" class="btn btn-primary">
-                    <i data-feather="plus" class="me-1"></i>
-                    Add New Store
+            <div class="d-flex align-items-center gap-3" aria-label="Connect marketplace">
+                {% if not connected.amazon %}
+                <a href="/amazon-oauth/authorize" title="Connect Amazon" aria-label="Connect Amazon">
+                    <img src="{{ url_for('static', filename='img/marketplaces/amazon.png') }}" alt="Amazon" style="width:72px;height:48px;object-fit:contain;">
                 </a>
+                {% endif %}
+                {% if not connected.ebay %}
+                <a href="/ebay-oauth/authorize" title="Connect eBay" aria-label="Connect eBay">
+                    <img src="{{ url_for('static', filename='img/marketplaces/ebay.png') }}" alt="eBay" style="width:72px;height:48px;object-fit:contain;">
+                </a>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -103,10 +90,10 @@
                                 <small class="d-block text-muted">{{ store.auth_error_code or 'Authentication failed' }}</small>
                             </div>
                         </div>
-                        <button type="button" class="btn btn-sm btn-danger mt-2 w-100" onclick="reconnectAmazon({{ store.id }}, '{{ store.name }}')">
-                            <i data-feather="refresh-cw" class="me-1"></i>
+                        <a class="btn btn-sm btn-danger mt-2 w-100" href="/amazon-oauth/authorize">
+                            <i data-feather="key" class="me-1"></i>
                             Reconnect Amazon
-                        </button>
+                        </a>
                     </div>
                     {% endif %}
                     
@@ -155,14 +142,14 @@
         {% endfor %}
     </div>
 {% else %}
-    <div class="card">
-        <div class="card-body text-center py-5">
-            <i data-feather="shopping-bag" size="64" class="text-muted mb-3"></i>
-            <h4 class="text-muted">No stores configured yet</h4>
-            <p class="text-muted mb-4">Connect your first store to start syncing inventory</p>
-            <a href="{{ '#' }}" class="btn btn-primary">
-                <i data-feather="plus" class="me-1"></i>
-                Add Your First Store
+    <div class="text-center py-5">
+        <p class="text-muted mb-4">Choose a marketplace to connect</p>
+        <div class="d-flex justify-content-center align-items-center gap-4">
+            <a href="/amazon-oauth/authorize" title="Connect Amazon" aria-label="Connect Amazon">
+                <img src="{{ url_for('static', filename='img/marketplaces/amazon.png') }}" alt="Amazon" style="width:120px;height:72px;object-fit:contain;">
+            </a>
+            <a href="/ebay-oauth/authorize" title="Connect eBay" aria-label="Connect eBay">
+                <img src="{{ url_for('static', filename='img/marketplaces/ebay.png') }}" alt="eBay" style="width:120px;height:72px;object-fit:contain;">
             </a>
         </div>
     </div>
@@ -298,66 +285,6 @@
         });
     }
     
-    function reconnectAmazon(storeId, storeName) {
-        if (!confirm(`Reconnect Amazon store "${storeName}"?\n\nThis will attempt to refresh the authentication token and resume sync.`)) {
-            return;
-        }
-        
-        const btn = event.target.closest('button');
-        const originalContent = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = '<i data-feather="loader" class="me-1"></i>Reconnecting...';
-        feather.replace();
-        
-        fetch(`/governed/stores/${storeId}/sync-preview`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                btn.innerHTML = '<i data-feather="check" class="me-1"></i>Connected!';
-                btn.classList.remove('btn-danger');
-                btn.classList.add('btn-success');
-                
-                const alertContainer = document.querySelector('.container-fluid');
-                const alert = document.createElement('div');
-                alert.className = 'alert alert-success alert-dismissible fade show';
-                alert.innerHTML = `
-                    <i data-feather="check-circle" class="me-2"></i>
-                    ${data.message}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                `;
-                alertContainer.insertBefore(alert, alertContainer.firstChild);
-                feather.replace();
-                
-                setTimeout(() => { location.reload(); }, 2000);
-            } else {
-                btn.innerHTML = originalContent;
-                btn.disabled = false;
-                feather.replace();
-                
-                const alertContainer = document.querySelector('.container-fluid');
-                const alertDiv = document.createElement('div');
-                alertDiv.className = 'alert alert-danger alert-dismissible fade show';
-                alertDiv.innerHTML = `
-                    <i data-feather="alert-circle" class="me-2"></i>
-                    <strong>Reconnection failed:</strong> ${data.error}
-                    ${data.error_code ? `<br><small class="text-muted">Error code: ${data.error_code}</small>` : ''}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                `;
-                alertContainer.insertBefore(alertDiv, alertContainer.firstChild);
-                feather.replace();
-            }
-        })
-        .catch(error => {
-            btn.innerHTML = originalContent;
-            btn.disabled = false;
-            feather.replace();
-            alert('Error: ' + error.message);
-        });
-    }
-
     function confirmDelete(storeId, storeName, platform) {
         document.getElementById('deleteStoreName').textContent = storeName;
         document.getElementById('deleteForm').action = `/governed/stores/${storeId}/delete-preview`;
@@ -413,67 +340,6 @@
             location.reload();
         });
     }
-    
-    function quickSetupAmazonUnified() {
-        if (confirm('Create Amazon store with BOTH FBA and FBM?\n\n✅ FBA Import: Read-only inventory from Amazon warehouses\n✅ FBM Push: Push stock from your warehouse to Amazon\n\nThis is the recommended setup for most sellers.')) {
-            submitAmazonSetupUnified('Amazon Store', true, true);
-        }
-    }
-    
-    function quickSetupAmazonOnly() {
-        if (confirm('Create Amazon store with FBM ONLY?\n\n✅ FBM Push: Push stock from your warehouse to Amazon\n❌ FBA Import: Disabled\n\nUse this if you only sell FBM products.')) {
-            submitAmazonSetupUnified('Amazon FBM', false, true);
-        }
-    }
-    
-    function quickSetupAmazonOnly() {
-        if (confirm('Create Amazon store with FBA ONLY?\n\n✅ FBA Import: Read-only inventory from Amazon warehouses\n❌ FBM Push: Disabled\n\nUse this if you only want to view FBA inventory.')) {
-            submitAmazonSetupUnified('Amazon FBA Import', true, false);
-        }
-    }
-    
-    function submitAmazonSetupUnified(displayName, fbaEnabled, fbmEnabled) {
-        const form = document.createElement('form');
-        form.method = 'GET';
-        form.action = '/governed/stores/amazon/setup-preview';
-        
-        const storeNameInput = document.createElement('input');
-        storeNameInput.type = 'hidden';
-        storeNameInput.name = 'store_name';
-        storeNameInput.value = `${displayName} - ${new Date().toISOString().slice(0, 10)}`;
-        form.appendChild(storeNameInput);
-        
-        const fbaInput = document.createElement('input');
-        fbaInput.type = 'hidden';
-        fbaInput.name = 'fba_import_enabled';
-        fbaInput.value = fbaEnabled ? 'true' : 'false';
-        form.appendChild(fbaInput);
-        
-        const fbmInput = document.createElement('input');
-        fbmInput.type = 'hidden';
-        fbmInput.name = 'fbm_sync_enabled';
-        fbmInput.value = fbmEnabled ? 'true' : 'false';
-        form.appendChild(fbmInput);
-        
-        const regionInput = document.createElement('input');
-        regionInput.type = 'hidden';
-        regionInput.name = 'region';
-        regionInput.value = 'UK';
-        form.appendChild(regionInput);
-        
-        const marketplaceInput = document.createElement('input');
-        marketplaceInput.type = 'hidden';
-        marketplaceInput.name = 'marketplace_id';
-        marketplaceInput.value = 'A1F83G8C2ARO7P';
-        form.appendChild(marketplaceInput);
-        
-        document.body.appendChild(form);
-        form.submit();
-    }
-    
-    document.getElementById('deleteModal').addEventListener('shown.bs.modal', function () {
-        feather.replace();
-    });
     
 </script>
 {% endblock %}
