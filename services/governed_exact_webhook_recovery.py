@@ -487,6 +487,30 @@ def recover_exact_failed_webhook(platform: str, notification_record_id: int) -> 
     db.session.expire_all()
     recovered = _canonical_order_exists(store_id, identity.get("order_id"))
     if not recovered:
+        # A cancellation cannot mutate an order BT38 never captured. Replaying
+        # the same durable cancellation after restart cannot create that missing
+        # sale, so terminate this exact notification as a governed no-op instead
+        # of leaving it FAILED for the startup recovery selector forever.
+        if (
+            platform == "amazon"
+            and isinstance(replay_result, dict)
+            and str(replay_result.get("status") or "").strip().lower() == "cancellation_unresolved"
+            and str(replay_result.get("business_event") or "").strip().lower() == "cancellation"
+        ):
+            return {
+                "success": True,
+                "recovered": False,
+                "terminal_noop": True,
+                "reason": "cancellation_for_missing_canonical_order",
+                "order_replayed": False,
+                "stock_mutation_started": False,
+                "order_id": identity.get("order_id"),
+                "store_id": store_id,
+                "notification_record_id": int(notification_record_id),
+                "platform": platform,
+                "replay_result": replay_result,
+                "broad_scan_started": False,
+            }
         return {
             "success": False,
             "recovered": False,
