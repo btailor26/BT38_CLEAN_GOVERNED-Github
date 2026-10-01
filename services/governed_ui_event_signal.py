@@ -344,9 +344,6 @@ def _bt38_existing_ui_signal_before_flush(
     These model checks cover DB-originating marketplace rows, persisted pushes,
     and FBM shipment lifecycle/tracking changes without adding another event path.
     """
-    if session_obj.info.get("_bt38_ui_commit_wake"):
-        return
-
     from fbm_models import FBMShipment
     from models import MarketplaceListing, MarketplaceOrder, SyncLog
     from shipping_spend_models import ShippingSpendLedger
@@ -404,7 +401,7 @@ def _bt38_existing_ui_signal_before_flush(
                 or message.startswith("event_type=product_linking_")
             ):
                 session_obj.info["_bt38_ui_commit_wake"] = True
-                return
+                continue
 
     for row in session_obj.dirty:
         if (
