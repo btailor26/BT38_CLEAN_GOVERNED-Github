@@ -82,7 +82,8 @@ def test_verified_manual_recovery_reuses_exact_committed_refresh_owner():
     assert "recoveredRefreshScopes.set(`${storeId}:${orderId}`" in source
     assert "source:'manual_exact_recovery_verified'" in source
     assert "store_id:storeId,marketplace_order_id:orderId" in source
-    assert "recoveredRefreshScopes.forEach(scope=>window.dispatchEvent(new CustomEvent('bt38-marketplace-event',{detail:scope})))" in source
+    assert "recoveredRefreshScopes.forEach(scope=>{" in source
+    assert "window.bt38RefreshExactCommittedFbmRow(scope)" in source
     assert "window.location.reload()" not in source
 
 
