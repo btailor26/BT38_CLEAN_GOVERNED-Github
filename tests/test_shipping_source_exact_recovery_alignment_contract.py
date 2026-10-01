@@ -27,3 +27,29 @@ def test_packlink_branch_keeps_amazon_to_marketplace_owned_promises_only():
     assert 'if gaps & promise_gaps:' in branch
     assert 'refresh_exact_amazon_order(row)' in branch
     assert '"marketplace_write_started": False' in branch
+
+
+def test_recover_missing_never_enumerates_beyond_selected_record():
+    source = SOURCE.read_text(encoding="utf-8")
+
+    assert "_candidate_order_ids" not in source
+    assert "recover_packlink_shipments_for_day" not in source
+    assert "find_shipment_by_custom_reference" not in source
+
+    # The DB gate and execution both retain the browser-selected identity.
+    assert "before = _database_readback(store_id, order_id)" in source
+    assert "MarketplaceOrder.store_id == store_id" in source
+    assert "MarketplaceOrder.marketplace_order_id == order_id" in source
+
+
+def test_packlink_recovery_uses_only_selected_records_persisted_reference():
+    source = SOURCE.read_text(encoding="utf-8")
+    start = source.index('if shipping_source == "packlink" and shipping_gaps:')
+    end = source.index('    calls_started = []', start)
+    branch = source[start:end]
+
+    assert 'provider_reference = str(shipment_truth.get("provider_shipment_id")' in branch
+    assert "adapter.get_shipment(provider_reference)" in branch
+    assert "adapter.get_tracking_status(reference=provider_reference)" in branch
+    assert "find_shipment_by_custom_reference" not in branch
+    assert "recover_packlink_shipments_for_day" not in branch
