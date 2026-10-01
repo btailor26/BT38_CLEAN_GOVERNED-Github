@@ -31,6 +31,15 @@ def _bt38_customer_scope():
     member_ids = [row[0] for row in CustomerAccountMember.query.with_entities(CustomerAccountMember.user_id).filter_by(account_id=account_id).all()]
     return account_id, store_ids, warehouse_ids, member_ids
 
+
+def _bt38_customer_store_or_404(store_id):
+    from models import Store
+    account_id, _, _, _ = _bt38_customer_scope()
+    if account_id is None:
+        from flask import abort
+        abort(404)
+    return Store.query.filter(Store.id == int(store_id), Store.account_id == account_id).first_or_404()
+
 @governed_bp.route("/logout")
 @login_required
 def logout():
@@ -133,6 +142,8 @@ def governed_dashboard_page():
     import json as _json
     from types import SimpleNamespace
     from models import Store, SystemLog, MarketplaceOrder, SalesOrder, SalesOrderItem, MCFOrder
+    from extensions import db
+    from sqlalchemy import or_
 
     account_id, store_ids, warehouse_ids, member_ids = _bt38_customer_scope()
     stores = Store.query.filter(Store.account_id == account_id).order_by(Store.id).all() if account_id else []
@@ -144,7 +155,7 @@ def governed_dashboard_page():
         webhook_logs = (
             SystemLog.query
             .filter(SystemLog.log_type == "marketplace_webhook")
-            .filter(db.or_(*[SystemLog.details.like(f'%"store_id": {sid}%') for sid in store_ids]))
+            .filter(or_(*[SystemLog.details.like(f'%"store_id": {sid}%') for sid in store_ids]))
             .order_by(SystemLog.created_at.desc())
             .limit(12)
             .all()
@@ -177,7 +188,7 @@ def governed_dashboard_page():
 
     mcf_orders = (
         MCFOrder.query
-        .filter(db.or_(MCFOrder.source_store_id.in_(store_ids), MCFOrder.fba_store_id.in_(store_ids)))
+        .filter(or_(MCFOrder.source_store_id.in_(store_ids), MCFOrder.fba_store_id.in_(store_ids)))
         .order_by(MCFOrder.created_at.desc())
         .limit(50)
         .all()
@@ -424,7 +435,7 @@ def governed_store_toggle(store_id):
     from extensions import db
     from models import Store
 
-    store = Store.query.get_or_404(store_id)
+    store = _bt38_customer_store_or_404(store_id)
     body = request.get_json(silent=True) or {}
     store.is_active = bool(body.get("is_active"))
     db.session.commit()
@@ -442,7 +453,7 @@ def governed_store_toggle(store_id):
 def governed_store_sync_preview(store_id):
     from models import Store
 
-    store = Store.query.get_or_404(store_id)
+    store = _bt38_customer_store_or_404(store_id)
     return jsonify({
         "ok": True,
         "success": True,
@@ -458,7 +469,7 @@ def governed_store_sync_preview(store_id):
 def governed_store_delete_preview(store_id):
     from models import Store
 
-    store = Store.query.get_or_404(store_id)
+    store = _bt38_customer_store_or_404(store_id)
     return jsonify({
         "ok": False,
         "success": False,
