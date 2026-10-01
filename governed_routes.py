@@ -5674,6 +5674,8 @@ def governed_ebay_oauth_callback():
 
     code = request.args.get("code")
     state = request.args.get("state")
+    ebay_error = request.args.get("error")
+    ebay_error_description = request.args.get("error_description")
     expected_state = session.get("governed_ebay_oauth_state")
     pending_states = {
         str(value)
@@ -5691,10 +5693,11 @@ def governed_ebay_oauth_callback():
             "ok": False,
             "success": False,
             "governed": True,
-            "error": "missing_code",
+            "error": ebay_error or "missing_code",
+            "error_description": ebay_error_description,
         }), 200
 
-    if not expected_state or not state or state != expected_state:
+    if not state or str(state) not in pending_states:
         return jsonify({
             "ok": False,
             "success": False,
