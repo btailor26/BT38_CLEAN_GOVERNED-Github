@@ -92,7 +92,7 @@ if(recoverButton)recoverButton.addEventListener('click',async()=>{
  const ids=selectedIds();if(!ids.length)return;
  const rows=ids.map(id=>document.querySelector(`.fbm-order-row[data-order-id="${CSS.escape(String(id))}"]`)).filter(Boolean);
  recoverButton.disabled=true;const original=recoverButton.innerHTML;recoverButton.textContent='Checking DB…';
- let called=0,failed=0,skipped=0;const recoveryLines=[];
+ let called=0,failed=0,skipped=0;const recoveryLines=[],recoveredRefreshScopes=new Map();
  for(const row of rows){
   const marketplace=String(row.dataset.marketplace||'').trim().toLowerCase(),storeId=Number(row.dataset.storeId||0),orderId=String(row.dataset.marketplaceOrderId||'').trim();
   try{
@@ -127,6 +127,7 @@ if(recoverButton)recoverButton.addEventListener('click',async()=>{
     const verified=await jsonFetch('/governed/actions/marketplace/exact-order-recovery-check',{method:'POST',body:JSON.stringify({store_id:storeId,marketplace_order_id:orderId,platform:marketplace})});
     const finalGaps=[...(verified.missing||[]),...(verified.unverified||[])],beforeGaps=[...(check.missing||[]),...(check.unverified||[])];
     const recovered=beforeGaps.filter((g,i,a)=>a.indexOf(g)===i&&!finalGaps.includes(g));
+    if(recovered.length)recoveredRefreshScopes.set(`${storeId}:${orderId}`,{source:'manual_exact_recovery_verified',event_type:'committed_marketplace_state',store_id:storeId,marketplace_order_id:orderId});
     recoveryLines.push(`${orderId} · Amazon${packlink?' + Packlink':''} · DB VERIFIED · recovered and persisted: ${recovered.join(', ')||'none'} · still missing/unverified: ${finalGaps.join(', ')||'none'} · external authority calls: ${Number(p.calls_made||0)+(packlink?1:0)}`);
    }else if(marketplace==='ebay'){called+=1;
     p=await jsonFetch('/governed/actions/ebay/exact-order-recovery',{method:'POST',body:JSON.stringify({store_id:storeId,marketplace_order_id:orderId})});
@@ -141,6 +142,9 @@ if(recoverButton)recoverButton.addEventListener('click',async()=>{
  const heading=`${called?'Recovery truth':'DB check only'} · ${called} call${called===1?'':'s'} made · ${skipped} not required · ${failed} failed`;
  window.alert(heading+'\\n\\n'+recoveryLines.join('\\n')+'\\n\\nPersisted DB truth will refresh silently.');
  recoverButton.innerHTML=original;updateSelection();
+ // Final exact DB verification is the deterministic completion boundary for this operator action.
+ // Reuse the existing committed-event refresh owner; SSE remains authority for background commits.
+ recoveredRefreshScopes.forEach(scope=>window.dispatchEvent(new CustomEvent('bt38-marketplace-event',{detail:scope})));
  // Recovery commits publish the existing governed event; the single FBM
  // refresh owner replaces persisted rows and reapplies History/Health.
 });
