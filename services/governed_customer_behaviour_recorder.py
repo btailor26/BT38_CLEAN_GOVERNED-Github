@@ -13,9 +13,9 @@ from datetime import datetime
 import json
 import time
 
-from flask import jsonify, request, render_template, abort, g
+from flask import jsonify, request, g
 from sqlalchemy import event as sqlalchemy_event
-from flask_login import current_user, login_required
+from flask_login import current_user
 
 from extensions import db
 from models import SystemLog
