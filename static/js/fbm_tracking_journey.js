@@ -70,6 +70,15 @@
     }
 
     let governedLiveRefreshPending = false;
+    const governedLiveRefreshQueue = new Map();
+
+    function committedRefreshIdentity(detail) {
+        const marketplaceOrderId = String(detail?.marketplace_order_id || '').trim();
+        const storeId = String(detail?.store_id || '').trim();
+        const orderId = String(detail?.order_id || '').trim();
+        if (marketplaceOrderId) return `${storeId}:${marketplaceOrderId}`;
+        return orderId ? `db:${orderId}` : '';
+    }
 
     function committedFbmRow(detail) {
         const marketplaceOrderId = String(detail?.marketplace_order_id || '').trim();
@@ -84,7 +93,6 @@
     }
 
     async function applyCommittedFbmSnapshot(detail) {
-        if (governedLiveRefreshPending) return;
         const row = committedFbmRow(detail);
         if (!row) return;
         const marketplaceOrderId = String(row.dataset.marketplaceOrderId || '').trim();
@@ -124,14 +132,37 @@
         }
     }
 
+    async function drainCommittedFbmRefreshQueue() {
+        if (governedLiveRefreshPending) return;
+        while (governedLiveRefreshQueue.size) {
+            const first = governedLiveRefreshQueue.entries().next().value;
+            if (!first) return;
+            const [identity, detail] = first;
+            governedLiveRefreshQueue.delete(identity);
+            governedLiveRefreshPending = true;
+            try {
+                await applyCommittedFbmSnapshot(detail);
+            } finally {
+                governedLiveRefreshPending = false;
+            }
+        }
+    }
+
+    function enqueueCommittedFbmRefresh(detail) {
+        const identity = committedRefreshIdentity(detail);
+        if (!identity) return;
+        governedLiveRefreshQueue.set(identity, detail);
+        void drainCommittedFbmRefreshQueue();
+    }
+
     function refreshFbmFromGovernedEvent(event) {
         const detail = event?.detail || {};
         const activeModal = document.querySelector('#fbmShippingModal.show, #fbmTrackingJourneyModal.show');
         if (activeModal) {
-            activeModal.addEventListener('hidden.bs.modal', () => void applyCommittedFbmSnapshot(detail), {once:true});
+            activeModal.addEventListener('hidden.bs.modal', () => enqueueCommittedFbmRefresh(detail), {once:true});
             return;
         }
-        void applyCommittedFbmSnapshot(detail);
+        enqueueCommittedFbmRefresh(detail);
     }
 
     window.addEventListener('bt38-marketplace-event', refreshFbmFromGovernedEvent);
