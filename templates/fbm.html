@@ -132,7 +132,7 @@ if(recoverButton)recoverButton.addEventListener('click',async()=>{
     const shipment=p.shipment_recovery||{},cost=p.shipping_cost_recovery||{},after=p.database_readback||[];
     const verified=await jsonFetch('/governed/actions/marketplace/exact-order-recovery-check',{method:'POST',body:JSON.stringify({store_id:storeId,marketplace_order_id:orderId,platform:marketplace})});
     if(p.success===true||shipment.success===true)recoveredRefreshScopes.set(`${storeId}:${orderId}`,{source:'manual_exact_recovery_verified',event_type:'committed_marketplace_state',store_id:storeId,marketplace_order_id:orderId});
-    recoveryLines.push(`${orderId} · eBay · DB VERIFIED · tracking ${shipment.tracking_number||'not recovered'} · new marketplace events ${Number(shipment.tracking_events_inserted||0)} · shipment cost ${recoveryCostText(cost.shipping_cost,cost.shipping_cost_currency)} · recovery still required: ${verified.recovery_required===true?'yes':'no'}`);
+    recoveryLines.push(`${orderId} · eBay · DB VERIFIED · tracking ${shipment.tracking_number||'not recovered'} · new marketplace events ${Number(shipment.tracking_events_inserted||0)} · shipment cost ${recoveryCostText(cost.shipping_cost,cost.shipping_cost_currency)} · DB readback ${after.length?'complete':'empty'} · recovery still required: ${verified.recovery_required===true?'yes':'no'}`);
    }else if(String(row.dataset.shipmentProvider||'').toLowerCase()==='packlink'&&row.dataset.shipmentId){
     p=await jsonFetch(`/fbm/shipments/${encodeURIComponent(row.dataset.shipmentId)}/packlink/status`);
     recoveryLines.push(`${orderId} · Packlink · CALL SUCCESSFUL · tracking ${p.tracking_number||p.tracking||'not recovered'}`);
