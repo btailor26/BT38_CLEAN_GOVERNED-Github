@@ -224,10 +224,9 @@ def _wrap_packlink_status(app) -> None:
 def install_governed_shipping_spend_alignment(app) -> None:
     if getattr(app, "_bt38_shipping_spend_alignment_installed", False):
         return
-    with app.app_context():
-        ShippingSpendLedger.__table__.create(bind=db.engine, checkfirst=True)
-        recover_historical_packlink_spend()
-
+    # Runtime installation attaches the existing purchase/status hand-offs only.
+    # Historical recovery remains an explicit callable; process startup must not
+    # scan or mutate shipping spend merely because the application restarted.
     from services.fbm_amazon_shipping_adapter import AmazonShippingAdapter
     original_amazon_purchase = AmazonShippingAdapter.purchase_shipment
     if not getattr(original_amazon_purchase, "_bt38_shipping_spend_wrapped", False):
