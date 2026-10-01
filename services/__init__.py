@@ -20,6 +20,11 @@ import services.governed_mcf_tracking_startup_alignment  # noqa: F401,E402
 # zero-polling, and persists only into the existing shipping spend ledger.
 import services.governed_ebay_shipping_label_finance_alignment  # noqa: F401,E402
 
+# Confirmed eBay Buy Shipping shipments get one exact delivery readback at the
+# end of eBay's persisted delivery promise when delivery is still unresolved.
+# This is a one-shot governed deadline event, not polling or a recurring scan.
+import services.governed_ebay_buy_shipping_delivery_deadline_alignment  # noqa: F401,E402
+
 # Existing Amazon FBM profile hydration also recovers Seller Central-purchased
 # Buy Shipping label authority from exact Amazon Finances + Merchant Fulfillment
 # reads. Tracking is optional; the validated Amazon ShipmentId is the durable
