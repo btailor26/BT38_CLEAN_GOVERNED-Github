@@ -7,6 +7,7 @@ NOTIFICATION_ALIGNMENT = (
     ROOT / "services" / "governed_notification_read_alignment.py"
 ).read_text(encoding="utf-8")
 FBM = (ROOT / "templates" / "fbm.html").read_text(encoding="utf-8")
+FBM_ROWS = (ROOT / "templates" / "_fbm_order_rows.html").read_text(encoding="utf-8")
 FBM_JOURNEY_JS = (ROOT / "static" / "js" / "fbm_tracking_journey_legacy.js").read_text(encoding="utf-8")
 EBAY_UI_JS = (ROOT / "static" / "js" / "fbm_ebay_shipping_alignment.js").read_text(encoding="utf-8")
 
@@ -15,11 +16,11 @@ def test_journey_numbers_are_removed_at_render_without_changing_state_authority(
     assert '("1 · Picked up", "Picked up")' in ALIGNMENT
     assert '("2 · In transit", "In transit")' in ALIGNMENT
     assert '("3 · Delivered", "Delivered")' in ALIGNMENT
-    assert "journey_state = item.shipment_state" in FBM
-    assert "journey_truth = g.fbm_delivery_truth_by_order_id.get(order.id, {})" in FBM
-    assert "delivered = journey_truth.get('delivered_at') or (shipment and shipment.delivered_at)" in FBM
-    assert "picked_up = delivered or journey_truth.get('carrier_accepted_at') or (shipment and shipment.carrier_accepted_at)" in FBM
-    assert "in_transit = delivered or journey_truth.get('first_movement_at') or (shipment and shipment.first_movement_at)" in FBM
+    assert "journey_state = item.shipment_state" in FBM_ROWS
+    assert "journey_truth = g.fbm_delivery_truth_by_order_id.get(order.id, {})" in FBM_ROWS
+    assert "delivered = journey_truth.get('delivered_at') or (shipment and shipment.delivered_at)" in FBM_ROWS
+    assert "picked_up = delivered or journey_truth.get('carrier_accepted_at') or (shipment and shipment.carrier_accepted_at)" in FBM_ROWS
+    assert "in_transit = delivered or journey_truth.get('first_movement_at') or (shipment and shipment.first_movement_at)" in FBM_ROWS
 
 
 def test_fbm_page_alignment_never_recovers_or_requeries_persisted_state_on_get():
