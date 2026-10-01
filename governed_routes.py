@@ -5545,7 +5545,12 @@ def _resolve_governed_ebay_oauth_store(store_id=None):
     """Resolve one explicit live eBay store; never select the newest row."""
     from models import Store
 
+    account_id = _governed_marketplace_account_id()
+    if account_id is None:
+        return None, []
+
     query = Store.query.filter(
+        Store.account_id == account_id,
         Store.platform.ilike("%ebay%"),
         Store.is_active == True,  # noqa: E712
         Store.store_mode == "live",
@@ -5578,6 +5583,7 @@ def _ebay_oauth_store_selection_error(candidates):
     }), 409
 
 @governed_bp.get("/ebay-oauth/authorize")
+@login_required
 def governed_ebay_oauth_authorize():
     import os
     import urllib.parse
@@ -5590,9 +5596,14 @@ def governed_ebay_oauth_authorize():
 
     scopes = governed_ebay_oauth_scopes()
 
-    store, candidates = _resolve_governed_ebay_oauth_store(request.args.get("store_id"))
-    if not store:
+    requested_store_id = request.args.get("store_id")
+    store, candidates = _resolve_governed_ebay_oauth_store(requested_store_id)
+    if not store and (requested_store_id or candidates):
         return _ebay_oauth_store_selection_error(candidates)
+
+    account_id = _governed_marketplace_account_id()
+    if account_id is None:
+        return jsonify({"ok": False, "success": False, "governed": True, "error": "customer_account_required"}), 403
 
     if not client_id or not runame:
         return jsonify({
@@ -5608,7 +5619,8 @@ def governed_ebay_oauth_authorize():
 
     state = secrets.token_urlsafe(24)
     session["governed_ebay_oauth_state"] = state
-    session["governed_ebay_oauth_store_id"] = store.id
+    session["governed_ebay_oauth_store_id"] = store.id if store else None
+    session["governed_ebay_oauth_account_id"] = account_id
 
     params = {
         "client_id": client_id,
@@ -5628,8 +5640,8 @@ def governed_ebay_oauth_authorize():
             "auth_url": auth_url,
             "runame": runame,
             "mode": "production",
-            "store_id": store.id,
-            "store_name": store.name,
+            "store_id": store.id if store else None,
+            "store_name": store.name if store else None,
         }), 200
 
     return redirect(auth_url)
@@ -5637,6 +5649,7 @@ def governed_ebay_oauth_authorize():
 
 
 @governed_bp.get("/ebay-oauth/callback")
+@login_required
 def governed_ebay_oauth_callback():
     import os
     import json
@@ -5651,6 +5664,8 @@ def governed_ebay_oauth_callback():
     state = request.args.get("state")
     expected_state = session.get("governed_ebay_oauth_state")
     selected_store_id = session.get("governed_ebay_oauth_store_id")
+    authorized_account_id = session.get("governed_ebay_oauth_account_id")
+    current_account_id = _governed_marketplace_account_id()
 
     if not code:
         return jsonify({
@@ -5660,7 +5675,7 @@ def governed_ebay_oauth_callback():
             "error": "missing_code",
         }), 200
 
-    if expected_state and state and state != expected_state:
+    if not expected_state or not state or state != expected_state:
         return jsonify({
             "ok": False,
             "success": False,
@@ -5668,9 +5683,14 @@ def governed_ebay_oauth_callback():
             "error": "state_mismatch",
         }), 200
 
-    store, candidates = _resolve_governed_ebay_oauth_store(selected_store_id)
-    if not store:
-        return _ebay_oauth_store_selection_error(candidates)
+    if current_account_id is None or int(authorized_account_id or 0) != int(current_account_id):
+        return jsonify({"ok": False, "success": False, "governed": True, "error": "account_mismatch"}), 403
+
+    store = None
+    if selected_store_id:
+        store, candidates = _resolve_governed_ebay_oauth_store(selected_store_id)
+        if not store:
+            return _ebay_oauth_store_selection_error(candidates)
 
     client_id = os.getenv("EBAY_CLIENT_ID")
     client_secret = os.getenv("EBAY_CLIENT_SECRET")
@@ -5723,6 +5743,17 @@ def governed_ebay_oauth_callback():
             "response": token,
         }), 200
 
+    if store is None:
+        store = Store(
+            account_id=current_account_id,
+            name="eBay",
+            platform="eBay",
+            is_active=True,
+            store_mode="live",
+            auth_status="ok",
+        )
+        db.session.add(store)
+
     existing = {}
     if isinstance(store.api_key, str):
         try:
@@ -5756,7 +5787,15 @@ def governed_ebay_oauth_callback():
     store.api_key = json.dumps(existing)
     store.is_active = True
     store.store_mode = "live"
+    store.auth_status = "ok"
+    store.auth_error_code = None
+    store.auth_error_message = None
+    store.auth_error_at = None
     db.session.commit()
+
+    session.pop("governed_ebay_oauth_state", None)
+    session.pop("governed_ebay_oauth_store_id", None)
+    session.pop("governed_ebay_oauth_account_id", None)
 
     notification_registration = None
 
