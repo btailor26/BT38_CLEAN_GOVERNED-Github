@@ -665,8 +665,32 @@ def install_governed_fbm_page_alignment(app) -> None:
         platform_filter = str(request.args.get("platform") or "").strip().lower()
         status_filter = str(request.args.get("status") or "").strip().lower()
         visible_limit = _requested_limit()
+        targeted_refresh = request.headers.get("X-BT38-UI-Refresh") == "targeted"
+        targeted_marketplace_order_id = str(
+            request.args.get("bt38_marketplace_order_id") or ""
+        ).strip()
 
-        if request.headers.get("X-BT38-FBM-History-Expansion") == "1":
+        if targeted_refresh and targeted_marketplace_order_id:
+            targeted_query = (
+                db.session.query(MarketplaceOrder)
+                .filter(MarketplaceOrder.marketplace_order_id == targeted_marketplace_order_id)
+                .options(
+                    joinedload(MarketplaceOrder.store),
+                    joinedload(MarketplaceOrder.warehouse_stock),
+                )
+                .order_by(MarketplaceOrder.id.desc())
+            )
+            try:
+                targeted_store_id = int(request.args.get("bt38_store_id") or 0)
+            except (TypeError, ValueError):
+                targeted_store_id = 0
+            if targeted_store_id > 0:
+                targeted_query = targeted_query.filter(
+                    MarketplaceOrder.store_id == targeted_store_id
+                )
+            targeted_row = targeted_query.first()
+            rows, has_more = ([targeted_row] if targeted_row is not None else []), False
+        elif request.headers.get("X-BT38-FBM-History-Expansion") == "1":
             # Explicit History expansion must render the complete bounded History
             # working set, not the normal visible page-size slice.
             from services import governed_fbm_global_search_alignment as global_search
@@ -866,11 +890,10 @@ def install_governed_fbm_page_alignment(app) -> None:
                 operational_promises.get(key),
             )
 
-        if request.headers.get("X-BT38-FBM-History-Expansion") == "1":
-            # History expansion is a row-fragment read, not a second full FBM page.
-            # The browser already owns the page shell, controls, modals and scripts.
-            # Return only canonical persisted rows; downstream lifecycle alignment
-            # appends the existing presentation facts used by the browser owner.
+        if targeted_refresh or request.headers.get("X-BT38-FBM-History-Expansion") == "1":
+            # Targeted committed refresh and History expansion both reuse the
+            # canonical persisted row fragment. Targeted refresh reaches this
+            # point with exactly one order; it never reconstructs the FBM shell.
             return render_template("_fbm_history_rows.html", orders=orders)
 
         counts = {
