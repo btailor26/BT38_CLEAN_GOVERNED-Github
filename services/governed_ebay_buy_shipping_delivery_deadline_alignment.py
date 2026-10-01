@@ -17,6 +17,7 @@ from services import governed_exact_ebay_order_hydration as _exact
 
 _ORIGINAL = _exact.hydrate_exact_ebay_order
 _INSTALLED = False
+_RUNTIME_ORIGINAL_START = None
 
 
 def _queue_deadline(*, store, order_id: str) -> dict:
@@ -98,11 +99,75 @@ def _aligned_hydrate(*, store, marketplace_order_id: str, source: str):
     return result
 
 
+
+def _restore_pending_deadlines(app) -> int:
+    """Bounded restart recovery only; never runs as a recurring scan."""
+    rows = db.session.execute(
+        text(
+            """
+            SELECT DISTINCT os.store_id, os.marketplace_order_id
+            FROM fbm_order_operational_state os
+            WHERE os.platform = 'ebay'
+              AND os.latest_delivery_at IS NOT NULL
+              AND EXISTS (
+                  SELECT 1 FROM fbm_shipments fs
+                  WHERE fs.store_id = os.store_id
+                    AND fs.marketplace_order_id = os.marketplace_order_id
+                    AND fs.provider = 'ebay_shipping'
+                    AND fs.delivered_at IS NULL
+              )
+              AND EXISTS (
+                  SELECT 1 FROM shipping_spend_ledger ssl
+                  WHERE ssl.store_id = os.store_id
+                    AND ssl.marketplace_order_id = os.marketplace_order_id
+                    AND ssl.provider = 'ebay'
+                    AND ssl.source = 'ebay_finances_shipping_label'
+                    AND ssl.confirmed = TRUE
+              )
+            ORDER BY os.store_id, os.marketplace_order_id
+            LIMIT 250
+            """
+        )
+    ).mappings().all()
+
+    from models import Store
+
+    queued = 0
+    for row in rows:
+        store = db.session.get(Store, int(row["store_id"]))
+        if store is None:
+            continue
+        result = _queue_deadline(
+            store=store,
+            order_id=str(row["marketplace_order_id"]),
+        )
+        if result.get("queued"):
+            queued += 1
+    return queued
+
+
+def _start_with_deadline_restore(app):
+    started = _RUNTIME_ORIGINAL_START(app)
+    if not started:
+        return started
+    try:
+        with app.app_context():
+            _restore_pending_deadlines(app)
+    except Exception:
+        # Restart recovery is best-effort; the governed runtime itself remains live.
+        pass
+    return started
+
+
 def install() -> None:
-    global _INSTALLED
+    global _INSTALLED, _RUNTIME_ORIGINAL_START
     if _INSTALLED:
         return
     _exact.hydrate_exact_ebay_order = _aligned_hydrate
+
+    import services.governed_runtime_engine as runtime
+    _RUNTIME_ORIGINAL_START = runtime.start_governed_runtime_engine
+    runtime.start_governed_runtime_engine = _start_with_deadline_restore
     _INSTALLED = True
 
 
