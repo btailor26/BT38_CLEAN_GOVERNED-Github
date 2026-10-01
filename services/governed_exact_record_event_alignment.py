@@ -82,7 +82,9 @@ def _row_scope(row) -> dict:
         scope["event_type"] = "order_committed"
     elif isinstance(row, FBMShipment):
         from services.fbm_shipping_state import shipment_confirmation_state
-        scope["order_id"] = _value(row, "order_id", "marketplace_order_id")
+        marketplace_order_id = _value(row, "marketplace_order_id", "order_id")
+        scope["order_id"] = marketplace_order_id
+        scope["marketplace_order_id"] = marketplace_order_id
         scope["store_id"] = _value(row, "store_id")
         tracking = _value(row, "tracking_number")
         carrier = _value(row, "carrier", "provider")
