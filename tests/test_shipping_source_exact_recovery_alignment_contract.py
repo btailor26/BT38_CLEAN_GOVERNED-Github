@@ -73,3 +73,14 @@ def test_targeted_refresh_never_reads_cross_order_price_memory():
     assert 'request.headers.get("X-BT38-UI-Refresh") == "targeted"' in source
     assert "MarketplaceOrder.marketplace_order_id == targeted_marketplace_order_id" in source
     assert "MarketplaceOrder.store_id == targeted_store_id" in source
+
+
+def test_verified_manual_recovery_reuses_exact_committed_refresh_owner():
+    source = Path("templates/fbm.html").read_text(encoding="utf-8")
+
+    assert "recoveredRefreshScopes=new Map()" in source
+    assert "recoveredRefreshScopes.set(`${storeId}:${orderId}`" in source
+    assert "source:'manual_exact_recovery_verified'" in source
+    assert "store_id:storeId,marketplace_order_id:orderId" in source
+    assert "recoveredRefreshScopes.forEach(scope=>window.dispatchEvent(new CustomEvent('bt38-marketplace-event',{detail:scope})))" in source
+    assert "window.location.reload()" not in source
