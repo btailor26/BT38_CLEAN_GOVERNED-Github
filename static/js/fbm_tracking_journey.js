@@ -122,7 +122,11 @@
             const replacementRow = document.importNode(freshRow, true);
             row.replaceWith(replacementRow);
             const openTrackingModal = document.querySelector('#fbmTrackingJourneyModal.show');
-            if (openTrackingModal) {
+            if (
+                openTrackingModal
+                && String(openTrackingModal.dataset.storeId || '') === storeId
+                && String(openTrackingModal.dataset.marketplaceOrderId || '') === marketplaceOrderId
+            ) {
                 const currentTrackingButton = replacementRow.querySelector('.fbm-tracking-journey');
                 if (currentTrackingButton) openPersistedJourney(currentTrackingButton);
             }
@@ -160,6 +164,12 @@
         governedLiveRefreshQueue.set(identity, detail);
         void drainCommittedFbmRefreshQueue();
     }
+
+    // Manual exact recovery has already crossed the final DB-verification boundary.
+    // Call the same single refresh owner directly instead of depending on event delivery.
+    window.bt38RefreshExactCommittedFbmRow = function(detail) {
+        enqueueCommittedFbmRefresh(detail || {});
+    };
 
     function refreshFbmFromGovernedEvent(event) {
         const detail = event?.detail || {};
@@ -378,8 +388,13 @@
     }
 
     function openPersistedJourney(button) {
+        const identityRow = button.closest('.fbm-order-row');
         const row = button.closest('.fbm-order-row');
         const modalElement = document.getElementById('fbmTrackingJourneyModal');
+        if (modalElement && identityRow) {
+            modalElement.dataset.storeId = String(identityRow.dataset.storeId || '');
+            modalElement.dataset.marketplaceOrderId = String(identityRow.dataset.marketplaceOrderId || '');
+        }
         const body = document.getElementById('fbmTrackingJourneyBody');
         const subtitle = document.getElementById('fbmTrackingJourneySubtitle');
         if (!row || !modalElement || !body) return;
