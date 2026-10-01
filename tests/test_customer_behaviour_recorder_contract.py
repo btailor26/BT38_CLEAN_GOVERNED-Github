@@ -41,7 +41,7 @@ def test_backend_and_browser_errors_are_retained():
 def test_customer_behaviour_replay_is_retired():
     text = _source()
     assert '@app.get("/admin/customer-behaviour")' not in text
-    assert "render_template("admin/customer_behaviour.html"" not in text
+    assert 'render_template("admin/customer_behaviour.html"' not in text
 
 
 def test_manual_video_recorder_remains_explicit_admin_only():
