@@ -224,6 +224,7 @@ class Store(db.Model):
     __tablename__ = 'stores'
     
     id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey('customer_accounts.id', ondelete='RESTRICT'), nullable=True, index=True)
     name = db.Column(db.String(200), nullable=False)
     platform = db.Column(db.String(100), nullable=False)  # Amazon, eBay, etc.
     fulfillment_type = db.Column(db.String(10), nullable=True)  # DEPRECATED: Use fba_import_enabled/fbm_sync_enabled instead
@@ -716,6 +717,7 @@ class Warehouse(db.Model):
     __tablename__ = 'warehouses'
     
     id = db.Column(db.Integer, primary_key=True)
+    account_id = db.Column(db.Integer, db.ForeignKey('customer_accounts.id', ondelete='RESTRICT'), nullable=True, index=True)
     name = db.Column(db.String(200), unique=True, nullable=False)
     location = db.Column(db.String(500))
     is_active = db.Column(db.Boolean, default=True)
