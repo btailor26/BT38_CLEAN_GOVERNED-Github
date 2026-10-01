@@ -53,3 +53,23 @@ def test_packlink_recovery_uses_only_selected_records_persisted_reference():
     assert "adapter.get_tracking_status(reference=provider_reference)" in branch
     assert "find_shipment_by_custom_reference" not in branch
     assert "recover_packlink_shipments_for_day" not in branch
+
+
+def test_committed_refresh_queues_exact_identities_without_dropping_events():
+    source = Path("static/js/fbm_tracking_journey.js").read_text(encoding="utf-8")
+
+    assert "const governedLiveRefreshQueue = new Map();" in source
+    assert "governedLiveRefreshQueue.set(identity, detail);" in source
+    assert "while (governedLiveRefreshQueue.size)" in source
+    assert "await applyCommittedFbmSnapshot(detail);" in source
+    assert "if (governedLiveRefreshPending) return;\n        const row = committedFbmRow(detail);" not in source
+    assert "setInterval(" not in source
+
+
+def test_targeted_refresh_never_reads_cross_order_price_memory():
+    source = Path("services/governed_fbm_page_alignment.py").read_text(encoding="utf-8")
+
+    assert "if missing_spend_rows and not targeted_refresh:" in source
+    assert 'request.headers.get("X-BT38-UI-Refresh") == "targeted"' in source
+    assert "MarketplaceOrder.marketplace_order_id == targeted_marketplace_order_id" in source
+    assert "MarketplaceOrder.store_id == targeted_store_id" in source
