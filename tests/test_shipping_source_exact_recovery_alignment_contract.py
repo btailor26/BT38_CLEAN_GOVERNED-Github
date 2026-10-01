@@ -144,3 +144,21 @@ def test_exact_browser_row_replacement_uses_store_and_marketplace_order_identity
     assert 'data-marketplace-order-id="${CSS.escape(marketplaceOrderId)}"' in source
     assert 'data-store-id="${CSS.escape(storeId)}"' in source
     assert "const freshRowSelector =" in source
+
+
+def test_ebay_recoverable_lifecycle_gap_survives_canonical_truth_review():
+    source = Path("services/governed_amazon_exact_order_recovery_route.py").read_text(encoding="utf-8")
+
+    assert 'recovery_required = bool(recovery_required or truth_review["recovery_required"])' in source
+    assert 'shipment_truth.get("delivered_at") is not None and delivered_count == 0' in source
+
+
+def test_verified_ebay_recovery_reuses_exact_committed_refresh_owner():
+    source = Path("templates/fbm.html").read_text(encoding="utf-8")
+    ebay = source.split("}else if(marketplace==='ebay')", 1)[1].split("}else if(String(row.dataset.shipmentProvider", 1)[0]
+
+    assert "/governed/actions/ebay/exact-order-recovery" in ebay
+    assert "/governed/actions/marketplace/exact-order-recovery-check" in ebay
+    assert "recoveredRefreshScopes.set" in ebay
+    assert "source:'manual_exact_recovery_verified'" in ebay
+    assert "store_id:storeId,marketplace_order_id:orderId" in ebay
