@@ -71,51 +71,67 @@
 
     let governedLiveRefreshPending = false;
 
-    async function applyCommittedFbmSnapshot() {
+    function committedFbmRow(detail) {
+        const marketplaceOrderId = String(detail?.marketplace_order_id || '').trim();
+        if (marketplaceOrderId) {
+            return document.querySelector(`.fbm-order-row[data-marketplace-order-id="${CSS.escape(marketplaceOrderId)}"]`);
+        }
+        const orderId = String(detail?.order_id || '').trim();
+        if (!orderId) return null;
+        const byDatabaseId = document.querySelector(`.fbm-order-row[data-order-id="${CSS.escape(orderId)}"]`);
+        if (byDatabaseId) return byDatabaseId;
+        return document.querySelector(`.fbm-order-row[data-marketplace-order-id="${CSS.escape(orderId)}"]`);
+    }
+
+    async function applyCommittedFbmSnapshot(detail) {
         if (governedLiveRefreshPending) return;
+        const row = committedFbmRow(detail);
+        if (!row) return;
+        const marketplaceOrderId = String(row.dataset.marketplaceOrderId || '').trim();
+        const storeId = String(row.dataset.storeId || '').trim();
+        if (!marketplaceOrderId) return;
+
         governedLiveRefreshPending = true;
         try {
-            const response = await fetch(window.location.href, {method:'GET', credentials:'same-origin', cache:'no-store', headers: {'Accept': 'text/html'}});
-            if (!response.ok) throw new Error(`FBM refresh failed (HTTP ${response.status})`);
-            const html = await response.text();
-            const parsed = new DOMParser().parseFromString(html, 'text/html');
-            const dataNode = parsed.getElementById('bt38FbmLifecycleTabsData');
-            const countsNode = parsed.getElementById('bt38FbmLifecycleCountsData');
-            if (!dataNode || !countsNode || typeof window.BT38FBMApplyCommittedSnapshot !== 'function') return;
-            const nextData = JSON.parse(dataNode.textContent || '{}');
-            const nextCounts = JSON.parse(countsNode.textContent || '{}');
-            document.querySelectorAll('.fbm-order-row').forEach(row => {
-                const orderId = String(row.dataset.orderId || '');
-                const freshRow = parsed.querySelector(`.fbm-order-row[data-order-id="${CSS.escape(orderId)}"]`);
-                if (!freshRow) return;
-                // The server-rendered row is the committed DB presentation
-                // authority. Replace the exact row rather than copying only
-                // datasets, otherwise visible tracking/journey/cost/source can
-                // remain stale while hidden data is already current.
-                row.replaceWith(document.importNode(freshRow, true));
+            const target = new URL(window.location.href);
+            target.searchParams.set('bt38_marketplace_order_id', marketplaceOrderId);
+            if (storeId) target.searchParams.set('bt38_store_id', storeId);
+            const response = await fetch(target.toString(), {
+                method:'GET',
+                credentials:'same-origin',
+                cache:'no-store',
+                headers: {'Accept':'text/html', 'X-BT38-UI-Refresh':'targeted'}
             });
-            // Rebuild the existing FBM browser-session owner from the replaced
-            // rows; no second refresh owner, timer, poller or marketplace read.
-            window.BT38FBMApplyCommittedSnapshot(nextData, nextCounts);
+            if (!response.ok) throw new Error(`FBM targeted refresh failed (HTTP ${response.status})`);
+            const parsed = new DOMParser().parseFromString(
+                `<table><tbody>${await response.text()}</tbody></table>`,
+                'text/html'
+            );
+            const freshRow = parsed.querySelector(
+                `.fbm-order-row[data-marketplace-order-id="${CSS.escape(marketplaceOrderId)}"]`
+            );
+            if (!freshRow) return;
+            row.replaceWith(document.importNode(freshRow, true));
             document.dispatchEvent(new CustomEvent('bt38-fbm-working-set-expanded', {
-                detail: {reason: 'committed_event_refresh'}
+                detail: {reason: 'committed_event_refresh', marketplace_order_id: marketplaceOrderId}
             }));
             alignPersistedLifecycle();
             updateSelectedPacklinkLabelAction();
         } catch (error) {
-            console.warn('[BT38 FBM] committed session refresh unavailable', error);
+            console.warn('[BT38 FBM] committed row refresh unavailable', error);
         } finally {
             governedLiveRefreshPending = false;
         }
     }
 
-    function refreshFbmFromGovernedEvent() {
+    function refreshFbmFromGovernedEvent(event) {
+        const detail = event?.detail || {};
         const activeModal = document.querySelector('#fbmShippingModal.show, #fbmTrackingJourneyModal.show');
         if (activeModal) {
-            activeModal.addEventListener('hidden.bs.modal', () => void applyCommittedFbmSnapshot(), {once:true});
+            activeModal.addEventListener('hidden.bs.modal', () => void applyCommittedFbmSnapshot(detail), {once:true});
             return;
         }
-        void applyCommittedFbmSnapshot();
+        void applyCommittedFbmSnapshot(detail);
     }
 
     window.addEventListener('bt38-marketplace-event', refreshFbmFromGovernedEvent);
