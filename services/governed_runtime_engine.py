@@ -976,6 +976,85 @@ def _execute_product_linking_group_push_event(event):
     }
 
 
+def _recover_exact_ebay_buy_shipping_delivery(event):
+    """One-shot exact eBay Buy Shipping delivery recovery at promise expiry."""
+    from extensions import db
+    from models import Store
+    from services.governed_exact_ebay_order_hydration import hydrate_exact_ebay_order
+
+    store_id = _safe_int(event.get("store_id"))
+    order_id = _clean(event.get("order_id"))
+    if store_id is None or not order_id:
+        return {
+            "verified": False,
+            "skipped": True,
+            "reason": "exact_ebay_buy_shipping_identity_required",
+            "database_touched": False,
+        }
+
+    eligible = db.session.execute(
+        __import__("sqlalchemy").text(
+            """
+            SELECT fs.id
+            FROM fbm_shipments fs
+            JOIN shipping_spend_ledger ssl
+              ON ssl.store_id = fs.store_id
+             AND ssl.marketplace_order_id = fs.marketplace_order_id
+             AND ssl.provider = 'ebay'
+             AND ssl.source = 'ebay_finances_shipping_label'
+             AND ssl.confirmed = TRUE
+            JOIN fbm_order_operational_state os
+              ON os.store_id = fs.store_id
+             AND os.marketplace_order_id = fs.marketplace_order_id
+             AND os.platform = 'ebay'
+            WHERE fs.store_id = :store_id
+              AND fs.marketplace_order_id = :order_id
+              AND fs.provider = 'ebay_shipping'
+              AND fs.delivered_at IS NULL
+              AND os.latest_delivery_at IS NOT NULL
+            LIMIT 1
+            """
+        ),
+        {"store_id": store_id, "order_id": order_id},
+    ).first()
+    if eligible is None:
+        return {
+            "verified": True,
+            "skipped": True,
+            "reason": "ebay_buy_shipping_delivery_recovery_not_required",
+            "database_touched": False,
+        }
+
+    store = db.session.get(Store, store_id)
+    if store is None:
+        return {
+            "verified": False,
+            "skipped": True,
+            "reason": "ebay_store_missing",
+            "database_touched": False,
+        }
+
+    result = hydrate_exact_ebay_order(
+        store=store,
+        marketplace_order_id=order_id,
+        source="ebay_buy_shipping_delivery_deadline",
+    )
+    return {
+        "verified": bool(isinstance(result, dict) and not result.get("skipped")),
+        "aligned": bool(isinstance(result, dict) and not result.get("skipped")),
+        "object": "FBMShipment",
+        "identity_field": "marketplace_order_id",
+        "identity": order_id,
+        "ebay_hydration": result,
+        "database_touched": True,
+        "rows_examined_max": 1,
+        "full_scan_started": False,
+        "recent_order_import_started": False,
+        "warehouse_scan_started": False,
+        "marketplace_hydration_started": False,
+    }
+
+
 def _verify_webhook_event(event):
     if not event.get("scope_present"):
         return {
@@ -1017,7 +1096,9 @@ def _verify_webhook_event(event):
             and fulfillment_type in {"AFN", "FBA", "AMAZON"}
         )
 
-        if amazon_fba_event:
+        if event_type == "ebay_buy_shipping_delivery_deadline":
+            result = _recover_exact_ebay_buy_shipping_delivery(event)
+        elif amazon_fba_event:
             result = _verify_exact_fba(event)
         elif event.get("order_id") or "order" in event_type:
             result = _verify_exact_order(event)
