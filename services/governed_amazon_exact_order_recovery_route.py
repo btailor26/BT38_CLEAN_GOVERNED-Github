@@ -146,6 +146,16 @@ def check_exact_marketplace_order_recovery():
         delivered_count = int((ebay_event_evidence or {}).get("delivered_count") or 0)
         if shipment_truth and (event_count == 0 or shipped_count == 0):
             recovery_required = True
+        # Once eBay shipment truth is persisted as shipped, a missing delivered
+        # timestamp remains a supported exact marketplace lifecycle gap. The
+        # readback may recover Trading GetOrders ActualDeliveryTime; pickup and
+        # in-transit carrier scans remain unsupported and are never invented.
+        if (
+            shipment_truth
+            and shipped_count > 0
+            and shipment_truth.get("delivered_at") is None
+        ):
+            recovery_required = True
         if shipment_truth.get("delivered_at") is not None and delivered_count == 0:
             recovery_required = True
 
