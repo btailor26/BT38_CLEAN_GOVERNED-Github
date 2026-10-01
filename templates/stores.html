@@ -16,6 +16,7 @@
                 <i data-feather="shopping-bag" class="me-2"></i>
                 Stores
             </h1>
+            {% if stores %}
             <div class="d-flex align-items-center gap-3" aria-label="Connect marketplace">
                 {% if not connected.amazon %}
                 <a href="/amazon-oauth/authorize" title="Connect Amazon" aria-label="Connect Amazon">
@@ -28,6 +29,7 @@
                 </a>
                 {% endif %}
             </div>
+            {% endif %}
         </div>
     </div>
 </div>
