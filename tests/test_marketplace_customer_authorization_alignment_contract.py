@@ -45,3 +45,5 @@ def test_ebay_governed_oauth_keeps_bounded_pending_states_for_callback_handoff()
     assert 'session["governed_ebay_oauth_pending_states"] = pending_states[-5:]' in text
     assert 'if not state or str(state) not in pending_states:' in text
     assert 'session.pop("governed_ebay_oauth_pending_states", None)' in text
+    assert 'ebay_error = request.args.get("error")' in text
+    assert '"error_description": ebay_error_description' in text
