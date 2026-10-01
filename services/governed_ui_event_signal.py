@@ -367,18 +367,27 @@ def _bt38_existing_ui_signal_before_flush(
         if isinstance(row, (MarketplaceOrder, FBMShipment, ShippingSpendLedger)):
             scope["store_id"] = getattr(row, "store_id", None)
             scope["marketplace_order_id"] = getattr(row, "marketplace_order_id", None)
-        identity = (
-            scope.get("order_id"),
+        marketplace_identity = (
             scope.get("store_id"),
             scope.get("marketplace_order_id"),
         )
-        if identity != (None, None, None) and not any(
-            (
-                item.get("order_id"),
-                item.get("store_id"),
-                item.get("marketplace_order_id"),
-            ) == identity
-            for item in scopes
+        if marketplace_identity != (None, None):
+            duplicate = any(
+                (
+                    item.get("store_id"),
+                    item.get("marketplace_order_id"),
+                ) == marketplace_identity
+                for item in scopes
+            )
+        else:
+            duplicate = any(
+                item.get("order_id") == scope.get("order_id")
+                and scope.get("order_id") is not None
+                for item in scopes
+            )
+        if not duplicate and (
+            marketplace_identity != (None, None)
+            or scope.get("order_id") is not None
         ):
             scopes.append(scope)
 
