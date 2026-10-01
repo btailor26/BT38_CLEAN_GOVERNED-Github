@@ -159,7 +159,10 @@ def check_exact_marketplace_order_recovery():
         platform=platform,
         readback=before,
     )
-    recovery_required = bool(truth_review["recovery_required"])
+    # Preserve exact eBay lifecycle gaps discovered above. The canonical truth
+    # review adds its own gaps; it must not erase supported eBay journey evidence
+    # that is still recoverable from the exact marketplace readback.
+    recovery_required = bool(recovery_required or truth_review["recovery_required"])
     missing = list(truth_review["missing"])
     unverified = list(truth_review["unverified"])
 
