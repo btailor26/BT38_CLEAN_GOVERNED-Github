@@ -861,12 +861,7 @@ def packlink_shipment_status(shipment_id: int):
         first_label = labels[0]
         label_url = first_label if isinstance(first_label, str) else (first_label.get("url") if isinstance(first_label, dict) else None)
         result = persist_external_label(shipment=shipment, marketplace=_platform(order), provider="packlink", provider_shipment_id=shipment.provider_shipment_id, carrier=carrier, service=service, tracking_number=tracking, provider_service_id=str(provider_payload.get("service_id") or shipment.provider_service_id or "") or None, label={"type": "LABEL", "format": "PDF", "url": label_url, "storage_ref": shipment.provider_shipment_id})
-        # A provider label proves Packlink checkout completed. Persist the exact
-        # selected-rate spend in the same governed transaction so new purchases
-        # do not depend on the remembered SKU/quantity/carrier fallback.
-        spend = recover_packlink_provider_spend(shipment, provider_payload)
-        db.session.commit()
-        return jsonify({"success": True, "payment_complete": True, "label_ready": True, "ready_to_ship": True, "blockers": [], "blocking_reason": None, "label": {"format": "PDF", "url": label_url}, "provider_status": shipment.last_provider_status, "tracking": tracking, "tracking_history": tracking_history, "shipping_cost": float(spend.amount) if spend is not None else None, "shipping_cost_currency": spend.currency if spend is not None else None, **result})
+        return jsonify({"success": True, "payment_complete": True, "label_ready": True, "ready_to_ship": True, "blockers": [], "blocking_reason": None, "label": {"format": "PDF", "url": label_url}, "provider_status": shipment.last_provider_status, "tracking": tracking, "tracking_history": tracking_history, **result})
     db.session.commit()
     return jsonify({
         "success": True,
