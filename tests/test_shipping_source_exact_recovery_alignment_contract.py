@@ -162,3 +162,11 @@ def test_verified_ebay_recovery_reuses_exact_committed_refresh_owner():
     assert "recoveredRefreshScopes.set" in ebay
     assert "source:'manual_exact_recovery_verified'" in ebay
     assert "store_id:storeId,marketplace_order_id:orderId" in ebay
+
+
+def test_ebay_shipped_row_missing_delivery_requires_exact_readback():
+    source = Path("services/governed_amazon_exact_order_recovery_route.py").read_text(encoding="utf-8")
+    assert "shipped_count > 0" in source
+    assert 'shipment_truth.get("delivered_at") is None' in source
+    assert "recovery_required = True" in source
+    assert "ActualDeliveryTime" in source
