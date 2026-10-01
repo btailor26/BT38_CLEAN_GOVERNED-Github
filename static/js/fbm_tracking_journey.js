@@ -82,6 +82,7 @@
 
     function committedFbmRow(detail) {
         const marketplaceOrderId = String(detail?.marketplace_order_id || '').trim();
+        const storeId = String(detail?.store_id || '').trim();
         if (marketplaceOrderId) {
             const marketplaceSelector = `.fbm-order-row[data-marketplace-order-id="${CSS.escape(marketplaceOrderId)}"]`;
             if (storeId) return document.querySelector(`${marketplaceSelector}[data-store-id="${CSS.escape(storeId)}"]`);
@@ -117,7 +118,7 @@
                 `<table><tbody>${await response.text()}</tbody></table>`,
                 'text/html'
             );
-            const freshRowSelector = `.fbm-order-row[data-marketplace-order-id="${CSS.escape(marketplaceOrderId)}"]${storeId ? `[data-store-id="${CSS.escape(storeId)}"]` : ''} ` .trim();
+            const freshRowSelector = `.fbm-order-row[data-marketplace-order-id="${CSS.escape(marketplaceOrderId)}"]${storeId ? `[data-store-id="${CSS.escape(storeId)}"]` : ''}`;
             const freshRow = parsed.querySelector(freshRowSelector);
             if (!freshRow) return;
             const replacementRow = document.importNode(freshRow, true);
