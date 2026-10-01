@@ -589,6 +589,18 @@ except Exception as exc:
     logging.exception(f"Failed to install governed FBM lifecycle alignment: {exc}")
     raise
 
+# Shipping spend already has one governed alignment owner. Install it only after
+# the FBM purchase/status endpoints exist so its existing wrappers attach to the
+# live routes; do not duplicate spend persistence inside provider route handlers.
+try:
+    from services.governed_shipping_spend_alignment import (
+        install_governed_shipping_spend_alignment,
+    )
+    install_governed_shipping_spend_alignment(app)
+except Exception as exc:
+    logging.exception(f"Failed to install governed shipping spend alignment: {exc}")
+    raise
+
 
 # Import and register admin reporting blueprint
 from admin_routes import admin_bp
