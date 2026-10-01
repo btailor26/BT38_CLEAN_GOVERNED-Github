@@ -108,14 +108,12 @@ def check_exact_marketplace_order_recovery():
             "reason": "active_store_not_found", "marketplace_call_started": False,
         }), 404
 
-    from scripts.recover_marketplace_dispatch_history import (
-        _candidate_order_ids,
-        _database_readback,
-    )
+    from scripts.recover_marketplace_dispatch_history import _database_readback
 
+    # Recover Missing is selected-record only. The DB gate must never enumerate
+    # candidate orders for the store; every read is bounded by this exact identity.
     before = _database_readback(store_id, order_id)
-    candidates = set(_candidate_order_ids(store_id, platform=platform))
-    recovery_required = order_id in candidates
+    recovery_required = False
 
     # eBay journey evidence is part of recovery completeness.  The proven exact
     # eBay readback persists supported marketplace events (Sell Fulfillment
