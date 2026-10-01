@@ -650,6 +650,7 @@ def google_login():
     customer account, package, store, or second onboarding path.
     """
     import base64
+    import hmac
     import json as json_module
     import os
     import time
@@ -726,7 +727,7 @@ def google_login():
     except Exception:
         return _login_error("Google sign-in could not be verified.")
 
-    user = db.session.query(User).filter(db.func.lower(User.email) == email).first()
+    user = db.session.query(User).filter(User.email == email).first()
     if not user or not user.is_active:
         return _login_error("This Google account is not registered for BT38 access.")
 
