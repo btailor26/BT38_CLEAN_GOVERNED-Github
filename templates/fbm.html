@@ -144,7 +144,10 @@ if(recoverButton)recoverButton.addEventListener('click',async()=>{
  recoverButton.innerHTML=original;updateSelection();
  // Final exact DB verification is the deterministic completion boundary for this operator action.
  // Reuse the existing committed-event refresh owner; SSE remains authority for background commits.
- recoveredRefreshScopes.forEach(scope=>window.dispatchEvent(new CustomEvent('bt38-marketplace-event',{detail:scope})));
+ recoveredRefreshScopes.forEach(scope=>{
+  if(typeof window.bt38RefreshExactCommittedFbmRow==='function')window.bt38RefreshExactCommittedFbmRow(scope);
+  else window.dispatchEvent(new CustomEvent('bt38-marketplace-event',{detail:scope}));
+ });
  // Recovery commits publish the existing governed event; the single FBM
  // refresh owner replaces persisted rows and reapplies History/Health.
 });
