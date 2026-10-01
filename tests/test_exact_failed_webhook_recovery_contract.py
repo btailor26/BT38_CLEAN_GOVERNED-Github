@@ -157,3 +157,14 @@ def test_successful_non_order_notification_does_not_require_marketplace_order():
     assert '"canonical_order_required": False' in recover
     assert '"order_id": None' in recover
     assert '"broad_scan_started": False' in recover
+
+
+def test_missing_order_amazon_cancellation_is_terminal_noop_not_restart_retry():
+    source = Path("services/governed_exact_webhook_recovery.py").read_text(encoding="utf-8")
+    assert '== "cancellation_unresolved"' in source
+    assert '== "cancellation"' in source
+    assert '"terminal_noop": True' in source
+    assert '"reason": "cancellation_for_missing_canonical_order"' in source
+    assert '"success": True' in source
+    assert '"order_replayed": False' in source
+    assert '"stock_mutation_started": False' in source
