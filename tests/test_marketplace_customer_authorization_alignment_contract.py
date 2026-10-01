@@ -38,3 +38,10 @@ def test_ebay_governed_oauth_supports_fresh_customer_without_cross_account_store
     assert 'session["governed_ebay_oauth_store_id"] = store.id if store else None' in text
     assert 'account_id=current_account_id' in text
     assert '"account_mismatch"' in text
+
+
+def test_ebay_governed_oauth_keeps_bounded_pending_states_for_callback_handoff():
+    text = _text(ROUTES)
+    assert 'session["governed_ebay_oauth_pending_states"] = pending_states[-5:]' in text
+    assert 'if not state or str(state) not in pending_states:' in text
+    assert 'session.pop("governed_ebay_oauth_pending_states", None)' in text
