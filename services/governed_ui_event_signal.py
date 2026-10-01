@@ -358,10 +358,35 @@ def _bt38_existing_ui_signal_before_flush(
         ShippingSpendLedger,
     )
 
+    scopes = session_obj.info.setdefault("_bt38_ui_commit_scopes", [])
+
+    def remember_scope(row):
+        scope = {"event_type": "committed_marketplace_state"}
+        if isinstance(row, MarketplaceOrder):
+            scope["order_id"] = getattr(row, "id", None)
+        if isinstance(row, (MarketplaceOrder, FBMShipment, ShippingSpendLedger)):
+            scope["store_id"] = getattr(row, "store_id", None)
+            scope["marketplace_order_id"] = getattr(row, "marketplace_order_id", None)
+        identity = (
+            scope.get("order_id"),
+            scope.get("store_id"),
+            scope.get("marketplace_order_id"),
+        )
+        if identity != (None, None, None) and not any(
+            (
+                item.get("order_id"),
+                item.get("store_id"),
+                item.get("marketplace_order_id"),
+            ) == identity
+            for item in scopes
+        ):
+            scopes.append(scope)
+
     for row in session_obj.new:
         if isinstance(row, canonical_rows):
+            remember_scope(row)
             session_obj.info["_bt38_ui_commit_wake"] = True
-            return
+            continue
 
         if isinstance(row, SyncLog):
             message = str(getattr(row, "message", "") or "").lower()
@@ -377,29 +402,36 @@ def _bt38_existing_ui_signal_before_flush(
             isinstance(row, canonical_rows)
             and session_obj.is_modified(row, include_collections=False)
         ):
+            remember_scope(row)
             session_obj.info["_bt38_ui_commit_wake"] = True
-            return
 
     for row in session_obj.deleted:
         if isinstance(row, canonical_rows):
+            remember_scope(row)
             session_obj.info["_bt38_ui_commit_wake"] = True
-            return
 
 
 @event.listens_for(Session, "after_commit")
 def _bt38_existing_ui_signal_after_commit(session_obj):
+    scopes = session_obj.info.pop("_bt38_ui_commit_scopes", [])
     if session_obj.info.pop("_bt38_ui_commit_wake", False):
-        publish_governed_ui_event(
-            source="committed_marketplace_state",
-            scope={
-                "event_type": "committed_marketplace_state",
-            },
-        )
+        if scopes:
+            for scope in scopes:
+                publish_governed_ui_event(
+                    source="committed_marketplace_state",
+                    scope=scope,
+                )
+        else:
+            publish_governed_ui_event(
+                source="committed_marketplace_state",
+                scope={"event_type": "committed_marketplace_state"},
+            )
 
 
 @event.listens_for(Session, "after_rollback")
 def _bt38_existing_ui_signal_after_rollback(session_obj):
     session_obj.info.pop("_bt38_ui_commit_wake", None)
+    session_obj.info.pop("_bt38_ui_commit_scopes", None)
 
 def _result_has_committed_change(value) -> bool:
     if not isinstance(value, dict):
