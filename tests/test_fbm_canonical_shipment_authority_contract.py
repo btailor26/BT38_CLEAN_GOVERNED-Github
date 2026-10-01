@@ -4,6 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ROUTES = (ROOT / "governed_fbm_routes.py").read_text(encoding="utf-8")
 TEMPLATE = (ROOT / "templates" / "fbm.html").read_text(encoding="utf-8")
+ROW_TEMPLATE = (ROOT / "templates" / "_fbm_order_rows.html").read_text(encoding="utf-8")
 JS = (ROOT / "static" / "js" / "fbm_tracking_journey_legacy.js").read_text(encoding="utf-8")
 DB_AUTHORITY = (ROOT / "services" / "governed_fbm_db_authority_alignment.py").read_text(encoding="utf-8")
 
@@ -55,8 +56,8 @@ def test_every_fbm_consumer_is_bound_to_the_same_canonical_runtime_selector():
 
 
 def test_fbm_provider_journey_receives_the_selected_persisted_shipment_id():
-    assert "shipment.provider == 'packlink' and shipment.provider_shipment_id and tracking_number" in TEMPLATE
-    assert 'data-shipment-id="{{ shipment.id }}"' in TEMPLATE
+    assert "shipment.provider == 'packlink' and shipment.provider_shipment_id and tracking_number" in ROW_TEMPLATE
+    assert 'data-shipment-id="{{ shipment.id }}"' in ROW_TEMPLATE
     assert "/fbm/shipments/${encodeURIComponent(button.dataset.shipmentId)}/packlink/status" in JS
     assert "Journey source: Packlink / carrier platform" in JS
 
@@ -72,9 +73,9 @@ def test_runtime_canonical_authority_rejects_unpaid_packlink_draft_as_physical_t
 
 
 def test_selected_recovery_routes_by_exact_marketplace_identity_before_packlink_fallback():
-    assert 'data-store-id="{{ order.store_id }}"' in TEMPLATE
-    assert 'data-marketplace-order-id="{{ order.marketplace_order_id }}"' in TEMPLATE
-    assert 'data-marketplace="{{ platform_key }}"' in TEMPLATE
+    assert 'data-store-id="{{ order.store_id }}"' in ROW_TEMPLATE
+    assert 'data-marketplace-order-id="{{ order.marketplace_order_id }}"' in ROW_TEMPLATE
+    assert 'data-marketplace="{{ platform_key }}"' in ROW_TEMPLATE
     handler = TEMPLATE.split("if(recoverButton)recoverButton.addEventListener", 1)[1].split("document.querySelector('.fbm-orders-table tbody')", 1)[0]
 
     assert "/governed/actions/amazon/exact-order-recovery" in handler
