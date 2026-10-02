@@ -37,7 +37,6 @@
 {% if stores %}
     <div class="row">
         {% for store in stores %}
-        {% set ebay_reauth_required = store.platform and 'ebay' in store.platform|lower and store.auth_status == 'auth_error' and store.auth_error_code == 'ebay_notification_reauthorization_required' %}
         <div class="col-md-6 col-lg-4 mb-4">
             <div class="card h-100">
                 <div class="card-body">
@@ -65,9 +64,6 @@
                             {% endif %}
                         {% elif store.platform and 'ebay' in store.platform|lower %}
                             <span class="badge bg-primary">eBay</span>
-                            {% if ebay_reauth_required %}
-                                <span class="badge bg-warning text-dark ms-1">Permission approval required</span>
-                            {% endif %}
                         {% else %}
                             <span class="badge bg-secondary">{{ store.platform }}</span>
                         {% endif %}
@@ -126,19 +122,10 @@
                             <i data-feather="refresh-cw" class="me-1"></i>
                             Sync Now
                         </button>
-                        {% if store.platform and 'ebay' in store.platform|lower %}
-                        <a href="/ebay-oauth/authorize"
-                           class="btn btn-sm {% if ebay_reauth_required %}btn-warning{% else %}btn-outline-primary{% endif %}"
-                           title="Authorize eBay" aria-label="Authorize eBay">
-                            <i data-feather="key" class="me-1"></i>
-                            {% if ebay_reauth_required %}Approve eBay{% else %}OAuth{% endif %}
-                        </a>
-                        {% else %}
                         <a href="#" class="btn btn-sm btn-outline-primary">
                             <i data-feather="edit-2" class="me-1"></i>
                             Edit
                         </a>
-                        {% endif %}
                         <button type="button" 
                                 class="btn btn-sm btn-outline-danger"
                                 onclick="confirmDelete({{ store.id }}, '{{ store.name }}', '{{ store.platform }}')">
