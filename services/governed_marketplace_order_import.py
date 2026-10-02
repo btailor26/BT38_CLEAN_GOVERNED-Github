@@ -27,8 +27,9 @@ from extensions import db
 from models import Store, MarketplaceOrder, MarketplaceListing, SyncLog
 
 
-# Compatibility export only; refresh execution lives in governed_ebay_oauth_scopes.\nEBAY_TOKEN_URL = "https://api.ebay.com/identity/v1/oauth2/token"\nEBAY_ORDERS_URL = "https://api.ebay.com/sell/fulfillment/v1/order"
-
+# Compatibility exports only; refresh execution lives in governed_ebay_oauth_scopes.
+EBAY_TOKEN_URL = "https://api.ebay.com/identity/v1/oauth2/token"
+EBAY_ORDERS_URL = "https://api.ebay.com/sell/fulfillment/v1/order"
 
 def _text(value: Any) -> str:
     return str(value or "").strip()
