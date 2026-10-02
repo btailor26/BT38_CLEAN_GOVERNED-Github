@@ -286,35 +286,11 @@ def _not_wired(store: Store, marketplace: str) -> dict[str, Any]:
 
 
 def _ebay_access_token(store: Store) -> str:
-    creds = _store_credentials(store)
-
-    refresh_token = creds.get("refresh_token")
-    client_id = os.getenv("EBAY_CLIENT_ID") or creds.get("client_id")
-    client_secret = os.getenv("EBAY_CLIENT_SECRET") or creds.get("client_secret")
-
-    if not refresh_token or not client_id or not client_secret:
-        raise RuntimeError("missing_ebay_credentials_for_order_import")
-
-    response = requests.post(
-        EBAY_TOKEN_URL,
-        auth=(client_id, client_secret),
-        data={
-            "grant_type": "refresh_token",
-            "refresh_token": refresh_token,
-            "scope": "https://api.ebay.com/oauth/api_scope/sell.fulfillment",
-        },
-        timeout=30,
+    from services.governed_ebay_oauth_scopes import governed_ebay_access_token
+    return governed_ebay_access_token(
+        store,
+        source="governed_ebay_order_import",
     )
-
-    if response.status_code >= 400:
-        raise RuntimeError(f"ebay_token_refresh_failed:{response.status_code}:{response.text[:500]}")
-
-    token = response.json().get("access_token")
-    if not token:
-        raise RuntimeError("ebay_token_refresh_missing_access_token")
-
-    return token
-
 
 def _parse_ebay_datetime(value: Any) -> datetime | None:
     text_value = _text(value)
