@@ -5696,6 +5696,20 @@ def governed_ebay_oauth_callback():
     state = request.args.get("state")
     ebay_error = request.args.get("error")
     ebay_error_description = request.args.get("error_description")
+
+    # Retired eBay Auth'n'Auth callbacks must never enter the OAuth path.
+    # BT38 supports only the production OAuth authorization-code grant.
+    legacy_auth_callback = any(
+        key in request.args for key in ("ebaytkn", "tknexp", "username")
+    )
+    if legacy_auth_callback:
+        return jsonify({
+            "ok": False,
+            "success": False,
+            "governed": True,
+            "error": "legacy_ebay_auth_retired",
+        }), 410
+
     expected_state = session.get("governed_ebay_oauth_state")
     pending_states = {str(expected_state)} if expected_state else set()
     selected_store_id = session.get("governed_ebay_oauth_store_id")
