@@ -284,15 +284,18 @@ def test_ebay_store_ui_never_uses_developer_portal_or_legacy_authnauth():
     assert "/ebay-oauth/authorize?store_id=" not in stores
 
 
-def test_ebay_store_ui_uses_persisted_auth_state_not_credentials():
+def test_ebay_store_ui_keeps_oauth_first_connect_only():
     stores = _source(STORES)
 
-    assert "store.auth_status == 'auth_error'" in stores
-    assert "store.auth_error_code == 'ebay_notification_reauthorization_required'" in stores
     assert "'AUTHORIZATION_REQUIRED' in store.api_key" not in stores
     assert "'Insufficient permissions' in store.api_key" not in stores
-    assert "Permission approval required" in stores
-    assert "Approve eBay" in stores
+    assert "Permission approval required" not in stores
+    assert "Approve eBay" not in stores
+
+    # Once an eBay Store exists, its card must not send the customer back
+    # through seller consent. Stored refresh-token authority owns renewal.
+    card_section = stores[stores.index("{% for store in stores %}"):]
+    assert 'href="/ebay-oauth/authorize"' not in card_section
 
 
 def test_web_entrypoint_does_not_run_ebay_recovery_during_import():
