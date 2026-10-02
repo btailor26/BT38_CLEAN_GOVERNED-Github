@@ -5620,7 +5620,13 @@ def governed_ebay_oauth_authorize():
             },
         }), 200
 
-    state = secrets.token_urlsafe(24)
+    from itsdangerous import URLSafeTimedSerializer
+
+    state_nonce = secrets.token_urlsafe(24)
+    state = URLSafeTimedSerializer(
+        current_app.secret_key,
+        salt="bt38-ebay-oauth-state",
+    ).dumps({"account_id": int(account_id), "nonce": state_nonce})
     pending_states = [
         str(value)
         for value in (session.get("governed_ebay_oauth_pending_states") or [])
@@ -5697,7 +5703,22 @@ def governed_ebay_oauth_callback():
             "error_description": ebay_error_description,
         }), 200
 
-    if not state or str(state) not in pending_states:
+    state_account_id = None
+    state_verified = bool(state and str(state) in pending_states)
+    if state and not state_verified:
+        try:
+            from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
+
+            state_payload = URLSafeTimedSerializer(
+                current_app.secret_key,
+                salt="bt38-ebay-oauth-state",
+            ).loads(str(state), max_age=900)
+            state_account_id = int(state_payload.get("account_id") or 0)
+            state_verified = state_account_id > 0
+        except (BadSignature, SignatureExpired, TypeError, ValueError):
+            state_verified = False
+
+    if not state_verified:
         return jsonify({
             "ok": False,
             "success": False,
@@ -5705,7 +5726,8 @@ def governed_ebay_oauth_callback():
             "error": "state_mismatch",
         }), 200
 
-    if current_account_id is None or int(authorized_account_id or 0) != int(current_account_id):
+    oauth_account_id = state_account_id or int(authorized_account_id or 0)
+    if current_account_id is None or oauth_account_id != int(current_account_id):
         return jsonify({"ok": False, "success": False, "governed": True, "error": "account_mismatch"}), 403
 
     store = None
