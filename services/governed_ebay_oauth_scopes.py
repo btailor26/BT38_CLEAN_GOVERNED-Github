@@ -77,3 +77,83 @@ def governed_ebay_refresh_scopes(credentials: dict | None = None) -> str | None:
     # With no durable proof of the granted set, omit scope and let eBay bind the
     # new access token to the refresh token's real seller-consent grant.
     return None
+
+
+def governed_ebay_access_token(store, *, force_refresh=False, source="governed_ebay_runtime"):
+    """Return one valid seller access token; this is the only refresh authority."""
+    import json
+    from datetime import datetime, timedelta
+    import requests
+    from extensions import db
+
+    raw = getattr(store, "api_key", None) or {}
+    if isinstance(raw, str):
+        try:
+            credentials = json.loads(raw or "{}")
+        except Exception:
+            credentials = {}
+    elif isinstance(raw, dict):
+        credentials = dict(raw)
+    else:
+        credentials = {}
+
+    token = str(credentials.get("access_token") or "").strip()
+    expires_soon = True
+    expires_at = credentials.get("access_token_expires_at")
+    if expires_at:
+        try:
+            expiry = datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
+            if expiry.tzinfo is not None:
+                expiry = expiry.replace(tzinfo=None)
+            expires_soon = expiry <= datetime.utcnow() + timedelta(minutes=10)
+        except Exception:
+            expires_soon = True
+
+    if token and not force_refresh and not expires_soon:
+        return token
+
+    refresh_token = str(credentials.get("refresh_token") or "").strip()
+    client_id = str(os.getenv("EBAY_CLIENT_ID") or credentials.get("app_id") or credentials.get("client_id") or "").strip()
+    client_secret = str(os.getenv("EBAY_CLIENT_SECRET") or credentials.get("cert_id") or credentials.get("client_secret") or "").strip()
+    if not refresh_token or not client_id or not client_secret:
+        raise RuntimeError("missing_ebay_refresh_credentials")
+
+    scope = governed_ebay_refresh_scopes(credentials)
+    data = {"grant_type": "refresh_token", "refresh_token": refresh_token}
+    if scope:
+        data["scope"] = scope
+
+    response = requests.post(
+        "https://api.ebay.com/identity/v1/oauth2/token",
+        auth=(client_id, client_secret),
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        data=data,
+        timeout=30,
+    )
+    try:
+        payload = response.json()
+    except Exception:
+        payload = {}
+
+    if response.status_code >= 300 or not payload.get("access_token"):
+        raise RuntimeError(f"ebay_access_token_refresh_failed:{response.status_code}")
+
+    now = datetime.utcnow()
+    credentials.update({
+        "access_token": payload.get("access_token"),
+        "token_type": payload.get("token_type"),
+        "access_token_expires_at": (
+            now + timedelta(seconds=int(payload.get("expires_in", 7200)))
+        ).isoformat(),
+        "oauth_source": source,
+        "oauth_requested_scope": scope or credentials.get("oauth_requested_scope"),
+        "oauth_granted_scope": payload.get("scope") or credentials.get("oauth_granted_scope"),
+        "refreshed_at": now.isoformat(),
+        "sandbox": False,
+    })
+    store.api_key = json.dumps(credentials)
+    store.is_active = True
+    store.store_mode = "live"
+    db.session.add(store)
+    db.session.commit()
+    return str(payload["access_token"])
