@@ -127,3 +127,18 @@ def test_ebay_returned_state_is_verified_by_signature_not_client_session():
     assert ').loads(str(state), max_age=900)' in signed_state
     assert 'state_account_id = int(state_payload.get("account_id") or 0)' in signed_state
     assert "str(state) in pending_states" not in signed_state
+
+
+def test_ebay_runtime_refresh_has_one_authority():
+    scopes = _text(ROOT / "services/governed_ebay_oauth_scopes.py")
+    adapter = _text(ROOT / "marketplace_adapters/ebay.py")
+    inventory = _text(ROOT / "services/governed_ebay_inventory_import.py")
+    orders = _text(ROOT / "services/governed_marketplace_order_import.py")
+    shipping = _text(ROOT / "services/governed_ebay_native_shipping_alignment.py")
+
+    assert scopes.count("https://api.ebay.com/identity/v1/oauth2/token") == 1
+    assert '"grant_type": "refresh_token"' in scopes
+    for runtime in (adapter, inventory, orders, shipping):
+        assert "governed_ebay_access_token" in runtime
+        assert '"grant_type": "refresh_token"' not in runtime
+        assert "https://api.ebay.com/identity/v1/oauth2/token" not in runtime
