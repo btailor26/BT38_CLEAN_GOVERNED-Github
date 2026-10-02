@@ -5831,10 +5831,100 @@ def governed_ebay_oauth_callback():
             "response": token,
         }), 200
 
+    # Bind OAuth to the actual eBay resource owner before creating/updating
+    # any BT38 Store. Multiple eBay stores per BT38 account are valid; the same
+    # eBay identity represented by more than one Store is not.
+    introspect_resp = requests.post(
+        "https://api.ebay.com/identity/v1/oauth2/token/introspect",
+        headers={
+            "Authorization": f"Basic {basic}",
+            "Content-Type": "application/x-www-form-urlencoded",
+        },
+        data={
+            "token": token.get("access_token"),
+            "token_type_hint": "access_token",
+        },
+        timeout=30,
+    )
+    try:
+        introspection = introspect_resp.json()
+    except Exception:
+        introspection = {}
+
+    ebay_subject = str(introspection.get("sub") or "").strip()
+    ebay_username = str(introspection.get("username") or "").strip()
+    if introspect_resp.status_code >= 300 or not introspection.get("active") or not ebay_subject:
+        return jsonify({
+            "ok": False,
+            "success": False,
+            "governed": True,
+            "error": "ebay_identity_verification_failed",
+            "status_code": introspect_resp.status_code,
+        }), 200
+
+    account_ebay_stores = Store.query.filter(
+        Store.account_id == current_account_id,
+        Store.platform.ilike("%ebay%"),
+    ).order_by(Store.id.asc()).all()
+
+    identity_matches = []
+    for candidate in account_ebay_stores:
+        candidate_credentials = {}
+        if isinstance(candidate.api_key, str):
+            try:
+                candidate_credentials = json.loads(candidate.api_key or "{}")
+            except Exception:
+                candidate_credentials = {}
+        elif isinstance(candidate.api_key, dict):
+            candidate_credentials = candidate.api_key
+        if str(candidate_credentials.get("ebay_oauth_subject") or "").strip() == ebay_subject:
+            identity_matches.append(candidate)
+
+    if len(identity_matches) > 1:
+        return jsonify({
+            "ok": False,
+            "success": False,
+            "governed": True,
+            "error": "duplicate_ebay_marketplace_identity",
+            "store_ids": [candidate.id for candidate in identity_matches],
+        }), 409
+
+    identity_store = identity_matches[0] if identity_matches else None
+    if identity_store is not None:
+        if store is not None and store.id != identity_store.id:
+            return jsonify({
+                "ok": False,
+                "success": False,
+                "governed": True,
+                "error": "ebay_marketplace_identity_store_mismatch",
+                "existing_store_id": identity_store.id,
+                "selected_store_id": store.id,
+            }), 409
+        store = identity_store
+
+    if store is not None:
+        selected_credentials = {}
+        if isinstance(store.api_key, str):
+            try:
+                selected_credentials = json.loads(store.api_key or "{}")
+            except Exception:
+                selected_credentials = {}
+        elif isinstance(store.api_key, dict):
+            selected_credentials = store.api_key
+        selected_subject = str(selected_credentials.get("ebay_oauth_subject") or "").strip()
+        if selected_subject and selected_subject != ebay_subject:
+            return jsonify({
+                "ok": False,
+                "success": False,
+                "governed": True,
+                "error": "ebay_marketplace_identity_store_mismatch",
+                "selected_store_id": store.id,
+            }), 409
+
     if store is None:
         store = Store(
             account_id=current_account_id,
-            name="eBay",
+            name=ebay_username or "eBay",
             platform="eBay",
             is_active=True,
             store_mode="live",
@@ -5867,6 +5957,8 @@ def governed_ebay_oauth_callback():
         "oauth_source": "governed_ebay_oauth_callback",
         "oauth_requested_scope": scopes,
         "oauth_granted_scope": token.get("scope") or scopes,
+        "ebay_oauth_subject": ebay_subject,
+        "ebay_oauth_username": ebay_username or existing.get("ebay_oauth_username"),
         "ebay_notification_listing_subscription_status": "PENDING",
         "ebay_notification_listing_subscription_error": None,
         "connected_at": now.isoformat(),
