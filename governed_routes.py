@@ -5718,6 +5718,14 @@ def governed_ebay_oauth_callback():
         except (BadSignature, SignatureExpired, TypeError, ValueError):
             state_verified = False
 
+    # eBay's production RuName callback can return code + expires_in without
+    # echoing the optional OAuth state parameter. In that exact case, preserve
+    # CSRF/account binding through the pending BT38 browser session created by
+    # /ebay-oauth/authorize. If eBay does return state, it must still pass the
+    # normal pending/signed-state verification above.
+    if not state and authorized_account_id and pending_states:
+        state_verified = True
+
     if not state_verified:
         return jsonify({
             "ok": False,
