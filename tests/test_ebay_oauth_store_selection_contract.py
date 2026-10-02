@@ -77,3 +77,29 @@ def test_ebay_oauth_keeps_only_one_state_in_client_session():
     assert 'pending_states[-5:]' not in authorize
     assert 'session.get("governed_ebay_oauth_pending_states")' not in callback
     assert 'pending_states = {str(expected_state)} if expected_state else set()' in callback
+
+
+def test_legacy_ebay_auth_callback_is_retired_before_oauth_processing():
+    callback = ROUTES.split("def governed_ebay_oauth_callback():", 1)[1]
+    callback = callback.split("@governed_bp.post(\"/ebay-oauth/token\")", 1)[0]
+
+    assert '("ebaytkn", "tknexp", "username")' in callback
+    assert '"error": "legacy_ebay_auth_retired"' in callback
+    retired = callback.split('"error": "legacy_ebay_auth_retired"', 1)[1]
+    assert "}), 410" in retired[:80]
+    assert "GetSessionID" not in callback
+    assert "FetchToken" not in callback
+    assert "SessID" not in callback
+
+
+def test_ebay_customer_connection_uses_oauth_authorization_code_only():
+    authorize = ROUTES.split("def governed_ebay_oauth_authorize():", 1)[1]
+    authorize = authorize.split("@governed_bp.get(\"/ebay-oauth/callback\")", 1)[0]
+
+    assert '"https://auth.ebay.com/oauth2/authorize?"' in authorize
+    assert '"response_type": "code"' in authorize
+    assert '"redirect_uri": runame' in authorize
+    assert '"state": state' in authorize
+    assert "signin.ebay.com" not in authorize
+    assert "GetSessionID" not in authorize
+    assert "FetchToken" not in authorize
