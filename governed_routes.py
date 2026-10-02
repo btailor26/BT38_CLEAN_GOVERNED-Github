@@ -466,18 +466,60 @@ def governed_store_sync_preview(store_id):
 
 
 @governed_bp.post("/governed/stores/<int:store_id>/delete-preview")
+@login_required
 def governed_store_delete_preview(store_id):
-    from models import Store
+    """Delete one customer-owned marketplace connection from BT38 only.
+
+    This path is marketplace-neutral. It never calls Amazon, eBay, or another
+    marketplace. Database FK rules preserve historical records with SET NULL
+    and remove store-owned operational rows with CASCADE. SyncJob is the one
+    NO ACTION dependency and must be retired explicitly before the Store row.
+    """
+    from extensions import db
+    from models import SyncJob
 
     store = _bt38_customer_store_or_404(store_id)
+    deleted_store_id = int(store.id)
+    deleted_store_name = store.name
+    deleted_platform = store.platform
+
+    # A running job means marketplace work may already be in flight. Do not
+    # delete its Store identity underneath execution; require it to finish.
+    running_jobs = SyncJob.query.filter(
+        SyncJob.store_id == deleted_store_id,
+        SyncJob.status == "running",
+    ).count()
+    if running_jobs:
+        return jsonify({
+            "ok": False,
+            "success": False,
+            "governed": True,
+            "error": "store_has_running_work",
+            "store_id": deleted_store_id,
+            "store_name": deleted_store_name,
+            "running_jobs": running_jobs,
+            "message": "Store cannot be deleted while governed marketplace work is running.",
+        }), 409
+
+    # Pending/retry/completed queue rows belong to the selected Store and would
+    # otherwise block deletion because sync_jobs intentionally has NO ACTION.
+    SyncJob.query.filter(SyncJob.store_id == deleted_store_id).delete(
+        synchronize_session=False
+    )
+
+    db.session.delete(store)
+    db.session.commit()
+
     return jsonify({
-        "ok": False,
-        "success": False,
-        "store_id": store.id,
-        "store_name": store.name,
-        "message": "Store deletion is disabled in governed mode until delete rules are approved.",
-        "governed": True
-    })
+        "ok": True,
+        "success": True,
+        "governed": True,
+        "store_id": deleted_store_id,
+        "store_name": deleted_store_name,
+        "platform": deleted_platform,
+        "marketplace_action": False,
+        "message": "Store connection deleted from BT38.",
+    }), 200
 
 
 def _governed_marketplace_account_id():
