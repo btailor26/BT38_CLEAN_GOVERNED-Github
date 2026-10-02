@@ -5726,8 +5726,11 @@ def governed_ebay_oauth_callback():
         }), 200
 
     state_account_id = None
-    state_verified = bool(state and str(state) in pending_states)
-    if state and not state_verified:
+    state_verified = False
+
+    # The signed state is self-authenticating and account-bound; do not require
+    # the client-side Flask session to survive the marketplace round trip.
+    if state:
         try:
             from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 
@@ -5740,18 +5743,11 @@ def governed_ebay_oauth_callback():
         except (BadSignature, SignatureExpired, TypeError, ValueError):
             state_verified = False
 
-    # eBay's production RuName callback can return code + expires_in without
-    # echoing the optional OAuth state parameter. In that exact case, preserve
-    # CSRF/account binding through the pending BT38 browser session created by
-    # /ebay-oauth/authorize. If eBay does return state, it must still pass the
-    # normal pending/signed-state verification above.
-    if not state and authorized_account_id and pending_states:
-        state_verified = True
-
-    # Keep the no-state eBay RuName handoff independently bound to the same
-    # authenticated BT38 customer even if temporary Flask OAuth session keys
-    # are lost between authorization and callback.
-    if not state and not state_verified:
+    # eBay production has been observed returning code + expires_in without
+    # echoing state. In that exact case use only the independently signed,
+    # short-lived browser handoff; never trust a missing-state callback merely
+    # because OAuth values happen to remain in the Flask session.
+    if not state:
         handoff = request.cookies.get("bt38_ebay_oauth_handoff")
         if handoff:
             try:
