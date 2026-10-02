@@ -5627,15 +5627,9 @@ def governed_ebay_oauth_authorize():
         current_app.secret_key,
         salt="bt38-ebay-oauth-state",
     ).dumps({"account_id": int(account_id), "nonce": state_nonce})
-    pending_states = [
-        str(value)
-        for value in (session.get("governed_ebay_oauth_pending_states") or [])
-        if value
-    ]
-    pending_states.append(state)
-    session["governed_ebay_oauth_pending_states"] = pending_states[-5:]
-    # Keep the legacy single value during rollout; callback accepts either the
-    # current value or one of the bounded pending states.
+    # Keep exactly one OAuth state in the client-side Flask session. The
+    # independently signed handoff cookie remains the no-state RuName fallback.
+    session.pop("governed_ebay_oauth_pending_states", None)
     session["governed_ebay_oauth_state"] = state
     session["governed_ebay_oauth_store_id"] = store.id if store else None
     session["governed_ebay_oauth_account_id"] = account_id
@@ -5703,13 +5697,7 @@ def governed_ebay_oauth_callback():
     ebay_error = request.args.get("error")
     ebay_error_description = request.args.get("error_description")
     expected_state = session.get("governed_ebay_oauth_state")
-    pending_states = {
-        str(value)
-        for value in (session.get("governed_ebay_oauth_pending_states") or [])
-        if value
-    }
-    if expected_state:
-        pending_states.add(str(expected_state))
+    pending_states = {str(expected_state)} if expected_state else set()
     selected_store_id = session.get("governed_ebay_oauth_store_id")
     authorized_account_id = session.get("governed_ebay_oauth_account_id")
     current_account_id = _governed_marketplace_account_id()
