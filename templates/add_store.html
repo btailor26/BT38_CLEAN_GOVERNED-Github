@@ -161,13 +161,17 @@
                             </div>
                         </div>
                         <div class="mt-2" id="ebayHelp" style="display: none;">
-                            <small class="text-muted">
-                                For eBay, use JSON format with: app_id, cert_id, dev_id, access_token, user_token
-                                <br>
-                                <button type="button" class="btn btn-link btn-sm p-0" id="showEbayTemplate">
-                                    Show template
-                                </button>
-                            </small>
+                            <div class="card border-info">
+                                <div class="card-body py-2">
+                                    <small class="text-muted d-block mb-2">
+                                        eBay accounts are connected through eBay's production OAuth consent flow. Manual eBay credentials are retired.
+                                    </small>
+                                    <a class="btn btn-success btn-sm" href="/ebay-oauth/authorize">
+                                        <i data-feather="link" class="me-1"></i>
+                                        Connect eBay Account
+                                    </a>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     
@@ -267,7 +271,7 @@
     // Platform information
     const platformInfo = {
         'Amazon': 'Amazon SP-API integration. Requires seller account with SP-API access. Use JSON format for credentials.',
-        'eBay': 'eBay Trading API integration. Requires developer account and authentication tokens. Use JSON format for credentials.',
+        'eBay': 'Connect your eBay account through the governed eBay OAuth consent flow.',
         'Shopify': 'Shopify Admin API integration. Requires Shopify store and API credentials.',
         'WooCommerce': 'WooCommerce REST API integration. Requires consumer key and secret.',
         'Etsy': 'Etsy Open API integration. Requires Etsy developer account and OAuth tokens.',
@@ -308,12 +312,12 @@
             } else if (this.value === 'eBay') {
                 if (ebayHelp) ebayHelp.style.display = 'block';
                 if (testConnectionBtn) testConnectionBtn.style.display = 'block';
-                // Show generic form, hide Amazon form
+                // eBay uses only the governed OAuth consent flow; never collect manual credentials here.
                 const amazonCredentials = document.getElementById('amazonCredentials');
                 const genericCredentials = document.getElementById('genericCredentials');
                 if (amazonCredentials) amazonCredentials.style.display = 'none';
-                if (genericCredentials) genericCredentials.style.display = 'block';
-                if (apiHelpText) apiHelpText.textContent = 'eBay Trading API credentials in JSON format';
+                if (genericCredentials) genericCredentials.style.display = 'none';
+                if (apiHelpText) apiHelpText.textContent = 'Connect eBay through OAuth';
             } else {
                 // Show generic form, hide Amazon form (for Shopify, WooCommerce, etc.)
                 const amazonCredentials = document.getElementById('amazonCredentials');
@@ -373,28 +377,6 @@
                   'IT: APJ6JRA9NG5V4, region: "IT"\n' +
                   'ES: A1RKKUPIHCS9HS, region: "ES"\n' +
                   'US: ATVPDKIKX0DER, region: "US"');
-        }
-        });
-    }
-    
-    // Show eBay credential template
-    const showEbayTemplateBtn = document.getElementById('showEbayTemplate');
-    if (showEbayTemplateBtn) {
-        showEbayTemplateBtn.addEventListener('click', function() {
-        const template = {
-            "app_id": "YOUR_APP_ID",
-            "cert_id": "YOUR_CERT_ID",
-            "dev_id": "YOUR_DEV_ID",
-            "access_token": "YOUR_ACCESS_TOKEN",
-            "refresh_token": "YOUR_REFRESH_TOKEN",
-            "user_token": "YOUR_USER_TOKEN",
-            "site_id": "0",
-            "sandbox": true
-        };
-        
-        const apiKeyField = document.getElementById('api_key');
-        if (apiKeyField) {
-            apiKeyField.value = JSON.stringify(template, null, 2);
         }
         });
     }
