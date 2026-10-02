@@ -27,7 +27,6 @@ from extensions import db
 from models import Store, MarketplaceOrder, MarketplaceListing, SyncLog
 
 
-EBAY_TOKEN_URL = "https://api.ebay.com/identity/v1/oauth2/token"
 EBAY_ORDERS_URL = "https://api.ebay.com/sell/fulfillment/v1/order"
 
 
