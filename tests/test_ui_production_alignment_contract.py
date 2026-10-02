@@ -294,7 +294,9 @@ def test_ebay_store_ui_keeps_oauth_first_connect_only():
 
     # Once an eBay Store exists, its card must not send the customer back
     # through seller consent. Stored refresh-token authority owns renewal.
-    card_section = stores[stores.index("{% for store in stores %}"):]
+    card_start = stores.index("{% for store in stores %}")
+    empty_state = stores.index("{% else %}", card_start)
+    card_section = stores[card_start:empty_state]
     assert 'href="/ebay-oauth/authorize"' not in card_section
 
 
