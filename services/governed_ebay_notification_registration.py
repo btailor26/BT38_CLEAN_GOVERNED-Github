@@ -423,7 +423,7 @@ def _persist_authorization_required(
     endpoint: str,
     error: str,
 ) -> dict[str, Any]:
-    """Persist a commercial eBay re-authorisation state even before destination lookup succeeds."""
+    """Persist an internal notification-capability authorization state without changing Store OAuth."""
     from app import db
 
     creds = _decode_store_credentials(store)
@@ -433,7 +433,7 @@ def _persist_authorization_required(
         "ebay_notification_registration_error": error,
         "ebay_notification_endpoint": endpoint,
         "ebay_notification_registered_at": now,
-        "ebay_reauthorization_required": True,
+        "ebay_notification_optional_reauthorization_required": True,
     })
     store.api_key = json.dumps(creds)
     _set_store_connection_health(
@@ -586,7 +586,7 @@ def ensure_ebay_order_notification_registration(
             "status": "AUTHORIZATION_REQUIRED",
             "ok": False,
             "skipped": True,
-            "error": "eBay return notification permissions require seller re-authorization.",
+            "error": "eBay return notification permission is unavailable to this persisted Store grant.",
         }
     else:
         try:
@@ -671,14 +671,13 @@ def ensure_ebay_order_notification_registration(
         "ebay_notification_schema_version": TOPIC_SCHEMA_VERSIONS[ORDER_TOPIC_ID],
         "ebay_notification_topic_schema_versions": topic_schema_versions,
         "ebay_notification_registered_at": now,
-        "ebay_reauthorization_required": optional_authorization_required,
+        "ebay_notification_optional_reauthorization_required": optional_authorization_required,
         "ebay_notification_optional_reauthorization_required": optional_authorization_required,
     })
 
     if all_topics_ok:
         creds["ebay_notification_registration_error"] = None
         creds["ebay_notification_listing_subscription_error"] = None
-        creds["ebay_reauthorization_required"] = False
         creds["ebay_notification_optional_reauthorization_required"] = False
         creds["ebay_notification_authorization_cleared_at"] = now
 
