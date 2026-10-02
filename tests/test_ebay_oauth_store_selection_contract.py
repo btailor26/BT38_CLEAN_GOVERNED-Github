@@ -103,3 +103,27 @@ def test_ebay_customer_connection_uses_oauth_authorization_code_only():
     assert "signin.ebay.com" not in authorize
     assert "GetSessionID" not in authorize
     assert "FetchToken" not in authorize
+
+
+def test_ebay_callback_uses_signed_handoff_not_session_for_missing_state():
+    callback = ROUTES.split("def governed_ebay_oauth_callback():", 1)[1]
+    callback = callback.split("@governed_bp.post(\"/ebay-oauth/token\")", 1)[0]
+
+    assert 'request.cookies.get("bt38_ebay_oauth_handoff")' in callback
+    assert ').loads(str(handoff), max_age=900)' in callback
+    assert 'state_account_id = int(handoff_payload.get("account_id") or 0)' in callback
+    assert 'if not state and authorized_account_id and pending_states:' not in callback
+    assert 'oauth_account_id = state_account_id or int(authorized_account_id or 0)' in callback
+    assert 'oauth_account_id != int(current_account_id)' in callback
+
+
+def test_ebay_returned_state_is_verified_by_signature_not_client_session():
+    callback = ROUTES.split("def governed_ebay_oauth_callback():", 1)[1]
+    callback = callback.split("@governed_bp.post(\"/ebay-oauth/token\")", 1)[0]
+
+    signed_state = callback.split("# The signed state is self-authenticating", 1)[1]
+    signed_state = signed_state.split("# eBay production has been observed", 1)[0]
+    assert "if state:" in signed_state
+    assert ').loads(str(state), max_age=900)' in signed_state
+    assert 'state_account_id = int(state_payload.get("account_id") or 0)' in signed_state
+    assert "str(state) in pending_states" not in signed_state
