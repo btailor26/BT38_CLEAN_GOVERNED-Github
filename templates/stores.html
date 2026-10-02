@@ -127,11 +127,11 @@
                             Sync Now
                         </button>
                         {% if store.platform and 'ebay' in store.platform|lower %}
-                        <a href="/ebay-oauth/authorize?store_id={{ store.id }}"
+                        <a href="/ebay-oauth/authorize"
                            class="btn btn-sm {% if ebay_reauth_required %}btn-warning{% else %}btn-outline-primary{% endif %}"
                            title="Authorize eBay" aria-label="Authorize eBay">
                             <i data-feather="key" class="me-1"></i>
-                            OAuth
+                            {% if ebay_reauth_required %}Approve eBay{% else %}OAuth{% endif %}
                         </a>
                         {% else %}
                         <a href="#" class="btn btn-sm btn-outline-primary">
