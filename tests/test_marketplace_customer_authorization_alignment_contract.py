@@ -63,3 +63,14 @@ def test_legacy_ebay_customer_templates_use_only_governed_authorize():
         assert 'name="access_token"' not in text
         assert 'name="refresh_token"' not in text
         assert 'name="cert_id"' not in text
+
+
+def test_add_store_ebay_uses_only_governed_oauth():
+    text = _text(ROOT / "templates/add_store.html")
+    assert 'href="/ebay-oauth/authorize"' in text
+    assert "Manual eBay credentials are retired." in text
+    assert "Show eBay credential template" not in text
+    assert '"app_id": "YOUR_APP_ID"' not in text
+    assert '"cert_id": "YOUR_CERT_ID"' not in text
+    assert '"access_token": "YOUR_ACCESS_TOKEN"' not in text
+    assert "eBay Trading API credentials in JSON format" not in text
