@@ -5688,7 +5688,7 @@ def governed_ebay_oauth_callback():
     import base64
     import requests
     from datetime import datetime, timedelta
-    from flask import jsonify, request, session, redirect
+    from flask import current_app, jsonify, request, session, redirect
     from app import db
     from models import Store
 
