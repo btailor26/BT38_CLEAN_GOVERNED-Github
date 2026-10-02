@@ -55,3 +55,11 @@ def test_ebay_no_state_callback_keeps_signed_customer_handoff_outside_temp_sessi
     assert 'state_account_id = int(handoff_payload.get("account_id") or 0)' in oauth
     assert 'oauth_account_id = state_account_id or int(authorized_account_id or 0)' in oauth
     assert 'oauth_account_id != int(current_account_id)' in oauth
+
+
+def test_ebay_state_mismatch_flows_through_existing_failure_recorder():
+    callback = ROUTES.split("def governed_ebay_oauth_callback():", 1)[1]
+    callback = callback.split("@governed_bp.post(\"/ebay-oauth/token\")", 1)[0]
+
+    mismatch = callback.split('"error": "state_mismatch"', 1)[1]
+    assert "}), 400" in mismatch[:80]
