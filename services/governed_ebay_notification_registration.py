@@ -396,36 +396,25 @@ def _set_store_connection_health(
     authorization_required: bool,
     error: str | None,
 ) -> None:
-    """Keep the eBay Store connection state aligned with core Notification API truth."""
-    if healthy:
-        if getattr(store, "auth_error_code", None) not in {
-            None,
-            "ebay_notification_reauthorization_required",
-        }:
-            return
-        if hasattr(store, "auth_status"):
-            store.auth_status = "ok"
-        if hasattr(store, "auth_error_code"):
-            store.auth_error_code = None
-        if hasattr(store, "auth_error_message"):
-            store.auth_error_message = None
-        if hasattr(store, "auth_error_at"):
-            store.auth_error_at = None
+    """Keep notification capability state separate from marketplace OAuth health."""
+    # Notification registration is a downstream capability. Its permission
+    # state must not overwrite the store-wide OAuth connection truth while
+    # valid marketplace credentials remain persisted.
+    if getattr(store, "auth_error_code", None) != "ebay_notification_reauthorization_required":
         return
 
-    if not authorization_required:
+    creds = _decode_store_credentials(store)
+    if not (creds.get("access_token") and creds.get("refresh_token")):
         return
 
     if hasattr(store, "auth_status"):
-        store.auth_status = "auth_error"
+        store.auth_status = "ok"
     if hasattr(store, "auth_error_code"):
-        store.auth_error_code = "ebay_notification_reauthorization_required"
+        store.auth_error_code = None
     if hasattr(store, "auth_error_message"):
-        store.auth_error_message = (
-            "eBay requires one-time approval for the notification permissions."
-        )
+        store.auth_error_message = None
     if hasattr(store, "auth_error_at"):
-        store.auth_error_at = datetime.utcnow()
+        store.auth_error_at = None
 
 
 def _persist_authorization_required(
