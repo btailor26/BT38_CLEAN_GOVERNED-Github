@@ -5591,7 +5591,7 @@ def governed_ebay_oauth_authorize():
     import os
     import urllib.parse
     import secrets
-    from flask import jsonify, redirect, session
+    from flask import current_app, jsonify, redirect, session
 
     client_id = os.getenv("EBAY_CLIENT_ID")
     runame = os.getenv("EBAY_RUNAME")
