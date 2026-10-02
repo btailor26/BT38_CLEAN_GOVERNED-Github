@@ -5651,7 +5651,7 @@ def governed_ebay_oauth_authorize():
     auth_url = "https://auth.ebay.com/oauth2/authorize?" + urllib.parse.urlencode(params)
 
     if request.args.get("json") == "1":
-        return jsonify({
+        response = jsonify({
             "ok": True,
             "success": True,
             "governed": True,
@@ -5660,9 +5660,29 @@ def governed_ebay_oauth_authorize():
             "mode": "production",
             "store_id": store.id if store else None,
             "store_name": store.name if store else None,
-        }), 200
+        })
+        response.set_cookie(
+            "bt38_ebay_oauth_handoff",
+            state,
+            max_age=900,
+            secure=True,
+            httponly=True,
+            samesite="Lax",
+            path="/ebay-oauth/callback",
+        )
+        return response, 200
 
-    return redirect(auth_url)
+    response = redirect(auth_url)
+    response.set_cookie(
+        "bt38_ebay_oauth_handoff",
+        state,
+        max_age=900,
+        secure=True,
+        httponly=True,
+        samesite="Lax",
+        path="/ebay-oauth/callback",
+    )
+    return response
 
 
 
@@ -5725,6 +5745,24 @@ def governed_ebay_oauth_callback():
     # normal pending/signed-state verification above.
     if not state and authorized_account_id and pending_states:
         state_verified = True
+
+    # Keep the no-state eBay RuName handoff independently bound to the same
+    # authenticated BT38 customer even if temporary Flask OAuth session keys
+    # are lost between authorization and callback.
+    if not state and not state_verified:
+        handoff = request.cookies.get("bt38_ebay_oauth_handoff")
+        if handoff:
+            try:
+                from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
+
+                handoff_payload = URLSafeTimedSerializer(
+                    current_app.secret_key,
+                    salt="bt38-ebay-oauth-state",
+                ).loads(str(handoff), max_age=900)
+                state_account_id = int(handoff_payload.get("account_id") or 0)
+                state_verified = state_account_id > 0
+            except (BadSignature, SignatureExpired, TypeError, ValueError):
+                state_verified = False
 
     if not state_verified:
         return jsonify({
