@@ -5940,14 +5940,9 @@ def governed_ebay_oauth_callback():
 
 @governed_bp.post("/ebay-oauth/token")
 def governed_ebay_oauth_refresh_token():
-    import os
-    import json
-    import base64
-    import requests
-    from datetime import datetime, timedelta
+    """Explicit operator refresh endpoint backed by the single token authority."""
     from flask import jsonify
-    from app import db
-    from models import Store
+    from services.governed_ebay_oauth_scopes import governed_ebay_access_token
 
     payload = request.get_json(silent=True) or {}
     selected_store_id = payload.get("store_id") or request.args.get("store_id")
@@ -5955,92 +5950,28 @@ def governed_ebay_oauth_refresh_token():
     if not store:
         return _ebay_oauth_store_selection_error(candidates)
 
-    creds = {}
-    if isinstance(store.api_key, str):
-        try:
-            creds = json.loads(store.api_key)
-        except Exception:
-            creds = {}
-    elif isinstance(store.api_key, dict):
-        creds = store.api_key
-
-    refresh_token = creds.get("refresh_token")
-    client_id = os.getenv("EBAY_CLIENT_ID") or creds.get("app_id")
-    client_secret = os.getenv("EBAY_CLIENT_SECRET") or creds.get("cert_id")
-
-    if not refresh_token or not client_id or not client_secret:
-        return jsonify({
-            "ok": False,
-            "success": False,
-            "governed": True,
-            "error": "missing_refresh_credentials",
-            "missing": {
-                "refresh_token": not bool(refresh_token),
-                "client_id": not bool(client_id),
-                "client_secret": not bool(client_secret),
-            },
-        }), 200
-
-    basic = base64.b64encode(f"{client_id}:{client_secret}".encode("utf-8")).decode("ascii")
-    from services.governed_ebay_oauth_scopes import governed_ebay_refresh_scopes
-
-    scopes = governed_ebay_refresh_scopes(creds)
-
-    resp = requests.post(
-        "https://api.ebay.com/identity/v1/oauth2/token",
-        headers={
-            "Authorization": f"Basic {basic}",
-            "Content-Type": "application/x-www-form-urlencoded",
-        },
-        data={
-            "grant_type": "refresh_token",
-            "refresh_token": refresh_token,
-            "scope": scopes,
-        },
-        timeout=30,
-    )
-
     try:
-        token = resp.json()
-    except Exception:
-        token = {"raw": resp.text}
-
-    if resp.status_code >= 300 or not token.get("access_token"):
+        access_token = governed_ebay_access_token(
+            store,
+            force_refresh=True,
+            source="governed_ebay_refresh_token",
+        )
+    except RuntimeError as exc:
         return jsonify({
             "ok": False,
             "success": False,
             "governed": True,
-            "error": "ebay_refresh_failed",
-            "status_code": resp.status_code,
-            "response": token,
+            "error": str(exc),
         }), 200
-
-    now = datetime.utcnow()
-    creds.update({
-        "access_token": token.get("access_token"),
-        "token_type": token.get("token_type"),
-        "access_token_expires_at": (now + timedelta(seconds=int(token.get("expires_in", 7200)))).isoformat(),
-        "oauth_source": "governed_ebay_refresh_token",
-        "oauth_requested_scope": scopes,
-        "oauth_granted_scope": token.get("scope") or creds.get("oauth_granted_scope"),
-        "refreshed_at": now.isoformat(),
-        "sandbox": False,
-    })
-
-    store.api_key = json.dumps(creds)
-    store.is_active = True
-    store.store_mode = "live"
-    db.session.commit()
 
     notification_registration = None
     try:
         from services.governed_ebay_notification_registration import (
             ensure_ebay_order_notification_registration,
         )
-
         notification_registration = ensure_ebay_order_notification_registration(
             store=store,
-            access_token=token.get("access_token"),
+            access_token=access_token,
         )
     except Exception as exc:
         notification_registration = {
