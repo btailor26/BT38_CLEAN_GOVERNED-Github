@@ -97,60 +97,18 @@ def _expires_soon(value: Any) -> bool:
 
 
 def _access_token(store: Any) -> str:
-    creds = _raw_credentials(store)
-    token = str(
-        creds.get("access_token")
-        or creds.get("oauth_token")
-        or creds.get("token")
-        or ""
-    ).strip()
-    if token and not _expires_soon(creds.get("access_token_expires_at")):
-        return token
+    from services.governed_ebay_oauth_scopes import governed_ebay_access_token
 
-    refresh_token = str(creds.get("refresh_token") or "").strip()
-    client_id = str(os.getenv("EBAY_CLIENT_ID") or creds.get("app_id") or creds.get("client_id") or "").strip()
-    client_secret = str(os.getenv("EBAY_CLIENT_SECRET") or creds.get("cert_id") or creds.get("client_secret") or "").strip()
-    if not refresh_token or not client_id or not client_secret:
-        if token:
-            return token
-        raise EbayNativeShippingError(
-            "eBay OAuth refresh credentials are missing for native shipping.",
-            authorization_required=True,
-        )
-
-    # Omit scope on refresh so eBay preserves the exact scopes granted by the
-    # seller's consent instead of attempting to escalate permissions silently.
-    response = requests.post(
-        "https://api.ebay.com/identity/v1/oauth2/token",
-        auth=(client_id, client_secret),
-        headers={"Content-Type": "application/x-www-form-urlencoded"},
-        data={"grant_type": "refresh_token", "refresh_token": refresh_token},
-        timeout=EBAY_TIMEOUT_SECONDS,
-    )
     try:
-        payload = response.json()
-    except Exception:
-        payload = {}
-    if response.status_code >= 300 or not payload.get("access_token"):
-        raise EbayNativeShippingError(
-            "eBay could not refresh the seller token for native shipping.",
-            status_code=response.status_code,
-            authorization_required=response.status_code in {400, 401, 403},
+        return governed_ebay_access_token(
+            store,
+            source="governed_ebay_native_shipping",
         )
-
-    now = datetime.utcnow()
-    creds["access_token"] = payload.get("access_token")
-    creds["token_type"] = payload.get("token_type")
-    creds["access_token_expires_at"] = (
-        now + timedelta(seconds=int(payload.get("expires_in", 7200)))
-    ).isoformat()
-    if payload.get("scope"):
-        creds["oauth_granted_scope"] = payload.get("scope")
-    creds["refreshed_at"] = now.isoformat()
-    store.api_key = json.dumps(creds)
-    db.session.commit()
-    return str(payload["access_token"])
-
+    except RuntimeError as exc:
+        raise EbayNativeShippingError(
+            str(exc),
+            authorization_required=True,
+        ) from exc
 
 def _headers(token: str, *, accept: str = "application/json") -> dict[str, str]:
     return {
