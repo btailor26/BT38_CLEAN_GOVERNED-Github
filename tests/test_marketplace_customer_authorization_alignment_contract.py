@@ -13,6 +13,7 @@ def test_stores_uses_marketplace_consent_not_temporary_setup():
     text = _text(STORES)
     assert "/amazon-oauth/authorize" in text
     assert "/ebay-oauth/authorize" in text
+    assert "/ebay-oauth/authorize?store_id=" not in text
     assert "img/marketplaces/amazon.png" in text
     assert "img/marketplaces/ebay.png" in text
     assert "Quick Setup" not in text
