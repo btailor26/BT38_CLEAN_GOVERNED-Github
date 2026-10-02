@@ -59,53 +59,12 @@ def _token_expires_soon(value: Any) -> bool:
 
 
 def _refresh_access_token_if_needed(store: Store, creds: dict[str, Any]) -> dict[str, Any]:
-    token = creds.get("access_token")
-    if token and not _token_expires_soon(creds.get("access_token_expires_at")):
-        return creds
-
-    refresh_token = creds.get("refresh_token")
-    client_id = os.getenv("EBAY_CLIENT_ID") or creds.get("app_id")
-    client_secret = os.getenv("EBAY_CLIENT_SECRET") or creds.get("cert_id")
-
-    if not refresh_token or not client_id or not client_secret:
-        return creds
-
-    basic = base64.b64encode(f"{client_id}:{client_secret}".encode("utf-8")).decode("ascii")
-    scopes = governed_ebay_refresh_scopes(creds)
-
-    resp = requests.post(
-        "https://api.ebay.com/identity/v1/oauth2/token",
-        headers={
-            "Authorization": f"Basic {basic}",
-            "Content-Type": "application/x-www-form-urlencoded",
-        },
-        data={
-            "grant_type": "refresh_token",
-            "refresh_token": refresh_token,
-            "scope": scopes,
-        },
-        timeout=30,
+    from services.governed_ebay_oauth_scopes import governed_ebay_access_token
+    governed_ebay_access_token(
+        store,
+        source="governed_ebay_inventory_import",
     )
-
-    payload = resp.json() if resp.text else {}
-    if resp.status_code >= 300 or not payload.get("access_token"):
-        return creds
-
-    creds.update({
-        "access_token": payload.get("access_token"),
-        "access_token_expires_at": (
-            datetime.utcnow() + timedelta(seconds=int(payload.get("expires_in", 7200)))
-        ).isoformat(),
-        "oauth_source": "governed_ebay_inventory_import_refresh",
-        "oauth_requested_scope": scopes,
-        "oauth_granted_scope": payload.get("scope") or creds.get("oauth_granted_scope"),
-    })
-    store.api_key = json.dumps(creds)
-    db.session.add(store)
-    db.session.flush()
-
-    return creds
-
+    return _parse_creds(store)
 
 def _xml_text(node: ET.Element | None, path: str, default: str = "") -> str:
     if node is None:
