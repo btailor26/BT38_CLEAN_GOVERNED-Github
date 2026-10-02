@@ -5650,12 +5650,6 @@ def governed_ebay_oauth_authorize():
 
     auth_url = "https://auth.ebay.com/oauth2/authorize?" + urllib.parse.urlencode(params)
 
-    current_app.logger.info(
-        "BT38 eBay OAuth authorize account_id=%s store_bound=%s state_created=true handoff_cookie_set=true",
-        account_id,
-        bool(store),
-    )
-
     if request.args.get("json") == "1":
         response = jsonify({
             "ok": True,
@@ -5771,21 +5765,12 @@ def governed_ebay_oauth_callback():
                 state_verified = False
 
     if not state_verified:
-        current_app.logger.warning(
-            "BT38 eBay OAuth state mismatch code_present=%s returned_state=%s session_account=%s pending_state=%s handoff_cookie=%s current_account=%s",
-            bool(code),
-            bool(state),
-            bool(authorized_account_id),
-            bool(pending_states),
-            bool(request.cookies.get("bt38_ebay_oauth_handoff")),
-            bool(current_account_id),
-        )
         return jsonify({
             "ok": False,
             "success": False,
             "governed": True,
             "error": "state_mismatch",
-        }), 200
+        }), 400
 
     oauth_account_id = state_account_id or int(authorized_account_id or 0)
     if current_account_id is None or oauth_account_id != int(current_account_id):
