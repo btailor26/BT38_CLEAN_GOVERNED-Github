@@ -126,7 +126,7 @@
                             <i data-feather="refresh-cw" class="me-1"></i>
                             Sync Now
                         </button>
-                        <a href="{% if ebay_reauth_required %}/ebay-oauth/authorize?store_id={{ store.id }}{% else %}#{% endif %}" 
+                        <a href="{% if ebay_reauth_required %}/ebay-oauth/authorize{% else %}#{% endif %}" 
                            class="btn btn-sm {% if ebay_reauth_required %}btn-warning{% else %}btn-outline-primary{% endif %}">
                             <i data-feather="{% if ebay_reauth_required %}key{% else %}edit-2{% endif %}" class="me-1"></i>
                             {% if ebay_reauth_required %}Approve eBay{% else %}Edit{% endif %}
