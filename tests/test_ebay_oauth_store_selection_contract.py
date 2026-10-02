@@ -63,3 +63,17 @@ def test_ebay_state_mismatch_flows_through_existing_failure_recorder():
 
     mismatch = callback.split('"error": "state_mismatch"', 1)[1]
     assert "}), 400" in mismatch[:80]
+
+
+def test_ebay_oauth_keeps_only_one_state_in_client_session():
+    authorize = ROUTES.split("def governed_ebay_oauth_authorize():", 1)[1]
+    authorize = authorize.split("@governed_bp.get(\"/ebay-oauth/callback\")", 1)[0]
+    callback = ROUTES.split("def governed_ebay_oauth_callback():", 1)[1]
+    callback = callback.split("@governed_bp.post(\"/ebay-oauth/token\")", 1)[0]
+
+    assert 'session.pop("governed_ebay_oauth_pending_states", None)' in authorize
+    assert 'session["governed_ebay_oauth_state"] = state' in authorize
+    assert 'pending_states.append(state)' not in authorize
+    assert 'pending_states[-5:]' not in authorize
+    assert 'session.get("governed_ebay_oauth_pending_states")' not in callback
+    assert 'pending_states = {str(expected_state)} if expected_state else set()' in callback
