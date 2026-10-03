@@ -283,7 +283,8 @@ def test_ebay_store_ui_never_uses_developer_portal_or_legacy_authnauth():
 
     assert "developer.ebay.com" not in stores
     assert "signin.ebay.com/ws/eBayISAPI.dll" not in stores
-    assert "/ebay-oauth/authorize" in stores
+    assert "/ebay-oauth/connect" in stores
+    assert "/ebay-oauth/authorize" not in stores
     assert "/ebay-oauth/authorize?store_id=" not in stores
 
 
