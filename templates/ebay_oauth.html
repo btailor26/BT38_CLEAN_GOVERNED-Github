@@ -1,8 +1,38 @@
-<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Connect eBay</title></head>
-<body>
-  <p>eBay connection is managed through BT38 Stores.</p>
-  <a href="/ebay-oauth/authorize">Connect eBay Account</a>
-</body>
-</html>
+{% extends "base.html" %}
+
+{% block title %}Connect eBay - BT38{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-lg-7 col-xl-6">
+        <div class="card">
+            <div class="card-body p-4">
+                <div class="text-center mb-4">
+                    <img src="{{ url_for('static', filename='img/marketplaces/ebay.png') }}"
+                         alt="eBay" style="width:120px;height:72px;object-fit:contain;">
+                    <h3 class="mt-3 mb-2">Connect your eBay account</h3>
+                    <p class="text-muted mb-0">
+                        BT38 will now send you to eBay to sign in and authorize this marketplace connection.
+                    </p>
+                </div>
+
+                <div class="alert alert-info">
+                    <i data-feather="shield" class="me-2"></i>
+                    Authorization is completed securely on eBay. BT38 does not ask for your eBay password.
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-4">
+                    <a href="/stores" class="btn btn-secondary">
+                        <i data-feather="arrow-left" class="me-1"></i>
+                        Back
+                    </a>
+                    <a href="/ebay-oauth/authorize" class="btn btn-success">
+                        Continue to eBay
+                        <i data-feather="arrow-right" class="ms-1"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
