@@ -24,7 +24,7 @@
                 </a>
                 {% endif %}
                 {% if not connected.ebay %}
-                <a href="/ebay-oauth/authorize" title="Connect eBay" aria-label="Connect eBay">
+                <a href="/ebay-oauth/connect" title="Connect eBay" aria-label="Connect eBay">
                     <img src="{{ url_for('static', filename='img/marketplaces/ebay.png') }}" alt="eBay" style="width:72px;height:48px;object-fit:contain;">
                 </a>
                 {% endif %}
@@ -145,7 +145,7 @@
             <a href="/amazon-oauth/authorize" title="Connect Amazon" aria-label="Connect Amazon">
                 <img src="{{ url_for('static', filename='img/marketplaces/amazon.png') }}" alt="Amazon" style="width:120px;height:72px;object-fit:contain;">
             </a>
-            <a href="/ebay-oauth/authorize" title="Connect eBay" aria-label="Connect eBay">
+            <a href="/ebay-oauth/connect" title="Connect eBay" aria-label="Connect eBay">
                 <img src="{{ url_for('static', filename='img/marketplaces/ebay.png') }}" alt="eBay" style="width:120px;height:72px;object-fit:contain;">
             </a>
         </div>
