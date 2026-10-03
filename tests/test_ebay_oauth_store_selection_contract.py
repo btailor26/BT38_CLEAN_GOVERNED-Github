@@ -13,7 +13,9 @@ def test_ebay_oauth_never_selects_the_newest_store():
 
     assert "order_by(Store.id.desc()).first()" not in oauth
     assert 'session["governed_ebay_oauth_store_id"] = store.id' in oauth
-    assert "selected_store_id = session.get(\"governed_ebay_oauth_store_id\")" in oauth
+    assert 'state_store_id = state_payload.get("store_id")' in oauth
+    assert "selected_store_id = state_store_id" in oauth
+    assert 'session.get("governed_ebay_oauth_store_id")' not in oauth
     assert '"error": "ebay_store_selection_required"' in oauth
 
 
