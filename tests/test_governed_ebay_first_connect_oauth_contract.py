@@ -5,6 +5,7 @@ ROUTES = Path("governed_routes.py").read_text(encoding="utf-8")
 STORES = Path("templates/stores.html").read_text(encoding="utf-8")
 NOTIFICATIONS = Path("services/governed_ebay_notification_registration.py").read_text(encoding="utf-8")
 SCOPES = Path("services/governed_ebay_oauth_scopes.py").read_text(encoding="utf-8")
+CONNECT = Path("templates/ebay_oauth.html").read_text(encoding="utf-8")
 
 
 def test_stores_ui_only_offers_ebay_oauth_when_ebay_is_not_connected():
@@ -13,6 +14,7 @@ def test_stores_ui_only_offers_ebay_oauth_when_ebay_is_not_connected():
     assert "Approve eBay" not in STORES
     card = STORES[STORES.index("{% for store in stores %}"):]
     assert 'href="/ebay-oauth/authorize"' not in card
+    assert 'href="/ebay-oauth/connect"' not in card
 
 
 def test_runtime_uses_refresh_token_without_customer_consent_roundtrip():
@@ -31,3 +33,13 @@ def test_first_connect_still_uses_full_governed_scope_authorization():
     assert '@governed_bp.get("/ebay-oauth/authorize")' in ROUTES
     assert '"scope": scopes' in ROUTES
     assert '"grant_type": "authorization_code"' in ROUTES
+
+
+def test_stores_uses_customer_handoff_before_ebay_authorization():
+    assert '@governed_bp.get("/ebay-oauth/connect")' in ROUTES
+    assert 'render_template("ebay_oauth.html")' in ROUTES
+    assert 'href="/ebay-oauth/connect"' in STORES
+    assert 'href="/ebay-oauth/authorize"' not in STORES
+    assert 'href="/ebay-oauth/authorize"' in CONNECT
+    assert "Continue to eBay" in CONNECT
+    assert "manual" not in CONNECT.lower()
