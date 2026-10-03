@@ -267,8 +267,11 @@ def test_ebay_commercial_oauth_uses_one_store_aware_authorization_code_flow():
     assert "signin.ebay.com/ws/eBayISAPI.dll" not in authorize
 
     assert '"grant_type": "authorization_code"' in callback
-    assert 'selected_store_id = session.get("governed_ebay_oauth_store_id")' in callback
+    assert 'state_store_id = state_payload.get("store_id")' in callback
+    assert 'state_intent == "connect_ebay_store"' in callback
+    assert 'selected_store_id = state_store_id' in callback
     assert "_resolve_governed_ebay_oauth_store(selected_store_id)" in callback
+    assert 'session.get("governed_ebay_oauth_store_id")' not in callback
     assert '"refresh_token": token.get("refresh_token") or existing.get("refresh_token")' in callback
     assert '"oauth_requested_scope": scopes' in callback
     assert "ensure_ebay_order_notification_registration(" in callback
