@@ -501,6 +501,29 @@ def governed_store_delete_preview(store_id):
             "message": "Store cannot be deleted while governed marketplace work is running.",
         }), 409
 
+    marketplace_disconnect = {
+        "ok": True,
+        "revoked": False,
+        "marketplace_action": False,
+    }
+    if str(deleted_platform or "").strip().lower() == "ebay":
+        from services.governed_marketplace_disconnect import revoke_persisted_ebay_grant
+
+        marketplace_disconnect = revoke_persisted_ebay_grant(store)
+        if not marketplace_disconnect.get("ok"):
+            db.session.rollback()
+            return jsonify({
+                "ok": False,
+                "success": False,
+                "governed": True,
+                "error": marketplace_disconnect.get("error") or "marketplace_disconnect_failed",
+                "store_id": deleted_store_id,
+                "store_name": deleted_store_name,
+                "platform": deleted_platform,
+                "marketplace_action": bool(marketplace_disconnect.get("marketplace_action")),
+                "message": "Marketplace authorization could not be revoked; BT38 kept the Store connection.",
+            }), 502
+
     # Pending/retry/completed queue rows belong to the selected Store and would
     # otherwise block deletion because sync_jobs intentionally has NO ACTION.
     SyncJob.query.filter(SyncJob.store_id == deleted_store_id).delete(
@@ -517,8 +540,9 @@ def governed_store_delete_preview(store_id):
         "store_id": deleted_store_id,
         "store_name": deleted_store_name,
         "platform": deleted_platform,
-        "marketplace_action": False,
-        "message": "Store connection deleted from BT38.",
+        "marketplace_action": bool(marketplace_disconnect.get("marketplace_action")),
+        "authorization_revoked": bool(marketplace_disconnect.get("revoked")),
+        "message": "Store connection disconnected and deleted from BT38.",
     }), 200
 
 
@@ -5668,7 +5692,12 @@ def governed_ebay_oauth_authorize():
     state = URLSafeTimedSerializer(
         current_app.secret_key,
         salt="bt38-ebay-oauth-state",
-    ).dumps({"account_id": int(account_id), "nonce": state_nonce})
+    ).dumps({
+        "account_id": int(account_id),
+        "store_id": int(store.id) if store else None,
+        "nonce": state_nonce,
+        "intent": "connect_ebay_store",
+    })
     # Keep exactly one OAuth state in the client-side Flask session. The
     # independently signed handoff cookie remains the no-state RuName fallback.
     session.pop("governed_ebay_oauth_pending_states", None)
@@ -5753,8 +5782,6 @@ def governed_ebay_oauth_callback():
         }), 410
 
     expected_state = session.get("governed_ebay_oauth_state")
-    pending_states = {str(expected_state)} if expected_state else set()
-    selected_store_id = session.get("governed_ebay_oauth_store_id")
     authorized_account_id = session.get("governed_ebay_oauth_account_id")
     current_account_id = _governed_marketplace_account_id()
 
@@ -5781,7 +5808,15 @@ def governed_ebay_oauth_callback():
                 salt="bt38-ebay-oauth-state",
             ).loads(str(state), max_age=900)
             state_account_id = int(state_payload.get("account_id") or 0)
-            state_verified = state_account_id > 0
+            state_store_id = state_payload.get("store_id")
+            state_nonce = str(state_payload.get("nonce") or "").strip()
+            state_intent = str(state_payload.get("intent") or "").strip()
+            state_verified = (
+                state_account_id > 0
+                and bool(state_nonce)
+                and state_intent == "connect_ebay_store"
+                and (not expected_state or str(state) == str(expected_state))
+            )
         except (BadSignature, SignatureExpired, TypeError, ValueError):
             state_verified = False
 
@@ -5800,7 +5835,15 @@ def governed_ebay_oauth_callback():
                     salt="bt38-ebay-oauth-state",
                 ).loads(str(handoff), max_age=900)
                 state_account_id = int(handoff_payload.get("account_id") or 0)
-                state_verified = state_account_id > 0
+                state_store_id = handoff_payload.get("store_id")
+                state_nonce = str(handoff_payload.get("nonce") or "").strip()
+                state_intent = str(handoff_payload.get("intent") or "").strip()
+                state_verified = (
+                    state_account_id > 0
+                    and bool(state_nonce)
+                    and state_intent == "connect_ebay_store"
+                    and (not expected_state or str(handoff) == str(expected_state))
+                )
             except (BadSignature, SignatureExpired, TypeError, ValueError):
                 state_verified = False
 
@@ -5817,7 +5860,8 @@ def governed_ebay_oauth_callback():
         return jsonify({"ok": False, "success": False, "governed": True, "error": "account_mismatch"}), 403
 
     store = None
-    if selected_store_id:
+    selected_store_id = state_store_id
+    if selected_store_id not in (None, ""):
         store, candidates = _resolve_governed_ebay_oauth_store(selected_store_id)
         if not store:
             return _ebay_oauth_store_selection_error(candidates)
