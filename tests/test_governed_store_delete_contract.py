@@ -16,15 +16,18 @@ def test_store_delete_is_customer_account_scoped_for_every_marketplace():
     assert "@login_required" in route
     assert "platform.ilike" not in route
     assert "Amazon" not in route
-    assert "eBay" not in route
 
 
-def test_store_delete_never_calls_marketplace():
+def test_store_delete_revokes_persisted_ebay_authority_before_local_delete():
     route = _delete_route()
-    assert '"marketplace_action": False' in route
+    revoke = route.index("revoke_persisted_ebay_grant(store)")
+    delete = route.index("db.session.delete(store)")
+    assert revoke < delete
+    assert '"authorization_revoked"' in route
+    assert '"marketplace_action": bool(marketplace_disconnect.get("marketplace_action"))' in route
+    assert '"marketplace_disconnect_failed"' in route
+    assert "db.session.rollback()" in route
     assert "requests." not in route
-    assert "governed_ebay" not in route
-    assert "governed_amazon" not in route
 
 
 def test_store_delete_blocks_running_work_and_retires_queue_dependency():
