@@ -470,10 +470,11 @@ def governed_store_sync_preview(store_id):
 def governed_store_delete_preview(store_id):
     """Delete one customer-owned marketplace connection from BT38 only.
 
-    This path is marketplace-neutral. It never calls Amazon, eBay, or another
-    marketplace. Database FK rules preserve historical records with SET NULL
-    and remove store-owned operational rows with CASCADE. SyncJob is the one
-    NO ACTION dependency and must be retired explicitly before the Store row.
+    This path is marketplace-neutral at the ownership boundary. Where BT38
+    holds a revocable marketplace grant, disconnect that persisted authority
+    before deleting the local Store. Database FK rules preserve historical
+    records with SET NULL and remove store-owned operational rows with CASCADE.
+    SyncJob is the one NO ACTION dependency and is retired before the Store row.
     """
     from extensions import db
     from models import SyncJob
