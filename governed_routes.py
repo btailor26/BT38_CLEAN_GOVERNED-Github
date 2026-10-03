@@ -5611,6 +5611,13 @@ def governed_settings_normalize():
 # Does not perform marketplace push/import/sync.
 # ============================================================
 
+@governed_bp.get("/ebay-oauth/connect")
+@login_required
+def governed_ebay_oauth_connect_page():
+    """Customer-facing handoff before eBay's production OAuth consent."""
+    return render_template("ebay_oauth.html")
+
+
 def _resolve_governed_ebay_oauth_store(store_id=None):
     """Resolve one explicit live eBay store; never select the newest row."""
     from models import Store
