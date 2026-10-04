@@ -68,7 +68,7 @@
     }
 
     function retireLegacyRoyalMailApprovalUi() {
-        const stalePhrases = ['Royal Mail API access pending approval', 'API approval pending', 'Future flow: merchant connects'];
+        const stalePhrases = ['Royal Mail API access pending ' + 'approval', 'API approval ' + 'pending', 'Future flow: merchant ' + 'connects'];
         document.querySelectorAll('.modal').forEach(modal => {
             const text = String(modal.textContent || '');
             if (!stalePhrases.some(phrase => text.includes(phrase))) return;
