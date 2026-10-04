@@ -98,3 +98,14 @@ def test_click_drop_form_is_self_explanatory_and_immediately_usable():
     assert "Do not enter your Royal Mail website password." in SCRIPT
     assert "API access pending approval" not in SCRIPT
     assert "API approval pending" not in SCRIPT
+
+
+def test_legacy_approval_render_is_retired_before_click_drop_card_installs():
+    assert "retireLegacyRoyalMailApprovalUi" in SCRIPT
+    assert "Royal Mail API access pending approval" in SCRIPT
+    assert "API approval pending" in SCRIPT
+    assert "Future flow: merchant connects" in SCRIPT
+    assert "modal.remove()" in SCRIPT
+    assert "installCard()" in SCRIPT
+    assert "retireLegacyRoyalMailApprovalUi();\n    if (installCard()) loadState();" in SCRIPT
+    assert "dataset.bt38RoyalMailConnect" in SCRIPT
