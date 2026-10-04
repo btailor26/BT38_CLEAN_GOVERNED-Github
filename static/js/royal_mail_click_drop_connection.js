@@ -31,25 +31,36 @@
         return `<div class="card fbm-ops-card h-100" id="royalMailConnectionCard">
             <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
                 <div><strong>Royal Mail · Click & Drop</strong>
-                    <div class="small text-muted">Merchant-owned Royal Mail label and tracking connection.</div>
+                    <div class="small text-muted">Connect this BT38 account to its own Royal Mail Click & Drop business account.</div>
                 </div>
                 <span id="royalMailConnectionBadge" class="badge bg-secondary">Checking…</span>
             </div>
             <div class="card-body">
-                <div id="royalMailConnectionStatus" class="small text-muted mb-2">Checking connection…</div>
+                <div id="royalMailConnectionStatus" class="small text-muted mb-3">Checking connection…</div>
                 <div id="royalMailConnectForm" class="d-none">
-                    <div class="small text-muted mb-2">Royal Mail's API uses your Click & Drop API auth key, not your normal website password.</div>
+                    <div class="alert alert-light border py-2 px-3 small mb-3">
+                        <strong>Before you connect</strong>
+                        <ol class="mb-1 mt-2 ps-3">
+                            <li>Sign in to your Royal Mail Click & Drop account.</li>
+                            <li>Open <strong>Settings → Integrations → Click & Drop API</strong>.</li>
+                            <li>Create the API integration if one is not already present.</li>
+                            <li>Copy the <strong>API authorisation key</strong> shown by Royal Mail.</li>
+                            <li>Return here, enter the account email and paste that key below.</li>
+                        </ol>
+                        <div class="text-muted">Do not enter your Royal Mail website password.</div>
+                    </div>
                     <div class="row g-2">
-                        <div class="col-md-5"><input id="royalMailAccountEmail" class="form-control form-control-sm" type="email" autocomplete="email" placeholder="Royal Mail account email"></div>
-                        <div class="col-md-7"><input id="royalMailApiKey" class="form-control form-control-sm" type="password" autocomplete="off" placeholder="Click & Drop API auth key"></div>
+                        <div class="col-md-5"><label class="form-label small" for="royalMailAccountEmail">Royal Mail account email</label><input id="royalMailAccountEmail" class="form-control form-control-sm" type="email" autocomplete="email" placeholder="name@business.co.uk"></div>
+                        <div class="col-md-7"><label class="form-label small" for="royalMailApiKey">Click & Drop API authorisation key</label><input id="royalMailApiKey" class="form-control form-control-sm" type="password" autocomplete="off" placeholder="Paste the API authorisation key"></div>
                     </div>
-                    <div class="d-flex gap-2 mt-2 flex-wrap">
-                        <button id="royalMailConnect" class="btn btn-sm btn-primary" type="button">Connect Royal Mail</button>
-                        <a class="btn btn-sm btn-outline-secondary" href="https://business.parcel.royalmail.com/" target="_blank" rel="noopener noreferrer">Open Click & Drop</a>
+                    <div class="d-flex gap-2 mt-3 flex-wrap">
+                        <button id="royalMailConnect" class="btn btn-sm btn-primary" type="button">Connect & test Royal Mail</button>
+                        <a class="btn btn-sm btn-outline-secondary" href="https://business.parcel.royalmail.com/" target="_blank" rel="noopener noreferrer">Open Royal Mail Click & Drop</a>
                     </div>
-                    <div class="small text-muted mt-2">In Click & Drop: Settings → Integrations → Click & Drop API → copy the authorisation key.</div>
+                    <div class="small text-muted mt-2">BT38 validates the key with Royal Mail before saving the connection. The API key is stored encrypted and belongs only to this BT38 user.</div>
                 </div>
-                <div id="royalMailConnectedActions" class="d-none d-flex gap-2 flex-wrap">
+                <div id="royalMailConnectedActions" class="d-none">
+                    <div class="small text-success mb-2">Royal Mail Click & Drop is connected and ready for this BT38 account.</div>
                     <button id="royalMailTest" class="btn btn-sm btn-outline-primary" type="button">Test connection</button>
                 </div>
             </div>
