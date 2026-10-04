@@ -249,6 +249,14 @@ jobs:
             sleep 10
           done
           printf 'FAIL' > deployment-evidence/public-smoke.txt; exit 1
+      - name: Recover overdue Packlink exceptions once
+        shell: bash
+        run: |
+          set -euo pipefail
+          flyctl ssh console --app bt38-prod --command "sh -lc 'cd /app && .venv/bin/python scripts/recover_packlink_post_deploy.py'"
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
       - name: Capture governed deployment after-state and write evidence record
         if: always()
         shell: bash
