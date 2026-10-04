@@ -45,6 +45,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/royal_mail_click_drop_connection.js', v=config['BT38_ASSET_VERSION']) }}"></script>
 <script src="https://cdn.jsdelivr.net/npm/qz-tray@2.2.6/qz-tray.js"></script><script src="{{ url_for('static', filename='js/fbm_qz_print.js') }}"></script><script src="{{ url_for('static', filename='js/fbm_tracking_journey.js', v=config['BT38_ASSET_VERSION']) }}"></script>
 <script>
 (function(){
