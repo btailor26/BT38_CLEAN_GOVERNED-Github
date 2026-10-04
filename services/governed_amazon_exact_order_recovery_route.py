@@ -381,15 +381,15 @@ def recover_exact_amazon_order_manually():
             # otherwise leave intermediate carrier movements absent indefinitely.
             calls_started.append("packlink_tracking")
             tracking_history = adapter.get_tracking_status(reference=provider_reference)
-                tracking = extract_packlink_tracking(provider_payload or {}, tracking_history, shipment.tracking_number)
-                if tracking:
-                    shipment.tracking_number = tracking
-                reconcile_packlink_tracking_lifecycle(
-                    shipment,
-                    provider_state=str((provider_payload or {}).get("state") or (provider_payload or {}).get("status") or shipment.last_provider_status or ""),
-                    tracking_history=tracking_history,
-                    observed_at=datetime.utcnow(),
-                )
+            tracking = extract_packlink_tracking(provider_payload or {}, tracking_history, shipment.tracking_number)
+            if tracking:
+                shipment.tracking_number = tracking
+            reconcile_packlink_tracking_lifecycle(
+                shipment,
+                provider_state=str((provider_payload or {}).get("state") or (provider_payload or {}).get("status") or shipment.last_provider_status or ""),
+                tracking_history=tracking_history,
+                observed_at=datetime.utcnow(),
+            )
             db.session.commit()
             packlink_result = {
                 "success": True, "skipped": False,
