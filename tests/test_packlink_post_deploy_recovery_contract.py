@@ -38,5 +38,6 @@ def test_today_no_longer_means_scan_every_packlink_shipment():
 
 def test_governed_deploy_runs_one_bounded_packlink_recovery():
     assert "Recover overdue Packlink exceptions once" in WORKFLOW
-    assert ".venv/bin/python scripts/recover_packlink_post_deploy.py" in WORKFLOW
+    assert "PYTHONPATH=/app .venv/bin/python -m scripts.recover_packlink_post_deploy" in WORKFLOW
+    assert ".venv/bin/python scripts/recover_packlink_post_deploy.py" not in WORKFLOW
     assert "recover_packlink_past_delivery_promise()" in SCRIPT
