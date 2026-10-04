@@ -100,7 +100,33 @@
         }
     }
 
+    function focusConnectionCardFromLegacyControl(control) {
+        const card = document.getElementById('royalMailConnectionCard');
+        const form = document.getElementById('royalMailConnectForm');
+        if (!card || !form) return false;
+        const legacyModal = control && control.closest ? control.closest('.modal') : null;
+        if (legacyModal) {
+            const close = legacyModal.querySelector('[data-bs-dismiss="modal"], .btn-close');
+            if (close) close.click();
+        }
+        form.classList.remove('d-none');
+        card.scrollIntoView({behavior: 'smooth', block: 'center'});
+        const apiKey = document.getElementById('royalMailApiKey');
+        window.setTimeout(() => { if (apiKey) apiKey.focus(); }, 150);
+        return true;
+    }
+
     document.addEventListener('click', async event => {
+        const clicked = event.target && event.target.closest ? event.target.closest('button, a') : null;
+        if (clicked && clicked.id !== 'royalMailConnect' && String(clicked.textContent || '').trim() === 'Connect Royal Mail account') {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!focusConnectionCardFromLegacyControl(clicked)) {
+                window.alert('Royal Mail connection form is unavailable. Refresh the FBM page and try again.');
+            }
+            return;
+        }
+
         const connect = event.target.closest('#royalMailConnect');
         if (connect) {
             const email = document.getElementById('royalMailAccountEmail')?.value.trim() || '';
