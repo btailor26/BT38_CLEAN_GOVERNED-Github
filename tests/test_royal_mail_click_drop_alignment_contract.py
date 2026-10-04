@@ -77,3 +77,12 @@ def test_alignment_is_installed_and_fbm_card_is_injected():
     assert "royal_mail_click_drop_connection.js" in INSTALLER
     assert "Royal Mail · Click & Drop" in SCRIPT
     assert "/governed/royal-mail/connection" in SCRIPT
+
+
+def test_legacy_royal_mail_connect_control_hands_off_to_live_click_drop_form():
+    assert "Connect Royal Mail account" in SCRIPT
+    assert "focusConnectionCardFromLegacyControl" in SCRIPT
+    assert "royalMailConnectForm" in SCRIPT
+    assert "royalMailApiKey" in SCRIPT
+    assert "event.preventDefault()" in SCRIPT
+    assert "API approval pending" not in SCRIPT
