@@ -13,6 +13,8 @@ from __future__ import annotations
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any
 
+from sqlalchemy import text
+
 from extensions import db
 from fbm_models import FBMShipment
 from fbm_tracking_event_models import FBMShipmentTrackingEvent
@@ -704,94 +706,75 @@ def process_packlink_callback(
     return response
 
 
-def recover_packlink_shipments_for_day(
-    target_day: date,
+def recover_packlink_past_delivery_promise(
     *,
     adapter: PacklinkAdapter | None = None,
 ) -> dict[str, Any]:
-    """One-shot recovery for exact Packlink shipments already known to BT38.
+    """One-shot post-deploy recovery for exact overdue Packlink exceptions only.
 
-    A recovery run for today audits every Packlink shipment already known to
-    BT38, regardless of age or apparent completeness. This deliberately repairs
-    legacy records that can look complete while containing inferred timestamps.
-    A non-today target keeps date-scoped recovery for explicit historical work.
-    Recovery is lifecycle-only: it never confirms a marketplace shipment and
-    never purchases or changes postage.
+    Selection is DB-only: Packlink is contacted only for shipments whose persisted
+    latest delivery promise has already passed and which are not DB-proven
+    Delivered. Each selected exact shipment performs one Packlink /track history
+    read. No all-shipment provider scan, marketplace write, polling loop, worker,
+    or scheduler is introduced.
     """
-    start = datetime.combine(target_day, time.min)
-    end = start + timedelta(days=1)
-    query = FBMShipment.query.filter(
-        FBMShipment.provider == "packlink",
-        FBMShipment.provider_shipment_id.isnot(None),
-    )
-    recover_all = target_day == datetime.utcnow().date()
-    if recover_all:
-        shipments = query.order_by(FBMShipment.id.asc()).all()
-    else:
-        shipments = (
-            query
-            .filter(FBMShipment.created_at >= start, FBMShipment.created_at < end)
-            .order_by(FBMShipment.id.asc())
-            .all()
+    rows = db.session.execute(
+        text(
+            """
+            SELECT fs.id
+            FROM fbm_shipments fs
+            JOIN fbm_order_operational_state fos
+              ON fos.store_id = fs.store_id
+             AND fos.marketplace_order_id = fs.marketplace_order_id
+            WHERE fs.provider = 'packlink'
+              AND fs.provider_shipment_id IS NOT NULL
+              AND BTRIM(fs.provider_shipment_id) <> ''
+              AND fs.delivered_at IS NULL
+              AND fos.latest_delivery_at IS NOT NULL
+              AND fos.latest_delivery_at < NOW()
+            ORDER BY fos.latest_delivery_at ASC, fs.id ASC
+            """
         )
+    ).scalars().all()
+    shipments = [
+        db.session.get(FBMShipment, int(shipment_id))
+        for shipment_id in rows
+    ]
+    shipments = [shipment for shipment in shipments if shipment is not None]
 
     adapter = adapter or PacklinkAdapter()
     results: list[dict[str, Any]] = []
     for shipment in shipments:
         try:
-            lifecycle_only = bool(recover_all or shipment.marketplace_confirmed_at is not None)
-            if lifecycle_only:
-                now = datetime.utcnow()
-                provider_payload = adapter.get_shipment(shipment.provider_shipment_id)
-                tracking_history = adapter.get_tracking_status(reference=shipment.provider_shipment_id)
-                provider_state = str(
-                    provider_payload.get("state") or provider_payload.get("status") or shipment.last_provider_status or ""
-                ).strip()
-                tracking = extract_packlink_tracking(
-                    provider_payload,
-                    tracking_history,
-                    shipment.tracking_number,
-                )
-                if tracking:
-                    shipment.tracking_number = tracking
-                reconcile_packlink_tracking_lifecycle(
-                    shipment,
-                    provider_state=provider_state,
-                    tracking_history=tracking_history,
-                    observed_at=now,
-                )
-                db.session.commit()
-                results.append({
-                    "success": True,
-                    "shipment_id": shipment.id,
-                    "marketplace_order_id": shipment.marketplace_order_id,
-                    "provider_reference": shipment.provider_shipment_id,
-                    "lifecycle_only": True,
-                    "historical_recovery": recover_all,
-                    "marketplace_write_attempted": False,
-                    "provider_status": shipment.last_provider_status,
-                    "shipment_status": shipment.status,
-                    "tracking_number": shipment.tracking_number,
-                })
-                continue
-
-            result = process_packlink_callback(
-                {
-                    "event": "shipment.label.ready",
-                    "data": {
-                        "shipment_reference": shipment.provider_shipment_id,
-                        "shipment_custom_reference": shipment.marketplace_order_id,
-                    },
-                },
-                adapter=adapter,
+            now = datetime.utcnow()
+            tracking_history = adapter.get_tracking_status(
+                reference=shipment.provider_shipment_id
             )
+            tracking = extract_packlink_tracking(
+                {},
+                tracking_history,
+                shipment.tracking_number,
+            )
+            if tracking:
+                shipment.tracking_number = tracking
+            reconcile_packlink_tracking_lifecycle(
+                shipment,
+                provider_state=shipment.last_provider_status or "",
+                tracking_history=tracking_history,
+                observed_at=now,
+            )
+            db.session.commit()
             results.append({
+                "success": True,
                 "shipment_id": shipment.id,
                 "marketplace_order_id": shipment.marketplace_order_id,
                 "provider_reference": shipment.provider_shipment_id,
-                **result,
+                "tracking_events_observed": len(tracking_history),
+                "delivered": shipment.delivered_at is not None,
+                "marketplace_write_attempted": False,
             })
         except PacklinkRequestError as exc:
+            db.session.rollback()
             results.append({
                 "success": False,
                 "shipment_id": shipment.id,
@@ -801,6 +784,7 @@ def recover_packlink_shipments_for_day(
                 "status_code": exc.status_code,
             })
         except Exception as exc:
+            db.session.rollback()
             results.append({
                 "success": False,
                 "shipment_id": shipment.id,
@@ -810,8 +794,41 @@ def recover_packlink_shipments_for_day(
             })
 
     return {
-        "success": True,
-        "target_day": target_day.isoformat(),
+        "success": all(bool(item.get("success")) for item in results),
+        "selector": "packlink_past_latest_delivery_promise_not_delivered",
+        "selected": len(shipments),
         "checked": len(shipments),
         "results": results,
+        "full_scan_started": False,
+        "polling_started": False,
+        "marketplace_write_attempted": False,
     }
+
+
+def recover_packlink_shipments_for_day(
+    target_day: date,
+    *,
+    adapter: PacklinkAdapter | None = None,
+) -> dict[str, Any]:
+    """Compatibility entry point for explicit Packlink recovery.
+
+    Current-day recovery now uses the same overdue-exception selector as the
+    governed post-deploy recovery. Historical date-scoped recovery is intentionally
+    rejected rather than scanning shipments that have not passed their persisted
+    delivery promise.
+    """
+    if target_day != datetime.utcnow().date():
+        return {
+            "success": False,
+            "target_day": target_day.isoformat(),
+            "selected": 0,
+            "checked": 0,
+            "reason": "historical_date_scan_retired_use_exact_manual_recovery",
+            "full_scan_started": False,
+            "polling_started": False,
+            "marketplace_write_attempted": False,
+            "results": [],
+        }
+    result = recover_packlink_past_delivery_promise(adapter=adapter)
+    return {"target_day": target_day.isoformat(), **result}
+
