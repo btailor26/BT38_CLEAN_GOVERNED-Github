@@ -253,7 +253,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          flyctl ssh console --app bt38-prod --command "sh -lc 'cd /app && .venv/bin/python scripts/recover_packlink_post_deploy.py'"
+          flyctl ssh console --app bt38-prod --command "sh -lc 'cd /app && PYTHONPATH=/app .venv/bin/python -m scripts.recover_packlink_post_deploy'"
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
