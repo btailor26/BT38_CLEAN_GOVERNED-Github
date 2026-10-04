@@ -176,6 +176,21 @@ def check_exact_marketplace_order_recovery():
     missing = list(truth_review["missing"])
     unverified = list(truth_review["unverified"])
 
+    # A persisted Packlink row can have complete current fields while its carrier
+    # journey is incomplete because callbacks were missed.  The DB cannot prove
+    # that remote history is complete from carrier/tracking/current status alone.
+    # Recover Missing is an explicit selected-order action, so allow exactly one
+    # Packlink history verification whenever an exact Packlink shipment identity
+    # is already persisted.  This does not start polling or contact Amazon.
+    shipment_truth = before.get("fbm_shipment") or {}
+    packlink_history_verification_required = bool(
+        str(shipment_truth.get("provider") or "").strip().lower() == "packlink"
+        and shipment_truth.get("id")
+        and str(shipment_truth.get("provider_shipment_id") or "").strip()
+    )
+    if packlink_history_verification_required:
+        recovery_required = True
+
     # eBay's supported marketplace readback cannot independently prove carrier
     # pickup/movement scans. Keep that capability fact visible; other connected
     # shipping authorities may still be eligible to recover those DB gaps.
@@ -215,6 +230,7 @@ def check_exact_marketplace_order_recovery():
         "truth_review": truth_review,
         "unavailable_tracking_evidence": unavailable_tracking_evidence,
         "carrier_history_supported_by_exact_ebay_readback": False if platform == "ebay" else None,
+        "packlink_history_verification_required": packlink_history_verification_required,
         "ebay_event_evidence": dict(ebay_event_evidence) if ebay_event_evidence is not None else None,
         "database_readback": before,
     }), 200
@@ -336,7 +352,7 @@ def recover_exact_amazon_order_manually():
     shipment_truth = dict(before.get("fbm_shipment") or {})
     shipping_source = str(shipment_truth.get("provider") or "").strip().lower()
     shipping_gaps = gaps & (tracking_gaps | label_gaps)
-    if shipping_source == "packlink" and shipping_gaps:
+    if shipping_source == "packlink":
         shipment = db.session.get(FBMShipment, shipment_truth.get("id")) if shipment_truth.get("id") else None
         provider_reference = str(shipment_truth.get("provider_shipment_id") or "").strip()
         if shipment is None or not provider_reference:
@@ -360,9 +376,11 @@ def recover_exact_amazon_order_manually():
                 provider_payload = adapter.get_shipment(provider_reference)
                 recover_packlink_provider_spend(shipment, provider_payload)
                 recover_confirmed_packlink_spend(shipment)
-            if shipping_gaps & tracking_gaps:
-                calls_started.append("packlink_tracking")
-                tracking_history = adapter.get_tracking_status(reference=provider_reference)
+            # Explicit manual recovery verifies the complete Packlink journey
+            # once even when current DB fields look complete. Missed callbacks can
+            # otherwise leave intermediate carrier movements absent indefinitely.
+            calls_started.append("packlink_tracking")
+            tracking_history = adapter.get_tracking_status(reference=provider_reference)
                 tracking = extract_packlink_tracking(provider_payload or {}, tracking_history, shipment.tracking_number)
                 if tracking:
                     shipment.tracking_number = tracking
