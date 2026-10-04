@@ -67,7 +67,37 @@
         </div>`;
     }
 
+    function retireLegacyRoyalMailApprovalUi() {
+        const stalePhrases = ['Royal Mail API access pending approval', 'API approval pending', 'Future flow: merchant connects'];
+        document.querySelectorAll('.modal').forEach(modal => {
+            const text = String(modal.textContent || '');
+            if (!stalePhrases.some(phrase => text.includes(phrase))) return;
+            try {
+                if (window.bootstrap?.Modal) window.bootstrap.Modal.getInstance(modal)?.hide();
+            } catch (_) {}
+            modal.remove();
+        });
+        document.querySelectorAll('.modal-backdrop').forEach(backdrop => backdrop.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.removeProperty('overflow');
+        document.body.style.removeProperty('padding-right');
+        document.querySelectorAll('[data-bs-target], [href^="#"]').forEach(control => {
+            const target = String(control.getAttribute('data-bs-target') || control.getAttribute('href') || '');
+            if (!target) return;
+            const node = document.querySelector(target);
+            if (node) return;
+            if (/royal/i.test(String(control.textContent || '') + ' ' + target)) {
+                control.removeAttribute('data-bs-toggle');
+                control.removeAttribute('data-bs-target');
+                control.removeAttribute('href');
+                control.setAttribute('type', 'button');
+                control.dataset.bt38RoyalMailConnect = '1';
+            }
+        });
+    }
+
     function installCard() {
+        retireLegacyRoyalMailApprovalUi();
         const grid = document.querySelector('.fbm-top-grid');
         if (!grid || document.getElementById('royalMailConnectionCard')) return false;
         grid.insertAdjacentHTML('beforeend', cardHtml());
@@ -129,7 +159,7 @@
 
     document.addEventListener('click', async event => {
         const clicked = event.target && event.target.closest ? event.target.closest('button, a') : null;
-        if (clicked && clicked.id !== 'royalMailConnect' && String(clicked.textContent || '').trim() === 'Connect Royal Mail account') {
+        if (clicked && clicked.id !== 'royalMailConnect' && (clicked.dataset.bt38RoyalMailConnect === '1' || String(clicked.textContent || '').trim() === 'Connect Royal Mail account')) {
             event.preventDefault();
             event.stopPropagation();
             if (!focusConnectionCardFromLegacyControl(clicked)) {
@@ -177,6 +207,7 @@
         }
     });
 
+    retireLegacyRoyalMailApprovalUi();
     if (installCard()) loadState();
     else window.setTimeout(() => { if (installCard()) loadState(); }, 250);
 })(window, document);
