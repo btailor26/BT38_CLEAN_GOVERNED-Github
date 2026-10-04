@@ -86,3 +86,15 @@ def test_legacy_royal_mail_connect_control_hands_off_to_live_click_drop_form():
     assert "royalMailApiKey" in SCRIPT
     assert "event.preventDefault()" in SCRIPT
     assert "API approval pending" not in SCRIPT
+
+
+def test_click_drop_form_is_self_explanatory_and_immediately_usable():
+    assert "Before you connect" in SCRIPT
+    assert "Settings → Integrations → Click & Drop API" in SCRIPT
+    assert "API authorisation key" in SCRIPT
+    assert "Royal Mail account email" in SCRIPT
+    assert "Connect & test Royal Mail" in SCRIPT
+    assert "Open Royal Mail Click & Drop" in SCRIPT
+    assert "Do not enter your Royal Mail website password." in SCRIPT
+    assert "API access pending approval" not in SCRIPT
+    assert "API approval pending" not in SCRIPT
