@@ -5853,6 +5853,31 @@ def governed_ebay_oauth_callback():
             except (BadSignature, SignatureExpired, TypeError, ValueError):
                 state_verified = False
 
+    # Final no-state fallback: the callback is login-protected and the same
+    # short-lived signed OAuth state is retained inside BT38's authenticated
+    # Flask session. Some eBay RuName callbacks omit state and browsers can
+    # omit the path-scoped handoff cookie. Validate the signed session state
+    # itself; never accept the loose account/store session fields as proof.
+    if not state_verified and expected_state:
+        try:
+            from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
+
+            session_state_payload = URLSafeTimedSerializer(
+                current_app.secret_key,
+                salt="bt38-ebay-oauth-state",
+            ).loads(str(expected_state), max_age=900)
+            state_account_id = int(session_state_payload.get("account_id") or 0)
+            state_store_id = session_state_payload.get("store_id")
+            state_nonce = str(session_state_payload.get("nonce") or "").strip()
+            state_intent = str(session_state_payload.get("intent") or "").strip()
+            state_verified = (
+                state_account_id > 0
+                and bool(state_nonce)
+                and state_intent == "connect_ebay_store"
+            )
+        except (BadSignature, SignatureExpired, TypeError, ValueError):
+            state_verified = False
+
     if not state_verified:
         return jsonify({
             "ok": False,
