@@ -80,6 +80,12 @@
         return true;
     }
 
+    function retireLegacyRoyalMailApprovalUi() {
+        document.querySelectorAll('[data-bt38-royal-mail-legacy="1"], #royalMailApprovalModal, .royal-mail-approval-backdrop').forEach(function (node) {
+            node.remove();
+        });
+    }
+
     document.addEventListener('click', async event => {
         const clicked = event.target && event.target.closest ? event.target.closest('button, a') : null;
         if (clicked && clicked.id !== 'royalMailConnect' && (clicked.dataset.bt38RoyalMailConnect === '1' || String(clicked.textContent || '').trim() === 'Connect Royal Mail account')) {
