@@ -6050,7 +6050,10 @@ def governed_ebay_oauth_callback():
         "sandbox": False,
         "oauth_source": "governed_ebay_oauth_callback",
         "oauth_requested_scope": scopes,
-        "oauth_granted_scope": token.get("scope") or scopes,
+        # Requested consent is not proof of the grant. Prefer the token response,
+        # then eBay's active-token introspection scope; otherwise persist no
+        # granted-scope claim and let capability be proved by the live API.
+        "oauth_granted_scope": token.get("scope") or introspection.get("scope") or None,
         "ebay_oauth_subject": ebay_subject,
         "ebay_oauth_username": ebay_username or existing.get("ebay_oauth_username"),
         "ebay_notification_listing_subscription_status": "PENDING",
