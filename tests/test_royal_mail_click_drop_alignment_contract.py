@@ -7,6 +7,7 @@ MODEL = (ROOT / "royal_mail_models.py").read_text(encoding="utf-8")
 READBACK = (ROOT / "services" / "governed_royal_mail_label_readback.py").read_text(encoding="utf-8")
 INSTALLER = (ROOT / "services" / "governed_royal_mail_click_drop_alignment.py").read_text(encoding="utf-8")
 SCRIPT = (ROOT / "static" / "js" / "royal_mail_click_drop_connection.js").read_text(encoding="utf-8")
+FBM_TEMPLATE = (ROOT / "templates" / "fbm.html").read_text(encoding="utf-8")
 MAIN = (ROOT / "main.py").read_text(encoding="utf-8")
 
 
@@ -72,11 +73,17 @@ def test_alignment_adds_only_connection_table_not_another_shipment_model():
     assert "no second shipment table" in INSTALLER.lower()
 
 
-def test_alignment_is_installed_and_fbm_card_is_injected():
+def test_alignment_is_installed_and_fbm_template_owns_connection_form():
     assert "install_governed_royal_mail_click_drop_alignment" in MAIN
-    assert "royal_mail_click_drop_connection.js" in INSTALLER
-    assert "Royal Mail · Click & Drop" in SCRIPT
+    assert "royal_mail_click_drop_connection.js" in FBM_TEMPLATE
+    assert 'id="royalMailConnectionCard"' in FBM_TEMPLATE
+    assert 'id="royalMailConnectForm"' in FBM_TEMPLATE
+    assert 'id="royalMailApiKey"' in FBM_TEMPLATE
+    assert "Royal Mail · Click & Drop" in FBM_TEMPLATE
     assert "/governed/royal-mail/connection" in SCRIPT
+    assert "function cardHtml()" not in SCRIPT
+    assert "function installCard()" not in SCRIPT
+    assert "document.querySelector('.fbm-top-grid')" not in SCRIPT
 
 
 def test_legacy_royal_mail_connect_control_hands_off_to_live_click_drop_form():
@@ -89,13 +96,13 @@ def test_legacy_royal_mail_connect_control_hands_off_to_live_click_drop_form():
 
 
 def test_click_drop_form_is_self_explanatory_and_immediately_usable():
-    assert "Before you connect" in SCRIPT
-    assert "Settings → Integrations → Click & Drop API" in SCRIPT
-    assert "API authorisation key" in SCRIPT
-    assert "Royal Mail account email" in SCRIPT
-    assert "Connect & test Royal Mail" in SCRIPT
-    assert "Open Royal Mail Click & Drop" in SCRIPT
-    assert "Do not enter your Royal Mail website password." in SCRIPT
+    assert "Before you connect" in FBM_TEMPLATE
+    assert "Settings → Integrations → Click & Drop API" in FBM_TEMPLATE
+    assert "API authorisation key" in FBM_TEMPLATE
+    assert "Royal Mail account email" in FBM_TEMPLATE
+    assert "Connect & test Royal Mail" in FBM_TEMPLATE
+    assert "Open Royal Mail Click & Drop" in FBM_TEMPLATE
+    assert "Do not enter your Royal Mail website password." in FBM_TEMPLATE
     assert "API access pending approval" not in SCRIPT
     assert "API approval pending" not in SCRIPT
 
@@ -106,6 +113,6 @@ def test_legacy_approval_render_is_retired_before_click_drop_card_installs():
     assert "'API approval ' + 'pending'" in SCRIPT
     assert "'Future flow: merchant ' + 'connects'" in SCRIPT
     assert "modal.remove()" in SCRIPT
-    assert "installCard()" in SCRIPT
-    assert "retireLegacyRoyalMailApprovalUi();\n    if (installCard()) loadState();" in SCRIPT
+    assert "installCard()" not in SCRIPT
+    assert "retireLegacyRoyalMailApprovalUi();\n    if (document.getElementById('royalMailConnectionCard')) loadState();" in SCRIPT
     assert "dataset.bt38RoyalMailConnect" in SCRIPT
