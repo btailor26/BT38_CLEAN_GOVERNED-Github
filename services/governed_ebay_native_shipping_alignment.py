@@ -324,13 +324,18 @@ def install_governed_ebay_native_shipping_alignment(app) -> None:
             for option in options:
                 if str(option.get("provider") or "") != "ebay_shipping":
                     continue
+                # A connected seller token is not proof that eBay has enabled
+                # the Limited Release Logistics API for this app/account.
+                # Keep the existing provider action as the explicit capability
+                # probe; do not claim availability before shipping_quote succeeds.
                 option.update({
-                    "available": True,
-                    "recommended": True,
+                    "available": False,
+                    "recommended": False,
                     "label_formats": ["PDF"],
                     "auto_print_supported": True,
                     "requires_terms_acceptance": False,
-                    "message": "Get eBay-native rates, buy the selected label in BT38 and print the returned PDF through the existing QZ path. If eBay has not enabled Logistics API access for this app/account, BT38 will stop before purchase and show that capability gate.",
+                    "capability_probe_required": True,
+                    "message": "Check eBay Shipping access and request live rates. BT38 marks this route available only after eBay accepts the Logistics shipping_quote call for this seller/app.",
                 })
         return options
 
