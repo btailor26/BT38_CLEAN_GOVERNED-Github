@@ -43,3 +43,12 @@ def test_stores_uses_customer_handoff_before_ebay_authorization():
     assert 'href="/ebay-oauth/authorize"' in CONNECT
     assert "Continue to eBay" in CONNECT
     assert "manual" not in CONNECT.lower()
+
+
+def test_signed_oauth_state_does_not_depend_on_surviving_flask_session():
+    callback = ROUTES[ROUTES.index('def governed_ebay_oauth_callback():'):]
+    assert 'URLSafeTimedSerializer(' in callback
+    assert '.loads(str(state), max_age=900)' in callback
+    assert 'state_intent == "connect_ebay_store"' in callback
+    assert 'str(state) == str(expected_state)' not in callback
+    assert 'str(handoff) == str(expected_state)' not in callback
