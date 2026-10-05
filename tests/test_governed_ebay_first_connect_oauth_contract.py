@@ -52,3 +52,10 @@ def test_signed_oauth_state_does_not_depend_on_surviving_flask_session():
     assert 'state_intent == "connect_ebay_store"' in callback
     assert 'str(state) == str(expected_state)' not in callback
     assert 'str(handoff) == str(expected_state)' not in callback
+
+
+def test_callback_uses_signed_handoff_when_returned_state_is_unusable():
+    callback = ROUTES[ROUTES.index('def governed_ebay_oauth_callback():'):]
+    assert 'if not state_verified:' in callback
+    assert 'request.cookies.get("bt38_ebay_oauth_handoff")' in callback
+    assert '.loads(str(handoff), max_age=900)' in callback
