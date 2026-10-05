@@ -55,7 +55,19 @@ def _shipping_connection_script() -> str:
     try{
       var response=await fetch('/fbm/shipping-connections/ebay/status',{credentials:'same-origin',cache:'no-store',headers:{'Accept':'application/json'}});
       var payload=await response.json().catch(function(){return {};});
-      if(!response.ok||payload.success!==true)throw new Error(payload.message||('HTTP '+response.status));
+      if(!response.ok||payload.success!==true){
+        status.className='small text-danger mt-2';
+        status.textContent=payload.message||('HTTP '+response.status);
+        if(payload.reauthorize_url && /^\/ebay-oauth\/authorize(?:\?|$)/.test(String(payload.reauthorize_url))){
+          var link=document.createElement('a');
+          link.className='btn btn-sm btn-primary mt-2';
+          link.href=String(payload.reauthorize_url);
+          link.textContent='Authorize eBay Shipping';
+          status.appendChild(document.createElement('br'));
+          status.appendChild(link);
+        }
+        return;
+      }
       status.className='small text-success mt-2';
       status.textContent=payload.message;
     }catch(error){
