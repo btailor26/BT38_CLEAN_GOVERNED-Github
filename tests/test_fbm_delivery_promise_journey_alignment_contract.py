@@ -40,3 +40,9 @@ def test_journey_alignment_remains_render_only_and_zero_polling():
     assert "XMLHttpRequest" not in JOURNEY
     assert "setInterval" not in JOURNEY
     assert "EventSource" not in JOURNEY
+
+
+def test_tracking_history_has_no_non_authoritative_latest_badge():
+    source = Path("static/js/fbm_delivery_promise_journey_alignment.js").read_text()
+    assert ">Latest</span>" not in source
+    assert "trackingHistoryHtml(events)" in source
