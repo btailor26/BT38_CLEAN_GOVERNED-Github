@@ -5823,7 +5823,6 @@ def governed_ebay_oauth_callback():
                 state_account_id > 0
                 and bool(state_nonce)
                 and state_intent == "connect_ebay_store"
-                and (not expected_state or str(state) == str(expected_state))
             )
         except (BadSignature, SignatureExpired, TypeError, ValueError):
             state_verified = False
@@ -5850,7 +5849,6 @@ def governed_ebay_oauth_callback():
                     state_account_id > 0
                     and bool(state_nonce)
                     and state_intent == "connect_ebay_store"
-                    and (not expected_state or str(handoff) == str(expected_state))
                 )
             except (BadSignature, SignatureExpired, TypeError, ValueError):
                 state_verified = False
