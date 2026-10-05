@@ -116,3 +116,10 @@ def test_legacy_approval_render_is_retired_before_click_drop_card_installs():
     assert "installCard()" not in SCRIPT
     assert "retireLegacyRoyalMailApprovalUi();\n    if (document.getElementById('royalMailConnectionCard')) loadState();" in SCRIPT
     assert "dataset.bt38RoyalMailConnect" in SCRIPT
+
+
+def test_royal_mail_connection_script_has_defined_startup_cleanup():
+    script = ROYAL_MAIL_UI.read_text(encoding="utf-8")
+    assert "function retireLegacyRoyalMailApprovalUi()" in script
+    assert "retireLegacyRoyalMailApprovalUi();" in script
+    assert script.index("function retireLegacyRoyalMailApprovalUi()") < script.index("retireLegacyRoyalMailApprovalUi();")
