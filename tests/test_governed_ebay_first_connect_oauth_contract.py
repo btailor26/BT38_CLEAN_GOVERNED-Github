@@ -59,3 +59,12 @@ def test_callback_uses_signed_handoff_when_returned_state_is_unusable():
     assert 'if not state_verified:' in callback
     assert 'request.cookies.get("bt38_ebay_oauth_handoff")' in callback
     assert '.loads(str(handoff), max_age=900)' in callback
+
+
+def test_callback_uses_signed_authenticated_session_state_when_ebay_omits_state_and_handoff():
+    callback = ROUTES[ROUTES.index('def governed_ebay_oauth_callback():'):]
+    assert 'if not state_verified and expected_state:' in callback
+    assert '.loads(str(expected_state), max_age=900)' in callback
+    assert 'state_account_id > 0' in callback
+    assert 'state_intent == "connect_ebay_store"' in callback
+    assert 'oauth_account_id != int(current_account_id)' in callback
