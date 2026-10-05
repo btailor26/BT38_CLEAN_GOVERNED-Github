@@ -132,3 +132,11 @@ def test_ebay_shipping_requires_proven_logistics_grant_before_ready():
     assert "/ebay-oauth/authorize?store_id=" in connection
     assert '"oauth_granted_scope": token.get("scope") or introspection.get("scope") or None' in routes
     assert '"oauth_granted_scope": token.get("scope") or scopes' not in routes
+
+
+def test_ebay_shipping_reauthorization_uses_governed_oauth_start_only():
+    source = Path("services/governed_ebay_shipping_connection_ui_alignment.py").read_text()
+    assert "payload.reauthorize_url" in source
+    assert "/ebay-oauth/authorize" in source
+    assert "auth.ebay.com/oauth2/authorize" not in source
+    assert "Authorize eBay Shipping" in source
