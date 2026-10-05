@@ -85,9 +85,7 @@
         if (clicked && clicked.id !== 'royalMailConnect' && (clicked.dataset.bt38RoyalMailConnect === '1' || String(clicked.textContent || '').trim() === 'Connect Royal Mail account')) {
             event.preventDefault();
             event.stopPropagation();
-            if (!focusConnectionCardFromLegacyControl(clicked)) {
-                window.alert('Royal Mail connection form is unavailable. Refresh the FBM page and try again.');
-            }
+            focusConnectionCardFromLegacyControl(clicked);
             return;
         }
 
