@@ -242,28 +242,6 @@
         });
     }
 
-    function installEbayShippingHandoff() {
-        const root = document.getElementById('fbmShippingOrders');
-        if (!root || root.dataset.ebayShippingHandoffInstalled === '1') return;
-        root.dataset.ebayShippingHandoffInstalled = '1';
-        const align = function () {
-            root.querySelectorAll('.provider-action[data-provider="ebay_shipping"]').forEach(function (button) {
-                button.disabled = false;
-                button.textContent = 'Open eBay shipping';
-                button.title = 'Open this order in eBay to check or buy marketplace postage.';
-            });
-        };
-        new MutationObserver(align).observe(root, {childList: true, subtree: true});
-        align();
-    }
-
-    function openEbayShipping(button) {
-        const box = button.closest('.card')?.querySelector('.rate-results');
-        const message = 'Native eBay Shipping is unavailable in this browser session. BT38 will not fall back to Seller Hub; reload the page and retry the in-BT38 eBay shipping action.';
-        if (box) box.innerHTML = `<div class="alert alert-danger mb-0">${esc(message)}</div>`;
-        else window.alert(message);
-    }
-
     function installManualShippingButton() {
         const readyButton = document.getElementById('readyToShipSelected');
         if (!readyButton || document.getElementById('manualShippingButton')) return;
@@ -432,12 +410,6 @@
     }
 
     document.addEventListener('click', function (event) {
-        const ebayShippingButton = event.target.closest('.provider-action[data-provider="ebay_shipping"]');
-        if (ebayShippingButton) {
-            event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation();
-            openEbayShipping(ebayShippingButton);
-            return;
-        }
         const statusButton = event.target.closest('.packlink-status[data-shipment-id]');
         if (statusButton) {
             const box = statusButton.closest('.rate-results');
@@ -460,7 +432,6 @@
     });
 
     installMarketplaceJourneyLinks();
-    installEbayShippingHandoff();
     installManualShippingButton();
     installBulkActionBar();
     installPacklinkHandoff();
