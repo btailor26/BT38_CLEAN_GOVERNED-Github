@@ -34,7 +34,7 @@ def _ebay_shipping_card() -> str:
         '<button id="ebayShippingConnectionTest" class="btn btn-sm btn-outline-primary" type="button">Test connection</button>'
         '</div>'
         '<div id="ebayShippingConnectionStatus" class="small text-muted mt-2">'
-        'Store connection is separate. Test only the eBay Shipping authorization here.'
+        'Store connection is separate. This check validates seller authorization; live Logistics capability is proved only when eBay accepts a rate request.'
         '</div>'
         '</div>'
     )
@@ -131,7 +131,8 @@ def install_governed_ebay_shipping_connection_ui_alignment(app) -> None:
                 'stores': ready,
                 'blocked_stores': blocked,
                 'webhook_authority_changed': False,
-                'message': f'eBay Shipping authorization is available for {names}. Open an eBay order and request rates to test Logistics API access.',
+                'capability_verified': False,
+                'message': f'eBay seller authorization is available for {names}. Logistics capability is not yet proved: open an eBay order and use Get eBay rates. A successful live shipping_quote response is the authority.',
             })
 
         first = blocked[0] if blocked else {}
