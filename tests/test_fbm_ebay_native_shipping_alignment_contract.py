@@ -25,6 +25,9 @@ def test_native_ebay_shipping_reuses_existing_fbm_state_and_provider_slot():
     assert '"marketplace_buy_shipping": True' in alignment
     assert '"auto_print_supported": True' in alignment
     assert '"label_formats": ["PDF"]' in alignment
+    assert '"available": False' in alignment
+    assert '"capability_probe_required": True' in alignment
+    assert "do not claim availability before shipping_quote succeeds" in alignment
 
 
 def test_native_ebay_shipping_calls_only_official_logistics_endpoints():
@@ -111,3 +114,11 @@ def test_notification_reauthorization_does_not_preempt_native_shipping_token_aut
     assert "ebay_notification_reauthorization_required" not in rates
     assert "_create_quote(order, parcel)" in rates
     assert "_access_token(order.store)" in alignment
+
+
+def test_ebay_shipping_connection_does_not_claim_logistics_capability_from_token_only():
+    connection = (ROOT / "services" / "governed_ebay_shipping_connection_ui_alignment.py").read_text(encoding="utf-8")
+    assert "'capability_verified': False" in connection
+    assert "Logistics capability is not yet proved" in connection
+    assert "successful live shipping_quote response is the authority" in connection
+    assert "eBay Shipping authorization is available for" not in connection
