@@ -122,3 +122,13 @@ def test_ebay_shipping_connection_does_not_claim_logistics_capability_from_token
     assert "Logistics capability is not yet proved" in connection
     assert "successful live shipping_quote response is the authority" in connection
     assert "eBay Shipping authorization is available for" not in connection
+
+
+def test_ebay_shipping_requires_proven_logistics_grant_before_ready():
+    connection = (ROOT / "services" / "governed_ebay_shipping_connection_ui_alignment.py").read_text(encoding="utf-8")
+    routes = (ROOT / "governed_routes.py").read_text(encoding="utf-8")
+    assert "EBAY_LOGISTICS_SCOPE not in granted_scopes" in connection
+    assert "reauthorize_url" in connection
+    assert "/ebay-oauth/authorize?store_id=" in connection
+    assert '"oauth_granted_scope": token.get("scope") or introspection.get("scope") or None' in routes
+    assert '"oauth_granted_scope": token.get("scope") or scopes' not in routes
