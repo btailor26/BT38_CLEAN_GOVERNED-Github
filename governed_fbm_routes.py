@@ -1176,13 +1176,36 @@ def verify_carrier_mapping(mapping_id: int):
 @governed_fbm_bp.get("/fbm/packlink/connection")
 @login_required
 def packlink_connection():
-    result = PacklinkAdapter().connection_check()
+    adapter = PacklinkAdapter()
+    result = adapter.connection_check()
+    callback_registered = False
+    if result.ok:
+        # Reuse the single governed Packlink callback-registration authority.
+        # This is connection-time setup only: no polling and no per-shipment registration.
+        from governed_packlink_callback_routes import _register_callback
+        try:
+            _register_callback(adapter)
+            callback_registered = True
+        except (PacklinkConfigurationError, PacklinkRequestError) as exc:
+            return jsonify({
+                "success": False,
+                "provider": "packlink",
+                "configured": result.configured,
+                "authenticated": True,
+                "callback_registered": False,
+                "status_code": getattr(exc, "status_code", None) or 503,
+                "account_country": result.account_country,
+                "account_email": result.account_email,
+                "message": f"Packlink authenticated, but webhook registration failed: {exc}",
+                "read_only": True,
+            }), getattr(exc, "status_code", None) or 503
     status = 200 if result.ok else (result.status_code or 503)
     return jsonify({
         "success": result.ok,
         "provider": "packlink",
         "configured": result.configured,
         "authenticated": result.ok,
+        "callback_registered": callback_registered,
         "status_code": result.status_code,
         "account_country": result.account_country,
         "account_email": result.account_email,
