@@ -150,7 +150,7 @@
             const detail = String(event.detail || '').trim();
             const location = String(event.location || '').trim();
             if (!title && !detail && !location) return '';
-            return `<div class="list-group-item py-2"><div class="d-flex justify-content-between gap-3"><div>${title ? `<div class="fw-semibold">${esc(title)}</div>` : ''}${detail ? `<div class="small text-muted">${esc(detail)}</div>` : ''}${location ? `<div class="small text-muted">${esc(location)}</div>` : ''}</div>${index === 0 ? '<span class="badge rounded-pill px-2 py-1 bg-secondary text-white align-self-start">Latest</span>' : ''}</div>${when ? `<div class="small text-muted mt-1">${esc(when)}</div>` : ''}</div>`;
+            return `<div class="list-group-item py-2"><div class="d-flex justify-content-between gap-3"><div>${title ? `<div class="fw-semibold">${esc(title)}</div>` : ''}${detail ? `<div class="small text-muted">${esc(detail)}</div>` : ''}${location ? `<div class="small text-muted">${esc(location)}</div>` : ''}</div></div>${when ? `<div class="small text-muted mt-1">${esc(when)}</div>` : ''}</div>`;
         }).join('') + `</div>`;
     }
 
