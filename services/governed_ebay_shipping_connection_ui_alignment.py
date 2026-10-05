@@ -7,6 +7,8 @@ modify, or consume sale/dispatch webhooks.
 """
 from __future__ import annotations
 
+import json
+
 from flask import jsonify
 from flask_login import login_required
 
@@ -110,6 +112,26 @@ def install_governed_ebay_shipping_connection_ui_alignment(app) -> None:
         ready = []
         blocked = []
         for store in ebay_stores:
+            credentials = {}
+            raw_credentials = getattr(store, 'api_key', None) or {}
+            if isinstance(raw_credentials, str):
+                try:
+                    credentials = json.loads(raw_credentials)
+                except Exception:
+                    credentials = {}
+            elif isinstance(raw_credentials, dict):
+                credentials = dict(raw_credentials)
+            granted_scopes = set(str(credentials.get('oauth_granted_scope') or '').split())
+            if EBAY_LOGISTICS_SCOPE not in granted_scopes:
+                blocked.append({
+                    'store_id': store.id,
+                    'store_name': store.name,
+                    'authorization_required': True,
+                    'limited_release_required': False,
+                    'reauthorize_url': f'/ebay-oauth/authorize?store_id={store.id}',
+                    'message': 'eBay Logistics permission is not proven for this seller. Reauthorize eBay and approve the requested shipping permission.',
+                })
+                continue
             try:
                 _access_token(store)
                 ready.append({'store_id': store.id, 'store_name': store.name})
@@ -143,6 +165,7 @@ def install_governed_ebay_shipping_connection_ui_alignment(app) -> None:
             'stores': [],
             'blocked_stores': blocked,
             'webhook_authority_changed': False,
+            'reauthorize_url': first.get('reauthorize_url'),
             'message': first.get('message') or 'eBay Shipping authorization is not available for the connected eBay store.',
         }), 403
 
