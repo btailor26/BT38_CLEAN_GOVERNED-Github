@@ -5831,7 +5831,7 @@ def governed_ebay_oauth_callback():
     # echoing state. In that exact case use only the independently signed,
     # short-lived browser handoff; never trust a missing-state callback merely
     # because OAuth values happen to remain in the Flask session.
-    if not state:
+    if not state_verified:
         handoff = request.cookies.get("bt38_ebay_oauth_handoff")
         if handoff:
             try:
