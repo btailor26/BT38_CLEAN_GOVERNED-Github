@@ -68,3 +68,9 @@ def test_feature_asset_strip_pattern_matches_real_script_tags():
     assert "royal_mail_click_drop_connection.js" not in stripped
     assert "fbm_row_truth_alignment.js" not in stripped
     assert not re.search(r"<script[^>]+src=", stripped)
+
+
+def test_tracking_journey_is_lazy_owned_by_tracking_number_click():
+    source = (ROOT / "services" / "governed_fbm_lazy_startup_alignment.py").read_text(encoding="utf-8")
+    assert "target.closest('.fbm-tracking-journey')" in source
+    assert "replayAfter('fbm_tracking_journey.js',event)" in source
