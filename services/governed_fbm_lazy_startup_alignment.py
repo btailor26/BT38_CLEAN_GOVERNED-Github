@@ -71,14 +71,11 @@ _BOOTSTRAP = r'''<script id="bt38FbmLazyFeatureBoundary">
 def _strip_feature_assets(html: str) -> str:
     for asset in _FEATURE_ASSETS:
         pattern = re.compile(
-            r'<script\\b[^>]*\\bsrc=["\\\'][^"\\\']*'
-            + re.escape(asset)
-            + r'[^"\\\']*["\\\'][^>]*>\\s*</script>',
+            rf"""<script[^>]+src=["'][^"']*{re.escape(asset)}[^"']*["'][^>]*>\\s*</script>""",
             re.IGNORECASE,
         )
         html = pattern.sub("", html)
     return html
-
 
 def install_governed_fbm_lazy_startup_alignment(app) -> None:
     if getattr(app, "_bt38_fbm_lazy_startup_alignment_installed", False):
