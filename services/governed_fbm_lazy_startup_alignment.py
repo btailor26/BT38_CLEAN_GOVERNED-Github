@@ -59,23 +59,11 @@ _BOOTSTRAP = r'''<script id="bt38FbmLazyFeatureBoundary">
     if(target.closest('.provider-action[data-provider="ebay_shipping"],.ebay-native-buy')){
       if(!loaded.has('fbm_ebay_shipping_alignment.js')) return replayAfter('fbm_ebay_shipping_alignment.js',event);
     }
-    if(target.closest('.bt38-replacement-start,.bt38-replacement-label')){
+    if(target.closest('#readyToShipSelected,.fbm-shipping-options,.bt38-replacement-start,.bt38-replacement-label')){
       if(!loaded.has('fbm_replacement_label_alignment.js')) return replayAfter('fbm_replacement_label_alignment.js',event);
-    }
-    if(target.closest('.fbm-tracking-journey')){
-      if(!loaded.has('fbm_tracking_journey.js')) return replayAfter('fbm_tracking_journey.js',event);
     }
   },true);
 
-  // Exact committed marketplace events are the only non-user startup boundary.
-  // Load row/Journey repaint owners only when such an event actually arrives.
-  window.addEventListener('bt38-marketplace-event',()=>{
-    void Promise.all([
-      load('fbm_event_session_refresh_alignment.js'),
-      load('fbm_delivery_promise_journey_alignment.js'),
-      load('fbm_row_truth_alignment.js')
-    ]).catch(error=>console.warn('[BT38 FBM] event feature unavailable',error));
-  },{capture:true});
 })();
 </script>'''
 
