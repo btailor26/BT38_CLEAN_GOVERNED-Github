@@ -17,3 +17,33 @@ def test_ordinary_page_navigation_does_not_fetch_dashboard_for_assistant():
     assert "if (!(options && options.committedEvent === true))" in source
     assert "void refreshAssistant({committedEvent:true});" in source
     assert "const count = await readDashboardActionCount(options);" in source
+
+
+def test_fbm_final_startup_boundary_strips_feature_assets_and_keeps_actions_lazy():
+    source = (ROOT / "services" / "governed_fbm_lazy_startup_alignment.py").read_text(encoding="utf-8")
+    for asset in (
+        "royal_mail_click_drop_connection.js",
+        "fbm_qz_print.js",
+        "fbm_tracking_journey.js",
+        "fbm_replacement_label_alignment.js",
+        "fbm_ebay_shipping_alignment.js",
+        "fbm_event_session_refresh_alignment.js",
+        "fbm_delivery_promise_journey_alignment.js",
+        "fbm_scroll_position_alignment.js",
+        "fbm_row_truth_alignment.js",
+    ):
+        assert asset in source
+    assert "target.closest('#royalMailConnectionCard" in source
+    assert "target.closest('#qzConnect,#qzSavePrinter" in source
+    assert 'provider-action[data-provider="ebay_shipping"]' in source
+    assert "target.closest('#readyToShipSelected,.fbm-shipping-options" in source
+    assert "window.addEventListener('bt38-marketplace-event'" not in source
+
+
+def test_lazy_startup_boundary_is_installed_before_feature_injectors():
+    source = (ROOT / "main.py").read_text(encoding="utf-8")
+    lazy = source.index("install_governed_fbm_lazy_startup_alignment(app)")
+    replacement = source.index("install_governed_fbm_replacement_label_alignment(app)")
+    ebay = source.index("install_governed_ebay_native_shipping_alignment(app)")
+    assert lazy < replacement
+    assert lazy < ebay
