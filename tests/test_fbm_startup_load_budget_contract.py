@@ -47,3 +47,9 @@ def test_lazy_startup_boundary_is_installed_before_feature_injectors():
     ebay = source.index("install_governed_ebay_native_shipping_alignment(app)")
     assert lazy < replacement
     assert lazy < ebay
+
+
+def test_fbm_rows_do_not_flash_before_browser_session_queue_projection():
+    source = (ROOT / "services" / "governed_fbm_dispatch_queue_alignment.py").read_text(encoding="utf-8")
+    assert '.fbm-orders-table:not([data-bt38-session-ready="1"]) tbody tr.fbm-order-row{visibility:hidden}' in source
+    assert "table.dataset.bt38SessionReady='1';saveSession();" in source
