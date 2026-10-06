@@ -53,6 +53,9 @@ _BOOTSTRAP = r'''<script id="bt38FbmLazyFeatureBoundary">
     if(target.closest('#royalMailConnectionCard,[data-bt38-royal-mail-legacy="1"],#royalMailApprovalModal')){
       if(!loaded.has('royal_mail_click_drop_connection.js')) return replayAfter('royal_mail_click_drop_connection.js',event);
     }
+    if(target.closest('.fbm-tracking-journey')){
+      if(!loaded.has('fbm_tracking_journey.js')) return replayAfter('fbm_tracking_journey.js',event);
+    }
     if(target.closest('#qzConnect,#qzSavePrinter,.packlink-existing-status,#dispatchedPacklinkLabelAction')){
       if(!loaded.has('fbm_qz_print.js')) return replayAfter('fbm_qz_print.js',event);
     }
