@@ -71,7 +71,7 @@ _BOOTSTRAP = r'''<script id="bt38FbmLazyFeatureBoundary">
 def _strip_feature_assets(html: str) -> str:
     for asset in _FEATURE_ASSETS:
         pattern = re.compile(
-            rf"""<script[^>]+src=["'][^"']*{re.escape(asset)}[^"']*["'][^>]*>\\s*</script>""",
+            rf"""<script[^>]+src=["'][^"']*{re.escape(asset)}[^"']*["'][^>]*>\s*</script>""",
             re.IGNORECASE,
         )
         html = pattern.sub("", html)
