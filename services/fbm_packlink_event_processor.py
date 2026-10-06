@@ -368,9 +368,12 @@ def process_packlink_event(
         }
 
     if event_name == "shipment.tracking.update":
-        callback_history = _callback_tracking_history(data)
+        # The webhook is the event-driven wake-up signal. Hydrate only this exact
+        # Packlink shipment's authoritative /track history; no polling or batch scan.
+        adapter = adapter or PacklinkAdapter()
+        tracking_history = adapter.get_tracking_status(reference=reference)
         provider_state = _callback_provider_state(data, event_name)
-        tracking = extract_packlink_tracking(data, callback_history, shipment.tracking_number)
+        tracking = extract_packlink_tracking(data, tracking_history, shipment.tracking_number)
         carrier, service, service_id = _provider_identity(data, shipment)
         if carrier:
             shipment.carrier = carrier
@@ -383,13 +386,13 @@ def process_packlink_event(
         persisted_events = _persist_tracking_events(
             shipment,
             data=data,
-            history=callback_history,
+            history=tracking_history,
             observed_at=now,
         )
         reconcile_packlink_tracking_lifecycle(
             shipment,
             provider_state=provider_state,
-            tracking_history=callback_history,
+            tracking_history=tracking_history,
             observed_at=now,
         )
         db.session.commit()
@@ -402,7 +405,7 @@ def process_packlink_event(
             "shipment_status": shipment.status,
             "provider_status": shipment.last_provider_status,
             "tracking_events_persisted": persisted_events,
-            "webhook_only": True,
+            "event_driven_provider_read": True,
         }
 
     _apply_lifecycle_state(shipment, event_name, now)
