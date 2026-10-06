@@ -493,9 +493,17 @@
     return parseDashboardCount(document);
   }
 
-  async function readDashboardActionCount() {
+  async function readDashboardActionCount(options) {
     const local = currentPageDashboardCount();
     if (Number.isFinite(local)) return local;
+
+    // Ordinary page entry, pageshow and visibility changes must not fetch the
+    // whole Dashboard just to repaint the assistant. Reuse the session value.
+    // A committed marketplace event may explicitly refresh the count once.
+    if (!(options && options.committedEvent === true)) {
+      const cached = Number(window.sessionStorage.getItem(cacheKey));
+      return Number.isFinite(cached) ? cached : null;
+    }
 
     const response = await fetch(dashboardPath, {
       method: 'GET',
@@ -513,7 +521,7 @@
     if (refreshRunning || document.visibilityState === 'hidden') return;
     refreshRunning = true;
     try {
-      const count = await readDashboardActionCount();
+      const count = await readDashboardActionCount(options);
       if (!Number.isFinite(count)) return;
       const previous = Number.isFinite(currentCount)
         ? currentCount
@@ -643,7 +651,7 @@
   }, true);
 
   window.addEventListener('bt38-marketplace-event', function () {
-    void refreshAssistant();
+    void refreshAssistant({committedEvent:true});
   });
   window.addEventListener('pageshow', function () {
     pagePose = null;
