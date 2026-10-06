@@ -60,13 +60,32 @@
 
     installFbmFetchTimeout();
 
-    function requireQz() {
-        if (!global.qz) throw new Error('QZ Tray browser library is not loaded.');
-        return global.qz;
+    let qzLoadPromise = null;
+
+    async function requireQz() {
+        if (global.qz) return global.qz;
+        if (!qzLoadPromise) {
+            qzLoadPromise = new Promise(function (resolve, reject) {
+                const script = document.createElement('script');
+                script.src = 'https://cdn.jsdelivr.net/npm/qz-tray@2.2.6/qz-tray.js';
+                script.async = true;
+                script.dataset.bt38QzLazy = '1';
+                script.onload = function () {
+                    if (global.qz) resolve(global.qz);
+                    else reject(new Error('QZ Tray browser library did not initialise.'));
+                };
+                script.onerror = function () {
+                    qzLoadPromise = null;
+                    reject(new Error('QZ Tray browser library could not be loaded.'));
+                };
+                document.head.appendChild(script);
+            });
+        }
+        return qzLoadPromise;
     }
 
     async function connect() {
-        const qz = requireQz();
+        const qz = await requireQz();
         if (!qz.websocket.isActive()) {
             await qz.websocket.connect({retries: 2, delay: 1});
         }
