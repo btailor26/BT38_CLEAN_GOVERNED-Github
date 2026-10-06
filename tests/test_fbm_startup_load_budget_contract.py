@@ -53,3 +53,18 @@ def test_fbm_rows_do_not_flash_before_browser_session_queue_projection():
     source = (ROOT / "services" / "governed_fbm_dispatch_queue_alignment.py").read_text(encoding="utf-8")
     assert '.fbm-orders-table:not([data-bt38-session-ready="1"]) tbody tr.fbm-order-row{visibility:hidden}' in source
     assert "table.dataset.bt38SessionReady='1';saveSession();" in source
+
+
+def test_feature_asset_strip_pattern_matches_real_script_tags():
+    import re
+    from services.governed_fbm_lazy_startup_alignment import _strip_feature_assets
+    html = (
+        '<script src="/static/js/fbm_tracking_journey.js?v=1.0.1"></script>'
+        '<script src="/static/js/royal_mail_click_drop_connection.js?v=2"></script>'
+        '<script src="/static/js/fbm_row_truth_alignment.js"></script>'
+    )
+    stripped = _strip_feature_assets(html)
+    assert "fbm_tracking_journey.js" not in stripped
+    assert "royal_mail_click_drop_connection.js" not in stripped
+    assert "fbm_row_truth_alignment.js" not in stripped
+    assert not re.search(r"<script[^>]+src=", stripped)
