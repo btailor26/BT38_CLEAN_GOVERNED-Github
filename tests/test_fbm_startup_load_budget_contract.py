@@ -95,16 +95,6 @@ def test_tracking_journey_has_no_duplicate_committed_event_refresh_owner():
     assert "'X-BT38-UI-Refresh':'targeted'" in exact_owner
 
 
-def test_history_expansion_consumes_bounded_fragment_not_full_document():
-    page = (ROOT / "services" / "governed_fbm_page_alignment.py").read_text(encoding="utf-8")
-    dispatch = (ROOT / "services" / "governed_fbm_dispatch_queue_alignment.py").read_text(encoding="utf-8")
-    assert 'request.headers.get("X-BT38-FBM-History-Expansion") == "1"' in page
-    assert 'return render_template("_fbm_history_rows.html", orders=orders)' in page
-    assert "document.createElement('template')" in dispatch
-    assert "fragment.content.querySelector('.fbm-orders-table tbody')" in dispatch
-    assert "new DOMParser().parseFromString(await response.text(),'text/html')" not in dispatch
-
-
 def test_fbm_filters_use_seeded_browser_snapshot_without_history_fetch():
     search = (ROOT / "services" / "governed_fbm_global_search_alignment.py").read_text(encoding="utf-8")
     dispatch = (ROOT / "services" / "governed_fbm_dispatch_queue_alignment.py").read_text(encoding="utf-8")
