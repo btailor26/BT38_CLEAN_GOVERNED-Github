@@ -108,3 +108,10 @@ def test_fbm_filters_use_seeded_browser_snapshot_without_history_fetch():
     assert "bt38-fbm-session-rendered" in dispatch
     assert "Follows History filter" in page
     assert 'onchange="this.form.submit()"' not in page
+
+
+
+def test_fbm_session_render_event_is_safe_inside_python_fstring():
+    dispatch = (ROOT / "services" / "governed_fbm_dispatch_queue_alignment.py").read_text(encoding="utf-8")
+    assert "new CustomEvent('bt38-fbm-session-rendered',{{detail:{{range:range,from:from,to:to}}}})" in dispatch
+    assert "new CustomEvent('bt38-fbm-session-rendered',{detail:" not in dispatch
