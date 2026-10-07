@@ -315,7 +315,7 @@ def test_web_entrypoint_does_not_run_ebay_recovery_during_import():
 
 def test_fbm_committed_refresh_is_exact_row_and_event_driven():
     journey = _source(FBM_TRACKING_JOURNEY)
-    exact = _source(ROOT / "services" / "governed_fbm_exact_record_session_alignment.py")
+    exact = _source(Path("services/governed_fbm_exact_record_session_alignment.py"))
     page = _source(FBM_PAGE_ALIGNMENT)
     signal = _source(UI_EVENT_SIGNAL)
 
