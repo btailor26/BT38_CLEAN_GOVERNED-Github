@@ -369,15 +369,14 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
     var title=card.querySelector('.card-header .fw-semibold');if(title&&labels[active])title.textContent=labels[active];
     var readyAction=active==='ready_dispatch';var selectionAction=readyAction||truthFilter!=='all';var actionArea=document.getElementById('readyToShipSelected');var selectAll=document.getElementById('selectAllOrders');var selectedCount=document.getElementById('selectedOrderCount');var actionHint=card.querySelector('.card-header .text-muted.small');if(actionArea)actionArea.classList.toggle('d-none',!readyAction);if(selectAll)selectAll.disabled=!selectionAction;
     rows.forEach(function(row){{var cb=row.querySelector('.fbm-order-checkbox');if(cb){{var selectable=selectionAction&&matchedSet.has(row);cb.checked=false;cb.disabled=!selectable;cb.closest('td').classList.toggle('invisible',!selectable)}}var option=row.querySelector('.fbm-shipping-options');if(option)option.classList.toggle('d-none',!readyAction)}});
-    if(selectedCount)selectedCount.classList.toggle('d-none',!selectionAction);if(actionHint)actionHint.classList.toggle('d-none',!selectionAction);table.dataset.bt38SessionReady='1';saveSession();
+    if(selectedCount)selectedCount.classList.toggle('d-none',!selectionAction);if(actionHint)actionHint.classList.toggle('d-none',!selectionAction);table.dataset.bt38SessionReady='1';saveSession();document.dispatchEvent(new CustomEvent('bt38-fbm-session-rendered',{detail:{range:range,from:from,to:to}}));
   }}
   // Keep the established single FBM browser-session owner reachable by the
   // shared page controller after it builds/refreshed its row cache. This is a
   // presentation-only handoff: no fetch, DB read, marketplace read or timer.
   window.BT38FBMApplyCommittedSnapshot=render;
-  // History stays browser-local once the requested bounded working set is loaded.
-  // A wider user-selected range performs one explicit DB-backed /fbm expansion;
-  // it never polls and never reads a marketplace/provider.
+  // History is an Excel-style presentation filter over the browser-session snapshot.
+  // Filter changes never read the DB; committed events remain the silent-refresh trigger.
   function applyHistory(){{currentPage=1;range=String(rangeInput&&rangeInput.value||'3d').toLowerCase();from=String(fromInput&&fromInput.value||'');to=String(toInput&&toInput.value||'');saveSession();refreshHistoryMatches();render();}}
   if(rangeInput)rangeInput.addEventListener('change',function(){{var custom=String(rangeInput.value||'')==='custom';if(fromInput)fromInput.style.display=custom?'':'none';if(toInput)toInput.style.display=custom?'':'none';if(!custom)applyHistory();}});
   if(fromInput)fromInput.addEventListener('change',function(){{if(range==='custom'||String(rangeInput&&rangeInput.value||'')==='custom'){{range='custom';if(fromInput.value&&toInput&&toInput.value)applyHistory();}}}});
