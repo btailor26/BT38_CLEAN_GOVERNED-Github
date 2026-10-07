@@ -13,8 +13,7 @@ from datetime import datetime
 import json
 import time
 
-from flask import jsonify, request, g
-from sqlalchemy import event as sqlalchemy_event
+from flask import jsonify, request, g, got_request_exception
 from flask_login import current_user
 
 from extensions import db
@@ -152,12 +151,20 @@ def _request_origin():
 
 
 def _record_system_event(message, details):
+    """Persist recorder evidence without touching the request's ORM transaction."""
     try:
-        row = SystemLog(log_type="system_recorder", message=message, details=json.dumps(details, ensure_ascii=False))
-        db.session.add(row)
-        db.session.commit()
+        with db.engine.begin() as connection:
+            connection.execute(
+                SystemLog.__table__.insert().values(
+                    log_type="system_recorder",
+                    message=message,
+                    details=json.dumps(details, ensure_ascii=False),
+                    created_at=datetime.utcnow(),
+                )
+            )
     except Exception:
-        db.session.rollback()
+        # Recorder evidence must never change or replace the operational outcome.
+        return
 
 def install_governed_customer_behaviour_recorder(app):
     if getattr(app, "_bt38_customer_behaviour_recorder_installed", False):
@@ -166,15 +173,13 @@ def install_governed_customer_behaviour_recorder(app):
 
     @app.before_request
     def bt38_system_recorder_request_start():
-        if request.path == _ENDPOINT: return
+        if request.path == _ENDPOINT or not _operational_path(request.path): return
         g._bt38_system_started = time.perf_counter()
         g._bt38_system_request_id = _safe_text(request.headers.get("X-Request-ID"), 100) or f"local-{time.time_ns()}"
-        g._bt38_db_queries = 0
-        g._bt38_db_ms = 0.0
 
     @app.after_request
     def bt38_system_recorder_request_finish(response):
-        if request.path == _ENDPOINT:
+        if request.path == _ENDPOINT or not _operational_path(request.path):
             return response
         if int(response.status_code) < 400:
             return response
@@ -185,18 +190,19 @@ def install_governed_customer_behaviour_recorder(app):
             "method": request.method, "page": request.path, "query_keys": _safe_query_keys(),
             "request_origin": _request_origin(), "status_code": int(response.status_code),
             "duration_ms": duration_ms, "response_bytes": int(response.calculate_content_length() or 0),
-            "db_query_count": int(getattr(g, "_bt38_db_queries", 0) or 0),
-            "db_duration_ms": round(float(getattr(g, "_bt38_db_ms", 0.0) or 0.0), 1),
             "recorded_at": datetime.utcnow().isoformat() + "Z",
         }
         _record_system_event(f"Failed request {request.method} {request.path}", details)
         return response
 
-    @app.errorhandler(Exception)
-    def bt38_system_recorder_unhandled(error):
-        details = {"event": "backend_error", "request_id": getattr(g, "_bt38_system_request_id", None), "method": request.method, "page": request.path, "error_type": type(error).__name__, "recorded_at": datetime.utcnow().isoformat() + "Z"}
-        _record_system_event(f"Backend error {request.method} {request.path}: {type(error).__name__}", details)
-        raise error
+    @got_request_exception.connect_via(app)
+    def bt38_system_recorder_unhandled(sender, exception, **extra):
+        # Observe Flask's exception signal only. The recorder does not own,
+        # replace, retry or re-raise the application's exception path.
+        if request.path == _ENDPOINT or not _operational_path(request.path):
+            return
+        details = {"event": "backend_error", "request_id": getattr(g, "_bt38_system_request_id", None), "method": request.method, "page": request.path, "error_type": type(exception).__name__, "recorded_at": datetime.utcnow().isoformat() + "Z"}
+        _record_system_event(f"Backend error {request.method} {request.path}: {type(exception).__name__}", details)
 
     @app.post(_ENDPOINT)
     def bt38_customer_behaviour_event():
@@ -210,6 +216,8 @@ def install_governed_customer_behaviour_recorder(app):
         event = _safe_text(payload.get("event"), 40)
         if event not in _ALLOWED_EVENTS:
             return jsonify({"ok": False}), 400
+        if not _operational_path(_safe_text(payload.get("page"), 300)):
+            return jsonify({"ok": False}), 400
         details = {k: payload.get(k) for k in _ALLOWED_KEYS if k in payload}
         for key, value in list(details.items()):
             if isinstance(value, (dict, list)):
@@ -220,14 +228,12 @@ def install_governed_customer_behaviour_recorder(app):
         details["authenticated"] = bool(current_user.is_authenticated)
         if current_user.is_authenticated:
             details["user_id"] = getattr(current_user, "id", None)
-        row = SystemLog(log_type="customer_behaviour", message=f"Customer behaviour: {event}", details=json.dumps(details, ensure_ascii=False))
-        db.session.add(row)
-        db.session.commit()
+        _record_system_event(f"Customer behaviour: {event}", details)
         return jsonify({"ok": True}), 202
 
     @app.after_request
     def bt38_customer_behaviour_script(response):
-        if request.path == _ENDPOINT or request.method != "GET": return response
+        if request.path == _ENDPOINT or request.method != "GET" or not _operational_path(request.path): return response
         content_type = str(response.headers.get("Content-Type") or "").lower()
         if "text/html" not in content_type or response.direct_passthrough or response.headers.get("Content-Encoding"): return response
         body = response.get_data(as_text=True)
