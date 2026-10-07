@@ -137,10 +137,23 @@ def _presentation(rows: list[MarketplaceOrder]) -> dict[str, dict]:
         shipment = shipments.get(key)
         queue = _aligned_workflow_queue_for(row, shipment)
         spend = spend_by_shipment.get(int(shipment.id)) if shipment and getattr(shipment, "id", None) else None
+        history_at = getattr(row, "created_at", None)
+        if queue == "dispatched":
+            # History on Dispatched means dispatch activity, not order age.
+            # Use only persisted DB shipment milestones already in this snapshot.
+            history_at = (
+                getattr(row, "shipped_at", None)
+                or (getattr(shipment, "label_purchased_at", None) if shipment else None)
+                or (getattr(shipment, "carrier_accepted_at", None) if shipment else None)
+                or (getattr(shipment, "first_movement_at", None) if shipment else None)
+                or (getattr(shipment, "delivered_at", None) if shipment else None)
+                or history_at
+            )
         payload[str(row.id)] = {
             "queue": queue,
             "status": str(getattr(row, "status", "") or "").strip().lower(),
             "created_at": row.created_at.isoformat() if getattr(row, "created_at", None) else None,
+            "history_at": history_at.isoformat() if history_at else None,
             # Canonical Shipping Cost authority: MCF uses persisted total MCF fee;
             # normal FBM uses confirmed persisted shipping spend.
             "shipping_cost": (
@@ -212,7 +225,7 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   var body=table.querySelector('tbody');
   var rows=Array.from(body.querySelectorAll('tr.fbm-order-row'));
   var labels={{ready_dispatch:'Ready to dispatch',pending:'Pending',dispatched:'Dispatched',cancelled:'Cancelled',fba:'FBA',replacements:'Replacement',refunds:'Refunds'}};
-  var sessionEpoch='fbm-history-3d-v1';
+  var sessionEpoch='fbm-history-snapshot-v2';
   var sessionDefaults={{tab:'pending',search:'',range:'3d',from:'',to:'',dirty:false,session_epoch:sessionEpoch}};
   var saved=sessionDefaults;
   if(window.BT38&&typeof window.BT38.getPageSession==='function'){{
@@ -222,9 +235,8 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
       var parsedSession=rawSession?JSON.parse(rawSession):null;
       storedEpoch=String(parsedSession&&parsedSession.session_epoch||'');
     }}catch(_e){{storedEpoch='';}}
-    // Only state created by this FBM History owner may override the 3-day
-    // default. Pre-ownership/stale browser state (for example range=90d)
-    // is deliberately ignored once, then the canonical session is saved below.
+    // Only state created by this full-snapshot History owner may override
+    // defaults. Older partial-snapshot browser state is discarded once.
     saved=storedEpoch===sessionEpoch?window.BT38.getPageSession('fbm',sessionDefaults):sessionDefaults;
   }}
   var active=saved.tab&&labels[saved.tab]?saved.tab:'pending';
@@ -280,10 +292,10 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
     row.dataset.shippingCost=String(info.shipping_cost);
     row.dataset.shippingCostCurrency=currency;
   }}
-  rows.forEach(function(row){{var info=data[row.dataset.orderId]||{{queue:'unclassified',shipping_cost_confirmed:false,created_at:null}};row.dataset.fbmQueue=info.queue;row.dataset.fbmCreatedAt=info.created_at||'';row.dataset.fbmPlatform=info.platform||'';row.dataset.fbmShipmentState=info.shipment_state||'';row.dataset.fbmMappingReview=info.mapping_review?'1':'0';row.dataset.fbmReturnEvent=info.return_event?'1':'0';alignCanonicalShippingCost(row,info);row.dataset.fbmSearch=(row.textContent||'').toLowerCase();}});
+  rows.forEach(function(row){{var info=data[row.dataset.orderId]||{{queue:'unclassified',shipping_cost_confirmed:false,created_at:null,history_at:null}};row.dataset.fbmQueue=info.queue;row.dataset.fbmCreatedAt=info.created_at||'';row.dataset.fbmHistoryAt=info.history_at||info.created_at||'';row.dataset.fbmPlatform=info.platform||'';row.dataset.fbmShipmentState=info.shipment_state||'';row.dataset.fbmMappingReview=info.mapping_review?'1':'0';row.dataset.fbmReturnEvent=info.return_event?'1':'0';alignCanonicalShippingCost(row,info);row.dataset.fbmSearch=(row.textContent||'').toLowerCase();}});
   function localDay(value){{if(!value)return null;var d=new Date(value);return isNaN(d.getTime())?null:new Date(d.getFullYear(),d.getMonth(),d.getDate());}}
   function historyBounds(){{var today=new Date();today=new Date(today.getFullYear(),today.getMonth(),today.getDate());if(range==='custom'){{var a=from?new Date(from+'T00:00:00'):null,b=to?new Date(to+'T23:59:59'):null;return {{start:a,end:b}};}}var days={{'3d':3,'7d':7,'30d':30,'90d':90,'1y':365}}[range]||3;var start=new Date(today);start.setDate(start.getDate()-(days-1));var end=new Date(today);end.setHours(23,59,59,999);return {{start:start,end:end}};}}
-  function inHistory(row){{var d=localDay(row.dataset.fbmCreatedAt);if(!d)return false;var bounds=historyBounds();if(bounds.start&&d<bounds.start)return false;if(bounds.end&&d>bounds.end)return false;return true;}}
+  function inHistory(row){{var d=localDay(row.dataset.fbmHistoryAt||row.dataset.fbmCreatedAt);if(!d)return false;var bounds=historyBounds();if(bounds.start&&d<bounds.start)return false;if(bounds.end&&d>bounds.end)return false;return true;}}
   var cachedCounts={{ready_dispatch:0,pending:0,dispatched:0,cancelled:0,fba:0,replacements:0,refunds:0}};
   var cachedTruthCounts={{source_unverified:0,tracking_missing:0,ship_by_missing:0,delivery_missing:0,shipping_cost_missing:0}};
   var cachedRowsByQueue={{ready_dispatch:[],pending:[],dispatched:[],cancelled:[],fba:[],replacements:[],refunds:[]}};
