@@ -486,27 +486,8 @@ def _metric_card(label: str, value: int, lines: list[str], extra_class: str = ""
 
 
 def _period_controls(health: dict) -> str:
-    preserved = {}
-    for name in ("platform", "status", "limit"):
-        value = str(request.args.get(name) or "").strip()
-        if value:
-            preserved[name] = value
-    hidden = "".join(
-        f'<input type="hidden" name="{escape(key)}" value="{escape(value)}">'
-        for key, value in preserved.items()
-    )
-    today_url = f"{request.path}?{urlencode({**preserved, 'health_period': 'today'})}"
-    selected_date = str(request.args.get("health_date") or "")
-    selected_month = str(request.args.get("health_month") or "")
-    return (
-        '<div class="fbm-period-controls" aria-label="FBM health period">'
-        f'<a class="btn btn-sm {"btn-primary" if health["period_mode"] == "today" else "btn-outline-secondary"}" href="{escape(today_url)}">Today</a>'
-        f'<form method="get" action="{escape(request.path)}">{hidden}<input type="hidden" name="health_period" value="date">'
-        f'<input class="form-control form-control-sm" aria-label="Custom FBM date" type="date" name="health_date" value="{escape(selected_date)}" onchange="this.form.submit()"></form>'
-        f'<form method="get" action="{escape(request.path)}">{hidden}<input type="hidden" name="health_period" value="month">'
-        f'<input class="form-control form-control-sm" aria-label="Custom FBM month" type="month" name="health_month" value="{escape(selected_month)}" onchange="this.form.submit()"></form>'
-        '</div>'
-    )
+    """Health follows the browser-session History filter; no filter navigation or DB reload."""
+    return '<div class="fbm-period-controls" aria-label="FBM health period"><span class="small text-muted">Follows History filter</span></div>'
 
 
 def _guide_html(health: dict) -> str:
