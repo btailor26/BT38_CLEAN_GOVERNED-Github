@@ -315,15 +315,22 @@ def test_web_entrypoint_does_not_run_ebay_recovery_during_import():
 
 def test_fbm_committed_refresh_is_exact_row_and_event_driven():
     journey = _source(FBM_TRACKING_JOURNEY)
+    exact = _source(ROOT / "services" / "governed_fbm_exact_record_session_alignment.py")
     page = _source(FBM_PAGE_ALIGNMENT)
     signal = _source(UI_EVENT_SIGNAL)
 
-    assert "fetch(window.location.href" not in journey
-    assert "X-BT38-UI-Refresh':'targeted'" in journey
-    assert "bt38_marketplace_order_id" in journey
-    assert "data-marketplace-order-id" in journey
-    assert "row.replaceWith" in journey
+    # Tracking Journey is presentation-only; committed DB refresh has one owner.
+    assert "X-BT38-UI-Refresh':'targeted'" not in journey
+    assert "bt38-marketplace-event" not in journey
     assert "setInterval(" not in journey
+
+    assert "X-BT38-UI-Refresh" in exact
+    assert "targeted" in exact
+    assert "bt38_marketplace_order_id" in exact
+    assert "data-marketplace-order-id" in exact
+    assert "replaceWith" in exact
+    assert "bt38-marketplace-event" in exact
+    assert "setInterval(" not in exact
 
     assert 'request.headers.get("X-BT38-UI-Refresh") == "targeted"' in page
     assert "MarketplaceOrder.marketplace_order_id == targeted_marketplace_order_id" in page
