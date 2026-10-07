@@ -63,6 +63,40 @@ def _script() -> str:
     var matches=historyMatch&&String(row.dataset.fbmQueue||'')===active&&(!search||String(row.dataset.fbmSearch||'').indexOf(search)>=0);
     row.hidden=!matches;
   }
+  function cssEscape(value){
+    var text=String(value==null?'':value);
+    return window.CSS&&typeof window.CSS.escape==='function'?window.CSS.escape(text):text.replace(/["\\\\]/g,'\\\\  function apply(detail){');
+  }
+  async function replaceFromPersistedDb(detail){
+    detail=detail&&typeof detail==='object'?detail:{};
+    var orderId=String(detail.order_id||'').trim();
+    var marketplaceOrderId=String(detail.marketplace_order_id||'').trim();
+    var storeId=String(detail.store_id||'').trim();
+    var selector=orderId?'.fbm-order-row[data-order-id="'+cssEscape(orderId)+'"]':'';
+    if(!selector&&marketplaceOrderId)selector='.fbm-order-row[data-marketplace-order-id="'+cssEscape(marketplaceOrderId)+'"]'+(storeId?'[data-store-id="'+cssEscape(storeId)+'"]':'');
+    if(!selector)return false;
+    var current=document.querySelector(selector);
+    if(!current)return false;
+    try{
+      var target=new URL(window.location.href);
+      if(marketplaceOrderId)target.searchParams.set('bt38_marketplace_order_id',marketplaceOrderId);
+      if(storeId)target.searchParams.set('bt38_store_id',storeId);
+      var response=await fetch(target.toString(),{method:'GET',credentials:'same-origin',cache:'no-store',headers:{'Accept':'text/html','X-BT38-UI-Refresh':'targeted'}});
+      if(!response.ok)return false;
+      var parsed=new DOMParser().parseFromString('<table><tbody>'+await response.text()+'</tbody></table>','text/html');
+      var fresh=parsed.querySelector(selector);
+      if(!fresh)return false;
+      var replacement=document.importNode(fresh,true);
+      current.replaceWith(replacement);
+      applyActiveFiltersToExactRow(replacement);
+      document.dispatchEvent(new CustomEvent('bt38-fbm-working-set-expanded',{detail:{reason:'committed_event_refresh',marketplace_order_id:marketplaceOrderId}}));
+      window.dispatchEvent(new CustomEvent('bt38-page-refreshed',{detail:{reason:'committed_event_refresh',path:'/fbm',order_id:orderId,marketplace_order_id:marketplaceOrderId}}));
+      return true;
+    }catch(error){
+      console.warn('[BT38 FBM] exact persisted row refresh unavailable',error);
+      return false;
+    }
+  }
   function apply(detail){
     detail=detail&&typeof detail==='object'?detail:{};
     var orderId=String(detail.order_id||detail.marketplace_order_id||'').trim();
@@ -136,6 +170,10 @@ def _script() -> str:
     // whole /fbm document and rebuilds every record.
     event.stopImmediatePropagation();
     apply(detail);
+    // The committed event is the wake-up signal. Re-read only this rendered
+    // order from the persisted DB-backed /fbm projection so the silent refresh
+    // never depends on the optional Tracking/Journey UI having been loaded.
+    void replaceFromPersistedDb(detail);
   },true);
 })();
 </script>'''
