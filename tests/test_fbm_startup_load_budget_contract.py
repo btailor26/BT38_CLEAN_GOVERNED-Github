@@ -130,3 +130,17 @@ def test_customer_recorder_is_zero_poll_passive_observer():
     assert "not _operational_path(request.path)" in recorder
     assert "g._bt38_db_queries" not in recorder
     assert "g._bt38_db_ms" not in recorder
+
+
+
+def test_dispatched_history_uses_persisted_dispatch_date_without_fetch():
+    dispatch = (ROOT / "services" / "governed_fbm_dispatch_queue_alignment.py").read_text(encoding="utf-8")
+    assert '"history_at": history_at.isoformat() if history_at else None' in dispatch
+    assert 'getattr(row, "shipped_at", None)' in dispatch
+    assert 'getattr(shipment, "label_purchased_at", None)' in dispatch
+    assert 'row.dataset.fbmHistoryAt=info.history_at||info.created_at||\'\'' in dispatch
+    assert 'localDay(row.dataset.fbmHistoryAt||row.dataset.fbmCreatedAt)' in dispatch
+    assert "fbm-history-snapshot-v2" in dispatch
+    assert "fbm-history-3d-v1" not in dispatch
+    assert "var loadedRange='3d'" not in dispatch
+    assert "expandHistoryWorkingSet" not in dispatch
