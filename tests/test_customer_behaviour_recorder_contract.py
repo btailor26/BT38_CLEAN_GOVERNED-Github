@@ -30,13 +30,14 @@ def test_successful_backend_requests_do_not_persist_recorder_rows():
 
 def test_backend_and_browser_errors_are_retained():
     text = _source()
-    assert "@app.errorhandler(Exception)" in text
+    assert "@app.errorhandler(Exception)" not in text
+    assert "@got_request_exception.connect_via(app)" in text
     assert '"event": "backend_error"' in text
     assert 'window.addEventListener("error"' in text
     assert 'window.addEventListener("unhandledrejection"' in text
     assert 'event:"browser_error"' in text
     assert 'log_type="system_recorder"' in text
-    assert 'log_type="customer_behaviour"' in text
+    assert '_record_system_event(f"Customer behaviour: {event}", details)' in text
 
 
 def test_customer_behaviour_replay_is_retired():
@@ -61,5 +62,7 @@ def test_manual_video_recorder_remains_explicit_admin_only():
 
 def test_exception_transport_cannot_recursively_record_itself():
     text = _source()
-    assert "if request.path == _ENDPOINT: return" in text
-    assert "if request.path == _ENDPOINT:" in text
+    assert "if request.path == _ENDPOINT or not _operational_path(request.path):" in text
+    assert "@app.errorhandler(Exception)" not in text
+    assert "raise error" not in text
+    assert "@got_request_exception.connect_via(app)" in text
