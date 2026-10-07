@@ -74,3 +74,11 @@ def test_tracking_journey_is_lazy_owned_by_tracking_number_click():
     source = (ROOT / "services" / "governed_fbm_lazy_startup_alignment.py").read_text(encoding="utf-8")
     assert "target.closest('.fbm-tracking-journey')" in source
     assert "replayAfter('fbm_tracking_journey.js',event)" in source
+
+
+def test_silent_refresh_is_db_backed_and_independent_of_tracking_ui():
+    source = (ROOT / "services" / "governed_fbm_exact_record_session_alignment.py").read_text(encoding="utf-8")
+    assert "async function replaceFromPersistedDb(detail)" in source
+    assert "'X-BT38-UI-Refresh':'targeted'" in source
+    assert "void replaceFromPersistedDb(detail);" in source
+    assert "fbm_tracking_journey.js" not in source
