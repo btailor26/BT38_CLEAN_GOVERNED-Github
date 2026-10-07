@@ -103,3 +103,18 @@ def test_history_expansion_consumes_bounded_fragment_not_full_document():
     assert "document.createElement('template')" in dispatch
     assert "fragment.content.querySelector('.fbm-orders-table tbody')" in dispatch
     assert "new DOMParser().parseFromString(await response.text(),'text/html')" not in dispatch
+
+
+def test_fbm_filters_use_seeded_browser_snapshot_without_history_fetch():
+    search = (ROOT / "services" / "governed_fbm_global_search_alignment.py").read_text(encoding="utf-8")
+    dispatch = (ROOT / "services" / "governed_fbm_dispatch_queue_alignment.py").read_text(encoding="utf-8")
+    page = (ROOT / "services" / "governed_fbm_page_alignment.py").read_text(encoding="utf-8")
+    assert 'return "1y"' in search
+    assert "expandHistoryWorkingSet" not in dispatch
+    assert "historyExpansion" not in dispatch
+    assert "X-BT38-FBM-History-Expansion" not in dispatch
+    assert "function applyHistory()" in dispatch
+    assert "refreshHistoryMatches();render();" in dispatch
+    assert "bt38-fbm-session-rendered" in dispatch
+    assert "Follows History filter" in page
+    assert 'onchange="this.form.submit()"' not in page
