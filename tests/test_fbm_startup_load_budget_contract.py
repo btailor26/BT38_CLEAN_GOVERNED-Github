@@ -115,3 +115,18 @@ def test_fbm_session_render_event_is_safe_inside_python_fstring():
     dispatch = (ROOT / "services" / "governed_fbm_dispatch_queue_alignment.py").read_text(encoding="utf-8")
     assert "new CustomEvent('bt38-fbm-session-rendered',{{detail:{{range:range,from:from,to:to}}}})" in dispatch
     assert "new CustomEvent('bt38-fbm-session-rendered',{detail:" not in dispatch
+
+
+
+def test_customer_recorder_is_zero_poll_passive_observer():
+    recorder = (ROOT / "services" / "governed_customer_behaviour_recorder.py").read_text(encoding="utf-8")
+    assert "setInterval(" not in recorder
+    assert "@app.errorhandler(Exception)" not in recorder
+    assert "@got_request_exception.connect_via(app)" in recorder
+    assert "raise error" not in recorder
+    assert "db.session.commit()" not in recorder
+    assert "db.session.rollback()" not in recorder
+    assert "with db.engine.begin() as connection:" in recorder
+    assert "not _operational_path(request.path)" in recorder
+    assert "g._bt38_db_queries" not in recorder
+    assert "g._bt38_db_ms" not in recorder
