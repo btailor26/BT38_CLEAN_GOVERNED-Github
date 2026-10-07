@@ -82,3 +82,14 @@ def test_silent_refresh_is_db_backed_and_independent_of_tracking_ui():
     assert "'X-BT38-UI-Refresh':'targeted'" in source
     assert "void replaceFromPersistedDb(detail);" in source
     assert "fbm_tracking_journey.js" not in source
+
+
+def test_tracking_journey_has_no_duplicate_committed_event_refresh_owner():
+    tracking = (ROOT / "static" / "js" / "fbm_tracking_journey.js").read_text(encoding="utf-8")
+    exact_owner = (ROOT / "services" / "governed_fbm_exact_record_session_alignment.py").read_text(encoding="utf-8")
+    assert "applyCommittedFbmSnapshot" not in tracking
+    assert "bt38RefreshExactCommittedFbmRow" not in tracking
+    assert "X-BT38-UI-Refresh" not in tracking
+    assert "window.addEventListener('bt38-marketplace-event'" not in tracking
+    assert "async function replaceFromPersistedDb(detail)" in exact_owner
+    assert "'X-BT38-UI-Refresh':'targeted'" in exact_owner
