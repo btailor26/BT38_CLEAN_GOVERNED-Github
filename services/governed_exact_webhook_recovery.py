@@ -382,6 +382,33 @@ def recover_exact_failed_webhook(platform: str, notification_record_id: int) -> 
             store_id=store_id,
             notification_record_id=int(notification_record_id),
         )
+        ebay_mcf_resume = None
+        if (
+            platform == "ebay"
+            and ebay_hydration
+            and ebay_hydration.get("success")
+            and int(ebay_hydration.get("sku_identity_repairs") or 0) > 0
+        ):
+            from models import MarketplaceOrder
+            from services.governed_order_stock_mutation import (
+                process_exact_marketplace_order_line,
+            )
+            repaired_rows = (
+                MarketplaceOrder.query
+                .filter(
+                    MarketplaceOrder.store_id == int(store_id),
+                    MarketplaceOrder.marketplace_order_id == str(identity["order_id"]),
+                )
+                .order_by(MarketplaceOrder.id)
+                .all()
+            )
+            ebay_mcf_resume = [
+                process_exact_marketplace_order_line(
+                    row,
+                    source="ebay_webhook_exact_recovery:identity_repair",
+                )
+                for row in repaired_rows
+            ]
         return {
             "success": True,
             "recovered": bool(
@@ -395,6 +422,7 @@ def recover_exact_failed_webhook(platform: str, notification_record_id: int) -> 
             "fba_verification": fba_verification,
             "amazon_hydration": amazon_hydration,
             "ebay_hydration": ebay_hydration,
+            "ebay_mcf_resume": ebay_mcf_resume,
             "order_id": identity.get("order_id"),
             "store_id": store_id,
             "notification_record_id": int(notification_record_id),
