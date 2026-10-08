@@ -674,7 +674,19 @@ def governed_amazon_oauth_callback():
         )
         db.session.add(store)
 
-    store.api_key = json.dumps({
+    # Reauthorisation rotates the Amazon OAuth grant only. Preserve any
+    # existing Store-scoped Amazon configuration used by governed execution
+    # (for example signing/role metadata) instead of replacing api_key wholesale.
+    existing_api_key = store.api_key or {}
+    if isinstance(existing_api_key, str):
+        try:
+            existing_api_key = json.loads(existing_api_key)
+        except Exception:
+            existing_api_key = {}
+    if not isinstance(existing_api_key, dict):
+        existing_api_key = {}
+
+    existing_api_key.update({
         "refresh_token": refresh_token,
         "lwa_app_id": client_id,
         "lwa_client_secret": client_secret,
@@ -683,6 +695,7 @@ def governed_amazon_oauth_callback():
         "oauth_source": "governed_amazon_oauth_callback",
         "connected_at": datetime.utcnow().isoformat(),
     })
+    store.api_key = json.dumps(existing_api_key)
     store.is_active = True
     store.store_mode = "live"
     store.auth_status = "ok"
