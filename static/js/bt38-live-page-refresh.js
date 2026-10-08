@@ -163,9 +163,9 @@
       </button>
       <div class="collapse" id="bt38FbmConnectionsCollapse">
         <div class="pb-2">
-          <button class="btn btn-dark text-start w-100 ps-5 py-2" type="button" data-bt38-royal-mail-connect="1">
+          <a class="btn btn-dark text-start w-100 ps-5 py-2" href="/fbm#royalMailConnectionCard" data-bt38-royal-mail-connect="1">
             <i data-feather="mail" class="me-2"></i>Royal Mail
-          </button>
+          </a>
           <button class="btn btn-dark text-start w-100 ps-5 py-2 bt38-shipping-connection" type="button" data-provider="packlink">
             <i data-feather="truck" class="me-2"></i>Packlink PRO
           </button>
