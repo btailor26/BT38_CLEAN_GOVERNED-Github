@@ -30,6 +30,16 @@ def test_amazon_governed_oauth_is_customer_bound():
     assert 'Store.account_id == current_account_id' in text
     assert 'account_id=current_account_id' in text
     assert '"https://api.amazon.com/auth/o2/token"' in text
+    assert 'expected_state = session.get("governed_amazon_oauth_state")' in text
+    assert 'str(state) != str(expected_state)' in text
+    assert 'str(state) not in pending_states' not in text
+
+
+def test_connected_amazon_store_always_exposes_reauthorise_action():
+    text = _text(STORES)
+    assert "Reauthorise Amazon" in text
+    assert "store.auth_status != 'auth_error'" in text
+    assert 'href="/amazon-oauth/authorize"' in text
 
 
 def test_ebay_governed_oauth_supports_fresh_customer_without_cross_account_store_selection():
