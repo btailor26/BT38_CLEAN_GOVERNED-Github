@@ -168,3 +168,13 @@ def test_missing_order_amazon_cancellation_is_terminal_noop_not_restart_retry():
     assert '"success": True' in source
     assert '"order_replayed": False' in source
     assert '"stock_mutation_started": False' in source
+
+
+def test_existing_ebay_identity_repair_resumes_mcf_without_sale_replay():
+    assert 'ebay_hydration.get("sku_identity_repairs")' in SOURCE
+    assert "process_exact_marketplace_order_line(" in SOURCE
+    assert '"ebay_webhook_exact_recovery:identity_repair"' in SOURCE
+    existing_guard = SOURCE.index("if _canonical_order_exists(")
+    resume = SOURCE.index('"ebay_webhook_exact_recovery:identity_repair"')
+    replay = SOURCE.index("replay_result = process_marketplace_notification(")
+    assert existing_guard < resume < replay
