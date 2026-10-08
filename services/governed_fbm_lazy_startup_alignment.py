@@ -51,7 +51,7 @@ _BOOTSTRAP = r'''<script id="bt38FbmLazyFeatureBoundary">
     const target=event.target && event.target.closest ? event.target.closest('*') : null;
     if(!target) return;
     if(target.closest('#royalMailConnectionCard,[data-bt38-royal-mail-legacy="1"],#royalMailApprovalModal')){
-      if(!loaded.has('royal_mail_click_drop_connection.js')) return replayAfter('royal_mail_click_drop_connection.js',event);
+      if(!loaded.has('royal_mail_click_drop_connection.js') && !window.bt38RoyalMailConnectionScriptPromise) return replayAfter('royal_mail_click_drop_connection.js',event);
     }
     if(target.closest('.fbm-tracking-journey')){
       if(!loaded.has('fbm_tracking_journey.js')) return replayAfter('fbm_tracking_journey.js',event);
