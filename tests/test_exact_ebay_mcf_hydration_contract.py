@@ -65,3 +65,12 @@ def test_no_manual_signal_or_parallel_mcf_builder_added():
     assert "MCFOrder(" not in HYDRATION
     assert "MCFService(" not in HYDRATION
     assert "run_governed_mcf_submission(row_id" in STOCK
+
+
+def test_exact_ebay_hydration_repairs_stale_variation_identity_from_exact_line():
+    fn = _function_source(HYDRATION, "hydrate_exact_ebay_order")
+    assert 'exact_sku = _text(item.get("sku"))' in fn
+    assert "MarketplaceListing.external_sku == exact_sku" in fn
+    assert "row.sku = exact_sku" in fn
+    assert "row.warehouse_stock_id = int(exact_listing.warehouse_stock_id)" in fn
+    assert "sku_identity_repairs" in fn
