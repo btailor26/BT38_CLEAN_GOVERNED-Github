@@ -407,6 +407,7 @@ def hydrate_exact_ebay_order(*, store, marketplace_order_id: str, source: str) -
     }
 
     identity_updates = 0
+    sku_identity_repairs = 0
     identity_conflicts = []
     tracking_updates = 0
     lifecycle_updates = 0
@@ -439,6 +440,35 @@ def hydrate_exact_ebay_order(*, store, marketplace_order_id: str, source: str) -
         )
         if item:
             line_id = _text(item.get("lineItemId"))
+            exact_sku = _text(item.get("sku"))
+            if line_id and exact_sku and _text(row.sku) != exact_sku:
+                from models import MarketplaceListing
+                exact_listing = (
+                    MarketplaceListing.query
+                    .filter(
+                        MarketplaceListing.store_id == store.id,
+                        MarketplaceListing.external_sku == exact_sku,
+                        MarketplaceListing.is_active == True,  # noqa: E712
+                    )
+                    .order_by(
+                        MarketplaceListing.warehouse_stock_id.is_(None),
+                        MarketplaceListing.updated_at.desc(),
+                        MarketplaceListing.id.desc(),
+                    )
+                    .first()
+                )
+                if exact_listing is None or not getattr(exact_listing, "warehouse_stock_id", None):
+                    identity_conflicts.append({
+                        "row_id": row.id,
+                        "line_item_id": line_id,
+                        "exact_sku": exact_sku,
+                        "reason": "exact_ebay_sku_listing_unresolved",
+                    })
+                    continue
+                row.sku = exact_sku
+                row.warehouse_stock_id = int(exact_listing.warehouse_stock_id)
+                sku_identity_repairs += 1
+                row_changed = True
             if line_id:
                 canonical_key = f"{store.id}:{order_id}:{line_id}:{_text(row.sku)}"
                 conflict = (
@@ -592,6 +622,7 @@ def hydrate_exact_ebay_order(*, store, marketplace_order_id: str, source: str) -
         "required_address_complete": required_address_complete,
         "rows_hydrated": len(rows),
         "identity_updates": identity_updates,
+        "sku_identity_repairs": sku_identity_repairs,
         "identity_conflicts": identity_conflicts,
         "fulfillments_seen": len(fulfillments),
         "fulfillment_lifecycle_rows": fulfillment_lifecycle_rows,
