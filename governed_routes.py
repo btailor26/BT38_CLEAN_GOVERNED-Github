@@ -613,7 +613,7 @@ def governed_amazon_oauth_callback():
 
     if not code or not seller_id:
         return jsonify({"ok": False, "success": False, "governed": True, "error": "missing_amazon_oauth_callback_fields"}), 200
-    if not state or str(state) not in pending_states:
+    if not state or not expected_state or str(state) != str(expected_state):
         return jsonify({"ok": False, "success": False, "governed": True, "error": "state_mismatch"}), 200
     if current_account_id is None or int(authorized_account_id or 0) != int(current_account_id):
         return jsonify({"ok": False, "success": False, "governed": True, "error": "account_mismatch"}), 403
