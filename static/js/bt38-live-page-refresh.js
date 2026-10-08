@@ -196,7 +196,7 @@
     // The existing form is moved from the inert server-rendered template into
     // the shared connection modal; only then is its existing script requested.
     async function openRoyalMailConnection(event) {
-      if (window.location.pathname.replace(/\\/$/, '') !== '/fbm') return;
+      if (window.location.pathname.replace(/\/$/, '') !== '/fbm') return;
       event.preventDefault();
       event.stopPropagation();
       const template = document.getElementById('bt38RoyalMailConnectionTemplate');
@@ -239,7 +239,7 @@
     document.querySelectorAll('[data-bt38-royal-mail-connect="1"]').forEach(function(link) {
       link.addEventListener('click', openRoyalMailConnection);
     });
-    if (window.location.pathname.replace(/\\/$/, '') === '/fbm' &&
+    if (window.location.pathname.replace(/\/$/, '') === '/fbm' &&
         window.location.hash === '#royalMailConnectionCard') {
       const link = document.querySelector('[data-bt38-royal-mail-connect="1"]');
       if (link) { void openRoyalMailConnection({preventDefault(){}, stopPropagation(){}}); }
