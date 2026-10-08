@@ -47,6 +47,17 @@ def process_marketplace_notification(
         payload,
     )
 
+    # eBay ORDER_CONFIRMATION can identify only the shared listing plus the
+    # exact order-line ID. Resolve an ambiguous variation through the existing
+    # exact eBay order reader before listing selection/order intake. This keeps
+    # Product Linking/MCF authority on the purchased SKU instead of allowing
+    # _find_listing() to choose an arbitrary variation from the shared item ID.
+    if marketplace == "ebay":
+        from services.governed_ebay_variation_signal import (
+            enrich_ambiguous_ebay_order_signal,
+        )
+        payload = enrich_ambiguous_ebay_order_signal(payload)
+
     # Amazon MCF lifecycle signals do not need a MarketplaceListing identity.
     # Reuse the existing exact MCF signal handler before listing resolution so
     # FULFILLMENT_ORDER_STATUS can update the existing MCF row and tracking.
