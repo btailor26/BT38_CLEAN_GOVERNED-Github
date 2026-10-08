@@ -192,6 +192,57 @@
       </div>`;
     document.body.appendChild(modalHost.firstElementChild);
 
+    // Royal Mail remains dormant until the merchant explicitly clicks it.
+    // The existing form is moved from the inert server-rendered template into
+    // the shared connection modal; only then is its existing script requested.
+    async function openRoyalMailConnection(event) {
+      if (window.location.pathname.replace(/\\/$/, '') !== '/fbm') return;
+      event.preventDefault();
+      event.stopPropagation();
+      const template = document.getElementById('bt38RoyalMailConnectionTemplate');
+      const body = document.getElementById('bt38ShippingConnectionBody');
+      const modal = document.getElementById('bt38ShippingConnectionModal');
+      if (!template || !body || !modal) {
+        console.error('[BT38 Royal Mail] Existing connection template unavailable');
+        return;
+      }
+      document.getElementById('bt38ShippingConnectionTitle').textContent = 'Royal Mail · Click & Drop';
+      document.getElementById('bt38ShippingConnectionSubtitle').textContent = 'Connect your own Royal Mail business account';
+      body.replaceChildren(template.content.cloneNode(true));
+      const sideNav = document.getElementById('bt38SideNav');
+      const offcanvas = sideNav ? bootstrap.Offcanvas.getInstance(sideNav) : null;
+      if (offcanvas) offcanvas.hide();
+      bootstrap.Modal.getOrCreateInstance(modal).show();
+      if (!window.bt38RoyalMailConnectionScriptPromise) {
+        window.bt38RoyalMailConnectionScriptPromise = new Promise(function(resolve, reject) {
+          const script = document.createElement('script');
+          script.src = '/static/js/royal_mail_click_drop_connection.js';
+          script.onload = resolve;
+          script.onerror = function() { reject(new Error('Royal Mail connection script unavailable')); };
+          document.head.appendChild(script);
+        });
+      } else {
+        // Existing script only fetches state on initial installation.
+        // Reuse its live form without reinitialising its click listeners.
+        const status = document.getElementById('royalMailConnectionStatus');
+        if (status) status.textContent = 'Connection form ready.';
+      }
+      try {
+        await window.bt38RoyalMailConnectionScriptPromise;
+      } catch (error) {
+        const status = document.getElementById('royalMailConnectionStatus');
+        if (status) { status.className = 'small text-danger'; status.textContent = error.message; }
+      }
+    }
+    document.querySelectorAll('[data-bt38-royal-mail-connect="1"]').forEach(function(link) {
+      link.addEventListener('click', openRoyalMailConnection);
+    });
+    if (window.location.pathname.replace(/\\/$/, '') === '/fbm' &&
+        window.location.hash === '#royalMailConnectionCard') {
+      const link = document.querySelector('[data-bt38-royal-mail-connect="1"]');
+      if (link) { void openRoyalMailConnection({preventDefault(){}, stopPropagation(){}}); }
+    }
+
     document.querySelectorAll('.bt38-shipping-connection').forEach(function (button) {
       button.addEventListener('click', function () {
         const provider = button.dataset.provider;
