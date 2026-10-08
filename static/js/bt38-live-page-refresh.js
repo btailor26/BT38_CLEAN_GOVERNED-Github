@@ -208,7 +208,9 @@
       }
       document.getElementById('bt38ShippingConnectionTitle').textContent = 'Royal Mail · Click & Drop';
       document.getElementById('bt38ShippingConnectionSubtitle').textContent = 'Connect your own Royal Mail business account';
-      body.replaceChildren(template.content.cloneNode(true));
+      if (!document.getElementById('royalMailConnectionCard')) {
+        body.replaceChildren(template.content.cloneNode(true));
+      }
       const sideNav = document.getElementById('bt38SideNav');
       const offcanvas = sideNav ? bootstrap.Offcanvas.getInstance(sideNav) : null;
       if (offcanvas) offcanvas.hide();
