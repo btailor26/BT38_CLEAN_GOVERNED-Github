@@ -35,6 +35,13 @@ def test_amazon_governed_oauth_is_customer_bound():
     assert 'str(state) not in pending_states' not in text
 
 
+def test_amazon_reauthorisation_preserves_existing_store_execution_config():
+    text = _text(ROUTES)
+    assert "existing_api_key = store.api_key or {}" in text
+    assert "existing_api_key.update({" in text
+    assert "store.api_key = json.dumps(existing_api_key)" in text
+
+
 def test_connected_amazon_store_always_exposes_reauthorise_action():
     text = _text(STORES)
     assert "Reauthorise Amazon" in text
