@@ -135,5 +135,10 @@
     });
 
     retireLegacyRoyalMailApprovalUi();
-    if (document.getElementById('royalMailConnectionCard')) loadState();
+    if (document.getElementById('royalMailConnectionCard')) {
+        loadState();
+        if (window.location.hash === '#royalMailConnectionCard') {
+            focusConnectionCardFromLegacyControl(null);
+        }
+    }
 })(window, document);
