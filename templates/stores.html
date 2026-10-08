@@ -94,6 +94,13 @@
                         </a>
                     </div>
                     {% endif %}
+
+                    {% if store.platform and 'amazon' in store.platform|lower and store.auth_status != 'auth_error' %}
+                    <a class="btn btn-sm btn-outline-warning mb-3 w-100" href="/amazon-oauth/authorize">
+                        <i data-feather="key" class="me-1"></i>
+                        Reauthorise Amazon
+                    </a>
+                    {% endif %}
                     
                     {% if store.api_endpoint %}
                     <p class="text-muted small mb-2">
