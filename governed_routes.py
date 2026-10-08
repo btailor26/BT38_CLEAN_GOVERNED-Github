@@ -593,6 +593,7 @@ def governed_amazon_oauth_authorize():
     return redirect(auth_url)
 
 
+@governed_bp.get("/auth/amazon/callback")
 @governed_bp.get("/amazon/callback")
 @governed_bp.get("/amazon-oauth/callback")
 @login_required
