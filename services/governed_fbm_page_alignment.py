@@ -568,7 +568,16 @@ def _align_fbm_header(html: str, health: dict) -> str:
     orders_marker = '<div class="card">\n    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2"><div><span class="fw-semibold">FBM Orders</span>'
 
     if top_start >= 0 and overview_start > top_start:
-        html = html[:top_start] + _guide_html(health) + "\n" + html[overview_start:]
+        # Keep the existing Royal Mail form inert until the merchant clicks
+        # Shipping connections → Royal Mail. Do not create a second form.
+        original_top = html[top_start:overview_start]
+        royal_start = original_top.find('<div class="card fbm-ops-card h-100" id="royalMailConnectionCard">')
+        next_card = original_top.find('<div class="card fbm-ops-card h-100">', royal_start + 1)
+        royal_template = ""
+        if royal_start >= 0 and next_card > royal_start:
+            royal_card = original_top[royal_start:next_card].strip()
+            royal_template = '<template id="bt38RoyalMailConnectionTemplate">' + royal_card + '</template>\n'
+        html = html[:top_start] + _guide_html(health) + "\n" + royal_template + html[overview_start:]
         overview_start = html.find('<div class="fbm-overview-grid">')
 
     orders_start = html.find(orders_marker, overview_start if overview_start >= 0 else 0)
