@@ -1,6 +1,6 @@
 from pathlib import Path
 
-MAIN = Path("main.py").read_text(encoding="utf-8")
+WEBHOOK = Path("services/governed_webhook_execution.py").read_text(encoding="utf-8")
 COMPAT = Path("services/governed_mcf_compat.py").read_text(encoding="utf-8")
 MCF_EXEC = Path("services/governed_mcf_execution.py").read_text(encoding="utf-8")
 FAILED_RETRY = Path("services/governed_failed_mcf_retry.py").read_text(encoding="utf-8")
@@ -32,9 +32,10 @@ def test_failed_linked_mcf_retry_is_bounded_and_reuses_existing_authority():
 
 
 def test_ambiguous_ebay_variation_resolves_exact_order_before_webhook_execution():
-    enrich_pos = MAIN.index("enrich_ambiguous_ebay_order_signal(payload or {})")
-    execute_pos = MAIN.index("result = original_webhook_execution(")
-    assert enrich_pos < execute_pos
+    enrich_pos = WEBHOOK.index("payload = enrich_ambiguous_ebay_order_signal(payload)")
+    listing_pos = WEBHOOK.index("listing = _find_listing(")
+    intake_pos = WEBHOOK.index("order_intake = _import_marketplace_order_from_notification(")
+    assert enrich_pos < listing_pos < intake_pos
     assert "MarketplaceListing.external_listing_id == listing_id" in VARIATION
     assert "len(candidate_skus) <= 1" in VARIATION
     assert 'f"{EBAY_ORDERS_URL}/{quote(order_id' in VARIATION
