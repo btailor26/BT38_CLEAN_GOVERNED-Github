@@ -653,6 +653,8 @@ def governed_amazon_oauth_callback():
             "ok": False, "success": False, "governed": True,
             "error": "amazon_token_exchange_failed",
             "status_code": resp.status_code,
+            "amazon_error": token.get("error"),
+            "amazon_error_description": token.get("error_description"),
         }), 200
 
     store = Store.query.filter(
