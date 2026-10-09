@@ -1,0 +1,43 @@
+name: Marketplace Listing Intake Validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      manifest_path:
+        description: 'Path to product intake JSON committed on this branch'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate-intake:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate listing intake (no publishing)
+        env:
+          MANIFEST_PATH: ${{ inputs.manifest_path }}
+        run: |
+          python - <<'PY'
+          import json, os, pathlib, sys
+          root = pathlib.Path.cwd().resolve()
+          path = (root / os.environ["MANIFEST_PATH"]).resolve()
+          if not path.is_relative_to(root) or path.suffix.lower() != ".json" or not path.is_file():
+              sys.exit("Invalid or missing repository JSON manifest")
+          data = json.loads(path.read_text(encoding="utf-8"))
+          for key in ("product_id", "seller_sku"):
+              if not isinstance(data.get(key), str) or not data[key].strip():
+                  sys.exit(f"Missing {key}")
+          if not isinstance(data.get("source_images"), list) or not data["source_images"] or not all(isinstance(x,str) and x.strip() for x in data["source_images"]):
+              sys.exit("source_images must be a nonempty array of references")
+          channels = data.get("marketplaces")
+          if not isinstance(channels,list) or not channels or set(channels) - {"amazon_uk","ebay_uk"}:
+              sys.exit("Unsupported marketplaces")
+          if not isinstance(data.get("product_facts"),dict):
+              sys.exit("Missing product_facts object")
+          if data.get("approval_status") != "pending":
+              sys.exit("Intake must be pending; publication is never authorised by this action")
+          print("Intake valid. Market research, image generation, compliance review and seller approval are still required. No listing published.")
+          PY
