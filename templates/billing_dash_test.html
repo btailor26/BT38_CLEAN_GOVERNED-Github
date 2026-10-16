@@ -1,27 +1,7 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Billing Dashboard Test | BT38</title>
-<style>
-*{box-sizing:border-box}body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#f4f6fa;color:#182338;margin:0}
-header{background:#14243b;color:white;padding:22px 6%}header strong{font-size:22px}header span{display:block;font-size:13px;color:#b5c8df;margin-top:5px}
-main{max-width:1000px;margin:42px auto;padding:0 20px}h1{font-size:34px;margin:0 0 8px}p{color:#59677b;line-height:1.6}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;margin-top:25px}
-.card{background:#fff;border:1px solid #dce4ed;border-radius:15px;padding:25px}
-.tag{font-size:12px;background:#eaf1f9;color:#34547a;border-radius:20px;padding:7px 10px;font-weight:700}
-.price{font-size:36px;font-weight:750;margin:23px 0}.price small{font-size:13px;color:#68778a;font-weight:400}
-button{background:#15253c;border:0;color:white;border-radius:9px;padding:13px;width:100%;opacity:.5;cursor:not-allowed}
-.notice{margin-top:25px;padding:17px;border:1px solid #c9d9eb;background:#eaf2fb;border-radius:10px}
-a{color:#245a96}
-</style>
-</head>
-<body><header><strong>BT38 / Billing Dashboard Test</strong><span>Existing BT38 server · No new machine</span></header>
-<main><h1>Billing dashboard test</h1><p>This page checks that the Billing dashboard template and route work on BT38's existing Flask server. Payments are not yet enabled.</p>
-<div class="grid">
-<section class="card"><span class="tag">PAYMENT TEST</span><h2>£1 live-payment check</h2><p>One-time Revolut payment, with zero credits issued.</p><div class="price">£1.00 <small>one-time</small></div><button disabled>Checkout not connected</button></section>
-<section class="card"><span class="tag">P&amp;L SELF-REVIEW</span><h2>10 review credits</h2><p>Ten credits for financial self-review.</p><div class="price">£29.00 <small>one-time</small></div><button disabled>Checkout not connected</button></section>
-<section class="card"><span class="tag">HUMAN REVIEW</span><h2>Professional review</h2><p>Manual financial review, individually priced.</p><div class="price">From £350</div><button disabled>Checkout not connected</button></section>
-</div><div class="notice"><strong>Route test only.</strong> No new machine, no database changes, no Revolut charges. Billing payment source remains in the separate <a href="https://github.com/btailor26/billing">billing repository</a>. Check <a href="/billing-dash-test/health">route health</a>.</div>
-</main></body></html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Billing Dashboard Test | BT38</title>
+<style>*{box-sizing:border-box}body{font-family:system-ui,Segoe UI,sans-serif;background:#f4f6fa;color:#182338;margin:0}header{background:#14243b;color:white;padding:22px 6%}main{max-width:1000px;margin:42px auto;padding:0 20px}p{color:#59677b;line-height:1.6}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:18px;margin-top:25px}.card{background:white;border:1px solid #dce4ed;border-radius:15px;padding:25px}.tag{font-size:12px;background:#eaf1f9;color:#34547a;border-radius:20px;padding:7px 10px;font-weight:700}.price{font-size:36px;font-weight:750;margin:23px 0}button{background:#15253c;border:0;color:white;border-radius:9px;padding:13px;width:100%;cursor:pointer}button:disabled{opacity:.5;cursor:not-allowed}.notice{margin-top:25px;padding:17px;border:1px solid #c9d9eb;background:#eaf2fb;border-radius:10px}</style></head><body>
+<header><strong>BT38 / Billing Dashboard Test</strong></header><main><h1>Billing dashboard test</h1><p>Test a real £1 Revolut-hosted checkout using BT38's existing machine. A successful redirect does not confirm payment.</p><div class="grid">
+<section class="card"><span class="tag">LIVE CHECKOUT TEST</span><h2>£1 payment test</h2><p>One-time Revolut order; no credits issued.</p><div class="price">£1.00</div><form method="post" action="/billing-dash-test/checkout"><button type="submit" {% if not checkout_available %}disabled{% endif %}>Pay £1 with Revolut</button></form>{% if not checkout_available %}<p>Revolut Merchant credentials unavailable.</p>{% endif %}</section>
+<section class="card"><span class="tag">P&amp;L SELF-REVIEW</span><h2>10 review credits</h2><p>Ten financial review credits.</p><div class="price">£29.00</div><button disabled>Coming later</button></section>
+<section class="card"><span class="tag">HUMAN REVIEW</span><h2>Professional review</h2><p>Individually priced.</p><div class="price">From £350</div><button disabled>Coming later</button></section></div>
+<div class="notice"><strong>Test scope:</strong> The £1 button creates a real order at Revolut and redirects to its hosted checkout. No credits are granted. Automatic webhook/ledger verification is not connected; use the Revolut Merchant dashboard to verify the payment. <a href="/billing-dash-test/health">Health check</a>.</div></main></body></html>
