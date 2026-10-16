@@ -1,5 +1,8 @@
 from app import app
 
+from billing_dash_test_routes import billing_dash_test_bp
+app.register_blueprint(billing_dash_test_bp)
+
 from services.governed_ebay_notification_challenge import (
     install_ebay_notification_challenge_handler,
 )
