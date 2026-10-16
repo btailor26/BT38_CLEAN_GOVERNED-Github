@@ -5,7 +5,6 @@ No BT38 marketplace writes, credits, background jobs or new machine.
 """
 import os
 import uuid
-from urllib.parse import urlparse
 import requests
 from flask import Blueprint, jsonify, redirect, render_template, session, url_for
 
