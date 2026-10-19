@@ -313,13 +313,44 @@ def get_manual_shipping_order(manual_order_id: int):
     return jsonify({"success": True, "manual_order": _order_payload(order), "rates": order.rates or []})
 
 
+@governed_fbm_manual_bp.post("/fbm/manual/<int:manual_order_id>/provider")
+@login_required
+def select_manual_shipping_provider(manual_order_id: int):
+    """User explicitly chooses a provider before any provider-specific operation."""
+    order = _owned_manual_order(manual_order_id)
+    if order is None:
+        return jsonify({"success": False, "message": "Manual shipping order not found."}), 404
+    provider = _text(_payload().get("provider")).lower()
+    if provider not in ("packlink", "royal_mail"):
+        return jsonify({"success": False, "message": "Choose a supported shipping provider."}), 422
+    if order.provider_shipment_id or order.status in (
+        "draft_creating", "draft_verification_required", "awaiting_provider_payment",
+        "tracking_ready", "provider_updated", "royal_mail_creating",
+        "royal_mail_verification_required",
+    ):
+        return jsonify({"success": False, "message": "Provider cannot be changed after shipment submission or while verification is required."}), 409
+    if order.provider != provider:
+        order.provider = provider
+        order.rates = []
+        order.rate_expires_at = None
+        order.selected_rate_id = None
+        order.provider_service_id = None
+        order.carrier = None
+        order.service = None
+        order.last_error = None
+        order.status = "saved"
+        db.session.commit()
+    return jsonify({"success": True, "manual_order": _order_payload(order),
+                    "message": "Shipping provider selected by user."})
+
+
 @governed_fbm_manual_bp.post("/fbm/manual/<int:manual_order_id>/packlink/rates")
 @login_required
 def manual_packlink_rates(manual_order_id: int):
     order = _owned_manual_order(manual_order_id)
     if order is None:
         return jsonify({"success": False, "message": "Manual shipping order not found."}), 404
-    if order.provider not in ("unassigned", "packlink"):
+    if order.provider != "packlink":
         return jsonify({"success": False, "message": "This order belongs to another shipping provider."}), 409
     if order.status in ("draft_creating", "draft_verification_required"):
         return jsonify({"success": False, "message": "Previous shipment creation requires provider verification before retry.", "manual_order_id": order.id}), 409
@@ -362,7 +393,6 @@ def manual_packlink_rates(manual_order_id: int):
             "parcel": parcel,
         }), getattr(exc, "status_code", None) or 502
 
-    order.provider = "packlink"
     order.rates = rates
     order.rate_expires_at = datetime.utcnow() + timedelta(minutes=15)
     order.status = "rates_ready"
