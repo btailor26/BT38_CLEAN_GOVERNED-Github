@@ -413,6 +413,12 @@ def manual_packlink_draft(manual_order_id: int):
     if rate is None:
         return jsonify({"success": False, "message": "Selected Packlink service is not in the saved quote."}), 409
 
+    if order.provider != "packlink" or order.status != "rates_ready":
+        return jsonify({
+            "success": False,
+            "message": "Get fresh Packlink rates before preparing a shipment.",
+        }), 409
+
     # Claim this order atomically before contacting Packlink. A second request
     # must not pass the earlier in-memory status check concurrently.
     claim = FBMManualOrder.query.filter(
@@ -466,7 +472,17 @@ def manual_packlink_draft(manual_order_id: int):
             "saved": True,
         }), 502
 
-    order.provider_shipment_id = _text(draft.get("reference")) or None
+    provider_reference = _text(draft.get("reference"))
+    if not provider_reference:
+        order.status = "draft_verification_required"
+        order.last_error = "Packlink response contained no shipment reference. Verify in Packlink before retrying."
+        db.session.commit()
+        return jsonify({
+            "success": False,
+            "message": order.last_error,
+            "manual_order_id": order.id,
+        }), 502
+    order.provider_shipment_id = provider_reference
     order.provider_status = _text(draft.get("payment_status")) or "pending_packlink_payment"
     order.checkout_url = _extract_checkout_url(draft.get("raw"))
     order.status = "awaiting_provider_payment"
