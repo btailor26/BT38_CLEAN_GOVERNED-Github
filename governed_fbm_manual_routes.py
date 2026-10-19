@@ -281,7 +281,7 @@ def create_manual_shipping_order():
         length_cm=_positive_float(data.get("length_cm")) or 0,
         width_cm=_positive_float(data.get("width_cm")) or 0,
         height_cm=_positive_float(data.get("height_cm")) or 0,
-        provider="packlink",
+        provider="unassigned",
         status="draft",
         created_by=_owner_key(),
     )
@@ -319,6 +319,8 @@ def manual_packlink_rates(manual_order_id: int):
     order = _owned_manual_order(manual_order_id)
     if order is None:
         return jsonify({"success": False, "message": "Manual shipping order not found."}), 404
+    if order.provider not in ("unassigned", "packlink"):
+        return jsonify({"success": False, "message": "This order belongs to another shipping provider."}), 409
     if order.provider_shipment_id:
         return jsonify({
             "success": False,
@@ -358,6 +360,7 @@ def manual_packlink_rates(manual_order_id: int):
             "parcel": parcel,
         }), getattr(exc, "status_code", None) or 502
 
+    order.provider = "packlink"
     order.rates = rates
     order.rate_expires_at = datetime.utcnow() + timedelta(minutes=15)
     order.status = "rates_ready"
@@ -380,6 +383,8 @@ def manual_packlink_draft(manual_order_id: int):
     order = _owned_manual_order(manual_order_id)
     if order is None:
         return jsonify({"success": False, "message": "Manual shipping order not found."}), 404
+    if order.provider not in ("unassigned", "packlink"):
+        return jsonify({"success": False, "message": "This order belongs to another shipping provider."}), 409
     if order.provider_shipment_id:
         return jsonify({
             "success": True,
@@ -460,6 +465,8 @@ def manual_packlink_status(manual_order_id: int):
     order = _owned_manual_order(manual_order_id)
     if order is None:
         return jsonify({"success": False, "message": "Manual shipping order not found."}), 404
+    if order.provider not in ("unassigned", "packlink"):
+        return jsonify({"success": False, "message": "This order belongs to another shipping provider."}), 409
     if not order.provider_shipment_id:
         return jsonify({"success": False, "message": "Packlink shipment has not been created yet."}), 409
 
