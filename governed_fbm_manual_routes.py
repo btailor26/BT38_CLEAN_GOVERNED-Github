@@ -321,6 +321,8 @@ def manual_packlink_rates(manual_order_id: int):
         return jsonify({"success": False, "message": "Manual shipping order not found."}), 404
     if order.provider not in ("unassigned", "packlink"):
         return jsonify({"success": False, "message": "This order belongs to another shipping provider."}), 409
+    if order.status in ("draft_creating", "draft_verification_required"):
+        return jsonify({"success": False, "message": "Previous shipment creation requires provider verification before retry.", "manual_order_id": order.id}), 409
     if order.provider_shipment_id:
         return jsonify({
             "success": False,
@@ -385,6 +387,8 @@ def manual_packlink_draft(manual_order_id: int):
         return jsonify({"success": False, "message": "Manual shipping order not found."}), 404
     if order.provider not in ("unassigned", "packlink"):
         return jsonify({"success": False, "message": "This order belongs to another shipping provider."}), 409
+    if order.status in ("draft_creating", "draft_verification_required"):
+        return jsonify({"success": False, "message": "Previous shipment creation requires provider verification before retry.", "manual_order_id": order.id}), 409
     if order.provider_shipment_id:
         return jsonify({
             "success": True,
