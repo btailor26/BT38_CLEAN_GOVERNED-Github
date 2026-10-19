@@ -477,15 +477,8 @@ def amazon_unshipped_report_upload():
 def fbm_page():
     platform_filter = str(request.args.get("platform") or "").strip().lower()
     status_filter = str(request.args.get("status") or "").strip().lower()
-    # Read persisted eligible orders before applying page filters. A global
-    # top-300 marketplace cap hid valid older FBM orders whenever FBA volume
-    # occupied the newest rows. No provider calls or polling occur here.
-    rows = [
-        row for row in MarketplaceOrder.query.order_by(
-            MarketplaceOrder.created_at.desc(), MarketplaceOrder.id.desc()
-        ).all()
-        if _is_fbm_eligible(row)
-    ]
+    raw_rows = MarketplaceOrder.query.order_by(MarketplaceOrder.created_at.desc(), MarketplaceOrder.id.desc()).limit(300).all()
+    rows = [row for row in raw_rows if _is_fbm_eligible(row)]
     shipments = _shipment_map(rows)
     seen, orders = set(), []
     for row in rows:
