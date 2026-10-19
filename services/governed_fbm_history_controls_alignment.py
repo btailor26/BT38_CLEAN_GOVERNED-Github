@@ -32,13 +32,11 @@ health_alignment._RANGE_DAYS = {
 
 
 def _range_key():
-    # A full /fbm browser refresh owns the one server-side working-set load.
-    # History controls after that refresh are browser-session presentation only.
-    # Never let stale/query-string History state expand an ordinary page refresh
-    # into a 30d/90d/1y DB render. An explicit internal expansion header remains
-    # available for controlled diagnostics, but normal browser navigation is 3d.
+    # Seed the full bounded historical working set once on page navigation.
+    # The browser still defaults the visible History control to 3d and applies
+    # subsequent History/search/lifecycle filters without another server read.
     if request.headers.get("X-BT38-FBM-History-Expansion") != "1":
-        return "3d"
+        return "1y"
     raw = str(request.args.get("fbm_range") or "3d").strip().lower()
     aliases = {
         "3": "3d", "3day": "3d", "3days": "3d",
