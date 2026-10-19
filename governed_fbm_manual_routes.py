@@ -420,6 +420,7 @@ def manual_packlink_draft(manual_order_id: int):
         FBMManualOrder.created_by == _owner_key(),
         FBMManualOrder.provider == "packlink",
         FBMManualOrder.status == "rates_ready",
+        FBMManualOrder.rate_expires_at > datetime.utcnow(),
         FBMManualOrder.provider_shipment_id.is_(None),
     ).update({
         "selected_rate_id": rate_id,
