@@ -1,7 +1,7 @@
 """Royal Mail Click & Drop public API connection and exact-order evidence.
 
-Merchant-owned credentials only.  Reads are explicit and exact; this module does
-not poll, import marketplace orders, buy postage or mutate marketplace state.
+Merchant-owned credentials only. Provider writes are explicit caller actions;
+this module does not poll, import marketplace sales or mutate marketplace state.
 """
 from __future__ import annotations
 
@@ -76,6 +76,66 @@ class RoyalMailClickDropClient:
             return requests.get(f"{BASE_URL}{path}", headers=self._headers(), timeout=REQUEST_TIMEOUT_SECONDS)
         except requests.RequestException as exc:
             raise RoyalMailAPIError(f"Royal Mail connection failed: {exc}") from exc
+
+    def create_orders(self, orders: list[dict[str, Any]]) -> dict[str, Any]:
+        """Explicit Click & Drop order import; caller must enforce ownership and idempotency.
+
+        This is NOT a postage purchase action. Never automatically retry an
+        ambiguous timeout: the provider may already have accepted the order.
+        """
+        if not isinstance(orders, list) or not orders or len(orders) > 2000:
+            raise ValueError("Provide between 1 and 2000 Royal Mail orders.")
+        if any(not isinstance(order, dict) for order in orders):
+            raise ValueError("Each Royal Mail order must be a JSON object.")
+        try:
+            response = requests.post(
+                f"{BASE_URL}/orders",
+                headers=self._headers(),
+                json={"items": orders},
+                timeout=REQUEST_TIMEOUT_SECONDS,
+            )
+        except requests.RequestException as exc:
+            raise RoyalMailAPIError(
+                "Royal Mail order submission outcome is unknown. Verify the exact "
+                "order reference in Click & Drop before retrying."
+            ) from exc
+        if response.status_code >= 400:
+            raise RoyalMailAPIError(
+                f"Royal Mail order submission returned HTTP {response.status_code}.",
+                status_code=response.status_code,
+            )
+        payload = self._json(response, description="order creation")
+        if not isinstance(payload, dict):
+            raise RoyalMailAPIError("Royal Mail returned an unexpected order creation response.")
+        return payload
+
+    def get_order_label_pdf(self, order_identifier: str) -> bytes:
+        """Retrieve a label for an exact existing order when the account permits."""
+        identifier = str(order_identifier or "").strip()
+        if not identifier or any(c in identifier for c in (";", "/", "\\", "\r", "\n")):
+            raise ValueError("A single Royal Mail order identifier is required.")
+        try:
+            response = requests.get(
+                f"{BASE_URL}/orders/{quote(identifier, safe='')}/label",
+                headers={**self._headers(), "Accept": "application/pdf"},
+                timeout=REQUEST_TIMEOUT_SECONDS,
+            )
+        except requests.RequestException as exc:
+            raise RoyalMailAPIError("Royal Mail label retrieval failed.") from exc
+        if response.status_code == 403:
+            raise RoyalMailAPIError(
+                "Royal Mail does not permit API label retrieval for this account or order.",
+                status_code=403,
+            )
+        if response.status_code >= 400:
+            raise RoyalMailAPIError(
+                f"Royal Mail label retrieval returned HTTP {response.status_code}.",
+                status_code=response.status_code,
+            )
+        document = response.content
+        if not document.startswith(b"%PDF-"):
+            raise RoyalMailAPIError("Royal Mail did not return a valid PDF label.")
+        return document
 
     @staticmethod
     def _json(response: requests.Response, *, description: str) -> Any:
