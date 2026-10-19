@@ -217,7 +217,7 @@ class FBMManualOrder(db.Model):
     width_cm = db.Column(db.Float, nullable=False)
     height_cm = db.Column(db.Float, nullable=False)
 
-    provider = db.Column(db.String(50), nullable=False, default="packlink", index=True)
+    provider = db.Column(db.String(50), nullable=False, default="unassigned", index=True)
     rates = db.Column(db.JSON, nullable=False, default=list)
     rate_expires_at = db.Column(db.DateTime, nullable=True)
     selected_rate_id = db.Column(db.String(300), nullable=True)
