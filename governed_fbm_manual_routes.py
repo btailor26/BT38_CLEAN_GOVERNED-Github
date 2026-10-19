@@ -68,6 +68,17 @@ def _payload() -> dict[str, Any]:
     return request.form.to_dict(flat=True)
 
 
+def _owner_key() -> str:
+    """Stable, unambiguous owner identity; legacy username rows fail closed."""
+    return f"user-id:{current_user.id}"
+
+
+def _owned_manual_order(manual_order_id: int) -> FBMManualOrder | None:
+    return FBMManualOrder.query.filter_by(
+        id=manual_order_id, created_by=_owner_key()
+    ).first()
+
+
 def _manual_reference(order_id: int) -> str:
     return f"MAN-{datetime.utcnow().strftime('%Y%m%d')}-{order_id:06d}"
 
@@ -244,7 +255,7 @@ def _order_payload(order: FBMManualOrder) -> dict[str, Any]:
 @governed_fbm_manual_bp.get("/fbm/manual/new")
 @login_required
 def manual_shipping_page():
-    recent = FBMManualOrder.query.order_by(FBMManualOrder.created_at.desc()).limit(25).all()
+    recent = FBMManualOrder.query.filter_by(created_by=_owner_key()).order_by(FBMManualOrder.created_at.desc()).limit(25).all()
     return render_template("fbm_manual_shipping.html", manual_orders=recent)
 
 
@@ -272,11 +283,7 @@ def create_manual_shipping_order():
         height_cm=_positive_float(data.get("height_cm")) or 0,
         provider="packlink",
         status="draft",
-        created_by=_text(
-            getattr(current_user, "username", None)
-            or getattr(current_user, "email", None)
-            or getattr(current_user, "id", None)
-        ) or None,
+        created_by=_owner_key(),
     )
     missing = _validation_errors(order)
     if missing:
@@ -300,7 +307,7 @@ def create_manual_shipping_order():
 @governed_fbm_manual_bp.get("/fbm/manual/<int:manual_order_id>")
 @login_required
 def get_manual_shipping_order(manual_order_id: int):
-    order = db.session.get(FBMManualOrder, manual_order_id)
+    order = _owned_manual_order(manual_order_id)
     if order is None:
         return jsonify({"success": False, "message": "Manual shipping order not found."}), 404
     return jsonify({"success": True, "manual_order": _order_payload(order), "rates": order.rates or []})
@@ -309,7 +316,7 @@ def get_manual_shipping_order(manual_order_id: int):
 @governed_fbm_manual_bp.post("/fbm/manual/<int:manual_order_id>/packlink/rates")
 @login_required
 def manual_packlink_rates(manual_order_id: int):
-    order = db.session.get(FBMManualOrder, manual_order_id)
+    order = _owned_manual_order(manual_order_id)
     if order is None:
         return jsonify({"success": False, "message": "Manual shipping order not found."}), 404
     if order.provider_shipment_id:
@@ -370,7 +377,7 @@ def manual_packlink_rates(manual_order_id: int):
 @governed_fbm_manual_bp.post("/fbm/manual/<int:manual_order_id>/packlink/draft")
 @login_required
 def manual_packlink_draft(manual_order_id: int):
-    order = db.session.get(FBMManualOrder, manual_order_id)
+    order = _owned_manual_order(manual_order_id)
     if order is None:
         return jsonify({"success": False, "message": "Manual shipping order not found."}), 404
     if order.provider_shipment_id:
@@ -450,7 +457,7 @@ def manual_packlink_draft(manual_order_id: int):
 @governed_fbm_manual_bp.post("/fbm/manual/<int:manual_order_id>/packlink/status")
 @login_required
 def manual_packlink_status(manual_order_id: int):
-    order = db.session.get(FBMManualOrder, manual_order_id)
+    order = _owned_manual_order(manual_order_id)
     if order is None:
         return jsonify({"success": False, "message": "Manual shipping order not found."}), 404
     if not order.provider_shipment_id:
