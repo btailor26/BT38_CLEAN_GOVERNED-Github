@@ -413,14 +413,30 @@ def manual_packlink_draft(manual_order_id: int):
     if rate is None:
         return jsonify({"success": False, "message": "Selected Packlink service is not in the saved quote."}), 409
 
-    # Save the selected service before the provider write.
-    order.selected_rate_id = rate_id
-    order.provider_service_id = _text(rate.get("service_id") or rate.get("id")) or None
-    order.carrier = _text(rate.get("carrier_name") or rate.get("carrier")) or None
-    order.service = _text(rate.get("service_name") or rate.get("service")) or None
-    order.status = "draft_creating"
-    order.last_error = None
+    # Claim this order atomically before contacting Packlink. A second request
+    # must not pass the earlier in-memory status check concurrently.
+    claim = FBMManualOrder.query.filter(
+        FBMManualOrder.id == order.id,
+        FBMManualOrder.created_by == _owner_key(),
+        FBMManualOrder.provider == "packlink",
+        FBMManualOrder.status == "rates_ready",
+        FBMManualOrder.provider_shipment_id.is_(None),
+    ).update({
+        "selected_rate_id": rate_id,
+        "provider_service_id": _text(rate.get("service_id") or rate.get("id")) or None,
+        "carrier": _text(rate.get("carrier_name") or rate.get("carrier")) or None,
+        "service": _text(rate.get("service_name") or rate.get("service")) or None,
+        "status": "draft_creating",
+        "last_error": None,
+    }, synchronize_session=False)
+    if claim != 1:
+        db.session.rollback()
+        return jsonify({
+            "success": False,
+            "message": "Shipment submission is already in progress, requires verification, or the quote is no longer ready.",
+        }), 409
     db.session.commit()
+    db.session.refresh(order)
 
     try:
         draft = PacklinkAdapter().create_shipment_draft(
