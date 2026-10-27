@@ -423,8 +423,16 @@ def push_group_listings(
         (listing for listing in listings if _is_fba_listing(listing)),
         None,
     )
+    # An exact marketplace order has already committed its deduction to the
+    # locked Warehouse row. Until Amazon reports back, propagate that Warehouse
+    # quantity rather than reusing the older read-only FBA snapshot.
+    order_warehouse_handoff = (
+        str(source or "").strip().lower()
+        == "governed_marketplace_order_warehouse_handoff"
+        and authority_warehouse_stock_id is not None
+    )
     fba_quantity = None
-    if fba_listing is not None:
+    if fba_listing is not None and not order_warehouse_handoff:
         confirmed_quantity = getattr(
             fba_listing,
             "last_marketplace_qty",
@@ -448,12 +456,12 @@ def push_group_listings(
             )
 
     authority_stock = None
-    if fba_listing is not None:
+    if fba_listing is not None and not order_warehouse_handoff:
         authority_stock = stock_by_id.get(
             int(fba_listing.warehouse_stock_id)
         )
     if (
-        fba_listing is None
+        (fba_listing is None or order_warehouse_handoff)
         and authority_warehouse_stock_id not in (None, "")
     ):
         try:
