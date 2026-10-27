@@ -221,6 +221,32 @@ def mutate_warehouse_stock_from_order_line(line: Any, source: str = "governed_or
     should_reconcile_group = bool(group_id)
     db.session.commit()
 
+    # The order is the immediate stock signal. The existing governed group
+    # writer takes the committed Warehouse quantity; Amazon FBA remains read-only
+    # and its later exact event supplies the final reconciliation.
+    group_reconcile_result = {
+        "success": True,
+        "skipped": True,
+        "reason": "no_current_product_linking_group",
+        "group_id": group_id,
+    }
+    if group_id:
+        try:
+            from services.governed_push_execution import push_group_listings
+            group_reconcile_result = push_group_listings(
+                group_id=int(group_id),
+                actor="governed-marketplace-order",
+                source="governed_marketplace_order_warehouse_handoff",
+                authority_warehouse_stock_id=int(stock.id),
+            )
+        except Exception as exc:
+            group_reconcile_result = {
+                "success": False,
+                "reason": "immediate_group_propagation_failed",
+                "error": str(exc),
+                "group_id": group_id,
+            }
+
     return {
         "success": True,
         "skipped": False,
@@ -236,13 +262,7 @@ def mutate_warehouse_stock_from_order_line(line: Any, source: str = "governed_or
         "affected_listings": len(linked),
         "reference_id": key,
         "group_reconcile_triggered": should_reconcile_group,
-        "group_reconcile_result": {
-            "success": True,
-            "skipped": True,
-            "reason": "warehouse_stock_mutation_does_not_push_directly",
-            "group_id": group_id,
-            "source": "warehouse_stock_mutation",
-        },
+        "group_reconcile_result": group_reconcile_result,
     }
 
 
