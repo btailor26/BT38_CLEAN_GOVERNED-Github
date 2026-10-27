@@ -206,8 +206,6 @@
   let selections = Array.from(
     document.querySelectorAll('.mcf-order-select')
   );
-  let mcfRefreshRunning = false;
-  let mcfRefreshPendingWhileHidden = false;
 
   const pageName = 'mcfOrders';
   const defaults = {
@@ -319,51 +317,6 @@
     });
   }
 
-  async function refreshMcfTable() {
-    if (document.visibilityState === 'hidden') {
-      mcfRefreshPendingWhileHidden = true;
-      return;
-    }
-    if (mcfRefreshRunning) {
-      mcfRefreshPendingWhileHidden = true;
-      return;
-    }
-    mcfRefreshRunning = true;
-    const controller = new AbortController();
-    const timeout = window.setTimeout(() => controller.abort(), 5000);
-    try {
-      const response = await fetch(window.location.href, {
-        credentials: 'same-origin',
-        cache: 'no-store',
-        headers: {'X-BT38-UI-Refresh': 'mcf-committed-state'},
-        signal: controller.signal
-      });
-      if (!response.ok) throw new Error('MCF table refresh HTTP ' + response.status);
-      const html = await response.text();
-      const parsed = new DOMParser().parseFromString(html, 'text/html');
-      const freshBody = parsed.getElementById('mcf-orders-body');
-      const body = document.getElementById('mcf-orders-body');
-      if (!freshBody || !body) throw new Error('MCF table missing from refresh response');
-      body.replaceChildren(...Array.from(freshBody.children).map((node) => document.importNode(node, true)));
-      refreshCollections();
-      render();
-      if (window.feather && typeof window.feather.replace === 'function') {
-        window.feather.replace();
-      }
-    } catch (error) {
-      if (error?.name !== 'AbortError') {
-        console.warn('[Orders/MCF] committed-state refresh failed', error);
-      }
-    } finally {
-      window.clearTimeout(timeout);
-      mcfRefreshRunning = false;
-      if (mcfRefreshPendingWhileHidden && document.visibilityState === 'visible') {
-        mcfRefreshPendingWhileHidden = false;
-        queueMicrotask(() => { void refreshMcfTable(); });
-      }
-    }
-  }
-
   selectAll.addEventListener('change', () => {
     selections.forEach((checkbox) => {
       const row = checkbox.closest('tr');
@@ -383,29 +336,9 @@
   prev.addEventListener('click', () => { if (page > 1) { page -= 1; render(); } });
   next.addEventListener('click', () => { page += 1; render(); });
 
-  // Reuse the single global live signal installed by base.html. Do not open a
-  // second EventSource from this page; that would consume another Gunicorn
-  // request thread and can make unrelated pages appear to hang.
-  window.addEventListener('bt38-marketplace-event', () => {
-    if (document.visibilityState === 'hidden') {
-      mcfRefreshPendingWhileHidden = true;
-      return;
-    }
-    void refreshMcfTable();
-  });
-
-  // A browser/laptop can sleep through the live SSE signal. On wake, perform
-  // one DB-only committed-state read so the page catches up with the bell.
-  // This is event/wake driven: no timer, no polling, no marketplace call.
-  window.addEventListener('pageshow', () => {
-    void refreshMcfTable();
-  });
-
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState !== 'visible') return;
-    mcfRefreshPendingWhileHidden = false;
-    void refreshMcfTable();
-  });
+  // Snapshot-only page: no polling, no SSE-triggered fetch, no wake/visibility
+  // refresh and no background database requests. A deliberate navigation or
+  // explicit user action is required to read fresh server data.
 
   render();
 })();
