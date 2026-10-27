@@ -562,6 +562,7 @@ def order_mcf_detail_page(order_id: int):
         lines=lines,
         views=views,
         mcf=mcf,
+        tracking_details=(__import__("services.governed_mcf_tracking", fromlist=["load_tracking_details"]).load_tracking_details(mcf.id) if mcf else []),
         eligible=bool(views) and all(view["eligible"] for view in views),
     )
 
@@ -1032,8 +1033,14 @@ def refresh_mcf_order(order_id: int):
         return redirect(url_for("governed_mcf.orders_mcf_page"))
 
     mcf = anchor.mcf_order
-    service = MCFService()
-    success, result = service.get_mcf_order_status(mcf)
+    from services.governed_mcf_execution import refresh_mcf_status
+    from services.governed_mcf_tracking import (
+        has_unforwarded_tracking,
+        load_tracking_details,
+        mark_tracking_forwarded,
+    )
+
+    success, result = refresh_mcf_status(mcf)
     if not success:
         flash(
             f"Amazon MCF status refresh failed: {result.get('error')}",
@@ -1042,7 +1049,8 @@ def refresh_mcf_order(order_id: int):
         return _refresh_redirect(anchor.id)
 
     lines = _order_lines(anchor)
-    if mcf.tracking_number:
+    tracking_details = load_tracking_details(mcf.id)
+    if tracking_details and has_unforwarded_tracking(mcf.id):
         ebay_guard = _guard(
             anchor.store,
             "mcf_tracking_ebay_enrichment",
@@ -1058,11 +1066,13 @@ def refresh_mcf_order(order_id: int):
                 anchor,
                 carrier=mcf.carrier or "Other",
                 tracking_number=mcf.tracking_number,
+                tracking_details=tracking_details,
             )
             if dispatch.get("success"):
+                mark_tracking_forwarded(mcf.id)
                 for line in lines:
                     line.carrier = mcf.carrier
-                    line.tracking_number = mcf.tracking_number
+                    line.tracking_number = tracking_details[0]["tracking_number"]
                     line.shipped_at = anchor.shipped_at or datetime.utcnow()
                     line.status = "mcf_tracking_updated"
                     line.error_message = None
