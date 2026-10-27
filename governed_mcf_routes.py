@@ -556,13 +556,14 @@ def order_mcf_detail_page(order_id: int):
     lines = _order_lines(anchor)
     views = [_line_view(line) for line in lines]
     mcf = next((line.mcf_order for line in lines if line.mcf_order_id), None)
+    from services.governed_mcf_tracking import load_tracking_details
     return render_template(
         "mcf_order_detail.html",
         anchor=anchor,
         lines=lines,
         views=views,
         mcf=mcf,
-        tracking_details=(__import__("services.governed_mcf_tracking", fromlist=["load_tracking_details"]).load_tracking_details(mcf.id) if mcf else []),
+        tracking_details=load_tracking_details(mcf.id) if mcf else [],
         eligible=bool(views) and all(view["eligible"] for view in views),
     )
 
