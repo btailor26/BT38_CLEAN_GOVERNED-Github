@@ -184,7 +184,19 @@ def sync_amazon_tracking_details(
 ) -> list[dict[str, Any]]:
     """Extract and durably retain the complete current Amazon tracking set."""
     order_id = int(mcf_order_id)
-    details = amazon_tracking_details(payload)
+    incoming = amazon_tracking_details(payload)
+    # Amazon may report split packages over several separate status events.
+    # Never discard a previously observed package when a later event is partial.
+    previous = load_tracking_details(order_id)
+    by_number = {
+        str(item["tracking_number"]): dict(item)
+        for item in previous
+        if item.get("tracking_number")
+    }
+    for item in incoming:
+        number = str(item["tracking_number"])
+        by_number[number] = {**by_number.get(number, {}), **item}
+    details = list(by_number.values())
     _latest_tracking[order_id] = details
     if details:
         _persist_state(order_id, details)
