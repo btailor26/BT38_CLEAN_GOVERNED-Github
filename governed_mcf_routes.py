@@ -387,15 +387,16 @@ def _bulk_orders(limit: int = 250) -> list[dict]:
             None,
         )
         eligible = bool(views) and all(view["eligible"] for view in views)
-        if not eligible and not mcf:
-            continue
-
+        # Show non-eligible source orders too: the page has an explicit
+        # Not eligible filter and users need to see why an order is missing.
         state = (
             "ready"
             if eligible and not mcf
             else "failed"
             if mcf and mcf.status == "failed"
             else "submitted"
+            if mcf
+            else "not_eligible"
         )
 
         orders.append({
