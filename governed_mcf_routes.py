@@ -1051,7 +1051,15 @@ def refresh_mcf_order(order_id: int):
 
     lines = _order_lines(anchor)
     tracking_details = load_tracking_details(mcf.id)
-    if tracking_details and has_unforwarded_tracking(mcf.id):
+    # A later package should update an already-dispatched order immediately.
+    # Before first dispatch, honour the existing one-hour cancellation window.
+    release_at = mcf.created_at + timedelta(hours=1) if mcf.created_at else None
+    waiting_for_release = (
+        not any(line.shipped_at for line in lines)
+        and release_at is not None
+        and datetime.utcnow() < release_at
+    )
+    if tracking_details and has_unforwarded_tracking(mcf.id) and not waiting_for_release:
         ebay_guard = _guard(
             anchor.store,
             "mcf_tracking_ebay_enrichment",
@@ -1095,7 +1103,8 @@ def refresh_mcf_order(order_id: int):
     else:
         flash(
             f"Amazon status updated to {mcf.amazon_status or mcf.status}; "
-            "tracking is not available yet.",
+            + ("tracking is awaiting the dispatch window." if waiting_for_release
+               else "no new tracking needs forwarding."),
             "info",
         )
 
