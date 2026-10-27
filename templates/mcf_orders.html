@@ -217,12 +217,19 @@
     page: 1
   };
 
-  const pageState = (
-    window.BT38
-    && typeof window.BT38.getPageSession === 'function'
-  )
-    ? window.BT38.getPageSession(pageName, defaults)
-    : defaults;
+  // Keep the table controls in this browser tab's session even when the
+  // shared BT38 page-session helper is absent or loads after this template.
+  const sessionKey = 'bt38:mcfOrders:table';
+  function readSession() {
+    try {
+      const saved = JSON.parse(window.sessionStorage.getItem(sessionKey) || '{}');
+      return saved && typeof saved === 'object' ? saved : {};
+    } catch (_) { return {}; }
+  }
+  const sharedState = (
+    window.BT38 && typeof window.BT38.getPageSession === 'function'
+  ) ? window.BT38.getPageSession(pageName, defaults) : {};
+  const pageState = { ...defaults, ...sharedState, ...readSession() };
 
   status.value = pageState.status || '';
   search.value = pageState.search || '';
@@ -234,16 +241,18 @@
   );
 
   function savePageState() {
+    const state = {
+      status: status.value,
+      search: search.value,
+      pageSize: size.value,
+      page
+    };
+    try { window.sessionStorage.setItem(sessionKey, JSON.stringify(state)); } catch (_) {}
     if (
       window.BT38
       && typeof window.BT38.setPageSession === 'function'
     ) {
-      window.BT38.setPageSession(pageName, {
-        status: status.value,
-        search: search.value,
-        pageSize: size.value,
-        page
-      });
+      window.BT38.setPageSession(pageName, state);
     }
   }
 
@@ -329,12 +338,12 @@
         headers: {'X-BT38-UI-Refresh': 'mcf-committed-state'},
         signal: controller.signal
       });
-      if (!response.ok) return;
+      if (!response.ok) throw new Error('MCF table refresh HTTP ' + response.status);
       const html = await response.text();
       const parsed = new DOMParser().parseFromString(html, 'text/html');
       const freshBody = parsed.getElementById('mcf-orders-body');
       const body = document.getElementById('mcf-orders-body');
-      if (!freshBody || !body) return;
+      if (!freshBody || !body) throw new Error('MCF table missing from refresh response');
       body.replaceChildren(...Array.from(freshBody.children).map((node) => document.importNode(node, true)));
       refreshCollections();
       render();
@@ -394,7 +403,6 @@
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') return;
-    if (!mcfRefreshPendingWhileHidden) return;
     mcfRefreshPendingWhileHidden = false;
     void refreshMcfTable();
   });
