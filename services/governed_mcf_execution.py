@@ -531,17 +531,19 @@ def refresh_mcf_from_amazon_signal(payload: dict) -> dict[str, Any]:
             "database_touched": True,
         }
 
-    accepted_at = (
-        mcf.amazon_status_updated_at
-        or mcf.updated_at
-        or mcf.created_at
-    )
+    # Status refresh timestamps are not acceptance timestamps: using them
+    # restarts the one-hour window every time Amazon sends another package.
+    accepted_at = mcf.created_at
     release_at = (
         accepted_at + timedelta(hours=1)
         if accepted_at is not None
         else None
     )
-    if release_at is not None and datetime.utcnow() < release_at:
+    if (
+        not any(getattr(line, "shipped_at", None) for line in lines)
+        and release_at is not None
+        and datetime.utcnow() < release_at
+    ):
         return {
             "success": True,
             "skipped": True,
