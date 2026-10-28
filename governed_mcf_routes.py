@@ -386,6 +386,21 @@ def _bulk_orders(limit: int = 250) -> list[dict]:
             (line.mcf_order for line in order_lines if line.mcf_order_id),
             None,
         )
+        # Only FBA-linked groups belong in the MCF queue. An ordinary eBay
+        # order with a warehouse group but no Amazon FBA listing is not an
+        # MCF candidate. Preserve previously submitted MCF orders for history.
+        has_fba_group = bool(views) and all(
+            view["group_id"] is not None
+            and any(
+                listing_skus_by_stock.get(stock_id)
+                or listing_fnskus_by_stock.get(stock_id)
+                for stock_id in stock_ids_by_group.get(view["group_id"], set())
+            )
+            for view in views
+        )
+        if not has_fba_group and not mcf:
+            continue
+
         eligible = bool(views) and all(view["eligible"] for view in views)
         # Show non-eligible source orders too: the page has an explicit
         # Not eligible filter and users need to see why an order is missing.
