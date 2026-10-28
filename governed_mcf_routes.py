@@ -186,25 +186,15 @@ def _source_is_non_amazon_marketplace(order: MarketplaceOrder) -> bool:
     return bool(platform) and "amazon" not in platform
 
 
-def _bulk_orders(limit: int = 250) -> list[dict]:
-    # Always include linked MCF records, even when newer marketplace orders
-    # push them outside the recent-order window.
-    recent_rows = (
+def _bulk_orders(limit: int = 100) -> list[dict]:
+    # Keep the initial MCF page bounded. Existing table state is retained by
+    # the browser session; marketplace changes arrive through governed events.
+    # Never hydrate the full historical MCF order set on a page request.
+    seed_rows = (
         MarketplaceOrder.query
         .order_by(MarketplaceOrder.created_at.desc(), MarketplaceOrder.id.desc())
-        .limit(max(1, min(int(limit or 250), 500)))
+        .limit(max(1, min(int(limit or 100), 100)))
         .all()
-    )
-    linked_rows = (
-        MarketplaceOrder.query
-        .filter(MarketplaceOrder.mcf_order_id.isnot(None))
-        .order_by(MarketplaceOrder.created_at.desc(), MarketplaceOrder.id.desc())
-        .all()
-    )
-    seed_rows = sorted(
-        {row.id: row for row in recent_rows + linked_rows}.values(),
-        key=lambda row: (row.created_at or datetime.min, row.id),
-        reverse=True,
     )
 
     keys = []
@@ -531,7 +521,7 @@ def _safe_seller_fulfillment_id(order: MarketplaceOrder) -> str:
 @governed_mcf_bp.get("/orders-mcf")
 @login_required
 def orders_mcf_page():
-    orders = _bulk_orders(limit=250)
+    orders = _bulk_orders(limit=100)
     return render_template("mcf_orders.html", orders=orders)
 
 
