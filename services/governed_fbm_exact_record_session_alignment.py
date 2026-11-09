@@ -42,7 +42,7 @@ def _script() -> str:
     return (window.BT38&&typeof window.BT38.getPageSession==='function')?window.BT38.getPageSession('fbm',fallback):fallback;
   }
   function inHistory(row,s){
-    var d=localDay(row.dataset.fbmCreatedAt);if(!d)return false;
+    var d=localDay(row.dataset.fbmHistoryAt||row.dataset.fbmCreatedAt);if(!d)return false;
     var today=new Date();today=new Date(today.getFullYear(),today.getMonth(),today.getDate());
     var range=String(s.range||'3d').toLowerCase(),start=null,end=null;
     if(range==='custom'){
@@ -63,9 +63,7 @@ def _script() -> str:
     var matches=historyMatch&&String(row.dataset.fbmQueue||'')===active&&(!search||String(row.dataset.fbmSearch||'').indexOf(search)>=0);
     row.hidden=!matches;
   }
-  function cssEscape(value){
-    var text=String(value==null?'':value);
-    return window.CSS&&typeof window.CSS.escape==='function'?window.CSS.escape(text):text.replace(/["\\\\]/g,'\\\\  function apply(detail){');
+  function apply(detail){');
   }
   function apply(detail){
     detail=detail&&typeof detail==='object'?detail:{};
@@ -84,6 +82,7 @@ def _script() -> str:
     if(canonicalQueue){row.dataset.fbmQueue=canonicalQueue;}
     else if(status){row.dataset.fbmQueue=queue(status);}
     if(detail.created_at)row.dataset.fbmCreatedAt=String(detail.created_at);
+    if(detail.history_at)row.dataset.fbmHistoryAt=String(detail.history_at);
     if(detail.platform!=null)row.dataset.fbmPlatform=String(detail.platform||'');
     if(detail.shipment_state!=null){
       row.dataset.fbmShipmentState=String(detail.shipment_state||'');
@@ -121,6 +120,7 @@ def _script() -> str:
           if(canonicalQueue)data[key].queue=canonicalQueue;
           else if(status)data[key].queue=queue(status);
           if(detail.created_at)data[key].created_at=detail.created_at;
+          if(detail.history_at)data[key].history_at=detail.history_at;
           ['platform','shipment_state','mapping_review','return_event','ship_by_at','earliest_delivery_at','latest_delivery_at','delivery_promise_at'].forEach(function(name){if(detail[name]!=null)data[key][name]=detail[name];});
           projected=data[key];
           dataNode.textContent=JSON.stringify(data);
@@ -129,7 +129,8 @@ def _script() -> str:
     }
     // Active History/tab/search filters remain presentation-only. Re-evaluate only
     // this changed row; never call the legacy whole-snapshot render path.
-    applyActiveFiltersToExactRow(row);
+    if(typeof window.BT38FBMApplyCommittedSnapshot==='function')window.BT38FBMApplyCommittedSnapshot();
+    else applyActiveFiltersToExactRow(row);
     window.dispatchEvent(new CustomEvent('bt38-fbm-committed-snapshot-applied',{detail:{order_id:orderId,row:row,committed:detail,projection:projected}}));
     return true;
   }
