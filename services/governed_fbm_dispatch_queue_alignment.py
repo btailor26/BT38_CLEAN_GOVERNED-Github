@@ -9,8 +9,9 @@ browser controller, polling, or marketplace/provider read is introduced.
 from __future__ import annotations
 
 import json
+from time import perf_counter
 
-from flask import g, make_response, request
+from flask import current_app, g, make_response, request
 from flask_login import login_required
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
@@ -423,20 +424,35 @@ def install_governed_fbm_dispatch_queue_alignment(app) -> None:
 
     @login_required
     def aligned_fbm_page():
+        # Warehouse is the performance baseline: measure FBM's existing server
+        # stages before changing the canonical reader or session authority.
+        started = perf_counter()
         original = current_view()
+        page_ms = (perf_counter() - started) * 1000
         response = make_response(original)
         if response.status_code != 200 or not response.mimetype.startswith("text/html"):
             return response
         rows = list(getattr(g, "_bt38_fbm_page_working_rows", []) or [])
         if not rows:
             rows = list(getattr(g, "_bt38_fbm_session_rows", []) or [])
+        presentation_started = perf_counter()
         payload = _presentation(rows)
+        presentation_ms = (perf_counter() - presentation_started) * 1000
         if request.headers.get("X-BT38-FBM-History-Expansion") == "1":
             # The existing browser owner needs canonical rows plus lifecycle facts
             # only. Do not append a second lifecycle controller, CSS or page shell.
             response.set_data(_inject_history_fragment_data(response.get_data(as_text=True), payload))
-            return response
-        response.set_data(_inject(response.get_data(as_text=True), payload, _fba_count()))
+            fba_ms = 0.0
+        else:
+            fba_started = perf_counter()
+            fba_count = _fba_count()
+            fba_ms = (perf_counter() - fba_started) * 1000
+            response.set_data(_inject(response.get_data(as_text=True), payload, fba_count))
+        current_app.logger.info(
+            "BT38 FBM page timing page_ms=%.1f presentation_ms=%.1f fba_count_ms=%.1f total_ms=%.1f rows=%d history_expansion=%s",
+            page_ms, presentation_ms, fba_ms, (perf_counter() - started) * 1000,
+            len(rows), request.headers.get("X-BT38-FBM-History-Expansion") == "1",
+        )
         return response
 
     app.view_functions[endpoint] = aligned_fbm_page
