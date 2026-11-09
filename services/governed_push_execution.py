@@ -423,6 +423,24 @@ def push_group_listings(
         (listing for listing in listings if _is_fba_listing(listing)),
         None,
     )
+    # An MCF/order handoff must not propagate an FBA-led group's quantity
+    # before Amazon confirms the FBA inventory change.
+    if (
+        fba_listing is not None
+        and str(source or "").strip().lower()
+        == "governed_marketplace_order_warehouse_handoff"
+    ):
+        return {
+            "success": True,
+            "ok": True,
+            "changed": False,
+            "no_op": True,
+            "marketplace_write_skipped": True,
+            "group_id": group_id,
+            "reason": "awaiting_confirmed_amazon_fba_inventory",
+            "inventory_authority": "AmazonFBAInventory",
+        }
+
     # MCF submission and marketplace order deductions are not confirmation of
     # Amazon FBA inventory. For an FBA-led group, only the exact confirmed
     # Amazon inventory event may supply the shared quantity.
