@@ -295,6 +295,13 @@ def push_marketplace_listing(
     listing.last_push_at = datetime.utcnow()
     listing.last_push_quantity = push_quantity if ok else listing.last_push_quantity
     listing.last_push_status = "success" if ok else "error"
+    # A committed marketplace response resolves the pending group state.
+    # Failed pushes remain visible as failures instead of looking pending.
+    if not dry_run:
+        if hasattr(listing, "push_state"):
+            listing.push_state = "success" if ok else "error"
+        if hasattr(listing, "last_sync_status"):
+            listing.last_sync_status = "success" if ok else "error"
     listing.last_push_error = None if ok else str(result.get("reason") or result.get("failure_reason") or result)[:1000]
     listing.push_attempts = 0 if ok else (listing.push_attempts or 0) + 1
     listing.consecutive_failures = 0 if ok else (listing.consecutive_failures or 0) + 1
