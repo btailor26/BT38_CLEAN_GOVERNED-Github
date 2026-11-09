@@ -430,34 +430,17 @@ def push_group_listings(
         (listing for listing in listings if _is_fba_listing(listing)),
         None,
     )
-    # An MCF/order handoff must not propagate an FBA-led group's quantity
-    # before Amazon confirms the FBA inventory change.
-    if (
-        fba_listing is not None
-        and str(source or "").strip().lower()
+    # A linked marketplace sale must protect every other marketplace at once.
+    # The order mutation has already committed the exact Warehouse deduction.
+    # Amazon FBA stays read-only and its later inventory event is confirmation.
+    order_warehouse_handoff = (
+        str(source or "").strip().lower()
         == "governed_marketplace_order_warehouse_handoff"
-    ):
-        return {
-            "success": True,
-            "ok": True,
-            "changed": False,
-            "no_op": True,
-            "marketplace_write_skipped": True,
-            "group_id": group_id,
-            "reason": "awaiting_confirmed_amazon_fba_inventory",
-            "inventory_authority": "AmazonFBAInventory",
-        }
-
-    # MCF submission and marketplace order deductions are not confirmation of
-    # Amazon FBA inventory. For an FBA-led group, only the exact confirmed
-    # Amazon inventory event may supply the shared quantity.
+        and authority_warehouse_stock_id is not None
+    )
     fba_quantity = None
-    if fba_listing is not None:
-        confirmed_quantity = getattr(
-            fba_listing,
-            "last_marketplace_qty",
-            None,
-        )
+    if fba_listing is not None and not order_warehouse_handoff:
+        confirmed_quantity = getattr(fba_listing, "last_marketplace_qty", None)
         if confirmed_quantity is None:
             return _blocked(
                 "Confirmed FBA quantity is missing; group propagation stopped.",
@@ -476,12 +459,12 @@ def push_group_listings(
             )
 
     authority_stock = None
-    if fba_listing is not None:
+    if fba_listing is not None and not order_warehouse_handoff:
         authority_stock = stock_by_id.get(
             int(fba_listing.warehouse_stock_id)
         )
     if (
-        fba_listing is None
+        (fba_listing is None or order_warehouse_handoff)
         and authority_warehouse_stock_id not in (None, "")
     ):
         try:
