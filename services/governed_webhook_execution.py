@@ -532,13 +532,24 @@ def process_marketplace_notification(
                 stock_mutation=mutation_result,
             )
 
-        push_result = push_group_listings(
-            group_id=int(group_id),
-            actor=actor,
-            source=f"webhook_{marketplace}_group_notification",
-            actor_user=None,
-            authority_warehouse_stock_id=stock.id,
-        )
+        # The canonical order mutation already invokes the governed group
+        # writer after committing Warehouse stock. Do not push the same group
+        # a second time for the same notification. Retain the existing
+        # notification fallback only if the first propagation failed.
+        mutation_group_result = mutation_result.get("group_reconcile_result") or {}
+        if (
+            mutation_result.get("group_reconcile_triggered")
+            and mutation_group_result.get("success")
+        ):
+            push_result = mutation_group_result
+        else:
+            push_result = push_group_listings(
+                group_id=int(group_id),
+                actor=actor,
+                source=f"webhook_{marketplace}_group_notification",
+                actor_user=None,
+                authority_warehouse_stock_id=stock.id,
+            )
 
         return _log_result(
             status="group_processed",
