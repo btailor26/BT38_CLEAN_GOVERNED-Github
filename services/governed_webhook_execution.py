@@ -489,49 +489,10 @@ def process_marketplace_notification(
             None,
         )
 
-        # FBA-led groups must never use the source marketplace sale or the
-        # Warehouse decrement as inventory authority. MCF submission/acceptance
-        # may happen during order mutation, but the one automatic group push is
-        # allowed only after Amazon ORDER_CHANGE causes the exact FBA refresh.
-        # FBM/non-FBA groups continue through the existing immediate push below.
-        if fba_authority is not None:
-            return _log_result(
-                status="fba_group_waiting_for_amazon_confirmation",
-                marketplace=marketplace,
-                event_type=event_type,
-                business_event=business_event,
-                reason=(
-                    "FBA-led group sale was stored and MCF handoff may proceed, "
-                    "but marketplace propagation is waiting for Amazon webhook "
-                    "confirmation and exact FBA inventory truth."
-                ),
-                payload=payload,
-                store_id=getattr(listing, "store_id", None),
-                listing_id=listing.id,
-                warehouse_stock_id=stock.id,
-                group_id=int(group_id),
-                fba_authority_listing_id=int(fba_authority.id),
-                seller_sku=(
-                    getattr(listing, "external_sku", None)
-                    or getattr(stock, "sku", None)
-                ),
-                group_context=group_context,
-                before_qty=before_qty,
-                after_qty=int(
-                    getattr(stock, "available_quantity", 0) or 0
-                ),
-                stock_changed=bool(
-                    mutation_result.get("success")
-                    and not mutation_result.get("skipped")
-                ),
-                correction_started=False,
-                push_started=False,
-                waiting_for_amazon_fba_confirmation=True,
-                order_id=order_intake.get("marketplace_order_id"),
-                order_intake=order_intake.get("result"),
-                stock_mutation=mutation_result,
-            )
-
+        # FBA-led groups must protect stock on other linked marketplaces as
+        # soon as the sale commits. The canonical mutation has already invoked
+        # the group writer with provisional Warehouse quantity; Amazon's later
+        # FBA inventory event remains the final confirmation.
         # The canonical order mutation already invokes the governed group
         # writer after committing Warehouse stock. Do not push the same group
         # a second time for the same notification. Retain the existing
@@ -557,7 +518,7 @@ def process_marketplace_notification(
             event_type=event_type,
             business_event=business_event,
             reason=(
-                "Grouped non-FBA sale notification created MarketplaceOrder, "
+                "Grouped marketplace sale notification created MarketplaceOrder, "
                 "updated Warehouse truth through governed order mutation, and "
                 "handed the exact current group to the shared Warehouse-controlled correction path."
             ),
