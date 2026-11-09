@@ -324,14 +324,21 @@ def test_fbm_committed_refresh_is_exact_row_and_event_driven():
     assert "bt38-marketplace-event" not in journey
     assert "setInterval(" not in journey
 
-    assert "X-BT38-UI-Refresh" in exact
-    assert "targeted" in exact
-    assert "bt38_marketplace_order_id" in exact
-    assert "data-marketplace-order-id" in exact
-    assert "replaceWith" in exact
+    # The committed event changes the existing browser row and then triggers
+    # the same session render used by History, Health and lifecycle counters.
+    # A targeted server HTML fetch is legacy code, not a requirement.
     assert "bt38-marketplace-event" in exact
+    assert "findRow(orderId)" in exact
+    assert "row.dataset.fbmHistoryAt||row.dataset.fbmCreatedAt" in exact
+    assert "BT38FBMApplyCommittedSnapshot" in exact
+    assert "bt38-fbm-committed-snapshot-applied" in exact
+    assert "stopImmediatePropagation" in exact
+    assert "X-BT38-UI-Refresh" not in exact
+    assert "fetch('/fbm" not in exact
     assert "setInterval(" not in exact
 
+    # The old targeted route may remain for compatibility but is no longer
+    # called by the browser's committed event flow.
     assert 'request.headers.get("X-BT38-UI-Refresh") == "targeted"' in page
     assert "MarketplaceOrder.marketplace_order_id == targeted_marketplace_order_id" in page
     assert 'return render_template("_fbm_history_rows.html", orders=orders)' in page
