@@ -367,6 +367,10 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   }}
   refreshHistoryMatches();
   function render(){{
+    // One browser-session calculation owns Health, History, tabs and counters.
+    // Rebuild local matches after a committed exact-record event, never fetch.
+    rows=Array.from(body.querySelectorAll('tr.fbm-order-row'));
+    refreshHistoryMatches();
     var counts=localCounts();
     if(initialRender&&Number(counts[active]||0)===0){{var fallback=['pending','ready_dispatch','dispatched','replacements','refunds','cancelled'].find(function(name){{return Number(counts[name]||0)>0}});if(fallback)active=fallback;}}
     initialRender=false;
