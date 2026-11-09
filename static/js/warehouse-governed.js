@@ -670,7 +670,8 @@
     }
 
     updateActionBar();
-    loadVisibleProfitability();
+    // Preserve the server-rendered/session economics on page entry.
+    // Recalculate only after an explicit stock/action event.
   });
 
   window.bt38ChooseAction = chooseAction;
