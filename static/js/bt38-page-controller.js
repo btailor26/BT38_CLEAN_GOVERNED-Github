@@ -207,7 +207,9 @@ window.BT38.pages = window.BT38.pages || {};
       // shared controller only presents that committed subset through paging.
       // Wiring the FBM form here would create a second filter authority.
       if (!fbmSessionOwned) wireForm(page);
-      wirePagination(page);
+      // FBM lifecycle owns its own pager; the shared controller must not attach
+      // a second set of Previous/Next and page-size listeners.
+      if (!fbmSessionOwned) wirePagination(page);
       if (cacheRows(page.name)) {
         if (fbmSessionOwned && typeof window.BT38FBMApplyCommittedSnapshot === "function") window.BT38FBMApplyCommittedSnapshot();
         else if (!fbmSessionOwned) filter(page.name, false);
