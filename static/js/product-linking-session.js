@@ -230,13 +230,13 @@
 
   async function fetchInitialSnapshotOnce() {
     const work = async () => {
-      const [latest, databaseRevision] = await Promise.all([
-        readSnapshot(),
-        fetchDatabaseRevision()
-      ]);
-      if (snapshotExists(latest) && latest.revision === databaseRevision) {
+      // A valid browser-session snapshot is authoritative until a committed
+      // affected-record event arrives. Do not query Neon on page entry.
+      const latest = await readSnapshot();
+      if (snapshotExists(latest)) {
         applySnapshot(latest);
       } else {
+        // A genuinely new session needs one initial data bootstrap.
         await fetchFullSnapshot();
       }
     };
