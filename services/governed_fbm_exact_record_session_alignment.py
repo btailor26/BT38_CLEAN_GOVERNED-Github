@@ -63,8 +63,6 @@ def _script() -> str:
     var matches=historyMatch&&String(row.dataset.fbmQueue||'')===active&&(!search||String(row.dataset.fbmSearch||'').indexOf(search)>=0);
     row.hidden=!matches;
   }
-  function apply(detail){');
-  }
   function apply(detail){
     detail=detail&&typeof detail==='object'?detail:{};
     var orderId=String(detail.order_id||detail.marketplace_order_id||'').trim();
