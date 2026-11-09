@@ -223,69 +223,6 @@ def _align_base_event_payload(html: str) -> str:
     return html
 
 
-def _replace_function(source: str, start_marker: str, end_marker: str, replacement: str) -> str:
-    start = source.find(start_marker)
-    end = source.find(end_marker, start + len(start_marker)) if start >= 0 else -1
-    if start < 0 or end < 0:
-        return source
-    return source[:start] + replacement + "\n\n  " + source[end:]
-
-
-def _align_shared_controller(source: str) -> str:
-    source = source.replace("let pendingWhileHidden = false;", "let pendingWhileHidden = null;")
-    source = _replace_function(
-        source,
-        "async function refreshProductLinkingSilently() {",
-        "function pageOwnsCommittedRefresh() {",
-        '''async function refreshProductLinkingSilently(detail) {
-    if (productLinkingRefreshRunning) return false;
-    if (typeof window.bt38RefreshProductLinkingRecord !== 'function') return false;
-    const exactSku = String(detail?.seller_sku || '').trim();
-    if (!exactSku) return false;
-
-    productLinkingRefreshRunning = true;
-    try {
-      await window.bt38RefreshProductLinkingRecord({listingSku: exactSku, warehouseSku: exactSku});
-      return true;
-    } catch (error) {
-      console.warn('[BT38 UI] exact Product Linking record refresh failed', error);
-      return false;
-    } finally {
-      productLinkingRefreshRunning = false;
-    }
-  }''',
-    )
-    source = _replace_function(
-        source,
-        "async function refreshCurrentPage() {",
-        "window.addEventListener('bt38-marketplace-event'",
-        '''async function refreshCurrentPage(detail) {
-    if (pageOwnsCommittedRefresh()) return;
-    if (document.visibilityState === 'hidden') {
-      pendingWhileHidden = detail || null;
-      return;
-    }
-    if (document.querySelector('[data-bt38-page="productLinking"]')) {
-      await refreshProductLinkingSilently(detail || {});
-    }
-  }''',
-    )
-    source = source.replace("void refreshCurrentPage();\n  });\n\n  document.addEventListener('visibilitychange'", "void refreshCurrentPage(event.detail || {});\n  });\n\n  document.addEventListener('visibilitychange'", 1)
-    source = source.replace("if (document.visibilityState !== 'visible' || !pendingWhileHidden) return;\n    pendingWhileHidden = false;\n    void refreshCurrentPage();", "if (document.visibilityState !== 'visible' || !pendingWhileHidden) return;\n    const committed = pendingWhileHidden;\n    pendingWhileHidden = null;\n    void refreshCurrentPage(committed);")
-    source = _replace_function(
-        source,
-        "async function readDashboardActionCount() {",
-        "async function refreshAssistant(options) {",
-        '''async function readDashboardActionCount() {
-    const local = currentPageDashboardCount();
-    if (Number.isFinite(local)) return local;
-    const cached = Number(window.sessionStorage.getItem(cacheKey));
-    return Number.isFinite(cached) ? cached : null;
-  }''',
-    )
-    return source
-
-
 def install_governed_exact_record_event_alignment(app) -> None:
     global _INSTALLED
     if _INSTALLED:
@@ -313,11 +250,6 @@ def install_governed_exact_record_event_alignment(app) -> None:
         path = request.path.rstrip("/") or "/"
         content_type = str(response.content_type or "").lower()
         if response.status_code != 200:
-            return response
-        if path == "/static/js/bt38-live-page-refresh.js" and "javascript" in content_type:
-            if response.direct_passthrough:
-                response.direct_passthrough = False
-            response.set_data(_align_shared_controller(response.get_data(as_text=True)))
             return response
         if "text/html" in content_type:
             body = response.get_data(as_text=True)
