@@ -458,6 +458,45 @@ def push_group_listings(
                 warehouse_stock_id=int(fba_listing.warehouse_stock_id),
             )
 
+    # Keep provisional cross-marketplace deductions protected while Amazon's
+    # delayed MCF inventory report catches up. A higher Amazon snapshot is not
+    # evidence that the pending deduction has disappeared.
+    pending_provisional_quantity = None
+    if fba_listing is not None and not order_warehouse_handoff:
+        for member_stock in warehouse_rows:
+            previous = getattr(member_stock, "last_group_push_result", None) or {}
+            if not isinstance(previous, dict):
+                continue
+            if (
+                previous.get("group_id") == group_id
+                and previous.get("awaiting_amazon_confirmation")
+            ):
+                try:
+                    candidate = max(0, int(previous["target_quantity"]))
+                except (KeyError, TypeError, ValueError):
+                    continue
+                pending_provisional_quantity = (
+                    candidate if pending_provisional_quantity is None
+                    else min(pending_provisional_quantity, candidate)
+                )
+        if (
+            pending_provisional_quantity is not None
+            and fba_quantity is not None
+            and fba_quantity > pending_provisional_quantity
+        ):
+            return {
+                "success": True,
+                "ok": True,
+                "changed": False,
+                "no_op": True,
+                "marketplace_write_skipped": True,
+                "group_id": group_id,
+                "target_quantity": pending_provisional_quantity,
+                "amazon_reported_quantity": fba_quantity,
+                "awaiting_amazon_confirmation": True,
+                "reason": "amazon_inventory_above_pending_provisional_quantity",
+            }
+
     authority_stock = None
     if fba_listing is not None and not order_warehouse_handoff:
         authority_stock = stock_by_id.get(
@@ -622,6 +661,11 @@ def push_group_listings(
                 "failed": failed_count,
                 "pushable_count": pushable_count,
                 "source": source,
+                "awaiting_amazon_confirmation": bool(
+                    fba_listing is not None
+                    and (order_warehouse_handoff or not group_success)
+                ),
+                "amazon_reported_quantity": fba_quantity,
             }
 
     db.session.commit()
