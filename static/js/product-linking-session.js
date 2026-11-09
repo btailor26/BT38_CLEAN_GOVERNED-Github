@@ -719,12 +719,9 @@
     const clear = form?.querySelector('a[href="/product-linking"]');
     if (clear && !clear.dataset.bt38SessionWired) { clear.dataset.bt38SessionWired = "1"; clear.addEventListener("click", (event) => { event.preventDefault(); event.stopImmediatePropagation(); form.reset(); state.page = 1; render(); }, true); }
 
-    window.addEventListener("bt38-marketplace-event", (event) => {
-      const detail = event?.detail || {};
-      const identity = { warehouseId: detail.warehouse_stock_id, groupId: detail.group_id, listingId: detail.listing_id, listingSku: detail.seller_sku, warehouseSku: detail.seller_sku };
-      if (!identity.warehouseId && !identity.groupId && !identity.listingId && !identity.listingSku) return;
-      void refreshAffectedRecord(identity).catch((error) => { console.warn("[ProductLinkingSession] marketplace event targeted refresh failed", error); });
-    });
+    // The shared live-page controller in base.html owns committed events.
+    // It invokes window.bt38RefreshProductLinkingRecord once per event.
+    // Do not register a second independent Product Linking listener.
   }
 
   function boot() { wire(); hydrate(); }
