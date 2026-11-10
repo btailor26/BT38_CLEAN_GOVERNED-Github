@@ -257,8 +257,10 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   var historyRequest=null;
   var todayForCoverage=new Date();todayForCoverage.setHours(0,0,0,0);
   var initialCoverageStart=new Date(todayForCoverage);initialCoverageStart.setDate(initialCoverageStart.getDate()-2);
-  var coverageStart=initialCoverageStart.getTime();
-  var coverageEnd=todayForCoverage.getTime();
+  // The initial three-day response is bounded; it is not proof of complete coverage.
+  var coverageStart=Infinity;
+  var coverageEnd=-Infinity;
+  var attemptedHistoryRanges=new Set();
   function requestedCoverage(key,startDate,endDate){{
     if(key==='custom'){{
       if(!startDate||!endDate)return null;
@@ -464,6 +466,9 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
     if(requestedRange==='custom'&&(!requestedFrom||!requestedTo))return;
     var requestedBounds=requestedCoverage(requestedRange,requestedFrom,requestedTo);
     if(!requestedBounds||historyAlreadyLoaded(requestedBounds))return;
+    var historyKey=[requestedRange,requestedFrom,requestedTo].join('|');
+    // An incomplete capped range must not be retried on every filter change.
+    if(attemptedHistoryRanges.has(historyKey))return;
     var u=new URL(window.location.href);
     u.searchParams.set('fbm_range',requestedRange);
     if(requestedRange==='custom'){{u.searchParams.set('fbm_from',requestedFrom);u.searchParams.set('fbm_to',requestedTo);}}
@@ -472,6 +477,7 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
     historyRequest=(async function(){{
       var response=await fetch(u.toString(),{{credentials:'same-origin',headers:{{'X-BT38-FBM-History-Expansion':'1','Accept':'text/html'}}}});
       if(!response.ok)throw new Error('History request failed: '+response.status);
+      var complete=response.headers.get('X-BT38-FBM-Snapshot-Complete')==='1';
       var doc=new DOMParser().parseFromString(await response.text(),'text/html');
       var incomingBody=doc.querySelector('.fbm-orders-table tbody');
       var incomingData=doc.getElementById('bt38FbmLifecycleTabsData');
@@ -497,9 +503,11 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
         row.dataset.fbmSearch=(row.textContent||'').toLowerCase();
       }});
       loadedRange=requestedRange;loadedFrom=requestedFrom;loadedTo=requestedTo;
+      attemptedHistoryRanges.add(historyKey);
+      if(!complete)console.warn('[FBM History] Range capped; browser records are partial.');
       // Only extend coverage when the newly fetched interval joins the
       // existing interval. Disjoint custom ranges must not imply missing dates.
-      if(requestedBounds.start<=coverageEnd+86400000&&requestedBounds.end>=coverageStart-86400000){{
+      if(complete&&(coverageStart===Infinity||requestedBounds.start<=coverageEnd+86400000&&requestedBounds.end>=coverageStart-86400000)){{
         coverageStart=Math.min(coverageStart,requestedBounds.start);
         coverageEnd=Math.max(coverageEnd,requestedBounds.end);
       }}
@@ -553,6 +561,9 @@ def install_governed_fbm_dispatch_queue_alignment(app) -> None:
         payload = _presentation(rows)
         presentation_ms = (perf_counter() - presentation_started) * 1000
         if request.headers.get("X-BT38-FBM-History-Expansion") == "1":
+            response.headers["X-BT38-FBM-Snapshot-Complete"] = (
+                "0" if getattr(g, "_bt38_fbm_working_set_truncated", True) else "1"
+            )
             # The existing browser owner needs canonical rows plus lifecycle facts
             # only. Do not append a second lifecycle controller, CSS or page shell.
             response.set_data(_inject_history_fragment_data(response.get_data(as_text=True), payload))
