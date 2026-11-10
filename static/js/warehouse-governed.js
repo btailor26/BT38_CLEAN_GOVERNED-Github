@@ -389,31 +389,61 @@
     button.title = `Estimated: ${money(sale)} sale - ${money(unitCost)} COGS - ${money(shipping)} shipping - ${money(fees)} fees`;
   }
 
+  // One browser-session economics working set. Filters must not repeat database reads.
+  const warehouseEconomicsCache = new Map();
+  const warehouseEconomicsPending = new Map();
+
   async function loadVisibleProfitability() {
     if (!warehouseActive()) return;
+    const rows = Array.from(document.querySelectorAll('.bt38-stock-table tbody tr[data-stock-id]'))
+      .filter(row => !row.hidden);
+    const ids = [...new Set(rows.map(row => String(row.dataset.stockId || '').trim())
+      .filter(id => id && id !== '0'))];
+    if (!ids.length) return;
 
-    const rows = Array.from(
-      document.querySelectorAll('.bt38-stock-table tbody tr[data-stock-id]')
-    ).filter(row => !row.hidden);
-    const stockIds = [];
+    // Render known records immediately. Only missing records need a database read.
     rows.forEach(row => {
-      const stockId = String(row.dataset.stockId || '').trim();
-      if (!stockId || stockId === '0' || stockIds.includes(stockId)) return;
-      stockIds.push(stockId);
+      const id = String(row.dataset.stockId || '').trim();
+      if (warehouseEconomicsCache.has(id)) renderRowProfit(row, warehouseEconomicsCache.get(id));
     });
-
-    if (!stockIds.length) return;
-
-    try {
-      const data = await getJson(`/governed/warehouse/economics-batch?stock_ids=${encodeURIComponent(stockIds.join(','))}`);
-      const byStockId = new Map(
-        (data.economics || []).map(item => [String(item.warehouse_stock_id), item])
-      );
-      rows.forEach(row => renderRowProfit(row, byStockId.get(String(row.dataset.stockId || ''))));
-    } catch (err) {
-      console.warn('[warehouse-profit] batch economics unavailable', err);
+    const missing = ids.filter(id => !warehouseEconomicsCache.has(id) && !warehouseEconomicsPending.has(id));
+    if (missing.length) {
+      const batch = getJson(`/governed/warehouse/economics-batch?stock_ids=${encodeURIComponent(missing.join(','))}`);
+      missing.forEach(id => warehouseEconomicsPending.set(id, batch));
+      try {
+        const data = await batch;
+        const byId = new Map((data.economics || []).map(item => [String(item.warehouse_stock_id), item]));
+        missing.forEach(id => {
+          // An event may have invalidated a record while the request was in flight.
+          if (warehouseEconomicsPending.get(id) === batch && byId.has(id)) {
+            warehouseEconomicsCache.set(id, byId.get(id));
+          }
+        });
+      } catch (err) {
+        console.warn('[warehouse-profit] batch economics unavailable', err);
+      } finally {
+        missing.forEach(id => {
+          if (warehouseEconomicsPending.get(id) === batch) warehouseEconomicsPending.delete(id);
+        });
+      }
+    } else {
+      const pending = ids.map(id => warehouseEconomicsPending.get(id)).filter(Boolean);
+      if (pending.length) await Promise.allSettled([...new Set(pending)]);
     }
+    rows.forEach(row => {
+      const id = String(row.dataset.stockId || '').trim();
+      if (warehouseEconomicsCache.has(id)) renderRowProfit(row, warehouseEconomicsCache.get(id));
+    });
   }
+
+  // Exact stock changes invalidate only the affected economics record.
+  window.addEventListener('bt38-warehouse-economics-changed', function (event) {
+    const id = String(event.detail && (event.detail.stock_id || event.detail.warehouse_stock_id) || '').trim();
+    if (!id) return;
+    warehouseEconomicsCache.delete(id);
+    warehouseEconomicsPending.delete(id);
+    scheduleVisibleProfitabilityRefresh();
+  });
 
   function scheduleVisibleProfitabilityRefresh() {
     window.requestAnimationFrame(() => {
