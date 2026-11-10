@@ -395,7 +395,21 @@
 
         window.addEventListener("bt38-marketplace-event", function () {
             stale = true;
-            setBellLight(true);
+            // The FBM page's committed projection supplies the authoritative
+            // action count; do not invent a second bell state on each wake.
+            if (!window.BT38BellCurrentRecords) setBellLight(true);
+        });
+
+        // The existing FBM projection emits this after applying page changes.
+        // Update the bell from those same records, without a fetch or polling.
+        window.addEventListener("bt38-fbm-bell-projection-updated", function (event) {
+            const projected = event.detail?.records;
+            if (!Array.isArray(projected)) return;
+            records = projected.slice(0, 50);
+            loaded = true;
+            stale = false;
+            updateUnread();
+            if (panel.classList.contains("show")) render();
         });
 
         function dispatchLiveBellSignal(detail) {
