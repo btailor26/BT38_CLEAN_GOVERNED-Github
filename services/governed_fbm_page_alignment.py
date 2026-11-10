@@ -370,33 +370,16 @@ def _dedupe_latest(rows: list[MarketplaceOrder]) -> list[MarketplaceOrder]:
     return result
 
 
-def _health_summary() -> dict:
-    """Aggregate period health from persisted DB facts only.
+def _health_summary(rows: list[MarketplaceOrder]) -> dict:
+    """Aggregate period health from the existing FBM page working set.
 
     Orders are counted by created_at in the selected period. Return/replacement/
     refund/case activity is counted by updated_at in that same period so an older
     order that develops an issue today is visible today. No marketplace/provider
     request is performed here.
     """
+    # Reuse the same canonical page records; Health must not query Neon again.
     mode, start_at, end_at, label = _health_period()
-    eligible = (
-        func.upper(func.coalesce(MarketplaceOrder.fulfillment_type, "")).notin_(("FBA", "AFN", "MCF")),
-        ~func.lower(func.coalesce(MarketplaceOrder.status, "")).like("mcf_%"),
-    )
-    rows = (
-        db.session.query(MarketplaceOrder)
-        .filter(
-            *eligible,
-            or_(
-                (MarketplaceOrder.created_at >= start_at) & (MarketplaceOrder.created_at < end_at),
-                (MarketplaceOrder.updated_at >= start_at) & (MarketplaceOrder.updated_at < end_at),
-            ),
-        )
-        .options(joinedload(MarketplaceOrder.store), joinedload(MarketplaceOrder.warehouse_stock))
-        .order_by(MarketplaceOrder.id.desc())
-        .limit(_FBM_HEALTH_MAX_ROWS)
-        .all()
-    )
     latest = _dedupe_latest(rows)
     profiles = _profile_map([row for row in latest if _platform(row).strip().lower() == "amazon"])
 
@@ -470,7 +453,7 @@ def _health_summary() -> dict:
         "health_score": health_score,
         "risk_actions": risk_actions,
         "shipping_actions": shipping_actions,
-        "truncated": len(rows) >= _FBM_HEALTH_MAX_ROWS,
+        "truncated": False,
     }
 
 
@@ -907,7 +890,7 @@ def install_governed_fbm_page_alignment(app) -> None:
             "mapping_review": sum(1 for item in orders if item["mapping_review"] and item["mapping_review"].status == "under_review"),
         }
 
-        health = _health_summary()
+        health = _health_summary(rows)
         html = render_template(
             "fbm.html",
             orders=orders,
