@@ -36,7 +36,7 @@ def _range_key():
     # The browser still defaults the visible History control to 3d and applies
     # subsequent History/search/lifecycle filters without another server read.
     if request.headers.get("X-BT38-FBM-History-Expansion") != "1":
-        return "1y"
+        return "3d"
     raw = str(request.args.get("fbm_range") or "3d").strip().lower()
     aliases = {
         "3": "3d", "3day": "3d", "3days": "3d",
