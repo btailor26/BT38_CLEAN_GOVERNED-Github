@@ -52,7 +52,7 @@ def _range_key() -> str:
     # Date/history controls are presentation-only over that snapshot and never
     # return to the DB. A committed event remains the only silent refresh trigger.
     if request.headers.get("X-BT38-FBM-History-Expansion") != "1":
-        return "1y"
+        return "3d"
     raw = str(request.args.get("fbm_range") or "1y").strip().lower()
     aliases = {
         "3": "3d", "3day": "3d", "3days": "3d",
