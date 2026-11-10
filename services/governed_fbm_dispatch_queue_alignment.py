@@ -249,10 +249,31 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   // Initial HTML is always the bounded 3-day working set. Wider History is
   // added only after an explicit History selection through the existing
   // expansion path; stale URL/session state cannot enlarge initial loading.
+  // Track the dates actually loaded into this browser working set.
+  // A filter covered by those records must never issue another History request.
   var loadedRange='3d';
   var loadedFrom='';
   var loadedTo='';
   var historyRequest=null;
+  var todayForCoverage=new Date();todayForCoverage.setHours(0,0,0,0);
+  var initialCoverageStart=new Date(todayForCoverage);initialCoverageStart.setDate(initialCoverageStart.getDate()-2);
+  var coverageStart=initialCoverageStart.getTime();
+  var coverageEnd=todayForCoverage.getTime();
+  function requestedCoverage(key,startDate,endDate){{
+    if(key==='custom'){{
+      if(!startDate||!endDate)return null;
+      var customStart=new Date(startDate+'T00:00:00'),customEnd=new Date(endDate+'T00:00:00');
+      if(isNaN(customStart.getTime())||isNaN(customEnd.getTime())||customStart>customEnd)return null;
+      return {{start:customStart.getTime(),end:customEnd.getTime()}};
+    }}
+    var days={{'3d':3,'7d':7,'30d':30,'90d':90,'1y':365}}[key]||3;
+    var day=new Date();day.setHours(0,0,0,0);
+    var begin=new Date(day);begin.setDate(begin.getDate()-(days-1));
+    return {{start:begin.getTime(),end:day.getTime()}};
+  }}
+  function historyAlreadyLoaded(bounds){{
+    return bounds&&bounds.start>=coverageStart&&bounds.end<=coverageEnd;
+  }}
   var range=String(saved.range||'3d').toLowerCase();
   var from=String(saved.from||'');
   var to=String(saved.to||'');
@@ -441,6 +462,8 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
     var requestedRange=range,requestedFrom=from,requestedTo=to;
     if(requestedRange==='3d')return;
     if(requestedRange==='custom'&&(!requestedFrom||!requestedTo))return;
+    var requestedBounds=requestedCoverage(requestedRange,requestedFrom,requestedTo);
+    if(!requestedBounds||historyAlreadyLoaded(requestedBounds))return;
     var u=new URL(window.location.href);
     u.searchParams.set('fbm_range',requestedRange);
     if(requestedRange==='custom'){{u.searchParams.set('fbm_from',requestedFrom);u.searchParams.set('fbm_to',requestedTo);}}
@@ -474,6 +497,12 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
         row.dataset.fbmSearch=(row.textContent||'').toLowerCase();
       }});
       loadedRange=requestedRange;loadedFrom=requestedFrom;loadedTo=requestedTo;
+      // Only extend coverage when the newly fetched interval joins the
+      // existing interval. Disjoint custom ranges must not imply missing dates.
+      if(requestedBounds.start<=coverageEnd+86400000&&requestedBounds.end>=coverageStart-86400000){{
+        coverageStart=Math.min(coverageStart,requestedBounds.start);
+        coverageEnd=Math.max(coverageEnd,requestedBounds.end);
+      }}
       if(window.BT38&&window.BT38.PageController)window.BT38.PageController.refreshTableCache('fbm');
       render();
     }})().catch(function(error){{console.error('[FBM History]',error);if(tableCount)tableCount.textContent='History unavailable — please retry';}}).finally(function(){{historyRequest=null;if(rangeInput)rangeInput.disabled=false;}});
