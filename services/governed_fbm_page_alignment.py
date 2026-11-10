@@ -670,6 +670,9 @@ def install_governed_fbm_page_alignment(app) -> None:
             rows, has_more = global_search._session_snapshot_rows()
         else:
             rows, has_more = _latest_distinct_fbm_rows(visible_limit)
+        # Expose completeness to the History response. A bounded result is not
+        # a complete browser-session date range when the source was truncated.
+        g._bt38_fbm_working_set_truncated = bool(has_more)
         shipments = _shipment_map(rows)
         profiles = _profile_map(rows)
 
