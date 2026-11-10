@@ -273,10 +273,15 @@ def install_governed_fbm_global_search_alignment(app) -> None:
         if cache is None:
             cache = {}
             g._bt38_fbm_profile_cache = cache
-        missing = [row for row in rows if row.store_id is not None and row.marketplace_order_id and (int(row.store_id), str(row.marketplace_order_id)) not in cache]
+        loaded = getattr(g, "_bt38_fbm_profile_keys_loaded", None)
+        if loaded is None:
+            loaded = set()
+            g._bt38_fbm_profile_keys_loaded = loaded
+        missing = [row for row in rows if row.store_id is not None and row.marketplace_order_id and (int(row.store_id), str(row.marketplace_order_id)) not in loaded]
         if missing:
             cache.update(original_profile_map(missing))
-        return {(int(row.store_id), str(row.marketplace_order_id)): cache.get((int(row.store_id), str(row.marketplace_order_id))) for row in rows if row.store_id is not None and row.marketplace_order_id and cache.get((int(row.store_id), str(row.marketplace_order_id))) is not None}
+            loaded.update((int(row.store_id), str(row.marketplace_order_id)) for row in missing)
+        return {(int(row.store_id), str(row.marketplace_order_id)): cache[(int(row.store_id), str(row.marketplace_order_id))] for row in rows if row.store_id is not None and row.marketplace_order_id and (int(row.store_id), str(row.marketplace_order_id)) in cache}
 
     def request_cached_shipment_map(rows):
         cache = getattr(g, "_bt38_fbm_shipment_cache", None)
