@@ -366,7 +366,6 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
       rowTruthFlags(row).forEach(function(flag){{if(Object.prototype.hasOwnProperty.call(cachedTruthCounts,flag))cachedTruthCounts[flag]+=1}});
     }});
   }}
-  refreshHistoryMatches();
   function render(){{
     // One browser-session calculation owns Health, History, tabs and counters.
     // Rebuild local matches after a committed exact-record event, never fetch.
