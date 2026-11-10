@@ -348,18 +348,21 @@ onclick="window.location.href='/warehouse?view=groups&q={{ item.sku|urlencode }}
 
             <td>
 
-              {% if item.is_fba %}
-                <span class="bt38-status locked">
-                  FBA Locked
-                </span>
+              {# Listing status comes from the session's governed record, not quantity.
+                 Never query a marketplace or Neon while rendering this badge. #}
+              {% set marketplace_status = (item.listing_status or item.status or '')|lower|trim %}
+              {% if marketplace_status in ['ended', 'removed', 'deleted', 'listing_ended', 'listing_removed'] %}
+                <span class="bt38-status inactive" title="Marketplace listing ended or removed">Ended / Removed</span>
+              {% elif marketplace_status in ['suspended', 'blocked', 'suppressed'] %}
+                <span class="bt38-status inactive">Suspended / Blocked</span>
+              {% elif marketplace_status in ['inactive', 'disabled', 'not_active'] or item.marketplace_listing_is_active is sameas false or item.listing_is_active is sameas false %}
+                <span class="bt38-status inactive">Listing Inactive</span>
+              {% elif item.is_fba %}
+                <span class="bt38-status locked">FBA Locked</span>
               {% elif item.available_quantity and item.available_quantity > 0 %}
-                <span class="bt38-status active">
-                  Active
-                </span>
+                <span class="bt38-status active">Active</span>
               {% else %}
-                <span class="bt38-status inactive">
-                  Inactive
-                </span>
+                <span class="bt38-status inactive">Out of Stock</span>
               {% endif %}
 
             </td>
