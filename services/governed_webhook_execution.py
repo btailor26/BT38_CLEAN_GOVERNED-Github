@@ -47,6 +47,52 @@ def process_marketplace_notification(
         payload,
     )
 
+    # eBay LISTING/ENDED is marketplace listing status, not a sale or a
+    # request to rediscover/import an ended listing. Retire only this store's
+    # exact eBay item (all its variations); preserve warehouse stock/groups.
+    if marketplace == "ebay" and str(_deep_get(payload, "topic") or "").upper() == "LISTING" and str(_deep_get(payload, "reason") or "").upper() == "ENDED":
+        from models import MarketplaceListing
+
+        item_id = _deep_get(payload, "listingId")
+        store_id = payload.get("_bt38_store_id")
+        if not item_id or store_id in (None, ""):
+            return _log_result(
+                status="listing_removal_unresolved", marketplace=marketplace,
+                event_type=event_type, business_event="listing_removed",
+                reason="eBay ENDED notification lacked exact listing/store identity.",
+                payload=payload, changed=False, stock_changed=False,
+                correction_started=False, push_started=False,
+            )
+        try:
+            store_id = int(store_id)
+        except (TypeError, ValueError):
+            return _log_result(
+                status="listing_removal_unresolved", marketplace=marketplace,
+                event_type=event_type, business_event="listing_removed",
+                reason="eBay ENDED notification had invalid store identity.",
+                payload=payload, changed=False, stock_changed=False,
+                correction_started=False, push_started=False,
+            )
+        listings = MarketplaceListing.query.filter(
+            MarketplaceListing.store_id == store_id,
+            MarketplaceListing.external_listing_id == str(item_id),
+        ).all()
+        changed_ids = []
+        for listing in listings:
+            if listing.is_active:
+                listing.is_active = False
+                changed_ids.append(int(listing.id))
+        if changed_ids:
+            db.session.commit()
+        return _log_result(
+            status="listing_removed_stored", marketplace=marketplace,
+            event_type=event_type, business_event="listing_removed",
+            reason="Exact eBay ENDED listing retired without reimport, stock mutation or marketplace push.",
+            payload=payload, store_id=store_id, external_listing_id=str(item_id),
+            changed=bool(changed_ids), affected_listing_ids=changed_ids,
+            stock_changed=False, correction_started=False, push_started=False,
+        )
+
     # eBay ORDER_CONFIRMATION can identify only the shared listing plus the
     # exact order-line ID. Resolve an ambiguous variation through the existing
     # exact eBay order reader before listing selection/order intake. This keeps
