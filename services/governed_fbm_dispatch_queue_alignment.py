@@ -152,6 +152,10 @@ def _presentation(rows: list[MarketplaceOrder]) -> dict[str, dict]:
             )
         payload[str(row.id)] = {
             "queue": queue,
+            "platform": _marketplace_platform_for(row),
+            "shipment_state": (str(page_alignment.shipment_confirmation_state(shipment)) if shipment else "not_started"),
+            "mapping_review": bool(shipment and getattr(getattr(shipment, "mapping_review", None), "status", None) == "under_review"),
+            "return_event": str(getattr(row, "status", "") or "").strip().lower() in ("return_requested", "returned"),
             "status": str(getattr(row, "status", "") or "").strip().lower(),
             "created_at": row.created_at.isoformat() if getattr(row, "created_at", None) else None,
             "history_at": history_at.isoformat() if history_at else None,
@@ -367,6 +371,40 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
       rowTruthFlags(row).forEach(function(flag){{if(Object.prototype.hasOwnProperty.call(cachedTruthCounts,flag))cachedTruthCounts[flag]+=1}});
     }});
   }}
+  // Health is a projection of the same filtered browser records, never a DB reader.
+  function refreshHealth(matched){{
+    var section=document.querySelector('.fbm-period-health');if(!section)return;
+    var values={{Orders:matched.length,'Ready to ship':0,Dispatched:0,'Awaiting carrier':0,'Carrier overdue':0,Returns:0,Replacements:0,'Refunds / issues':0,'Mapping review':0}};
+    var platforms={{}};
+    matched.forEach(function(row){{
+      var info=data[row.dataset.orderId]||{{}};
+      var q=String(row.dataset.fbmQueue||'');
+      var status=String(info.status||'').toLowerCase();
+      var shipment=String(info.shipment_state||row.dataset.fbmShipmentState||'');
+      var platform=String(info.platform||row.dataset.fbmPlatform||'Other');
+      platforms[platform]=(platforms[platform]||0)+1;
+      if(q==='ready_dispatch')values['Ready to ship']++;
+      if(q==='dispatched')values.Dispatched++;
+      if(shipment==='awaiting_carrier_acceptance')values['Awaiting carrier']++;
+      if(shipment==='acceptance_overdue')values['Carrier overdue']++;
+      if(info.mapping_review)values['Mapping review']++;
+      if(status==='return_requested'||status==='returned')values.Returns++;
+      if(status==='replacement_requested'||status==='replacement')values.Replacements++;
+      if(['refund_requested','refunded','case_open','dispute','chargeback'].indexOf(status)>=0)values['Refunds / issues']++;
+    }});
+    section.querySelectorAll('.fbm-period-card').forEach(function(card){{
+      var label=card.querySelector('.fbm-period-label');var value=card.querySelector('.fbm-period-value');
+      if(label&&value&&Object.prototype.hasOwnProperty.call(values,label.textContent.trim()))value.textContent=String(values[label.textContent.trim()]);
+    }});
+    var risk=values['Carrier overdue']+values['Mapping review']+values.Returns+values.Replacements+values['Refunds / issues'];
+    var base=Math.max(1,matched.length+values.Returns+values.Replacements+values['Refunds / issues']);
+    var score=Math.max(0,Math.min(100,Math.round(100*(base-risk)/base)));
+    var ring=section.querySelector('.fbm-score-ring');if(ring){{ring.style.setProperty('--fbm-score',score+'%');var number=ring.querySelector('strong');if(number)number.textContent=score+'%';}}
+    var riskLabel=section.querySelector('.fbm-score-card .small.text-muted');if(riskLabel)riskLabel.textContent=risk+' risk/issue actions in this selection';
+    var subtitle=section.querySelector('.fbm-period-head .small.text-muted');if(subtitle)subtitle.textContent=(range==='custom'?from+' to '+to:range)+' · Current page filters';
+    var guide=document.querySelector('.fbm-guide-period');if(guide){{var strong=guide.querySelector('strong'),span=guide.querySelector('span');if(strong)strong.textContent=range==='custom'?from+' to '+to:range;if(span)span.textContent=matched.length+' matching FBM orders';}}
+    var ordersCard=section.querySelector('.fbm-period-orders .fbm-period-tip');if(ordersCard)ordersCard.textContent=Object.keys(platforms).sort().map(function(k){{return k+': '+platforms[k]}}).join(' · ')||'No matching orders';
+  }}
   function render(){{
     // One browser-session calculation owns Health, History, tabs and counters.
     // Rebuild local matches after a committed exact-record event, never fetch.
@@ -380,6 +418,7 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
     var matchedSet=new Set(matched);
     rows.forEach(function(row){{if(!matchedSet.has(row))row.hidden=true}});
     renderExistingPager(matched);
+    refreshHealth(matched);
     refreshBadges();
     refreshTruthSummary();
     tabBar.querySelectorAll('[data-fbm-tab]').forEach(function(button){{var selected=button.dataset.fbmTab===active;button.classList.toggle('active',selected);button.setAttribute('aria-selected',selected?'true':'false')}});
