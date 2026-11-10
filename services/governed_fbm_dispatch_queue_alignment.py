@@ -226,7 +226,7 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   var body=table.querySelector('tbody');
   var rows=Array.from(body.querySelectorAll('tr.fbm-order-row'));
   var labels={{ready_dispatch:'Ready to dispatch',pending:'Pending',dispatched:'Dispatched',cancelled:'Cancelled',fba:'FBA',replacements:'Replacement',refunds:'Refunds'}};
-  var sessionEpoch='fbm-history-snapshot-v2';
+  var sessionEpoch='fbm-history-on-demand-v3';
   var sessionDefaults={{tab:'pending',search:'',range:'3d',from:'',to:'',dirty:false,session_epoch:sessionEpoch}};
   var saved=sessionDefaults;
   if(window.BT38&&typeof window.BT38.getPageSession==='function'){{
@@ -248,6 +248,7 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   var loadedRange='3d';
   var loadedFrom='';
   var loadedTo='';
+  var historyRequest=null;
   var range=String(saved.range||'3d').toLowerCase();
   var from=String(saved.from||'');
   var to=String(saved.to||'');
@@ -393,7 +394,53 @@ def _inject(html: str, payload: dict[str, dict], fba_count: int) -> str:
   window.BT38FBMApplyCommittedSnapshot=render;
   // History is an Excel-style presentation filter over the browser-session snapshot.
   // Filter changes never read the DB; committed events remain the silent-refresh trigger.
-  function applyHistory(){{currentPage=1;range=String(rangeInput&&rangeInput.value||'3d').toLowerCase();from=String(fromInput&&fromInput.value||'');to=String(toInput&&toInput.value||'');saveSession();refreshHistoryMatches();render();}}
+  // Expand only on an explicit History selection. The normal FBM entry
+  // remains a three-day snapshot, and previously fetched history stays in
+  // the browser working set until navigation or refresh.
+  async function expandHistoryWorkingSet(){{
+    if(historyRequest)return historyRequest;
+    var requestedRange=range,requestedFrom=from,requestedTo=to;
+    if(requestedRange==='3d')return;
+    if(requestedRange==='custom'&&(!requestedFrom||!requestedTo))return;
+    var u=new URL(window.location.href);
+    u.searchParams.set('fbm_range',requestedRange);
+    if(requestedRange==='custom'){{u.searchParams.set('fbm_from',requestedFrom);u.searchParams.set('fbm_to',requestedTo);}}
+    else{{u.searchParams.delete('fbm_from');u.searchParams.delete('fbm_to');}}
+    if(rangeInput)rangeInput.disabled=true;
+    historyRequest=(async function(){{
+      var response=await fetch(u.toString(),{{credentials:'same-origin',headers:{{'X-BT38-FBM-History-Expansion':'1','Accept':'text/html'}}}});
+      if(!response.ok)throw new Error('History request failed: '+response.status);
+      var doc=new DOMParser().parseFromString(await response.text(),'text/html');
+      var incomingBody=doc.querySelector('.fbm-orders-table tbody');
+      var incomingData=doc.getElementById('bt38FbmLifecycleTabsData');
+      if(!incomingBody||!incomingData)throw new Error('History response incomplete');
+      var incoming=JSON.parse(incomingData.textContent||'{{}}');
+      var known=new Map(Array.from(body.querySelectorAll('tr.fbm-order-row')).map(function(row){{return [String(row.dataset.orderId),row]}}));
+      incomingBody.querySelectorAll('tr.fbm-order-row').forEach(function(row){{
+        var key=String(row.dataset.orderId);
+        if(!known.has(key)){{body.appendChild(row);known.set(key,row);}}
+      }});
+      Object.assign(data,incoming);
+      rows=Array.from(body.querySelectorAll('tr.fbm-order-row'));
+      rows.forEach(function(row){{
+        var info=data[row.dataset.orderId]||{{}};
+        row.dataset.fbmQueue=info.queue||'unclassified';
+        row.dataset.fbmCreatedAt=info.created_at||'';
+        row.dataset.fbmHistoryAt=info.history_at||info.created_at||'';
+        row.dataset.fbmPlatform=info.platform||'';
+        row.dataset.fbmShipmentState=info.shipment_state||'';
+        row.dataset.fbmMappingReview=info.mapping_review?'1':'0';
+        row.dataset.fbmReturnEvent=info.return_event?'1':'0';
+        alignCanonicalShippingCost(row,info);
+        row.dataset.fbmSearch=(row.textContent||'').toLowerCase();
+      }});
+      loadedRange=requestedRange;loadedFrom=requestedFrom;loadedTo=requestedTo;
+      if(window.BT38&&window.BT38.PageController)window.BT38.PageController.refreshTableCache('fbm');
+      render();
+    }})().catch(function(error){{console.error('[FBM History]',error);if(tableCount)tableCount.textContent='History unavailable — please retry';}}).finally(function(){{historyRequest=null;if(rangeInput)rangeInput.disabled=false;}});
+    return historyRequest;
+  }}
+  function applyHistory(){{currentPage=1;range=String(rangeInput&&rangeInput.value||'3d').toLowerCase();from=String(fromInput&&fromInput.value||'');to=String(toInput&&toInput.value||'');saveSession();render();void expandHistoryWorkingSet();}}
   if(rangeInput)rangeInput.addEventListener('change',function(){{var custom=String(rangeInput.value||'')==='custom';if(fromInput)fromInput.style.display=custom?'':'none';if(toInput)toInput.style.display=custom?'':'none';if(!custom)applyHistory();}});
   if(fromInput)fromInput.addEventListener('change',function(){{if(range==='custom'||String(rangeInput&&rangeInput.value||'')==='custom'){{range='custom';if(fromInput.value&&toInput&&toInput.value)applyHistory();}}}});
   if(toInput)toInput.addEventListener('change',function(){{if(range==='custom'||String(rangeInput&&rangeInput.value||'')==='custom'){{range='custom';if(toInput.value&&fromInput&&fromInput.value)applyHistory();}}}});
