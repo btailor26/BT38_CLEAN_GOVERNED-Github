@@ -49,7 +49,17 @@
     const currentRow = document.querySelector(selector);
     if (!currentRow) return false;
 
-    const response = await fetch(window.location.href, {
+    // FBM's targeted backend requires the canonical marketplace order identity.
+    // Never fetch the full FBM working set for a single committed order event.
+    const refreshUrl = new URL(window.location.href);
+    if (path === '/fbm') {
+      const marketplaceOrderId = String(detail?.marketplace_order_id || currentRow.dataset.marketplaceOrderId || '').trim();
+      if (!marketplaceOrderId) return false;
+      refreshUrl.searchParams.set('bt38_marketplace_order_id', marketplaceOrderId);
+      const storeId = String(detail?.store_id || currentRow.dataset.storeId || '').trim();
+      if (storeId) refreshUrl.searchParams.set('bt38_store_id', storeId);
+    }
+    const response = await fetch(refreshUrl.toString(), {
       credentials: 'same-origin',
       cache: 'no-store',
       headers: {'X-BT38-UI-Refresh': 'targeted'}
