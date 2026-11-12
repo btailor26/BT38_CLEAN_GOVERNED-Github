@@ -57,7 +57,7 @@
       if (!marketplaceOrderId) return false;
       refreshUrl.searchParams.set('bt38_marketplace_order_id', marketplaceOrderId);
       const storeId = String(detail?.store_id || currentRow.dataset.storeId || '').trim();
-      if (!/^[1-9]\\d*$/.test(storeId)) return false;
+      if (!/^[1-9][0-9]*$/.test(storeId)) return false;
       refreshUrl.searchParams.set('bt38_store_id', storeId);
     }
     const response = await fetch(refreshUrl.toString(), {
