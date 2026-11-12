@@ -644,6 +644,14 @@ def install_governed_fbm_page_alignment(app) -> None:
         ).strip()
 
         if targeted_refresh and targeted_marketplace_order_id:
+            # Exact refresh is store-scoped; a marketplace order ID alone is
+            # not sufficient to select a canonical row across customer stores.
+            try:
+                targeted_store_id = int(request.args.get("bt38_store_id") or 0)
+            except (TypeError, ValueError):
+                targeted_store_id = 0
+            if targeted_store_id <= 0:
+                return render_template("_fbm_history_rows.html", orders=[]), 400
             targeted_query = (
                 db.session.query(MarketplaceOrder)
                 .filter(MarketplaceOrder.marketplace_order_id == targeted_marketplace_order_id)
@@ -653,14 +661,9 @@ def install_governed_fbm_page_alignment(app) -> None:
                 )
                 .order_by(MarketplaceOrder.id.desc())
             )
-            try:
-                targeted_store_id = int(request.args.get("bt38_store_id") or 0)
-            except (TypeError, ValueError):
-                targeted_store_id = 0
-            if targeted_store_id > 0:
-                targeted_query = targeted_query.filter(
-                    MarketplaceOrder.store_id == targeted_store_id
-                )
+            targeted_query = targeted_query.filter(
+                MarketplaceOrder.store_id == targeted_store_id
+            )
             targeted_row = targeted_query.first()
             rows, has_more = ([targeted_row] if targeted_row is not None else []), False
         elif request.headers.get("X-BT38-FBM-History-Expansion") == "1":
