@@ -364,6 +364,7 @@ def test_fbm_targeted_backend_requires_exact_marketplace_order_identity():
     assert "if targeted_refresh and targeted_marketplace_order_id:" in source
     assert "MarketplaceOrder.marketplace_order_id == targeted_marketplace_order_id" in source
     assert "MarketplaceOrder.store_id == targeted_store_id" in source
+    assert "_bt38_customer_store_or_404(targeted_store_id)" in source
     assert "if targeted_store_id <= 0:" in source
     assert 'return render_template("_fbm_history_rows.html", orders=[]), 400' in source
 
