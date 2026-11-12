@@ -414,7 +414,7 @@ onclick="window.location.href='/warehouse?view=groups&q={{ item.sku|urlencode }}
       <input type="hidden" name="listing_status" value="{{ listing_status_filter or 'all' }}">
       <input type="hidden" name="page" value="1">
       <label for="bt38ResultsPerPageSelect">Results per page:</label>
-      <select id="bt38ResultsPerPageSelect" name="per_page" onchange="bt38SetFilter(this.name, this.value)">
+      <select id="bt38ResultsPerPageSelect" name="per_page">
         <option value="15" {% if (per_page or 15)|int == 15 %}selected{% endif %}>15</option>
         <option value="25" {% if (per_page or 15)|int == 25 %}selected{% endif %}>25</option>
         <option value="50" {% if (per_page or 15)|int == 50 %}selected{% endif %}>50</option>
