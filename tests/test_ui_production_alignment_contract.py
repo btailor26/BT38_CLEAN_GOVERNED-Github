@@ -387,3 +387,12 @@ def test_warehouse_unlinked_stock_not_hidden_by_listing_page_size():
     assert "if len(rows) < row_limit:" not in warehouse
     assert "unlinked_stock = (" in warehouse
     assert "if stock.id in linked_stock_ids:" in warehouse
+
+
+def test_warehouse_bottom_pager_has_one_change_owner():
+    """The local controller, not an inline handler, owns Warehouse page-size changes."""
+    template = _source(Path("templates/warehouse.html"))
+    controller = _source(Path("static/js/bt38-page-controller.js"))
+    assert template.count('id="bt38ResultsPerPageSelect"') == 1
+    assert '<select id="bt38ResultsPerPageSelect" name="per_page">' in template
+    assert 'select.addEventListener("change", () => { page.currentPage = 1; render(page.name); })' in controller
