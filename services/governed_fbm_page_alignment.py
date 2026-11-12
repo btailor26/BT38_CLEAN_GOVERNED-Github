@@ -643,6 +643,10 @@ def install_governed_fbm_page_alignment(app) -> None:
             request.args.get("bt38_marketplace_order_id") or ""
         ).strip()
 
+        if targeted_refresh and not targeted_marketplace_order_id:
+            # Never turn a malformed exact-record request into a normal page read.
+            return render_template("_fbm_history_rows.html", orders=[]), 400
+
         if targeted_refresh and targeted_marketplace_order_id:
             # Exact refresh is store-scoped; a marketplace order ID alone is
             # not sufficient to select a canonical row across customer stores.
