@@ -346,3 +346,19 @@ def test_fbm_committed_refresh_is_exact_row_and_event_driven():
     assert '"marketplace_order_id": getattr(row, "marketplace_order_id", None)' not in signal
     assert 'scope["marketplace_order_id"] = getattr(row, "marketplace_order_id", None)' in signal
     assert 'source="committed_marketplace_state"' in signal
+
+
+def test_fbm_committed_refresh_is_scoped_to_one_marketplace_order():
+    """A committed FBM event must never request an unscoped full FBM snapshot."""
+    source = _source(Path("static/js/bt38-live-page-refresh.js"))
+    assert "refreshUrl.searchParams.set('bt38_marketplace_order_id', marketplaceOrderId)" in source
+    assert "if (!marketplaceOrderId) return false" in source
+    assert "refreshUrl.searchParams.set('bt38_store_id', storeId)" in source
+    assert "fetch(refreshUrl.toString()" in source
+
+
+def test_fbm_targeted_backend_requires_exact_marketplace_order_identity():
+    source = _source(FBM_PAGE_ALIGNMENT)
+    assert "if targeted_refresh and targeted_marketplace_order_id:" in source
+    assert "MarketplaceOrder.marketplace_order_id == targeted_marketplace_order_id" in source
+    assert "MarketplaceOrder.store_id == targeted_store_id" in source
