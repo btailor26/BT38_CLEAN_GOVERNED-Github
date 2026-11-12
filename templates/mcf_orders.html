@@ -174,7 +174,7 @@
   <div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2">
     <div class="d-flex align-items-center gap-2">
       <button id="mcf-prev" class="btn btn-sm btn-outline-secondary" type="button">Previous</button>
-      <span id="mcf-page-label" class="small text-muted">Page 1</span>
+      <span id="mcf-page-label" class="small text-muted" aria-live="polite">Page 1 of 1 · 0 total</span>
       <button id="mcf-next" class="btn btn-sm btn-outline-secondary" type="button">Next</button>
     </div>
     <div class="d-flex align-items-center gap-2">
@@ -302,7 +302,7 @@
     rows.forEach((row) => row.classList.toggle('d-none', !visible.has(row)));
     noMatch.classList.toggle('d-none', filtered.length !== 0);
     count.textContent = String(filtered.length);
-    label.textContent = `Page ${page} of ${pages}`;
+    label.textContent = `Page ${page} of ${pages} · ${filtered.length} total`;
     prev.disabled = page <= 1;
     next.disabled = page >= pages;
     updateSelectionState();
