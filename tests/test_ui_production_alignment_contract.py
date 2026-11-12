@@ -376,3 +376,14 @@ def test_warehouse_exact_event_refresh_reindexes_local_session_rows():
     assert "currentRow.replaceWith(document.importNode(freshRow, true));" in shared
     assert "window.BT38.PageController.refreshTableCache('warehouse')" in shared
     assert "refreshTableCache(name) { const cached = cacheRows(name); if (cached) filter(name, true);" in controller
+
+
+def test_warehouse_unlinked_stock_not_hidden_by_listing_page_size():
+    """Unlinked master stock remains in the browser working set above 15 listings."""
+    source = _source(Path("governed_routes.py"))
+    warehouse = source.split("def governed_warehouse_page():", 1)[1].split(
+        '@governed_bp.post("/governed/actions/sku/dry-run")', 1
+    )[0]
+    assert "if len(rows) < row_limit:" not in warehouse
+    assert "unlinked_stock = (" in warehouse
+    assert "if stock.id in linked_stock_ids:" in warehouse
