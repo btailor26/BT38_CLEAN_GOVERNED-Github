@@ -34,7 +34,7 @@
                        class="form-control" 
                        id="groupSearchInput" 
                        placeholder="Search groups by name, description, or group key..." 
-                       onkeyup="filterGroups()">
+                       onkeyup="bt38GroupsPage = 1; filterGroups()">
                 <button class="btn btn-outline-secondary" 
                         type="button" 
                         onclick="clearGroupSearch()" 
@@ -68,12 +68,14 @@
         </div>
     </div>
 
+    <!-- Product Groups with Items: one browser-local bottom pager -->
+    <div id="bt38GroupCards">
     <!-- Product Groups with Items -->
     {% for group_data in groups_with_items %}
     {% set group = group_data.group %}
     {% set group_items = group_data['items'] %}
     {% set stats = group_data.stats %}
-    <div class="card mb-3">
+    <div class="card mb-3 group-card">
         <div class="card-header">
             <div class="d-flex justify-content-between align-items-center">
                 <div class="d-flex align-items-center">
@@ -228,6 +230,17 @@
         {% endif %}
     </div>
     {% endfor %}
+    </div>
+    <div id="bt38GroupsBottomPager" class="bt38-results-bottom d-flex flex-wrap align-items-center justify-content-between gap-2 border-top pt-2 mt-2">
+      <span id="bt38GroupsCount" class="small text-muted" aria-live="polite"></span>
+      <div class="d-flex flex-wrap align-items-center gap-2">
+        <label for="bt38GroupsPageSize" class="small text-muted mb-0">Results per page:</label>
+        <select id="bt38GroupsPageSize" class="form-select form-select-sm" style="width:auto"><option value="15">15</option><option value="25">25</option><option value="50">50</option><option value="100">100</option></select>
+        <button type="button" id="bt38GroupsPrev" class="btn btn-sm btn-outline-secondary">Previous</button>
+        <span id="bt38GroupsPageLabel" class="small text-muted"></span>
+        <button type="button" id="bt38GroupsNext" class="btn btn-sm btn-outline-secondary">Next</button>
+      </div>
+    </div>
 {% else %}
     <div class="card">
         <div class="card-body text-center py-5">
@@ -456,14 +469,29 @@
     return false;
   };
 
+  let bt38GroupsPage = 1;
   window.filterGroups = function filterGroups() {
     const input = document.getElementById("groupSearchInput");
-    const query = input ? input.value.toLowerCase() : "";
-
-    document.querySelectorAll(".group-card").forEach(function(card) {
-      const text = card.textContent.toLowerCase();
-      card.style.display = text.includes(query) ? "" : "none";
-    });
+    const query = input ? input.value.trim().toLowerCase() : "";
+    const cards = Array.from(document.querySelectorAll("#bt38GroupCards > .group-card"));
+    const matches = cards.filter(card => card.textContent.toLowerCase().includes(query));
+    const size = document.getElementById("bt38GroupsPageSize");
+    const perPage = [15,25,50,100].includes(Number(size?.value)) ? Number(size.value) : 15;
+    const pages = Math.max(1, Math.ceil(matches.length / perPage));
+    bt38GroupsPage = Math.max(1, Math.min(bt38GroupsPage, pages));
+    const start = (bt38GroupsPage - 1) * perPage;
+    const visible = new Set(matches.slice(start, start + perPage));
+    cards.forEach(card => { card.hidden = !visible.has(card); });
+    const count = document.getElementById("bt38GroupsCount");
+    if (count) count.textContent = "Showing " + (matches.length ? start+1 : 0) + "–" + Math.min(start+perPage,matches.length) + " of " + matches.length + " groups";
+    const searchCount = document.getElementById("groupSearchCount");
+    if (searchCount) searchCount.textContent = String(matches.length);
+    const label = document.getElementById("bt38GroupsPageLabel");
+    if (label) label.textContent = "Page " + bt38GroupsPage + " of " + pages + " · " + matches.length + " total";
+    const prev = document.getElementById("bt38GroupsPrev");
+    const next = document.getElementById("bt38GroupsNext");
+    if (prev) prev.disabled = bt38GroupsPage <= 1;
+    if (next) next.disabled = bt38GroupsPage >= pages;
   };
 
   window.clearGroupSearch = function clearGroupSearch() {
@@ -477,6 +505,13 @@
       cb.addEventListener("change", window.updateSelectedSkus);
     });
 
+    const size = document.getElementById("bt38GroupsPageSize");
+    if (size) size.addEventListener("change", function() { bt38GroupsPage = 1; window.filterGroups(); });
+    const prev = document.getElementById("bt38GroupsPrev");
+    if (prev) prev.addEventListener("click", function() { bt38GroupsPage--; window.filterGroups(); });
+    const next = document.getElementById("bt38GroupsNext");
+    if (next) next.addEventListener("click", function() { bt38GroupsPage++; window.filterGroups(); });
+    window.filterGroups();
     const searchInput = document.getElementById("groupSearchInput");
     if (searchInput) {
       searchInput.addEventListener("keydown", function(e) {
