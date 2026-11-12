@@ -2376,63 +2376,64 @@ def governed_warehouse_page():
             fnsku=listing.fnsku,
         ))
 
-    if len(rows) < row_limit:
-        stock_query = (
-            db.session.query(WarehouseStock)
-            .options(joinedload(WarehouseStock.warehouse))
-            .filter(WarehouseStock.is_active == True)  # noqa: E712
-            .filter(WarehouseStock.warehouse_id.in_(warehouse_ids))
-            .filter(WarehouseStock.is_deleted == False)  # noqa: E712
-            .populate_existing()
-        )
+    # Include every unlinked Warehouse stock row regardless of listing count.
+    # The browser, not the server page-size selection, owns pagination.
+    stock_query = (
+        db.session.query(WarehouseStock)
+        .options(joinedload(WarehouseStock.warehouse))
+        .filter(WarehouseStock.is_active == True)  # noqa: E712
+        .filter(WarehouseStock.warehouse_id.in_(warehouse_ids))
+        .filter(WarehouseStock.is_deleted == False)  # noqa: E712
+        .populate_existing()
+    )
 
-        if q:
-            like = f"%{q}%"
-            stock_query = stock_query.filter(
-                or_(
-                    WarehouseStock.sku.ilike(like),
-                    WarehouseStock.product_name.ilike(like),
-                    WarehouseStock.barcode.ilike(like),
-                    WarehouseStock.group_title.ilike(like),
-                )
+    if q:
+        like = f"%{q}%"
+        stock_query = stock_query.filter(
+            or_(
+                WarehouseStock.sku.ilike(like),
+                WarehouseStock.product_name.ilike(like),
+                WarehouseStock.barcode.ilike(like),
+                WarehouseStock.group_title.ilike(like),
             )
-
-        unlinked_stock = (
-            stock_query
-            .order_by(WarehouseStock.updated_at.desc(), WarehouseStock.id.desc())
-            .all()
         )
 
-        for stock in unlinked_stock:
-            if stock.id in linked_stock_ids:
-                continue
+    unlinked_stock = (
+        stock_query
+        .order_by(WarehouseStock.updated_at.desc(), WarehouseStock.id.desc())
+        .all()
+    )
 
-            rows.append(SimpleNamespace(
-                id=stock.id,
-                inventory_item_id=None,
-                item_id=None,
-                marketplace_listing_id=None,
-                sku=stock.sku,
-                master_product_group_id=stock.master_product_group_id,
-                location="Warehouse",
-                image_url=stock.image_url,
-                product_name=stock.product_name,
-                title=stock.product_name,
-                group_title=stock.group_title,
-                barcode=stock.barcode,
-                mcf_group_source=False,
-                is_fba=False,
-                is_fbm=False,
-                is_group_controlled=bool(stock.is_group_controlled),
-                available_quantity=stock.sellable_quantity,
-                price=0,
-                store_name=stock.warehouse.name if stock.warehouse else "Warehouse",
-                platform="Warehouse",
-                external_listing_id=None,
-                external_sku=None,
-                asin=None,
-                fnsku=None,
-            ))
+    for stock in unlinked_stock:
+        if stock.id in linked_stock_ids:
+            continue
+
+        rows.append(SimpleNamespace(
+            id=stock.id,
+            inventory_item_id=None,
+            item_id=None,
+            marketplace_listing_id=None,
+            sku=stock.sku,
+            master_product_group_id=stock.master_product_group_id,
+            location="Warehouse",
+            image_url=stock.image_url,
+            product_name=stock.product_name,
+            title=stock.product_name,
+            group_title=stock.group_title,
+            barcode=stock.barcode,
+            mcf_group_source=False,
+            is_fba=False,
+            is_fbm=False,
+            is_group_controlled=bool(stock.is_group_controlled),
+            available_quantity=stock.sellable_quantity,
+            price=0,
+            store_name=stock.warehouse.name if stock.warehouse else "Warehouse",
+            platform="Warehouse",
+            external_listing_id=None,
+            external_sku=None,
+            asin=None,
+            fnsku=None,
+        ))
 
 
     if view == "available":
