@@ -366,3 +366,12 @@ def test_fbm_targeted_backend_requires_exact_marketplace_order_identity():
     assert "MarketplaceOrder.store_id == targeted_store_id" in source
     assert "if targeted_store_id <= 0:" in source
     assert 'return render_template("_fbm_history_rows.html", orders=[]), 400' in source
+
+
+def test_warehouse_exact_event_refresh_reindexes_local_session_rows():
+    """A replaced Warehouse DOM row must not leave stale local filter data."""
+    shared = _source(Path("static/js/bt38-live-page-refresh.js"))
+    controller = _source(CONTROLLER)
+    assert "currentRow.replaceWith(document.importNode(freshRow, true));" in shared
+    assert "window.BT38.PageController.refreshTableCache('warehouse')" in shared
+    assert "refreshTableCache(name) { const cached = cacheRows(name); if (cached) filter(name, true);" in controller
