@@ -360,6 +360,7 @@ def test_fbm_committed_refresh_is_scoped_to_one_marketplace_order():
 
 def test_fbm_targeted_backend_requires_exact_marketplace_order_identity():
     source = _source(FBM_PAGE_ALIGNMENT)
+    assert "if targeted_refresh and not targeted_marketplace_order_id:" in source
     assert "if targeted_refresh and targeted_marketplace_order_id:" in source
     assert "MarketplaceOrder.marketplace_order_id == targeted_marketplace_order_id" in source
     assert "MarketplaceOrder.store_id == targeted_store_id" in source
