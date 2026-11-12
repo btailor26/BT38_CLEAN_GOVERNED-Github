@@ -354,7 +354,7 @@ def test_fbm_committed_refresh_is_scoped_to_one_marketplace_order():
     assert "refreshUrl.searchParams.set('bt38_marketplace_order_id', marketplaceOrderId)" in source
     assert "if (!marketplaceOrderId) return false" in source
     assert "refreshUrl.searchParams.set('bt38_store_id', storeId)" in source
-    assert "if (!/^[1-9]\\\\d*$/.test(storeId)) return false;" in source
+    assert "if (!/^[1-9][0-9]*$/.test(storeId)) return false;" in source
     assert "fetch(refreshUrl.toString()" in source
 
 
