@@ -72,6 +72,12 @@
     if (!freshRow) return false;
 
     currentRow.replaceWith(document.importNode(freshRow, true));
+    // The Warehouse controller caches DOM row references and searchable text.
+    // Rebuild its in-memory index after an exact row replacement, without a
+    // second network request or resetting the user's active filters/page.
+    if (path === '/warehouse' && window.BT38?.PageController?.refreshTableCache) {
+      window.BT38.PageController.refreshTableCache('warehouse');
+    }
     if (path === '/fbm') {
       document.dispatchEvent(new CustomEvent('bt38-fbm-working-set-expanded'));
     }
