@@ -656,6 +656,10 @@ def install_governed_fbm_page_alignment(app) -> None:
                 targeted_store_id = 0
             if targeted_store_id <= 0:
                 return render_template("_fbm_history_rows.html", orders=[]), 400
+            # A valid store ID is not enough: enforce the authenticated
+            # customer's store ownership before reading the exact order.
+            from governed_routes import _bt38_customer_store_or_404
+            _bt38_customer_store_or_404(targeted_store_id)
             targeted_query = (
                 db.session.query(MarketplaceOrder)
                 .filter(MarketplaceOrder.marketplace_order_id == targeted_marketplace_order_id)
