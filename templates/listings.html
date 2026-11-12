@@ -92,7 +92,7 @@
                 </div>
                 <div id="jobsList" style="display: none;">
                     <div class="table-responsive">
-                        <table class="table table-hover">
+                        <table class="table table-hover" id="bt38ListingsTable">
                             <thead>
                                 <tr>
                                     <th>ID</th>
@@ -354,6 +354,18 @@
                         </tbody>
                     </table>
                 </div>
+                <div class="bt38-results-bottom d-flex flex-wrap align-items-center justify-content-between gap-2 border-top pt-2 mt-2" id="bt38ListingsBottomPager">
+                    <span class="small text-muted" id="bt38ListingsCount" aria-live="polite"></span>
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <label class="small text-muted mb-0" for="bt38ListingsPageSize">Results per page:</label>
+                        <select class="form-select form-select-sm" id="bt38ListingsPageSize" style="width:auto">
+                            <option value="15">15</option><option value="25">25</option><option value="50">50</option><option value="100">100</option>
+                        </select>
+                        <button class="btn btn-sm btn-outline-secondary" id="bt38ListingsPrev" type="button">Previous</button>
+                        <span class="small text-muted" id="bt38ListingsPageLabel"></span>
+                        <button class="btn btn-sm btn-outline-secondary" id="bt38ListingsNext" type="button">Next</button>
+                    </div>
+                </div>
                 {% else %}
                 <div class="text-center py-5">
                     <i data-feather="shopping-cart" class="mb-3" style="width: 48px; height: 48px;"></i>
@@ -370,6 +382,7 @@
     </div>
 </div>
 
+<script src="{{ url_for('static', filename='js/bt38-listings-local-pager.js', v=config['BT38_ASSET_VERSION']) }}"></script>
 <script>
 (function () {
   function showGovernedMessage(message, type) {
