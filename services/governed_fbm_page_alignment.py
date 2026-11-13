@@ -138,7 +138,11 @@ def _workspace_fbm_eligible(row: MarketplaceOrder, profile: FBMOrderProfile | No
 
 
 def _latest_distinct_fbm_rows(limit: int) -> tuple[list[MarketplaceOrder], bool]:
-    """Read newest persisted FBM plus dispatched FBA rows from a bounded window."""
+    """Read only the authenticated customer's FBM and dispatched FBA orders."""
+    from governed_routes import _bt38_customer_scope
+    account_id, store_ids, _, _ = _bt38_customer_scope()
+    if account_id is None or not store_ids:
+        return [], False
     fulfillment = func.upper(func.coalesce(MarketplaceOrder.fulfillment_type, ""))
     status = func.lower(func.coalesce(MarketplaceOrder.status, ""))
     dispatched_fba = (
@@ -151,6 +155,7 @@ def _latest_distinct_fbm_rows(limit: int) -> tuple[list[MarketplaceOrder], bool]
     )
     normal_fbm = fulfillment.notin_(("FBA", "AFN", "MCF"))
     query = db.session.query(MarketplaceOrder).filter(
+        MarketplaceOrder.store_id.in_(store_ids),
         or_(normal_fbm, dispatched_fba),
         ~status.like("mcf_%"),
     )
@@ -918,13 +923,17 @@ def install_governed_fbm_page_alignment(app) -> None:
 
     @login_required
     def bounded_shipping_options():
+        from governed_routes import _bt38_customer_scope
+        account_id, store_ids, _, _ = _bt38_customer_scope()
+        if account_id is None or not store_ids:
+            return jsonify({"success": False, "message": "No authorised stores."}), 404
         order_ids = _selected_order_ids()
         if not order_ids:
             return jsonify({"success": False, "message": "Select at least one FBM order."}), 400
 
         rows = (
             db.session.query(MarketplaceOrder)
-            .filter(MarketplaceOrder.id.in_(order_ids))
+            .filter(MarketplaceOrder.id.in_(order_ids), MarketplaceOrder.store_id.in_(store_ids))
             .options(joinedload(MarketplaceOrder.store))
             .all()
         )
