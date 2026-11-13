@@ -13,7 +13,7 @@ from html import escape
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
-from flask import jsonify, request, render_template
+from flask import g, jsonify, request, render_template
 from flask_login import login_required
 from sqlalchemy import func, or_, text, tuple_
 from sqlalchemy.orm import joinedload
