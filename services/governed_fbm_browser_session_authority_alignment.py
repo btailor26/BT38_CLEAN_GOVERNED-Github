@@ -48,7 +48,7 @@ def _session_presentation(rows):
     return payload
 
 
-def _browser_session_health_shell() -> dict:
+def _browser_session_health_shell(rows=None) -> dict:
     from services import governed_fbm_all_orders_health_alignment as health
     mode, start_at, end_at, label, raw_from, raw_to = health._selected_history_window()
     return {
