@@ -566,7 +566,8 @@
         );
 
         panel.addEventListener("show.bs.offcanvas", async function () {
-            stale = true;
+            // Reuse the loaded browser-session bell snapshot on repeat opens.
+            // A committed marketplace event marks it stale when refresh is needed.
             await loadNotifications();
             markSeen();
         });
