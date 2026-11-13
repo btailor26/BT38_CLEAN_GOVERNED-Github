@@ -491,3 +491,12 @@ def test_warehouse_kpi_fallbacks_never_show_fabricated_values():
     route = _source(WAREHOUSE_ROUTE)
     assert 'html.replace("<strong>1,156</strong>"' not in route
     assert 'html.replace("<strong>£183k</strong>"' not in route
+
+
+def test_warehouse_status_does_not_query_neon_on_navigation():
+    template = _source(WAREHOUSE)
+    controller = _source(CONTROLLER)
+    assert "<strong>Not checked</strong>" in template
+    assert 'fetch("/governed/warehouse/runtime-state"' not in controller
+    assert "updateWarehouseStatusKpi()" not in controller
+    assert 'addEventListener("bt38-warehouse-runtime-status"' in controller
