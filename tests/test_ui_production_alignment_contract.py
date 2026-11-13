@@ -433,3 +433,11 @@ def test_fbm_all_three_order_read_paths_are_customer_store_scoped():
     assert "_bt38_customer_scope()" in ordinary
     assert "_bt38_customer_scope()" in shipping
     assert "_bt38_customer_scope()" in snapshot
+
+
+def test_listings_local_pager_targets_rendered_table_and_asset_version_is_optional():
+    listings = _source(Path("templates/listings.html"))
+    pager = _source(Path("static/js/bt38-listings-local-pager.js"))
+    assert listings.count('id="bt38ListingsTable"') == 1
+    assert "getElementById('bt38ListingsTable')" in pager
+    assert "config.get('BT38_ASSET_VERSION'" in listings
