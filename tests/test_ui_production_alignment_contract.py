@@ -461,3 +461,12 @@ def test_warehouse_shared_list_bar_does_not_install_server_navigation():
     source = _source(Path("static/js/bt38-live-page-refresh.js"))
     assert "if (cleanPath() === '/warehouse') return;" in source
     assert "Warehouse pagination is owned by bt38-page-controller.js" in source
+
+
+def test_notification_bell_does_not_read_database_on_page_wake():
+    source = _source(Path("templates/base.html"))
+    bell = source.split('id="bt38NotificationPanelScript"', 1)[1].split("</script>", 1)[0]
+    assert 'panel.addEventListener("show.bs.offcanvas"' in bell
+    assert 'window.addEventListener(\n            "pageshow"' not in bell
+    assert 'document.addEventListener(\n            "visibilitychange"' not in bell
+    assert "hydrateBellAfterWake" not in bell
