@@ -478,3 +478,11 @@ def test_notification_panel_reuses_session_snapshot_on_repeat_open():
     handler = bell.split('panel.addEventListener("show.bs.offcanvas"', 1)[1].split('});', 1)[0]
     assert "await loadNotifications();" in handler
     assert "stale = true;" not in handler
+
+
+def test_warehouse_kpi_fallbacks_never_show_fabricated_values():
+    source = _source(WAREHOUSE)
+    assert "<strong>1,156</strong>" not in source
+    assert "<strong>£183k</strong>" not in source
+    assert "<strong>£0.00</strong>" in source
+    assert "<span>Listings</span>\n      <strong>0</strong>" in source
