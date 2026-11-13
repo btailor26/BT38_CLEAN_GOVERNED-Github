@@ -441,3 +441,9 @@ def test_listings_local_pager_targets_rendered_table_and_asset_version_is_option
     assert listings.count('id="bt38ListingsTable"') == 1
     assert "getElementById('bt38ListingsTable')" in pager
     assert "config.get('BT38_ASSET_VERSION'" in listings
+
+
+def test_fbm_page_imports_flask_request_context_for_working_set_status():
+    source = _source(FBM_PAGE_ALIGNMENT)
+    assert "from flask import g, jsonify, request, render_template" in source
+    assert "g._bt38_fbm_working_set_truncated = bool(has_more)" in source
