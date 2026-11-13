@@ -484,5 +484,10 @@ def test_warehouse_kpi_fallbacks_never_show_fabricated_values():
     source = _source(WAREHOUSE)
     assert "<strong>1,156</strong>" not in source
     assert "<strong>£183k</strong>" not in source
-    assert "<strong>£0.00</strong>" in source
-    assert "<span>Listings</span>\n      <strong>0</strong>" in source
+    assert "stats.listing_count" in source
+    assert "stats.inventory_value" in source
+    assert 'else "0"' in source
+    assert 'else "0.00"' in source
+    route = _source(WAREHOUSE_ROUTE)
+    assert 'html.replace("<strong>1,156</strong>"' not in route
+    assert 'html.replace("<strong>£183k</strong>"' not in route
