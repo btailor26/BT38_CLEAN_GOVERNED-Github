@@ -396,3 +396,26 @@ def test_warehouse_bottom_pager_has_one_change_owner():
     assert template.count('id="bt38ResultsPerPageSelect"') == 1
     assert '<select id="bt38ResultsPerPageSelect" name="per_page">' in template
     assert 'select.addEventListener("change", () => { page.currentPage = 1; render(page.name); })' in controller
+
+
+def test_fba_stock_page_is_authenticated_and_scoped_to_customer_stores():
+    source = _source(WAREHOUSE_ROUTE)
+    fba = source.split("@governed_bp.route('/amazon-fba-stock')", 1)[1].split('@governed_bp.get("/governed/audit/runtime-understanding")', 1)[0]
+    assert "@login_required" in fba.split("def amazon_fba_stock():", 1)[0]
+    assert "account_id, store_ids, _, _ = _bt38_customer_scope()" in fba
+    assert "if account_id is None:" in fba
+    assert "Store.id.in_(store_ids)" in fba
+    assert "AmazonFBAInventory.query.filter(AmazonFBAInventory.store_id.in_(store_ids))" in fba
+    assert fba.count("AmazonFBAInventory.store_id.in_(store_ids)") >= 5
+
+
+def test_listings_and_groups_use_one_bottom_local_pager():
+    listings = _source(Path("templates/listings.html"))
+    groups = _source(Path("templates/groups.html"))
+    pager = _source(Path("static/js/bt38-listings-local-pager.js"))
+    assert listings.count('id="bt38ListingsBottomPager"') == 1
+    assert groups.count('id="bt38GroupsBottomPager"') == 1
+    assert 'id="bt38ListingsPageSize"' in listings
+    assert 'id="bt38GroupsPageSize"' in groups
+    assert "fetch(" not in pager
+    assert "window.filterGroups = function filterGroups()" in groups
