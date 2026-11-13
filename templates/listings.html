@@ -237,7 +237,7 @@
             <div class="card-body">
                 {% if listings %}
                 <div class="table-responsive">
-                    <table class="table table-hover">
+                    <table id="bt38ListingsTable" class="table table-hover">
                         <thead>
                             <tr>
                                 <th style="width: 40px;">
@@ -382,7 +382,7 @@
     </div>
 </div>
 
-<script src="{{ url_for('static', filename='js/bt38-listings-local-pager.js', v=config['BT38_ASSET_VERSION']) }}"></script>
+<script src="{{ url_for('static', filename='js/bt38-listings-local-pager.js', v=config.get('BT38_ASSET_VERSION', 'listings-local-pager')) }}"></script>
 <script>
 (function () {
   function showGovernedMessage(message, type) {
