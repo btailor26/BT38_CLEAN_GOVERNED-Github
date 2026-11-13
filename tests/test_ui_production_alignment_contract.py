@@ -470,3 +470,11 @@ def test_notification_bell_does_not_read_database_on_page_wake():
     assert 'window.addEventListener(\n            "pageshow"' not in bell
     assert 'document.addEventListener(\n            "visibilitychange"' not in bell
     assert "hydrateBellAfterWake" not in bell
+
+
+def test_notification_panel_reuses_session_snapshot_on_repeat_open():
+    source = _source(Path("templates/base.html"))
+    bell = source.split('id="bt38NotificationPanelScript"', 1)[1].split("</script>", 1)[0]
+    handler = bell.split('panel.addEventListener("show.bs.offcanvas"', 1)[1].split('});', 1)[0]
+    assert "await loadNotifications();" in handler
+    assert "stale = true;" not in handler
