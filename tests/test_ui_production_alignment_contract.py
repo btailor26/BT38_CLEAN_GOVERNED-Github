@@ -419,3 +419,17 @@ def test_listings_and_groups_use_one_bottom_local_pager():
     assert 'id="bt38GroupsPageSize"' in groups
     assert "fetch(" not in pager
     assert "window.filterGroups = function filterGroups()" in groups
+
+
+def test_fbm_all_three_order_read_paths_are_customer_store_scoped():
+    page = _source(Path("services/governed_fbm_page_alignment.py"))
+    history = _source(Path("services/governed_fbm_global_search_alignment.py"))
+    ordinary = page.split("def _latest_distinct_fbm_rows(", 1)[1].split("\ndef ", 1)[0]
+    shipping = page.split("def bounded_shipping_options():", 1)[1]
+    snapshot = history.split("def _session_snapshot_rows()", 1)[1].split("\ndef ", 1)[0]
+    assert "MarketplaceOrder.store_id.in_(store_ids)" in ordinary
+    assert "MarketplaceOrder.store_id.in_(store_ids)" in shipping
+    assert "MarketplaceOrder.store_id.in_(store_ids)" in snapshot
+    assert "_bt38_customer_scope()" in ordinary
+    assert "_bt38_customer_scope()" in shipping
+    assert "_bt38_customer_scope()" in snapshot
