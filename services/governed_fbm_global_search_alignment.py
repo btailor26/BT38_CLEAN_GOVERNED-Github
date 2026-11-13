@@ -182,6 +182,10 @@ def _session_snapshot_rows() -> tuple[list[MarketplaceOrder], bool]:
     if cached is not None:
         return list(cached), bool(getattr(g, "_bt38_fbm_session_truncated", False))
     from services import governed_fbm_page_alignment as page_alignment
+    from governed_routes import _bt38_customer_scope
+    account_id, store_ids, _, _ = _bt38_customer_scope()
+    if account_id is None or not store_ids:
+        return [], False
     _, start_at, end_at, _ = _range_bounds()
     fulfillment = func.upper(func.coalesce(MarketplaceOrder.fulfillment_type, ""))
     status = func.lower(func.coalesce(MarketplaceOrder.status, ""))
@@ -198,6 +202,7 @@ def _session_snapshot_rows() -> tuple[list[MarketplaceOrder], bool]:
     # persisted dispatched FBA/AFN rows; MCF remains outside this FBA tab.
     candidate_limit = _RANGE_ROW_CAP + 1
     candidates = (db.session.query(MarketplaceOrder).filter(
+        MarketplaceOrder.store_id.in_(store_ids),
         or_(normal_fbm, dispatched_fba),
         ~status.like("mcf_%"),
     ).filter(MarketplaceOrder.store_id.isnot(None), MarketplaceOrder.marketplace_order_id.isnot(None)).filter(MarketplaceOrder.created_at >= start_at, MarketplaceOrder.created_at < end_at).options(joinedload(MarketplaceOrder.store), joinedload(MarketplaceOrder.warehouse_stock)).order_by(MarketplaceOrder.id.desc()).limit(candidate_limit).all())
