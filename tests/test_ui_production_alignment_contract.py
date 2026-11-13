@@ -455,3 +455,9 @@ def test_fbm_browser_session_health_override_accepts_page_rows():
     assert "health = _health_summary(rows)" in page
     assert "def _browser_session_health_shell(rows=None) -> dict:" in authority
     assert "page._health_summary = _browser_session_health_shell" in authority
+
+
+def test_warehouse_shared_list_bar_does_not_install_server_navigation():
+    source = _source(Path("static/js/bt38-live-page-refresh.js"))
+    assert "if (cleanPath() === '/warehouse') return;" in source
+    assert "Warehouse pagination is owned by bt38-page-controller.js" in source
