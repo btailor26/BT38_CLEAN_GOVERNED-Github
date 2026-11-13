@@ -6225,22 +6225,29 @@ def governed_ebay_oauth_refresh_token():
 # Governed fuse-box path only.
 # FBA/AFN inventory is imported from Amazon and never pushed from warehouse.
 @governed_bp.route('/amazon-fba-stock')
+@login_required
 def amazon_fba_stock():
     """Amazon FBA read-only stock page. FBA/AFN is imported from Amazon and never pushed from warehouse."""
     from models import db, AmazonFBAInventory, Store
+
+    account_id, store_ids, _, _ = _bt38_customer_scope()
+    if account_id is None:
+        from flask import abort
+        abort(404)
 
     page = request.args.get('page', 1, type=int)
     search = (request.args.get('search') or '').strip()
     status_filter = request.args.get('status', 'active')
 
     fba_stores = Store.query.filter(
+        Store.id.in_(store_ids),
         Store.platform.ilike('amazon'),
         Store.fba_import_enabled == True
     ).all()
 
     no_fba_store = len(fba_stores) == 0
 
-    query = AmazonFBAInventory.query
+    query = AmazonFBAInventory.query.filter(AmazonFBAInventory.store_id.in_(store_ids))
 
     if search:
         like = f'%{search}%'
@@ -6267,11 +6274,11 @@ def amazon_fba_stock():
         error_out=False
     )
 
-    total_skus = AmazonFBAInventory.query.filter(AmazonFBAInventory.is_archived == False).count()
-    total_quantity = db.session.query(db.func.coalesce(db.func.sum(AmazonFBAInventory.available_quantity), 0)).scalar() or 0
+    total_skus = AmazonFBAInventory.query.filter(AmazonFBAInventory.store_id.in_(store_ids), AmazonFBAInventory.is_archived == False).count()
+    total_quantity = db.session.query(db.func.coalesce(db.func.sum(AmazonFBAInventory.available_quantity), 0)).filter(AmazonFBAInventory.store_id.in_(store_ids)).scalar() or 0
     stores_count = len(fba_stores)
-    orphaned_count = AmazonFBAInventory.query.filter(AmazonFBAInventory.is_orphaned == True).count()
-    archived_count = AmazonFBAInventory.query.filter(AmazonFBAInventory.is_archived == True).count()
+    orphaned_count = AmazonFBAInventory.query.filter(AmazonFBAInventory.store_id.in_(store_ids), AmazonFBAInventory.is_orphaned == True).count()
+    archived_count = AmazonFBAInventory.query.filter(AmazonFBAInventory.store_id.in_(store_ids), AmazonFBAInventory.is_archived == True).count()
 
     stats = {
         'total_skus': total_skus,
