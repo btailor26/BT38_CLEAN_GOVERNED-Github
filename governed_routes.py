@@ -2673,10 +2673,8 @@ def _patch_warehouse_phase1_ui(html: str, stats, search_query: str, active_view:
     This keeps the approved layout intact and adds only runtime behavior:
     search, KPI filters, tab filters, and real dynamic KPI values.
     """
-    listing_count = f"{int(getattr(stats, 'listing_count', 0) or 0):,}"
-    inventory_value = f"£{float(getattr(stats, 'inventory_value', 0) or 0):,.0f}"
-    html = html.replace("<strong>1,156</strong>", f"<strong>{listing_count}</strong>")
-    html = html.replace("<strong>£183k</strong>", f"<strong>{inventory_value}</strong>")
+    # Warehouse KPI cards are rendered directly from stats in warehouse.html.
+    # Never substitute figures by matching hardcoded HTML placeholders.
 
     payload = {
         "searchQuery": search_query or "",
