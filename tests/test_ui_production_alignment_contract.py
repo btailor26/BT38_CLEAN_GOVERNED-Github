@@ -447,3 +447,11 @@ def test_fbm_page_imports_flask_request_context_for_working_set_status():
     source = _source(FBM_PAGE_ALIGNMENT)
     assert "from flask import g, jsonify, request, render_template" in source
     assert "g._bt38_fbm_working_set_truncated = bool(has_more)" in source
+
+
+def test_fbm_browser_session_health_override_accepts_page_rows():
+    page = _source(FBM_PAGE_ALIGNMENT)
+    authority = _source(Path("services/governed_fbm_browser_session_authority_alignment.py"))
+    assert "health = _health_summary(rows)" in page
+    assert "def _browser_session_health_shell(rows=None) -> dict:" in authority
+    assert "page._health_summary = _browser_session_health_shell" in authority
