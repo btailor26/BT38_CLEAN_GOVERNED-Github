@@ -163,15 +163,13 @@ window.BT38.pages = window.BT38.pages || {};
       setWarehouseKpi("Inventory Value", formatted, missing ? `${costed} SKUs costed · ${missing} missing COGS` : `${costed} SKUs costed · stock × COGS`);
     } catch (error) { console.warn("[warehouse-kpi] aggregate read unavailable", error); }
   }
-  async function updateWarehouseStatusKpi() {
-    setWarehouseKpi("Warehouse Status", "Checking", "Runtime heartbeat");
-    try {
-      const response = await fetch("/governed/warehouse/runtime-state", {credentials: "include", headers: {Accept: "application/json"}, cache: "no-store"});
-      const data = await response.json();
-      const live = response.ok && data && data.ok === true;
-      setWarehouseKpi("Warehouse Status", live ? "Live" : "Attention", live ? "Runtime healthy" : "Runtime check required");
-    } catch (error) { setWarehouseKpi("Warehouse Status", "Attention", "Runtime unavailable"); }
-  }
+  // Runtime status is not inferred from page navigation. Only a committed
+  // runtime-status event can change the initial "Not checked" label.
+  window.addEventListener("bt38-warehouse-runtime-status", function (event) {
+    const detail = event.detail || {};
+    if (detail.ok === true) setWarehouseKpi("Warehouse Status", "Live", "Runtime verified");
+    else if (detail.ok === false) setWarehouseKpi("Warehouse Status", "Attention", "Runtime check required");
+  });
   function normalizeWarehouseUi() {
     if (!document.querySelector('[data-bt38-page="warehouse"]')) return;
     const routes = {"master stock": "/warehouse", "fba read only": "/fba-inventory", "group view": "/product-linking", "listings": "/warehouse?view=listings", "orders": "/orders", "stock transfer": "/warehouse?view=stock-transfer"};
@@ -182,7 +180,6 @@ window.BT38.pages = window.BT38.pages || {};
       button.addEventListener("click", () => { window.location.href = route; });
     });
     updateWarehouseKpis();
-    updateWarehouseStatusKpi();
   }
 
   const controller = {
