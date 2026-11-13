@@ -1026,6 +1026,9 @@
   }
 
   function installWithAsyncSupport() {
+    // Warehouse pagination is owned by bt38-page-controller.js; do not install
+    // the legacy shared bar that navigates to a new server-rendered page.
+    if (cleanPath() === '/warehouse') return;
     if (install()) return;
     const observer = new MutationObserver(function () {
       if (install()) observer.disconnect();
