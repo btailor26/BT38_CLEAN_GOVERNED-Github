@@ -132,13 +132,13 @@
 
     <div class="bt38-kpi-card">
       <span>Listings</span>
-      <strong>0</strong>
+      <strong>{{ "{:,}".format(stats.listing_count|int) if stats and stats.listing_count is not none else "0" }}</strong>
       <small>Across marketplaces</small>
     </div>
 
     <div class="bt38-kpi-card">
       <span>Inventory Value</span>
-      <strong>£0.00</strong>
+      <strong>£{{ "{:,.2f}".format(stats.inventory_value|float) if stats and stats.inventory_value is not none else "0.00" }}</strong>
       <small>Warehouse stock × recorded COGS</small>
     </div>
 
