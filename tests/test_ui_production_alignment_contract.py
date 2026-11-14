@@ -536,3 +536,13 @@ def test_exact_committed_page_row_projects_into_bell_once():
     assert "setInterval(" not in source
 
 
+
+def test_fbm_bell_follows_verified_committed_snapshot_only():
+    owner = _source(Path("services/governed_fbm_exact_record_session_alignment.py"))
+    bell = _source(Path("services/governed_fbm_bell_display_only_alignment.py"))
+    assert "window.dispatchEvent(new CustomEvent('bt38-fbm-committed-snapshot-applied'" in owner
+    assert "window.addEventListener('bt38-fbm-committed-snapshot-applied',sync)" in bell
+    assert "document.addEventListener('bt38:exact-record-event',sync)" not in bell
+    assert "sessionStorage.setItem(cacheKey,JSON.stringify(projected))" in bell
+    assert "db.session" not in bell
+
