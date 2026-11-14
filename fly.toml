@@ -5,10 +5,9 @@ primary_region = "lhr"
   dockerfile = "Dockerfile"
 
 [env]
-  # Webhooks remain the immediate listing path. This enables the existing
-  # bounded eight-hour importer as recovery when a marketplace notification
-  # is unavailable or missed; the importer still obeys the database fuses.
-  ENABLE_GOVERNED_8H_HYDRATION = "true"
+  # Only committed events drive governed work; no scheduled hydration.
+  # Match the Gunicorn worker environment to avoid conflicting configuration.
+  ENABLE_GOVERNED_8H_HYDRATION = "false"
 
 [http_service]
   internal_port = 5000
