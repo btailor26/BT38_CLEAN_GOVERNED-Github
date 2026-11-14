@@ -371,7 +371,8 @@ def test_warehouse_exact_event_refresh_reindexes_local_session_rows():
     """A replaced Warehouse DOM row must not leave stale local filter data."""
     shared = _source(Path("static/js/bt38-live-page-refresh.js"))
     controller = _source(CONTROLLER)
-    assert "currentRow.replaceWith(document.importNode(freshRow, true));" in shared
+    assert "currentRow.replaceWith(committedRow);" in shared
+    assert "projectCommittedRow(committedRow, detail, path);" in shared
     assert "window.BT38.PageController.refreshTableCache('warehouse')" in shared
     assert "refreshTableCache(name) { const cached = cacheRows(name); if (cached) filter(name, true);" in controller
 
