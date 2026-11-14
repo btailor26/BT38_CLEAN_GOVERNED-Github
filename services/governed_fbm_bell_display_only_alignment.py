@@ -62,7 +62,8 @@ def _fbm_bell_session_script() -> str:
   }
   window.BT38BellCurrentRecords=function(){return read().slice(0,50);};
   sync();
-  document.addEventListener('bt38:exact-record-event',sync);
+  // Only the canonical FBM page's applied snapshot may update the bell.
+  // A raw event signal is not proof that its page row has been committed.
   window.addEventListener('bt38-fbm-committed-snapshot-applied',sync);
 })();
 </script>'''
