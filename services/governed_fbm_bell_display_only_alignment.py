@@ -62,7 +62,8 @@ def _fbm_bell_session_script() -> str:
   }
   window.BT38BellCurrentRecords=function(){return read().slice(0,50);};
   sync();
-  document.addEventListener('bt38:exact-record-event',sync);
+  // The canonical exact-record owner emits this only after updating its row.
+  // Never project the bell from an earlier raw transport signal.
   window.addEventListener('bt38-fbm-committed-snapshot-applied',sync);
 })();
 </script>'''
