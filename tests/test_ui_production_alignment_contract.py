@@ -546,3 +546,10 @@ def test_fbm_bell_follows_verified_committed_snapshot_only():
     assert "sessionStorage.setItem(cacheKey,JSON.stringify(projected))" in bell
     assert "db.session" not in bell
 
+
+
+def test_committed_warehouse_bell_title_normalizes_whitespace():
+    source = _source(Path("static/js/bt38-live-page-refresh.js"))
+    projection = source.split("function projectCommittedRow(row, detail, path) {", 1)[1].split("  async function refreshExactHtmlRow", 1)[0]
+    assert "trim().replace(/\\s+/g, ' ').slice(0, 180)" in projection
+    assert "trim().replace(/\\\\s+/g, ' ').slice(0, 180)" not in projection
