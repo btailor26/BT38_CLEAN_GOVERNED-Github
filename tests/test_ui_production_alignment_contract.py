@@ -126,16 +126,13 @@ def test_warehouse_route_loads_complete_relevant_listing_working_set_once():
 
 def test_warehouse_kpis_use_distinct_truth_sources():
     source = _source(CONTROLLER)
-
-    assert "Active linked listings" in source
-    assert "/governed/warehouse/economics-batch?stock_ids=" in source
-    assert "stock × COGS" in source
-    assert "missing COGS" in source
-    assert "/governed/warehouse/runtime-state" not in source
+    warehouse = _source(WAREHOUSE)
+    assert "/governed/warehouse/kpis" not in source
+    assert "updateWarehouseKpis()" not in source
     assert "bt38-warehouse-runtime-status" in source
     assert "Runtime verified" in source
-    assert "Loaded stock × price" not in source
-    assert "Loaded marketplace listings" not in source
+    assert "stats.inventory_value" in warehouse
+    assert "stats.listing_count" in warehouse
 
 
 def test_warehouse_navigation_is_wired_to_existing_pages():
