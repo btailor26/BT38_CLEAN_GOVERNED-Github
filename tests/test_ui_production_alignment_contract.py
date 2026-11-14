@@ -474,8 +474,10 @@ def test_notification_panel_reuses_session_snapshot_on_repeat_open():
     source = _source(Path("templates/base.html"))
     bell = source.split('id="bt38NotificationPanelScript"', 1)[1].split("</script>", 1)[0]
     handler = bell.split('panel.addEventListener("show.bs.offcanvas"', 1)[1].split('});', 1)[0]
-    assert "await loadNotifications();" in handler
-    assert "stale = true;" not in handler
+    assert "render();" in handler
+    assert "markSeen();" in handler
+    assert "loadNotifications()" not in handler
+    assert "fetch(" not in handler
 
 
 def test_warehouse_kpi_fallbacks_never_show_fabricated_values():
