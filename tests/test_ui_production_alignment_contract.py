@@ -511,14 +511,15 @@ def test_warehouse_status_does_not_query_neon_on_navigation():
     assert 'addEventListener("bt38-warehouse-runtime-status"' in controller
 
 
-def test_notifications_refresh_only_on_committed_event_or_explicit_open():
+def test_notifications_are_read_only_page_projection_without_secondary_fetch():
     source = _source(Path("templates/base.html"))
+    assert 'window.addEventListener("bt38-fbm-bell-projection-updated"' in source
     assert 'window.addEventListener("bt38-marketplace-event"' in source
-    assert 'if (panel.classList.contains("show")) void loadNotifications();' in source
     assert 'panel.addEventListener("show.bs.offcanvas"' in source
     assert 'const byKey = new Map(records.map' in source
     assert 'if (key) byKey.set(key, record);' in source
-    assert "setInterval(" not in source
-    assert "setTimeout(loadNotifications" not in source
+    assert '/governed/ui/notifications?limit=20' not in source
+    assert 'loadNotifications()' not in source
+    assert 'setInterval(' not in source
 
 
