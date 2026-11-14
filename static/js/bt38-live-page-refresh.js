@@ -37,7 +37,7 @@
       ? (orderId ? `order:${storeId}:${orderId}` : '')
       : (stockId ? `stock:${stockId}` : listingId ? `listing:${listingId}` : '');
     if (!identity) return;
-    const title = String(row.querySelector('[data-product-title],.product-title,.order-product-title')?.textContent || row.querySelector('td')?.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 180);
+    const title = String(row.querySelector('[data-product-title],.product-title,.order-product-title')?.textContent || row.querySelector('td')?.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 180);
     const record = {
       event_key: identity,
       log_type: path === '/fbm' ? 'marketplace_sale' : 'marketplace_listing',
