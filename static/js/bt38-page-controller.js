@@ -145,24 +145,9 @@ window.BT38.pages = window.BT38.pages || {};
     if (strong) strong.textContent = value;
     if (small && note) small.textContent = note;
   }
-  // Warehouse aggregate KPIs come from /governed/warehouse/kpis. Row-level
-  // profitability is a separate local truth owned by warehouse-governed.js at
-  // /governed/warehouse/economics-batch?stock_ids= and never expands into a marketplace write.
-  async function updateWarehouseKpis() {
-    try {
-      const response = await fetch("/governed/warehouse/kpis", {credentials: "include", headers: {Accept: "application/json"}, cache: "no-store"});
-      const data = await response.json();
-      if (!response.ok || data.success === false) throw new Error(data.error || data.message || "Warehouse KPI data unavailable");
-      setWarehouseKpi("Total SKUs", String(Number(data.total_skus || 0)), "Warehouse master SKUs");
-      setWarehouseKpi("Available Units", String(Number(data.total_available || 0)), "Warehouse Available");
-      setWarehouseKpi("Low Stock", String(Number(data.low_stock_count || 0)), "Needs Attention");
-      setWarehouseKpi("Listings", String(Number(data.listing_count || 0)), "Active linked listings");
-      const formatted = new Intl.NumberFormat("en-GB", {style: "currency", currency: "GBP", maximumFractionDigits: 0}).format(Number(data.inventory_value || 0));
-      const missing = Number(data.missing_cogs_skus || 0);
-      const costed = Number(data.costed_skus || 0);
-      setWarehouseKpi("Inventory Value", formatted, missing ? `${costed} SKUs costed · ${missing} missing COGS` : `${costed} SKUs costed · stock × COGS`);
-    } catch (error) { console.warn("[warehouse-kpi] aggregate read unavailable", error); }
-  }
+  // Initial Warehouse KPI totals are rendered from the scoped server snapshot.
+  // Navigation must not re-read Neon or overwrite them with global aggregates.
+  // Row-level economics are separately owned by warehouse-governed.js.
   // Runtime status is not inferred from page navigation. Only a committed
   // runtime-status event can change the initial "Not checked" label.
   window.addEventListener("bt38-warehouse-runtime-status", function (event) {
@@ -179,7 +164,6 @@ window.BT38.pages = window.BT38.pages || {};
       button.type = "button";
       button.addEventListener("click", () => { window.location.href = route; });
     });
-    updateWarehouseKpis();
   }
 
   const controller = {
