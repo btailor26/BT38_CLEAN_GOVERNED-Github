@@ -26,6 +26,35 @@
     if (window.CSS && typeof window.CSS.escape === 'function') return window.CSS.escape(text);
     return text.replace(/["\\]/g, '\\$&');
   }
+  // The bell projects the exact row already committed to the visible page.
+  // This is not another event source, query, or notification hydration.
+  function projectCommittedRow(row, detail, path) {
+    const orderId = String(detail?.marketplace_order_id || row.dataset.marketplaceOrderId || '').trim();
+    const storeId = String(detail?.store_id || row.dataset.storeId || '').trim();
+    const stockId = String(detail?.warehouse_stock_id || row.dataset.stockId || '').trim();
+    const listingId = String(detail?.listing_id || row.dataset.listingId || '').trim();
+    const identity = path === '/fbm'
+      ? (orderId ? `order:${storeId}:${orderId}` : '')
+      : (stockId ? `stock:${stockId}` : listingId ? `listing:${listingId}` : '');
+    if (!identity) return;
+    const title = String(row.querySelector('[data-product-title],.product-title,.order-product-title')?.textContent || row.querySelector('td')?.textContent || '').trim().replace(/\\s+/g, ' ').slice(0, 180);
+    const record = {
+      event_key: identity,
+      log_type: path === '/fbm' ? 'marketplace_sale' : 'marketplace_listing',
+      platform: String(detail?.platform || row.dataset.platform || 'Marketplace'),
+      title: title || (path === '/fbm' ? 'Marketplace order updated' : 'Warehouse record updated'),
+      message: title,
+      sku: String(detail?.seller_sku || row.dataset.sku || ''),
+      order_id: orderId,
+      listing_id: listingId,
+      quantity: row.dataset.quantity || null,
+      created_at: String(detail?.published_at || new Date().toISOString())
+    };
+    window.dispatchEvent(new CustomEvent('bt38-fbm-bell-projection-updated', {
+      detail: {records: [record], source: 'committed_page_row'}
+    }));
+  }
+
   async function refreshExactHtmlRow(detail) {
     const path = window.location.pathname.replace(/\/$/, '') || '/';
     let selector = '';
@@ -71,7 +100,9 @@
     const freshRow = parsed.querySelector(selector);
     if (!freshRow) return false;
 
-    currentRow.replaceWith(document.importNode(freshRow, true));
+    const committedRow = document.importNode(freshRow, true);
+    currentRow.replaceWith(committedRow);
+    projectCommittedRow(committedRow, detail, path);
     // The Warehouse controller caches DOM row references and searchable text.
     // Rebuild its in-memory index after an exact row replacement, without a
     // second network request or resetting the user's active filters/page.
