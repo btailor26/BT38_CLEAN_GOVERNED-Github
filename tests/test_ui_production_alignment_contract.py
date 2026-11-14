@@ -523,3 +523,13 @@ def test_notifications_are_read_only_page_projection_without_secondary_fetch():
     assert 'setInterval(' not in source
 
 
+
+def test_exact_committed_page_row_projects_into_bell_once():
+    source = _source(Path("static/js/bt38-live-page-refresh.js"))
+    assert "projectCommittedRow(committedRow, detail, path);" in source
+    assert "currentRow.replaceWith(committedRow);" in source
+    assert "detail: {records: [record], source: 'committed_page_row'}" in source
+    assert "bt38-fbm-bell-projection-updated" in source
+    assert "setInterval(" not in source
+
+
