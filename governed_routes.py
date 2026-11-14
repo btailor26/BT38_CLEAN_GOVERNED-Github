@@ -2483,18 +2483,29 @@ def governed_warehouse_page():
     low_stock_count = int(low_stock_count or 0)
 
     listing_count = (
-        db.session.query(MarketplaceListing)
+        db.session.query(func.count(MarketplaceListing.id))
         .filter(MarketplaceListing.is_active == True)  # noqa: E712
         .filter(MarketplaceListing.store_id.in_(store_ids))
-        .count()
+        .filter(~MarketplaceListing.title.ilike("Amazon SKU%"))
+        .scalar()
+        or 0
     )
 
-    inventory_value = 0.0
-    for row in rows:
-        try:
-            inventory_value += float(getattr(row, "price", 0) or 0) * int(getattr(row, "available_quantity", 0) or 0)
-        except Exception:
-            pass
+    # Inventory value is warehouse sellable stock at recorded unit cost,
+    # never the current view's listing price or a sum of filtered rows.
+    inventory_value = (
+        db.session.query(
+            func.coalesce(
+                func.sum(sellable * func.coalesce(WarehouseStock.unit_cost, 0)),
+                0,
+            )
+        )
+        .filter(WarehouseStock.is_active == True)  # noqa: E712
+        .filter(WarehouseStock.warehouse_id.in_(warehouse_ids))
+        .filter(WarehouseStock.is_deleted == False)  # noqa: E712
+        .scalar()
+        or 0
+    )
 
     stats = SimpleNamespace(
         total_skus=total_skus,
