@@ -494,6 +494,17 @@ def test_warehouse_kpi_fallbacks_never_show_fabricated_values():
     assert 'html.replace("<strong>£183k</strong>"' not in route
 
 
+def test_warehouse_initial_inventory_value_uses_scoped_sellable_cogs():
+    route = _source(WAREHOUSE_ROUTE)
+    block = route.split("    listing_count = (", 1)[1].split("    stats = SimpleNamespace(", 1)[0]
+    assert 'filter(MarketplaceListing.store_id.in_(store_ids))' in block
+    assert 'filter(~MarketplaceListing.title.ilike("Amazon SKU%"))' in block
+    assert "func.sum(sellable * func.coalesce(WarehouseStock.unit_cost, 0))" in block
+    assert "filter(WarehouseStock.warehouse_id.in_(warehouse_ids))" in block
+    assert 'getattr(row, "price"' not in block
+
+
+
 def test_warehouse_status_does_not_query_neon_on_navigation():
     template = _source(WAREHOUSE)
     controller = _source(CONTROLLER)
