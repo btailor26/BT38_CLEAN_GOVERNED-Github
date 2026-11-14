@@ -195,14 +195,12 @@
         const list = document.getElementById("bt38NotificationList");
         if (!panel || !bell || !badge || !loading || !errorBox || !emptyBox || !list) return;
 
-        const salesUrl = "/governed/ui/notifications?limit=20";
         const liveUrl = "/governed/ui/events/stream";
         const seenKey = "bt38.notifications.lastSeenAt";
         const seenEventsKey = "bt38.notifications.seenEventKeys";
         const lightKey = "bt38.notifications.eventPending";
         let records = [];
         let loaded = false;
-        let stale = true;
         let liveSource = null;
         let liveChannel = null;
         let releaseLiveLeader = null;
@@ -349,56 +347,12 @@
             feather.replace();
         }
 
-        async function loadNotifications() {
-            if (!stale && loaded) return;
-            loading.classList.remove("d-none");
-            errorBox.classList.add("d-none");
-            try {
-                const response = await fetch(salesUrl, {method: "GET", headers: {"Accept": "application/json"}, credentials: "same-origin", cache: "no-store"});
-                if (!response.ok) throw new Error(`Notification request failed with HTTP ${response.status}`);
-                const payload = await response.json();
-                if (payload?.success !== true) throw new Error(payload?.error || payload?.message || "Notification response was not successful.");
-                records = Array.isArray(payload.records) ? payload.records : [];
-
-                if (
-                    window.localStorage.getItem(seenEventsKey) === null
-                    && window.localStorage.getItem(seenKey) !== null
-                ) {
-                    const previousLastSeen = Number(
-                        window.localStorage.getItem(seenKey) || 0
-                    );
-
-                    const previouslySeenKeys = records
-                        .filter((record) => timestamp(record) <= previousLastSeen)
-                        .map(eventKey)
-                        .filter(Boolean);
-
-                    window.localStorage.setItem(
-                        seenEventsKey,
-                        JSON.stringify(previouslySeenKeys)
-                    );
-                }
-
-                loaded = true;
-                stale = false;
-                render();
-                updateUnread();
-            } catch (error) {
-                errorBox.textContent = error instanceof Error ? error.message : "Unable to load notifications.";
-                errorBox.classList.remove("d-none");
-            } finally {
-                loading.classList.add("d-none");
-            }
-        }
-
         setBellLight(window.localStorage.getItem(lightKey) === "1");
 
         window.addEventListener("bt38-marketplace-event", function () {
-            // A committed event is the only automatic notification read trigger.
-            // No interval, navigation hydration, or visibility polling.
-            stale = true;
-            if (!window.BT38BellCurrentRecords) setBellLight(true);
-            if (panel.classList.contains("show")) void loadNotifications();
+            // The existing page controller applies the committed event first.
+            // The bell is a read-only projection, never a second fetch/event.
+            // Only bt38-fbm-bell-projection-updated may supply display records.
         });
 
         // The existing FBM projection emits this after applying page changes.
@@ -417,7 +371,6 @@
                 .sort((a, b) => timestamp(b) - timestamp(a))
                 .slice(0, 50);
             loaded = true;
-            // Preserve a pending committed-event refresh; FBM is one source.
 
             updateUnread();
             if (panel.classList.contains("show")) render();
@@ -576,11 +529,19 @@
             {once: true}
         );
 
-        panel.addEventListener("show.bs.offcanvas", async function () {
-            // Reuse the loaded browser-session bell snapshot on repeat opens.
-            // A committed marketplace event marks it stale when refresh is needed.
-            await loadNotifications();
-            if (loaded) markSeen();
+        panel.addEventListener("show.bs.offcanvas", function () {
+            // Read the already-applied page projection only. No Neon read.
+            loading.classList.add("d-none");
+            errorBox.classList.add("d-none");
+            if (!loaded) {
+                emptyBox.classList.add("d-none");
+                list.classList.add("d-none");
+                errorBox.textContent = "Waiting for the page's committed marketplace activity.";
+                errorBox.classList.remove("d-none");
+                return;
+            }
+            render();
+            markSeen();
         });
 
         // Page show and tab visibility must not hydrate notifications from Neon.
