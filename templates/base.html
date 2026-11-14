@@ -394,10 +394,11 @@
         setBellLight(window.localStorage.getItem(lightKey) === "1");
 
         window.addEventListener("bt38-marketplace-event", function () {
+            // A committed event is the only automatic notification read trigger.
+            // No interval, navigation hydration, or visibility polling.
             stale = true;
-            // The FBM page's committed projection supplies the authoritative
-            // action count; do not invent a second bell state on each wake.
             if (!window.BT38BellCurrentRecords) setBellLight(true);
+            if (panel.classList.contains("show")) void loadNotifications();
         });
 
         // The existing FBM projection emits this after applying page changes.
@@ -405,9 +406,19 @@
         window.addEventListener("bt38-fbm-bell-projection-updated", function (event) {
             const projected = event.detail?.records;
             if (!Array.isArray(projected)) return;
-            records = projected.slice(0, 50);
+            // An empty FBM-only projection must never erase notifications
+            // already supplied by other marketplace UI sources.
+            const byKey = new Map(records.map((record) => [eventKey(record), record]));
+            projected.forEach((record) => {
+                const key = eventKey(record);
+                if (key) byKey.set(key, record);
+            });
+            records = Array.from(byKey.values())
+                .sort((a, b) => timestamp(b) - timestamp(a))
+                .slice(0, 50);
             loaded = true;
-            stale = false;
+            // Preserve a pending committed-event refresh; FBM is one source.
+
             updateUnread();
             if (panel.classList.contains("show")) render();
         });
@@ -569,7 +580,7 @@
             // Reuse the loaded browser-session bell snapshot on repeat opens.
             // A committed marketplace event marks it stale when refresh is needed.
             await loadNotifications();
-            markSeen();
+            if (loaded) markSeen();
         });
 
         // Page show and tab visibility must not hydrate notifications from Neon.
