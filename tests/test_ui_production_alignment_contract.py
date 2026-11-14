@@ -131,8 +131,9 @@ def test_warehouse_kpis_use_distinct_truth_sources():
     assert "/governed/warehouse/economics-batch?stock_ids=" in source
     assert "stock × COGS" in source
     assert "missing COGS" in source
-    assert "/governed/warehouse/runtime-state" in source
-    assert "Runtime healthy" in source
+    assert "/governed/warehouse/runtime-state" not in source
+    assert "bt38-warehouse-runtime-status" in source
+    assert "Runtime verified" in source
     assert "Loaded stock × price" not in source
     assert "Loaded marketplace listings" not in source
 
