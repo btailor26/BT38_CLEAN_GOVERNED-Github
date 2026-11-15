@@ -339,6 +339,7 @@ def _import_item(
     item: ET.Element,
     *,
     item_is_detail: bool = False,
+    changed_only: bool = False,
 ) -> dict[str, Any]:
     item_id = _xml_text(item, "{*}ItemID")
     if not item_id:
@@ -373,6 +374,29 @@ def _import_item(
             sold = int(_xml_text(variation, "{*}SellingStatus/{*}QuantitySold", "0") or 0)
             available = max(0, qty - sold)
             price = float(_xml_text(variation, "{*}StartPrice", str(parent_price)) or parent_price or 0)
+
+            if changed_only:
+                # eBay LISTING/UPDATED is a parent-item signal, not an exact
+                # variation event. Only touch an existing variation if its
+                # observed quantity changed; preserve its Warehouse identity.
+                existing = (
+                    db.session.query(MarketplaceListing)
+                    .filter(
+                        MarketplaceListing.store_id == store.id,
+                        MarketplaceListing.external_listing_id == item_id,
+                        MarketplaceListing.external_sku == sku,
+                        MarketplaceListing.is_active == True,  # noqa: E712
+                    )
+                    .order_by(MarketplaceListing.id.asc())
+                    .first()
+                )
+                if (
+                    existing is not None
+                    and existing.warehouse_stock_id is not None
+                    and existing.last_marketplace_qty is not None
+                    and int(existing.last_marketplace_qty) == available
+                ):
+                    continue
 
             stock = _find_or_create_stock(sku, title)
             listing = _upsert_listing(
@@ -411,6 +435,31 @@ def _import_item(
                 or parent_price
                 or 0
             )
+
+        if changed_only:
+            existing = (
+                db.session.query(MarketplaceListing)
+                .filter(
+                    MarketplaceListing.store_id == store.id,
+                    MarketplaceListing.external_listing_id == item_id,
+                    MarketplaceListing.external_sku == parent_sku,
+                    MarketplaceListing.is_active == True,  # noqa: E712
+                )
+                .order_by(MarketplaceListing.id.asc())
+                .first()
+            )
+            if (
+                existing is not None
+                and existing.warehouse_stock_id is not None
+                and existing.last_marketplace_qty is not None
+                and int(existing.last_marketplace_qty) == parent_qty
+            ):
+                return {
+                    "items": 0, "variations": 0,
+                    "affected_listing_ids": [],
+                    "affected_warehouse_stock_ids": [],
+                    "affected_group_ids": [],
+                }
 
         stock = _find_or_create_stock(parent_sku, title)
         listing = _upsert_listing(
@@ -495,7 +544,7 @@ def recover_governed_ebay_listing_from_notification(
             detail = _get_item_detail(creds, item_id)
             if detail is None:
                 raise RuntimeError("ebay_listing_notification_item_not_found")
-            exact = _import_item(store, creds, detail, item_is_detail=True)
+            exact = _import_item(store, creds, detail, item_is_detail=True, changed_only=True)
             db.session.commit()
             result = {
                 "success": True,
@@ -507,9 +556,15 @@ def recover_governed_ebay_listing_from_notification(
                 **exact,
             }
         else:
-            result = run_governed_ebay_inventory_import(
-                store_id=int(store_id),
-            )
+            return {
+                "success": False,
+                "governed": True,
+                "applicable": True,
+                "bounded_recovery": True,
+                "reason": "ebay_listing_notification_missing_exact_item_id",
+                "store_id": int(store_id),
+                "event_type": str(event_type or ""),
+            }
     except Exception as exc:
         return {
             "success": False,
