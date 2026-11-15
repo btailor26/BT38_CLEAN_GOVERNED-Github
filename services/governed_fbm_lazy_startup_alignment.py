@@ -63,6 +63,12 @@ _BOOTSTRAP = r'''<script id="bt38FbmLazyFeatureBoundary">
       if(!loaded.has('fbm_ebay_shipping_alignment.js')) return replayAfter('fbm_ebay_shipping_alignment.js',event);
     }
     if(target.closest('#readyToShipSelected,.fbm-shipping-options,.bt38-replacement-start,.bt38-replacement-label')){
+      // The eBay provider button can be disabled in the initial markup.
+      // Initialise its handler when the shipping workspace opens, before the
+      // seller attempts to click the provider action.
+      if(!loaded.has('fbm_ebay_shipping_alignment.js')){
+        void load('fbm_ebay_shipping_alignment.js').catch(error=>console.warn('[BT38 FBM] eBay shipping unavailable',error));
+      }
       if(!loaded.has('fbm_replacement_label_alignment.js')) return replayAfter('fbm_replacement_label_alignment.js',event);
     }
   },true);
