@@ -186,7 +186,7 @@ def _authoritative_ebay_ship_to(order: MarketplaceOrder) -> dict[str, Any]:
     instructions = data.get("fulfillmentStartInstructions") or []
     destination = next(
         (
-            instruction.get("shippingStep", {}).get("shipTo", {})
+            (instruction.get("shippingStep") or {}).get("shipTo") or {}
             for instruction in instructions
             if (instruction.get("shippingStep") or {}).get("shipTo", {}).get("contactAddress", {}).get("addressLine1")
         ),
