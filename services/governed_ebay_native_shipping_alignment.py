@@ -167,9 +167,51 @@ def _contact(values: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _authoritative_ebay_ship_to(order: MarketplaceOrder) -> dict[str, Any]:
+    """Read exact eBay address lines only when a seller requests shipping rates.
+
+    MarketplaceOrder.ship_to_address is a display-oriented combined address.
+    It must not be sent as eBay Logistics contactAddress.addressLine1.
+    No marketplace request occurs during page load or filtering.
+    """
+    token = _access_token(order.store)
+    response = requests.get(
+        f"https://api.ebay.com/sell/fulfillment/v1/order/{order.marketplace_order_id}",
+        headers={"Authorization": f"Bearer {token}", "Accept": "application/json"},
+        timeout=EBAY_TIMEOUT_SECONDS,
+    )
+    if response.status_code != 200:
+        raise _provider_error(response, "Unable to verify the original eBay delivery address.")
+    data = response.json()
+    instructions = data.get("fulfillmentStartInstructions") or []
+    destination = next(
+        (
+            instruction.get("shippingStep", {}).get("shipTo", {})
+            for instruction in instructions
+            if (instruction.get("shippingStep") or {}).get("shipTo", {}).get("contactAddress", {}).get("addressLine1")
+        ),
+        None,
+    )
+    if not destination:
+        raise EbayNativeShippingError("Original eBay shipping address is missing.")
+    address = destination.get("contactAddress") or {}
+    return {
+        "name": destination.get("fullName"),
+        "address1": address.get("addressLine1"),
+        "address2": address.get("addressLine2"),
+        "city": address.get("city"),
+        "region": address.get("stateOrProvince"),
+        "postcode": address.get("postalCode"),
+        "country": address.get("countryCode"),
+        "email": destination.get("email"),
+        "phone": (destination.get("primaryPhone") or {}).get("phoneNumber"),
+        "company": destination.get("companyName"),
+    }
+
+
 def _quote_payload(order: MarketplaceOrder, parcel: dict[str, Any]) -> dict[str, Any]:
     origin = ship_from()
-    destination = ship_to(order)
+    destination = _authoritative_ebay_ship_to(order)
     missing_destination = [
         field for field in ("name", "address1", "city", "postcode", "country")
         if not destination.get(field)
