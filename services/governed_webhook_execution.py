@@ -232,6 +232,26 @@ def process_marketplace_notification(
                 payload,
             )
 
+    # A LISTING webhook identifies the parent item, not one exact variation.
+    # The importer has already committed SKU-specific changes to Neon; the
+    # downstream handler must not arbitrarily select a sibling variation and
+    # mutate its Warehouse record. Let the existing committed recovery/event
+    # path own exact affected Warehouse identities.
+    if marketplace == "ebay" and listing_notification:
+        return _log_result(
+            status="listing_recovery_processed",
+            marketplace=marketplace,
+            event_type=event_type,
+            business_event=business_event,
+            reason="eBay listing notification handled by committed SKU-specific recovery; no ambiguous parent-item stock mutation.",
+            payload=payload,
+            changed=bool((listing_discovery or {}).get("changed")),
+            stock_changed=False,
+            correction_started=bool((listing_discovery or {}).get("correction_started")),
+            push_started=bool((listing_discovery or {}).get("correction_started")),
+            listing_discovery=listing_discovery,
+        )
+
     if not listing:
         if order_lifecycle.get("handled"):
             return _log_result(
