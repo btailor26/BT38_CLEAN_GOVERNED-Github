@@ -102,6 +102,14 @@
                     </a>
                     {% endif %}
                     
+                    {% if store.platform and 'ebay' in store.platform|lower %}
+                    <a class="btn btn-sm btn-outline-primary mb-3 w-100"
+                       href="/ebay-oauth/authorize?store_id={{ store.id }}"
+                       aria-label="Reauthorise eBay store {{ store.name }}">
+                        <i class="fas fa-key me-1"></i> Reauthorise eBay
+                    </a>
+                    {% endif %}
+
                     {% if store.api_endpoint %}
                     <p class="text-muted small mb-2">
                         <i data-feather="link" class="me-1"></i>
