@@ -371,13 +371,13 @@ def install_governed_ebay_native_shipping_alignment(app) -> None:
                 # Keep the existing provider action as the explicit capability
                 # probe; do not claim availability before shipping_quote succeeds.
                 option.update({
-                    "available": False,
+                    "available": True,
                     "recommended": False,
                     "label_formats": ["PDF"],
                     "auto_print_supported": True,
                     "requires_terms_acceptance": False,
                     "capability_probe_required": True,
-                    "message": "Check eBay Shipping access and request live rates. BT38 marks this route available only after eBay accepts the Logistics shipping_quote call for this seller/app.",
+                    "message": "Request live eBay shipping rates. Availability of rates and label purchase is confirmed only by the provider response.",
                 })
         return options
 
