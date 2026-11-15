@@ -64,6 +64,13 @@
                             {% endif %}
                         {% elif store.platform and 'ebay' in store.platform|lower %}
                             <span class="badge bg-primary">eBay</span>
+                            {% if store.auth_status == 'ok' %}
+                                <span class="badge bg-success ms-1" title="OAuth credentials stored; individual API capabilities require live verification">Authorised</span>
+                            {% elif store.auth_status == 'auth_error' %}
+                                <span class="badge bg-danger ms-1">Authorisation Error</span>
+                            {% else %}
+                                <span class="badge bg-secondary ms-1">Authorisation Unverified</span>
+                            {% endif %}
                         {% else %}
                             <span class="badge bg-secondary">{{ store.platform }}</span>
                         {% endif %}
@@ -103,6 +110,12 @@
                     {% endif %}
                     
                     {% if store.platform and 'ebay' in store.platform|lower %}
+                    {% if store.auth_status == 'auth_error' %}
+                    <div class="alert alert-danger py-2 px-3 mb-3" role="alert">
+                        eBay authorisation needs attention.
+                        {% if store.auth_error_code %}<small class="d-block">{{ store.auth_error_code }}</small>{% endif %}
+                    </div>
+                    {% endif %}
                     <a class="btn btn-sm btn-outline-primary mb-3 w-100"
                        href="/ebay-oauth/authorize?store_id={{ store.id }}"
                        aria-label="Reauthorise eBay store {{ store.name }}">
