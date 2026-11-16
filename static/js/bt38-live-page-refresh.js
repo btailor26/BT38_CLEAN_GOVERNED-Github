@@ -110,6 +110,8 @@
       window.BT38.PageController.refreshTableCache('warehouse');
     }
     if (path === '/fbm') {
+      // Keep the FBM page's existing session-owned filters and selection.
+      // Rebind only controls on the exact replaced row; no broad reload.
       document.dispatchEvent(new CustomEvent('bt38-fbm-working-set-expanded'));
     }
     window.dispatchEvent(new CustomEvent('bt38-page-refreshed', {
@@ -148,10 +150,10 @@
   }
 
   function pageOwnsCommittedRefresh() {
-    return Boolean(
-      document.getElementById('mcf-orders-body') ||
-      document.querySelector('.fbm-orders-table')
-    );
+    // MCF has its own event/session controller. FBM does not: its tracking
+    // journey bootstrap is presentation-only, so excluding FBM here silently
+    // drops committed order events on already-open pages.
+    return Boolean(document.getElementById('mcf-orders-body'));
   }
 
   async function refreshCurrentPage(detail) {
