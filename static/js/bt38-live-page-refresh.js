@@ -65,10 +65,16 @@
       else if (detail?.seller_sku) selector = `tr[data-sku="${cssEscape(detail.seller_sku)}"]`;
       else if (detail?.group_id != null) selector = `tr[data-group-id="${cssEscape(detail.group_id)}"]`;
     } else if (path === '/fbm') {
-      if (detail?.order_id != null) {
-        selector = `.fbm-order-row[data-order-id="${cssEscape(detail.order_id)}"]`;
-      } else if (detail?.marketplace_order_id) {
-        selector = `.fbm-order-row[data-marketplace-order-id="${cssEscape(detail.marketplace_order_id)}"]`;
+      // The committed order publisher uses order_id for the marketplace
+      // identity, while other producers use marketplace_order_id or a DB id.
+      // Resolve against existing DOM identities without another discovery read.
+      const orderIdentity = detail?.marketplace_order_id ?? detail?.order_id;
+      if (orderIdentity != null) {
+        const key = cssEscape(orderIdentity);
+        const store = detail?.store_id != null ? `[data-store-id="${cssEscape(detail.store_id)}"]` : '';
+        const byMarketplace = `.fbm-order-row[data-marketplace-order-id="${key}"]${store}`;
+        const byDatabase = `.fbm-order-row[data-order-id="${key}"]${store}`;
+        selector = document.querySelector(byMarketplace) ? byMarketplace : byDatabase;
       }
     } else {
       return false;
@@ -82,7 +88,7 @@
     // Never fetch the full FBM working set for a single committed order event.
     const refreshUrl = new URL(window.location.href);
     if (path === '/fbm') {
-      const marketplaceOrderId = String(detail?.marketplace_order_id || currentRow.dataset.marketplaceOrderId || '').trim();
+      const marketplaceOrderId = String(detail?.marketplace_order_id || currentRow.dataset.marketplaceOrderId || detail?.order_id || '').trim();
       if (!marketplaceOrderId) return false;
       refreshUrl.searchParams.set('bt38_marketplace_order_id', marketplaceOrderId);
       const storeId = String(detail?.store_id || currentRow.dataset.storeId || '').trim();
