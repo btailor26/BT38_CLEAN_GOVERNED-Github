@@ -393,21 +393,18 @@ def push_group_listings(
             group_id=group_id,
         )
 
-    # A one-member group is operationally a standalone SKU. Never enter the
-    # group propagation writer for it, regardless of stale relationship flags.
-    if len(listings) < 2:
-        return {
-            "success": True,
-            "ok": True,
-            "governed": True,
-            "changed": False,
-            "no_op": True,
-            "marketplace_write_skipped": True,
-            "group_id": group_id,
-            "active_group_members": len(listings),
-            "affected_listing_ids": [int(listing.id) for listing in listings],
-            "reason": "Product Linking propagation requires at least two active marketplace listings.",
-        }
+    # A one-member group is operationally a standalone SKU. The committed
+    # order/warehouse change still needs one exact listing write; skipping it
+    # leaves marketplace quantity stale until a user manually pushes.
+    # Mark the source as a group member to prevent re-expansion into this writer.
+    if len(listings) == 1:
+        return push_marketplace_listing(
+            listing_id=int(listings[0].id),
+            actor=actor,
+            source=f"{source}:group_member",
+            actor_user=actor_user,
+            dry_run=dry_run,
+        )
 
     warehouse_ids = sorted({
         int(listing.warehouse_stock_id)
