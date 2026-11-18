@@ -46,14 +46,14 @@ def test_customer_behaviour_replay_is_retired():
     assert 'render_template("admin/customer_behaviour.html"' not in text
 
 
-def test_manual_video_recorder_remains_explicit_admin_only():
+def test_manual_video_recorder_remains_explicit_authenticated_only():
     text = _source()
     assert "_VIDEO_CONTROL_SCRIPT" in text
     assert "bt38JourneyVideoRecord" in text
     assert "getDisplayMedia({video:true,audio:false})" in text
     assert "new MediaRecorder(stream)" in text
     assert "recorder.start()" in text
-    assert 'getattr(current_user, "role", "") == "admin"' in text
+    assert 'if current_user.is_authenticated:' in text
     assert text.count("getDisplayMedia(") == 1
     assert 'startButton.addEventListener("click",async function()' in text
     assert 'document.getElementById("bt38NotificationBell")' in text
