@@ -21,6 +21,7 @@ from models import SystemLog
 
 _ENDPOINT = "/governed/ui/customer-behaviour"
 _OPERATIONAL_PATH_PREFIXES = (
+    "/dashboard",
     "/fbm",
     "/governed/warehouse",
     "/warehouse",
