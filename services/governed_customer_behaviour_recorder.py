@@ -239,7 +239,7 @@ def install_governed_customer_behaviour_recorder(app):
         body = response.get_data(as_text=True)
         if "bt38CustomerBehaviourRecorder" in body or "</body>" not in body: return response
         injected = _SCRIPT
-        if current_user.is_authenticated and getattr(current_user, "role", "") == "admin":
+        if current_user.is_authenticated:
             injected += "\n" + _VIDEO_CONTROL_SCRIPT
         body = body.replace("</body>", injected + "\n</body>", 1)
         response.set_data(body)
