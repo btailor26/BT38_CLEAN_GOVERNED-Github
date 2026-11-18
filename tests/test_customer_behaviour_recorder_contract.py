@@ -46,6 +46,12 @@ def test_customer_behaviour_replay_is_retired():
     assert 'render_template("admin/customer_behaviour.html"' not in text
 
 
+def test_dashboard_receives_manual_video_recorder():
+    text = _source()
+    assert '    "/dashboard",' in text
+    assert 'if not _operational_path(request.path):' in text or 'not _operational_path(request.path)' in text
+
+
 def test_manual_video_recorder_remains_explicit_authenticated_only():
     text = _source()
     assert "_VIDEO_CONTROL_SCRIPT" in text
