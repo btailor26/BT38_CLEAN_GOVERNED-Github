@@ -98,7 +98,13 @@ _VIDEO_CONTROL_SCRIPT = r'''<script id="bt38JourneyVideoRecorder">
     try{
       // Capture can start only from this explicit Continue action. The browser
       // owns the chooser/permission prompt and BT38 cannot auto-accept/bypass it.
-      stream=await navigator.mediaDevices.getDisplayMedia({video:true,audio:false});
+      stream=await navigator.mediaDevices.getDisplayMedia({video:{displaySurface:"browser"},audio:false,preferCurrentTab:true,selfBrowserSurface:"include",surfaceSwitching:"exclude",monitorTypeSurfaces:"exclude"});
+      // Display-surface hints are not enforcement: reject any non-tab selection.
+      var captureTrack=stream.getVideoTracks()[0];
+      if(!captureTrack||captureTrack.getSettings().displaySurface!=="browser"){
+        stream.getTracks().forEach(function(track){track.stop();});
+        stream=null;throw new Error("Select the BT38 browser tab, not a window or entire screen.");
+      }
       chunks=[];recorder=new MediaRecorder(stream);
       recorder.addEventListener("dataavailable",function(e){if(e.data&&e.data.size)chunks.push(e.data);});
       recorder.addEventListener("stop",function(){
