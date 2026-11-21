@@ -57,7 +57,8 @@ def test_manual_video_recorder_remains_explicit_authenticated_only():
     assert "_VIDEO_CONTROL_SCRIPT" in text
     assert "bt38JourneyVideoRecord" in text
     assert 'displaySurface:"browser"' in text
-    assert 'preferCurrentTab:true' in text
+    assert 'preferCurrentTab:false,selfBrowserSurface:"exclude"' in text
+    assert 'preferCurrentTab:true,selfBrowserSurface:"exclude"' not in text
     assert 'monitorTypeSurfaces:"exclude"' in text
     assert 'captureTrack.getSettings().displaySurface!=="browser"' in text
     assert "new MediaRecorder(stream)" in text
