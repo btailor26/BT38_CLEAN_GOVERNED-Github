@@ -52,6 +52,16 @@ def test_dashboard_receives_manual_video_recorder():
     assert 'if not _operational_path(request.path):' in text or 'not _operational_path(request.path)' in text
 
 
+def test_video_button_is_not_limited_to_operational_routes():
+    text = _source()
+    injection = text.split("def bt38_customer_behaviour_script(response):", 1)[1]
+    assert 'if request.path == _ENDPOINT or request.method != "GET": return response' in injection
+    assert 'if not current_user.is_authenticated and not _operational_path(request.path): return response' in injection
+    assert 'if _operational_path(request.path) and "bt38CustomerBehaviourRecorder" not in body:' in injection
+    assert 'if current_user.is_authenticated and "bt38JourneyVideoRecorder" not in body:' in injection
+    assert 'if request.path == _ENDPOINT or request.method != "GET" or not _operational_path(request.path)' not in injection
+
+
 def test_manual_video_recorder_remains_explicit_authenticated_only():
     text = _source()
     assert "_VIDEO_CONTROL_SCRIPT" in text
