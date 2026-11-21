@@ -220,14 +220,18 @@ def install_governed_customer_behaviour_recorder(app):
 
     @app.after_request
     def bt38_customer_behaviour_script(response):
-        if request.path == _ENDPOINT or request.method != "GET" or not _operational_path(request.path): return response
+        if request.path == _ENDPOINT or request.method != "GET": return response
         content_type = str(response.headers.get("Content-Type") or "").lower()
         if "text/html" not in content_type or response.direct_passthrough or response.headers.get("Content-Encoding"): return response
+        if not current_user.is_authenticated and not _operational_path(request.path): return response
         body = response.get_data(as_text=True)
-        if "bt38CustomerBehaviourRecorder" in body or "</body>" not in body: return response
-        injected = _SCRIPT
-        if current_user.is_authenticated:
+        if "</body>" not in body: return response
+        injected = ""
+        if _operational_path(request.path) and "bt38CustomerBehaviourRecorder" not in body:
+            injected = _SCRIPT
+        if current_user.is_authenticated and "bt38JourneyVideoRecorder" not in body:
             injected += "\n" + _VIDEO_CONTROL_SCRIPT
+        if not injected.strip(): return response
         body = body.replace("</body>", injected + "\n</body>", 1)
         response.set_data(body)
         response.headers.pop("Content-Length", None)
