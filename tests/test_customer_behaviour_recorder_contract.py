@@ -90,6 +90,13 @@ def test_recorder_controller_survives_full_page_navigation():
     assert 'Choose the BT38 browser tab' in text
 
 
+def test_reopening_recorder_on_another_page_preserves_active_controller():
+    text = _source()
+    assert 'if(controller.__bt38JourneyControllerReady){controller.focus();panel.hidden=true;return;}' in text
+    assert 'controller.__bt38JourneyControllerReady=true;' in text
+    assert text.index('if(controller.__bt38JourneyControllerReady)') < text.index('controller.document.open()')
+
+
 def test_controller_document_closes_inline_script_correctly():
     text = _source()
     # One JavaScript source backslash escapes the slash for the outer HTML parser;
