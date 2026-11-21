@@ -86,7 +86,7 @@ _VIDEO_CONTROL_SCRIPT = r'''<script id="bt38JourneyVideoRecorder">
       '}catch(e){cleanup();state.textContent=e&&e.message||"Capture cancelled";}});'+
       'stop.addEventListener("click",()=>{if(recorder&&recorder.state!=="inactive")recorder.stop();});'+
       'window.addEventListener("beforeunload",e=>{if(recorder&&recorder.state==="recording"){e.preventDefault();e.returnValue="";}});'+
-      '})();<\\/script></body></html>';
+      '})();<\/script></body></html>';
   }
   button.addEventListener("click",function(){panel.hidden=false;noteInput.focus();});
   startButton.addEventListener("click",async function(){
