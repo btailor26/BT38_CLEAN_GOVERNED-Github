@@ -95,7 +95,11 @@ _VIDEO_CONTROL_SCRIPT = r'''<script id="bt38JourneyVideoRecorder">
     if(controller&&!controller.closed){controller.focus();panel.hidden=true;return;}
     controller=window.open("","bt38JourneyRecorderController","popup=yes,width=620,height=540");
     if(!controller){window.alert("Allow the BT38 recorder popup and try again.");return;}
+    // A new BT38 page gets a fresh script instance. Reuse the named controller
+    // without replacing its document or interrupting an active MediaRecorder.
+    if(controller.__bt38JourneyControllerReady){controller.focus();panel.hidden=true;return;}
     controller.document.open();controller.document.write(controllerHtml(note));controller.document.close();
+    controller.__bt38JourneyControllerReady=true;
     panel.hidden=true;
   });
 })();
