@@ -69,6 +69,16 @@ def test_manual_video_recorder_remains_explicit_authenticated_only():
     assert 'bell.parentNode.insertBefore(button,bell)' in text
 
 
+def test_recorder_controller_survives_full_page_navigation():
+    text = _source()
+    assert 'window.open("","bt38JourneyRecorderController"' in text
+    assert 'controller.document.write(controllerHtml(note))' in text
+    assert 'selfBrowserSurface:"exclude"' in text
+    assert 'window.addEventListener("pagehide",stop' not in text
+    assert 'window.addEventListener("beforeunload"' in text
+    assert 'Choose the BT38 browser tab' in text
+
+
 def test_exception_transport_cannot_recursively_record_itself():
     text = _source()
     assert "if request.path == _ENDPOINT or not _operational_path(request.path):" in text
