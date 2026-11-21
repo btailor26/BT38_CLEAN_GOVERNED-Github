@@ -83,8 +83,8 @@ def test_controller_document_closes_inline_script_correctly():
     text = _source()
     # One JavaScript source backslash escapes the slash for the outer HTML parser;
     # two backslashes would emit a literal backslash and leave the popup script open.
-    assert r'})();<\\/script></body></html>' in text
-    assert r'})();<\\\\/script></body></html>' not in text
+    assert r'})();<\/script></body></html>' in text
+    assert r'})();<\\/script></body></html>' not in text
 
 
 def test_exception_transport_cannot_recursively_record_itself():
