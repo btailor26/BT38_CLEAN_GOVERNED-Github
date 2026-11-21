@@ -56,7 +56,10 @@ def test_manual_video_recorder_remains_explicit_authenticated_only():
     text = _source()
     assert "_VIDEO_CONTROL_SCRIPT" in text
     assert "bt38JourneyVideoRecord" in text
-    assert "getDisplayMedia({video:true,audio:false})" in text
+    assert 'displaySurface:"browser"' in text
+    assert 'preferCurrentTab:true' in text
+    assert 'monitorTypeSurfaces:"exclude"' in text
+    assert 'captureTrack.getSettings().displaySurface!=="browser"' in text
     assert "new MediaRecorder(stream)" in text
     assert "recorder.start()" in text
     assert 'if current_user.is_authenticated:' in text
